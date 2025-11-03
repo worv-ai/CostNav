@@ -33,12 +33,14 @@ from isaaclab_assets.robots.cartpole import CARTPOLE_CFG  # isort:skip
 
 @configclass
 class CostnavIsaaclabV1SceneCfg(InteractiveSceneCfg):
-    """Configuration for a cart-pole scene."""
+    """Configuration for a cart-pole scene with custom map."""
 
-    # ground plane
-    ground = AssetBaseCfg(
-        prim_path="/World/ground",
-        spawn=sim_utils.GroundPlaneCfg(size=(100.0, 100.0)),
+    # custom map
+    custom_map = AssetBaseCfg(
+        prim_path="/World/custom_map",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path="omniverse://10.50.2.21/Users/worv/map/Street_road.usd"
+        ),
     )
 
     # robot
@@ -60,7 +62,9 @@ class CostnavIsaaclabV1SceneCfg(InteractiveSceneCfg):
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    joint_effort = mdp.JointEffortActionCfg(asset_name="robot", joint_names=["slider_to_cart"], scale=100.0)
+    joint_effort = mdp.JointEffortActionCfg(
+        asset_name="robot", joint_names=["slider_to_cart"], scale=100.0
+    )
 
 
 @configclass
@@ -146,7 +150,10 @@ class TerminationsCfg:
     # (2) Cart out of bounds
     cart_out_of_bounds = DoneTerm(
         func=mdp.joint_pos_out_of_manual_limit,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["slider_to_cart"]), "bounds": (-3.0, 3.0)},
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["slider_to_cart"]),
+            "bounds": (-3.0, 3.0),
+        },
     )
 
 
@@ -157,8 +164,8 @@ class TerminationsCfg:
 
 @configclass
 class CostnavIsaaclabV1EnvCfg(ManagerBasedRLEnvCfg):
-    # Scene settings
-    scene: CostnavIsaaclabV1SceneCfg = CostnavIsaaclabV1SceneCfg(num_envs=4096, env_spacing=4.0)
+    # Scene settings - reduced num_envs for complex map
+    scene: CostnavIsaaclabV1SceneCfg = CostnavIsaaclabV1SceneCfg(num_envs=64, env_spacing=4.0)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
@@ -178,4 +185,13 @@ class CostnavIsaaclabV1EnvCfg(ManagerBasedRLEnvCfg):
         # simulation settings
         self.sim.dt = 1 / 120
         self.sim.render_interval = self.decimation
-
+        # increase PhysX GPU collision buffers for complex scenes with many collision objects
+        self.sim.physx.gpu_collision_stack_size = (
+            536870912  # 512 MB to handle complex map collisions
+        )
+        self.sim.physx.gpu_found_lost_pairs_capacity = (
+            8000000  # Increased to handle many collision pairs
+        )
+        self.sim.physx.gpu_total_aggregate_pairs_capacity = (
+            7000000  # Increased to handle aggregate collision pairs
+        )
