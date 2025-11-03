@@ -42,6 +42,7 @@ It allows you to develop in an isolated environment, outside of the core Isaac L
         ```bash
         # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
         python scripts/<RL_LIBRARY>/train.py --task=<TASK_NAME>
+        python scripts/skrl/train.py --task=Template-Costnav-Isaaclab-v0
         ```
 
     - Running a task with dummy agents:
