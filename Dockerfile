@@ -92,9 +92,13 @@ RUN uv pip install --python="${PYTHON_BIN}" --system \
 COPY pyproject.toml ./
 COPY README.md ./
 COPY costnav/ ./costnav/
+COPY costnav_isaaclab/ ./costnav_isaaclab/
 
 # Install costnav with Isaac Lab dependencies
 RUN uv pip install --python="${PYTHON_BIN}" --system -e ".[isaac-lab,dev]"
+
+# Install costnav_isaaclab project (from template)
+RUN uv pip install --python="${PYTHON_BIN}" --system -e costnav_isaaclab/source/costnav_isaaclab
 
 # Use bash as entrypoint to prevent Isaac Sim auto-start
 # The devcontainer will override this with its own command
