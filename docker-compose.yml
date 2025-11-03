@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # Isaac Sim environment
+  isaac-sim:
+    profiles: ["isaac-sim"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: isaac-sim
+    image: costnav:isaac-sim
+    container_name: costnav-isaac-sim
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - DISPLAY=${DISPLAY}
+      - XAUTHORITY=${XAUTHORITY}
+    volumes:
+      - .:/workspace
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ~/omniverse_map:/omniverse_map:ro
+    network_mode: host
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']  # TODO: Using 'all' GPUs
+              capabilities: [gpu]
+
+  # Isaac Lab environment
+  isaac-lab:
+    profiles: ["isaac-lab"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: isaac-lab
+    image: costnav:isaac-lab
+    container_name: costnav-isaac-lab
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - DISPLAY=${DISPLAY}
+      - XAUTHORITY=${XAUTHORITY}
+    volumes:
+      - .:/workspace
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ~/omniverse_map:/omniverse_map:ro
+    network_mode: host
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']  # TODO: Using 'all' GPUs
+              capabilities: [gpu]
+
+  # Development environment (minimal dependencies)
+  dev:
+    profiles: ["dev"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    image: costnav:dev
+    container_name: costnav-dev
+    volumes:
+      - .:/workspace
+    network_mode: host
+    stdin_open: true
+    tty: true
+    command: sleep infinity
+

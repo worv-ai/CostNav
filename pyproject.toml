@@ -1,0 +1,73 @@
+[project]
+name = "CostNav"
+version = "0.1.0"
+description = "A benchmark for navigation with cost estimation"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    # Core dependencies that all environments need
+    "numpy>=1.24.0",
+    "gymnasium>=0.29.0",
+]
+
+[project.optional-dependencies]
+# Isaac Sim specific dependencies
+# Note: Isaac Sim itself is container-based (nvcr.io/nvidia/isaac-sim:5.0.0)
+# These are additional packages that work with Isaac Sim
+isaac-sim = [
+    # Add any additional packages needed for Isaac Sim workflows
+    # Most dependencies come from the Isaac Sim container itself
+]
+
+# Isaac Lab specific dependencies
+# Note: Isaac Lab is installed on top of Isaac Sim container
+# The actual installation happens in Dockerfile with specific commands:
+#   - torch==2.7.0, torchvision==0.22.0 (CUDA 12.8)
+#   - rl_games from isaac-sim fork
+#   - isaaclab[isaacsim,all]==2.2.0
+isaac-lab = [
+    # Add any additional packages needed for Isaac Lab workflows
+    # Core Isaac Lab deps are installed via pip in Dockerfile
+]
+
+# Development dependencies
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+]
+
+# All simulation environments (for CI/testing)
+all = [
+    "costnav[isaac-sim,isaac-lab]",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+# UV-specific configuration
+dev-dependencies = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+

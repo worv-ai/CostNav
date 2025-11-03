@@ -1,0 +1,11 @@
+{
+  "python.defaultInterpreterPath": "/isaac-sim/kit/python/bin/python3",
+  "python.analysis.extraPaths": [
+    "/isaac-sim/kit/python/lib/python3.11/site-packages",
+    "/isaac-sim/kit/python/lib/python3.11/site-packages/isaaclab/source/isaaclab"
+  ],
+  "python.autoComplete.extraPaths": [
+    "/isaac-sim/kit/python/lib/python3.11/site-packages",
+    "/isaac-sim/kit/python/lib/python3.11/site-packages/isaaclab/source/isaaclab"
+  ]
+}
