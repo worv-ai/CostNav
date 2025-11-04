@@ -37,17 +37,21 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /workspace
 
 # Set environment variables for Isaac Sim
-ENV ISAAC_SIM_PATH=/isaac-sim
-ENV PYTHONPATH="${ISAAC_SIM_PATH}/python:${PYTHONPATH}"
-ENV PYTHON_BIN="${ISAAC_SIM_PATH}/python.sh"
+ENV ACCEPT_EULA=Y \
+    PATH="/isaac-sim/kit/python/bin:${PATH}" \
+    KIT_PYTHON_BIN="/isaac-sim/kit/python/bin/python3" \
+    PYTHONPATH="/isaac-sim/python:${PYTHONPATH}"
 
 # Copy project files
 COPY pyproject.toml ./
 COPY README.md ./
 COPY costnav/ ./costnav/
 
+# Create symlink for python -> python3
+RUN ln -sf /isaac-sim/kit/python/bin/python3 /isaac-sim/kit/python/bin/python
+
 # Install with Isaac Sim dependencies (minimal, since Isaac Sim already has most deps)
-RUN uv pip install --python="${PYTHON_BIN}" --system -e ".[isaac-sim,dev]"
+RUN uv pip install --python="${KIT_PYTHON_BIN}" --system -e ".[isaac-sim,dev]"
 
 # Use bash as entrypoint to prevent Isaac Sim auto-start
 # The devcontainer will override this with its own command
@@ -68,23 +72,23 @@ RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 WORKDIR /workspace
 
 # Set environment variables for Isaac Sim
-ENV ISAAC_SIM_PATH=/isaac-sim
-ENV PYTHONPATH="${ISAAC_SIM_PATH}/python:${PYTHONPATH}"
-ENV PYTHON_BIN="${ISAAC_SIM_PATH}/python.sh"
+ENV ACCEPT_EULA=Y \
+    PATH="/isaac-sim/kit/python/bin:${PATH}" \
+    KIT_PYTHON_BIN="/isaac-sim/kit/python/bin/python3" \
+    PYTHONPATH="/isaac-sim/python:${PYTHONPATH}"
+
+# Create symlink for python -> python3
+RUN ln -sf /isaac-sim/kit/python/bin/python3 /isaac-sim/kit/python/bin/python
 
 # Install PyTorch with CUDA 12.8 support (required for Isaac Lab)
-RUN uv pip install --python="${PYTHON_BIN}" --system \
+RUN uv pip install --python="${KIT_PYTHON_BIN}" --system \
     torch==2.7.0 \
     torchvision==0.22.0 \
     --index-url https://download.pytorch.org/whl/cu128
 
-# Install rl_games from Isaac Sim's fork (Python 3.11 compatible)
-RUN uv pip install --python="${PYTHON_BIN}" --system \
-    git+https://github.com/isaac-sim/rl_games.git@python3.11
-
 # Install Isaac Lab with all extensions
 # Using Isaac Sim's Python to install globally in the container (no venv needed)
-RUN uv pip install --python="${PYTHON_BIN}" --system \
+RUN uv pip install --python="${KIT_PYTHON_BIN}" --system \
     "isaaclab[isaacsim,all]==2.2.0" \
     --extra-index-url https://pypi.nvidia.com
 
@@ -95,10 +99,10 @@ COPY costnav/ ./costnav/
 COPY costnav_isaaclab/ ./costnav_isaaclab/
 
 # Install costnav with Isaac Lab dependencies
-RUN uv pip install --python="${PYTHON_BIN}" --system -e ".[isaac-lab,dev]"
+RUN uv pip install --python="${KIT_PYTHON_BIN}" --system -e ".[isaac-lab,dev]"
 
 # Install costnav_isaaclab project (from template)
-RUN uv pip install --python="${PYTHON_BIN}" --system -e costnav_isaaclab/source/costnav_isaaclab
+RUN uv pip install --python="${KIT_PYTHON_BIN}" --system -e costnav_isaaclab/source/costnav_isaaclab
 
 # Use bash as entrypoint to prevent Isaac Sim auto-start
 # The devcontainer will override this with its own command
