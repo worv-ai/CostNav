@@ -165,7 +165,7 @@ class TerminationsCfg:
 @configclass
 class CostnavIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
     # Scene settings
-    scene: CostnavIsaaclabSceneCfg = CostnavIsaaclabSceneCfg(num_envs=4096, env_spacing=4.0)
+    scene: CostnavIsaaclabSceneCfg = CostnavIsaaclabSceneCfg(num_envs=16, env_spacing=4.0)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
@@ -185,3 +185,13 @@ class CostnavIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
         # simulation settings
         self.sim.dt = 1 / 120
         self.sim.render_interval = self.decimation
+        # increase PhysX GPU collision buffers for complex scenes with many collision objects
+        self.sim.physx.gpu_collision_stack_size = (
+            536870912  # 512 MB to handle complex map collisions
+        )
+        self.sim.physx.gpu_found_lost_pairs_capacity = (
+            8000000  # Increased to handle many collision pairs
+        )
+        self.sim.physx.gpu_total_aggregate_pairs_capacity = (
+            7000000  # Increased to handle aggregate collision pairs
+        )
