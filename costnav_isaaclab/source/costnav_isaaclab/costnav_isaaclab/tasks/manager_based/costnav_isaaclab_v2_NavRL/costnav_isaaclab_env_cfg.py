@@ -6,6 +6,8 @@
 import math
 
 import isaaclab.sim as sim_utils
+import isaaclab_tasks.manager_based.locomotion.velocity.mdp as loc_mdp
+import isaaclab_tasks.manager_based.navigation.mdp as nav_mdp
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
@@ -15,15 +17,15 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
+from isaaclab.sensors import CameraCfg, ContactSensorCfg, TiledCameraCfg
 from isaaclab.utils import configclass
 
 from . import mdp
+from .coco_robot_cfg import COCO_CFG, ClassicalCarActionCfg
 
 ##
 # Pre-defined configs
 ##
-
-from isaaclab_assets.robots.cartpole import CARTPOLE_CFG  # isort:skip
 
 
 ##
@@ -33,7 +35,7 @@ from isaaclab_assets.robots.cartpole import CARTPOLE_CFG  # isort:skip
 
 @configclass
 class CostnavIsaaclabSceneCfg(InteractiveSceneCfg):
-    """Configuration for a cart-pole scene."""
+    """Configuration for COCO robot navigation scene with custom map."""
 
     # custom map
     custom_map = AssetBaseCfg(
@@ -43,8 +45,31 @@ class CostnavIsaaclabSceneCfg(InteractiveSceneCfg):
         ),
     )
 
-    # robot
-    robot: ArticulationCfg = CARTPOLE_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    # robot - COCO robot for navigation
+    robot: ArticulationCfg = COCO_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+
+    # sensors
+    contact_forces = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True
+    )
+
+    # camera sensor for visual observations
+    # Note: Camera is attached to the robot's body_link
+    camera = TiledCameraCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/body_link/front_cam",
+        update_period=0.1,
+        height=1080 // 8,
+        width=1920 // 8,
+        data_types=["rgb", "distance_to_camera"],
+        spawn=sim_utils.PinholeCameraCfg.from_intrinsic_matrix(
+            intrinsic_matrix=[531.0, 0.0, 960.0, 0.0, 531.0, 540.0, 0.0, 0.0, 1.0],
+            width=1920,
+            height=1080,
+        ),
+        offset=CameraCfg.OffsetCfg(
+            pos=(0.51, 0.0, 0.015), rot=(0.5, -0.5, 0.5, -0.5), convention="ros"
+        ),
+    )
 
     # lights
     dome_light = AssetBaseCfg(
@@ -59,12 +84,26 @@ class CostnavIsaaclabSceneCfg(InteractiveSceneCfg):
 
 
 @configclass
+class CommandsCfg:
+    """Command specifications for the MDP."""
+
+    pose_command = nav_mdp.UniformPose2dCommandCfg(
+        asset_name="robot",
+        simple_heading=False,
+        resampling_time_range=(30.0, 30.0),
+        debug_vis=True,
+        ranges=nav_mdp.UniformPose2dCommandCfg.Ranges(
+            pos_x=(7.0, 10.0), pos_y=(7.0, 10.0), heading=(-math.pi, math.pi)
+        ),
+    )
+
+
+@configclass
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    joint_effort = mdp.JointEffortActionCfg(
-        asset_name="robot", joint_names=["slider_to_cart"], scale=100.0
-    )
+    # Use COCO velocity actions (linear velocity + steering angle)
+    joint_pos = ClassicalCarActionCfg(asset_name="robot")
 
 
 @configclass
@@ -76,8 +115,20 @@ class ObservationsCfg:
         """Observations for policy group."""
 
         # observation terms (order preserved)
-        joint_pos_rel = ObsTerm(func=mdp.joint_pos_rel)
-        joint_vel_rel = ObsTerm(func=mdp.joint_vel_rel)
+        pose_command = ObsTerm(
+            func=mdp.advanced_generated_commands,
+            params={"command_name": "pose_command", "max_dim": 2, "normalize": True},
+        )
+
+        def __post_init__(self) -> None:
+            self.enable_corruption = False
+            self.concatenate_terms = True
+
+    @configclass
+    class SensorCfg(ObsGroup):
+        """Sensor observations for visual navigation."""
+
+        rgb = ObsTerm(func=mdp.rgbd_processed, params={"sensor_cfg": SceneEntityCfg("camera")})
 
         def __post_init__(self) -> None:
             self.enable_corruption = False
@@ -85,30 +136,27 @@ class ObservationsCfg:
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
+    sensor: SensorCfg = SensorCfg()
 
 
 @configclass
 class EventCfg:
     """Configuration for events."""
 
-    # reset
-    reset_cart_position = EventTerm(
-        func=mdp.reset_joints_by_offset,
+    # reset robot base position
+    reset_base = EventTerm(
+        func=loc_mdp.reset_root_state_uniform,
         mode="reset",
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["slider_to_cart"]),
-            "position_range": (-1.0, 1.0),
-            "velocity_range": (-0.5, 0.5),
-        },
-    )
-
-    reset_pole_position = EventTerm(
-        func=mdp.reset_joints_by_offset,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["cart_to_pole"]),
-            "position_range": (-0.25 * math.pi, 0.25 * math.pi),
-            "velocity_range": (-0.25 * math.pi, 0.25 * math.pi),
+            "pose_range": {"x": (0.3, 0.3), "y": (0.3, 0.3), "yaw": (0.0, 0.0)},
+            "velocity_range": {
+                "x": (-0.0, 0.0),
+                "y": (-0.0, 0.0),
+                "z": (-0.0, 0.0),
+                "roll": (-0.0, 0.0),
+                "pitch": (-0.0, 0.0),
+                "yaw": (-0.0, 0.0),
+            },
         },
     )
 
@@ -117,27 +165,40 @@ class EventCfg:
 class RewardsCfg:
     """Reward terms for the MDP."""
 
-    # (1) Constant running reward
-    alive = RewTerm(func=mdp.is_alive, weight=1.0)
-    # (2) Failure penalty
-    terminating = RewTerm(func=mdp.is_terminated, weight=-2.0)
-    # (3) Primary task: keep pole upright
-    pole_pos = RewTerm(
-        func=mdp.joint_pos_target_l2,
-        weight=-1.0,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["cart_to_pole"]), "target": 0.0},
+    # Arrival reward
+    arrived_reward = RewTerm(
+        func=loc_mdp.is_terminated_term, weight=2000.0, params={"term_keys": "arrive"}
     )
-    # (4) Shaping tasks: lower cart velocity
-    cart_vel = RewTerm(
-        func=mdp.joint_vel_l1,
-        weight=-0.01,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["slider_to_cart"])},
+
+    # Collision penalty
+    collision_penalty = RewTerm(
+        func=loc_mdp.is_terminated_term, weight=-200.0, params={"term_keys": "collision"}
     )
-    # (5) Shaping tasks: lower pole angular velocity
-    pole_vel = RewTerm(
-        func=mdp.joint_vel_l1,
-        weight=-0.005,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["cart_to_pole"])},
+
+    # Position tracking reward (coarse)
+    position_tracking = RewTerm(
+        func=mdp.position_command_error_tanh,
+        weight=10.0,
+        params={"std": 5.0, "command_name": "pose_command"},
+    )
+
+    # Position tracking reward (fine-grained)
+    position_tracking_fine = RewTerm(
+        func=mdp.position_command_error_tanh,
+        weight=50.0,
+        params={"std": 1.0, "command_name": "pose_command"},
+    )
+
+    # Reward for moving towards goal
+    moving_towards_goal = RewTerm(
+        func=mdp.moving_towards_goal_reward,
+        weight=20.0,
+        params={"command_name": "pose_command"},
+    )
+
+    # Reward for maintaining target velocity
+    target_vel_rew = RewTerm(
+        func=mdp.target_vel_reward, weight=10.0, params={"command_name": "pose_command"}
     )
 
 
@@ -145,15 +206,24 @@ class RewardsCfg:
 class TerminationsCfg:
     """Termination terms for the MDP."""
 
-    # (1) Time out
-    time_out = DoneTerm(func=mdp.time_out, time_out=True)
-    # (2) Cart out of bounds
-    cart_out_of_bounds = DoneTerm(
-        func=mdp.joint_pos_out_of_manual_limit,
+    # Time out
+    time_out = DoneTerm(func=loc_mdp.time_out, time_out=True)
+
+    # Collision termination
+    collision = DoneTerm(
+        func=mdp.illegal_contact,
+        time_out=False,
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["slider_to_cart"]),
-            "bounds": (-3.0, 3.0),
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names="body_link"),
+            "threshold": 1.0,
         },
+    )
+
+    # Arrival termination
+    arrive = DoneTerm(
+        func=mdp.arrive,
+        time_out=False,
+        params={"threshold": 1.0, "command_name": "pose_command"},
     )
 
 
@@ -164,11 +234,14 @@ class TerminationsCfg:
 
 @configclass
 class CostnavIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
-    # Scene settings
-    scene: CostnavIsaaclabSceneCfg = CostnavIsaaclabSceneCfg(num_envs=16, env_spacing=4.0)
+    """Configuration for COCO robot navigation environment with custom map."""
+
+    # Scene settings - reduced num_envs for complex map
+    scene: CostnavIsaaclabSceneCfg = CostnavIsaaclabSceneCfg(num_envs=64, env_spacing=4.0)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
+    commands: CommandsCfg = CommandsCfg()
     events: EventCfg = EventCfg()
     # MDP settings
     rewards: RewardsCfg = RewardsCfg()
@@ -178,13 +251,17 @@ class CostnavIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
     def __post_init__(self) -> None:
         """Post initialization."""
         # general settings
-        self.decimation = 2
-        self.episode_length_s = 5
+        self.decimation = 10  # Control frequency: 50 Hz (500ms / 10)
+        self.episode_length_s = 30.0  # 30 second episodes for navigation
+
         # viewer settings
         self.viewer.eye = (8.0, 0.0, 5.0)
+
         # simulation settings
-        self.sim.dt = 1 / 120
-        self.sim.render_interval = self.decimation
+        self.sim.dt = 0.005  # 5ms timestep (200 Hz physics)
+        self.sim.render_interval = 4  # Render every 4 physics steps
+        self.sim.disable_contact_processing = True
+
         # increase PhysX GPU collision buffers for complex scenes with many collision objects
         self.sim.physx.gpu_collision_stack_size = (
             536870912  # 512 MB to handle complex map collisions
@@ -195,3 +272,7 @@ class CostnavIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.physx.gpu_total_aggregate_pairs_capacity = (
             7000000  # Increased to handle aggregate collision pairs
         )
+
+        # Update camera period based on decimation
+        if hasattr(self.scene, "camera"):
+            self.scene.camera.update_period = self.decimation * self.sim.dt
