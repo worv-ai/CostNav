@@ -14,17 +14,25 @@ from pathlib import Path
 from isaaclab.app import AppLauncher
 
 # add argparse arguments
-parser = argparse.ArgumentParser(description="Play a checkpoint of an RL agent from Stable-Baselines3.")
-parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
-parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
-parser.add_argument(
-    "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
+parser = argparse.ArgumentParser(
+    description="Play a checkpoint of an RL agent from Stable-Baselines3."
 )
-parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
+parser.add_argument(
+    "--video", action="store_true", default=False, help="Record videos during training."
+)
+parser.add_argument(
+    "--video_length", type=int, default=200, help="Length of the recorded video (in steps)."
+)
+parser.add_argument(
+    "--disable_fabric",
+    action="store_true",
+    default=False,
+    help="Disable fabric and use USD I/O operations.",
+)
+parser.add_argument(
+    "--num_envs", type=int, default=None, help="Number of environments to simulate."
+)
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
-parser.add_argument(
-    "--agent", type=str, default="sb3_cfg_entry_point", help="Name of the RL agent configuration entry point."
-)
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 parser.add_argument(
@@ -37,7 +45,9 @@ parser.add_argument(
     action="store_true",
     help="When no checkpoint provided, use the last saved model. Otherwise use the best saved model.",
 )
-parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
+parser.add_argument(
+    "--real-time", action="store_true", default=False, help="Run in real-time, if possible."
+)
 parser.add_argument(
     "--keep_all_info",
     action="store_true",
@@ -61,15 +71,14 @@ simulation_app = app_launcher.app
 
 """Rest everything follows."""
 
-import gymnasium as gym
 import os
 import random
 import time
+
+import costnav_isaaclab.tasks  # noqa: F401
+import gymnasium as gym
+import isaaclab_tasks  # noqa: F401
 import torch
-
-from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import VecNormalize
-
 from isaaclab.envs import (
     DirectMARLEnv,
     DirectMARLEnvCfg,
@@ -79,17 +88,14 @@ from isaaclab.envs import (
 )
 from isaaclab.utils.dict import print_dict
 from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
-
 from isaaclab_rl.sb3 import Sb3VecEnvWrapper, process_sb3_cfg
-
-import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils.hydra import hydra_task_config
 from isaaclab_tasks.utils.parse_cfg import get_checkpoint_path
+from stable_baselines3 import PPO
+from stable_baselines3.common.vec_env import VecNormalize
 
-import costnav_isaaclab.tasks  # noqa: F401
 
-
-@hydra_task_config(args_cli.task, args_cli.agent)
+@hydra_task_config(args_cli.task, "sb3_cfg_entry_point")
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: dict):
     """Play with stable-baselines agent."""
     # grab task name for checkpoint path
@@ -100,7 +106,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         args_cli.seed = random.randint(0, 10000)
 
     # override configurations with non-hydra CLI arguments
-    env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
+    env_cfg.scene.num_envs = (
+        args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
+    )
     agent_cfg["seed"] = args_cli.seed if args_cli.seed is not None else agent_cfg["seed"]
     # set the environment seed
     # note: certain randomizations occur in the environment initialization so we set the seed here
@@ -114,7 +122,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     if args_cli.use_pretrained_checkpoint:
         checkpoint_path = get_published_pretrained_checkpoint("sb3", train_task_name)
         if not checkpoint_path:
-            print("[INFO] Unfortunately a pre-trained checkpoint is currently unavailable for this task.")
+            print(
+                "[INFO] Unfortunately a pre-trained checkpoint is currently unavailable for this task."
+            )
             return
     elif args_cli.checkpoint is None:
         # FIXME: last checkpoint doesn't seem to really use the last one'
@@ -126,9 +136,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     else:
         checkpoint_path = args_cli.checkpoint
     log_dir = os.path.dirname(checkpoint_path)
-
-    # set the log directory for the environment (works for all environment types)
-    env_cfg.log_dir = log_dir
 
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
