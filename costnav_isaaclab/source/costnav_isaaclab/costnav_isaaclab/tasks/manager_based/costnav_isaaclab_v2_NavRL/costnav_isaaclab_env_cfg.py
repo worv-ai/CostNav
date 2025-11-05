@@ -54,9 +54,8 @@ class CostnavIsaaclabSceneCfg(InteractiveSceneCfg):
     )
 
     # camera sensor for visual observations
-    # Note: Camera is attached to the robot's body_link
     camera = TiledCameraCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/body_link/front_cam",
+        prim_path="{ENV_REGEX_NS}/Robot/base_link/front_cam",
         update_period=0.1,
         height=1080 // 8,
         width=1920 // 8,
