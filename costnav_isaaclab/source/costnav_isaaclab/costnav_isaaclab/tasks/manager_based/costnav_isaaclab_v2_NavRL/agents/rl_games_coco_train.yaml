@@ -23,8 +23,8 @@ params:
           name: default
         sigma_init:
           name: const_initializer
-          val: 0
-        fixed_sigma: False
+          val: -1.5  # Increased exploration: log(sigma) = -1.5, sigma ≈ 0.22 (was -2.9, sigma ≈ 0.055)
+        fixed_sigma: True  # Use fixed sigma to prevent entropy Inf issues
 
     cnn:
       permute_input: False
@@ -57,7 +57,7 @@ params:
     multi_gpu: False
     ppo: True
     mixed_precision: True
-    normalize_input: False
+    normalize_input: False  # Keep False - observations already normalized in rgbd_processed()
     normalize_value: True
     value_bootstrap: True
     num_actors: -1  # configured from the script (based on num_envs)
@@ -66,16 +66,16 @@ params:
     normalize_advantage: True
     gamma: 0.99
     tau: 0.95
-    learning_rate: 1e-3
+    learning_rate: 5e-4  # Reduced from 1e-3 for stability
     lr_schedule: adaptive
     schedule_type: legacy
-    kl_threshold: 0.01
+    kl_threshold: 0.016  # Increased from 0.01 for better exploration
     score_to_win: 20000
     max_epochs: 3000
     save_best_after: 50
     save_frequency: 10
     grad_norm: 1.0
-    entropy_coef: 0.005 # 002
+    entropy_coef: 0.0  # Disabled to prevent Inf with fixed_sigma
     truncate_grads: True
     e_clip: 0.2
     horizon_length: 32
@@ -84,5 +84,5 @@ params:
     critic_coef: 1.0
     clip_value: True
     seq_length: 4
-    bounds_loss_coef: 0.01
+    bounds_loss_coef: 0.001  # Reduced from 0.01
     

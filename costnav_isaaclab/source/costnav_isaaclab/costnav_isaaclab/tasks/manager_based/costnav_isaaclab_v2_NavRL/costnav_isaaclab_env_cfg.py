@@ -94,11 +94,13 @@ class CommandsCfg:
 
     pose_command = nav_mdp.UniformPose2dCommandCfg(
         asset_name="robot",
-        simple_heading=False,
+        simple_heading=True,  # Point towards goal for easier learning
         resampling_time_range=(30.0, 30.0),
         debug_vis=True,
         ranges=nav_mdp.UniformPose2dCommandCfg.Ranges(
-            pos_x=(7.0, 10.0), pos_y=(7.0, 10.0), heading=(-math.pi, math.pi)
+            pos_x=(3.0, 6.0),
+            pos_y=(3.0, 6.0),
+            heading=(-math.pi, math.pi),  # Closer goals for initial learning
         ),
     )
 
@@ -185,30 +187,35 @@ class RewardsCfg:
         func=loc_mdp.is_terminated_term, weight=-200.0, params={"term_keys": "collision"}
     )
 
-    # Position tracking reward (coarse)
+    # Position tracking reward (coarse) - increased weight and adjusted std for closer goals
     position_tracking = RewTerm(
         func=mdp.position_command_error_tanh,
-        weight=10.0,
-        params={"std": 5.0, "command_name": "pose_command"},
+        weight=20.0,  # Increased from 10.0
+        params={"std": 3.0, "command_name": "pose_command"},  # Reduced from 5.0 for closer goals
     )
 
     # Position tracking reward (fine-grained)
     position_tracking_fine = RewTerm(
         func=mdp.position_command_error_tanh,
-        weight=50.0,
-        params={"std": 1.0, "command_name": "pose_command"},
+        weight=100.0,  # Increased from 50.0
+        params={
+            "std": 0.5,
+            "command_name": "pose_command",
+        },  # Reduced from 1.0 for tighter tracking
     )
 
-    # Reward for moving towards goal
+    # Reward for moving towards goal - CRITICAL for learning
     moving_towards_goal = RewTerm(
         func=mdp.moving_towards_goal_reward,
-        weight=20.0,
+        weight=50.0,  # Increased from 20.0 to strongly encourage movement
         params={"command_name": "pose_command"},
     )
 
     # Reward for maintaining target velocity
     target_vel_rew = RewTerm(
-        func=mdp.target_vel_reward, weight=10.0, params={"command_name": "pose_command"}
+        func=mdp.target_vel_reward,
+        weight=30.0,
+        params={"command_name": "pose_command"},  # Increased from 10.0
     )
 
 

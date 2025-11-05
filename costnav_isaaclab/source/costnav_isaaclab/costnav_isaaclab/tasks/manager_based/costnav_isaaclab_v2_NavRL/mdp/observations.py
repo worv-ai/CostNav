@@ -91,7 +91,9 @@ def rgbd_processed(
         images = images.float() / 255.0
         images = images.permute(0, 3, 1, 2)
         B, C, H, W = images.shape
+        # Handle inf and nan in depth images
         depth[depth == float("inf")] = 0
+        depth[~torch.isfinite(depth)] = 0  # Also handle NaN
         depth = depth.reshape(B, 1, H, W).clamp(0.0, 20.0) / 20.0
 
     rgbd = torch.cat([images, depth], dim=1).clone()
@@ -99,5 +101,8 @@ def rgbd_processed(
     # Flatten if requested (for concatenation with vector observations)
     if flatten:
         rgbd = rgbd.reshape(rgbd.shape[0], -1)
+
+    # Final safety check: replace any remaining NaN/Inf with zeros
+    rgbd = torch.where(torch.isfinite(rgbd), rgbd, torch.zeros_like(rgbd))
 
     return rgbd

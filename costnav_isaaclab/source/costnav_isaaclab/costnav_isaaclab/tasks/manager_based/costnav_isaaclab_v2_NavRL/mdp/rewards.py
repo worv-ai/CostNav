@@ -47,7 +47,14 @@ def position_command_error_tanh(
     command = env.command_manager.get_command(command_name)
     des_pos_b = command[:, :2]  # Only use x, y position (2D navigation)
     distance = torch.norm(des_pos_b, dim=1)
-    return (1 - torch.tanh(distance / std)).float()
+
+    # Compute reward with safety checks
+    reward = (1 - torch.tanh(distance / std)).float()
+
+    # Replace NaN/Inf with zeros
+    reward = torch.where(torch.isfinite(reward), reward, torch.zeros_like(reward))
+
+    return reward
 
 
 def heading_command_error_abs(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor:
@@ -78,11 +85,40 @@ def moving_towards_goal_reward(env: ManagerBasedRLEnv, command_name: str) -> tor
     Returns:
         Reward tensor of shape (num_envs,).
     """
+    # Get the command manager to access previous distance
+    command_term = env.command_manager.get_term(command_name)
+
+    # Get current distance to goal
     command = env.command_manager.get_command(command_name)
-    movement_xy = command[:, -1:]  # Last dimension contains movement metric
-    reward = movement_xy[:, 0]
-    # Only give reward after initial steps to avoid instability
-    return reward * (env.episode_length_buf >= 10).float()
+    target_pos = command[:, :2]  # x, y position in base frame
+    current_distance = torch.norm(target_pos, dim=1)
+
+    # Compute movement towards goal (negative means moving closer)
+    # We need to track previous distance - use metrics from command term
+    if hasattr(command_term, "metrics") and "error_pos_2d" in command_term.metrics:
+        # Use the stored distance metric if available
+        # Reward is positive when distance decreases
+        asset = env.scene["robot"]
+        vel = asset.data.root_lin_vel_b[:, 0:2]
+
+        # Compute velocity component towards goal
+        distance_to_target = current_distance.clamp_min(1e-6)
+        vel_direction = target_pos / distance_to_target.unsqueeze(-1)
+        movement_reward = (vel * vel_direction).sum(-1)
+
+        # Only give reward after initial steps to avoid instability
+        reward = movement_reward * (env.episode_length_buf >= 10).float()
+
+        # Clamp to prevent extreme values
+        reward = torch.clamp(reward, -10.0, 10.0)
+
+        # Replace NaN/Inf with zeros
+        reward = torch.where(torch.isfinite(reward), reward, torch.zeros_like(reward))
+
+        return reward
+    else:
+        # Fallback: return zero if metrics not available
+        return torch.zeros(env.num_envs, device=env.device)
 
 
 def target_vel_reward(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor:
@@ -104,6 +140,23 @@ def target_vel_reward(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor
     asset = env.scene["robot"]
     vel = asset.data.root_lin_vel_b[:, 0:2]
 
-    vel_direction = target_pos / distance_to_target_pos.clamp_min(1e-6)
+    # Avoid division by very small numbers - use a larger epsilon
+    # When very close to target (< 0.1m), don't give velocity reward
+    distance_threshold = 0.1
+    safe_distance = distance_to_target_pos.clamp_min(distance_threshold)
+
+    # Compute velocity direction only when far enough from target
+    vel_direction = target_pos / safe_distance
     reward_vel = (vel * vel_direction).sum(-1)
+
+    # Zero out reward when too close to target to avoid numerical issues
+    mask = (distance_to_target_pos.squeeze(-1) > distance_threshold).float()
+    reward_vel = reward_vel * mask
+
+    # Clamp to prevent extreme values
+    reward_vel = torch.clamp(reward_vel, -10.0, 10.0)
+
+    # Replace NaN/Inf with zeros
+    reward_vel = torch.where(torch.isfinite(reward_vel), reward_vel, torch.zeros_like(reward_vel))
+
     return reward_vel
