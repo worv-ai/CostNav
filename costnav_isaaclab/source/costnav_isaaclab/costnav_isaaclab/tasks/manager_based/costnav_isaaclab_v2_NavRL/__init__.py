@@ -7,6 +7,11 @@ import gymnasium as gym
 
 from . import agents
 
+# Register custom network builders for RL-Games (needed for mix_input_actor_critic)
+from .rl_games_network import register_mix_input_network
+
+register_mix_input_network()
+
 ##
 # Register Gym environments.
 ##

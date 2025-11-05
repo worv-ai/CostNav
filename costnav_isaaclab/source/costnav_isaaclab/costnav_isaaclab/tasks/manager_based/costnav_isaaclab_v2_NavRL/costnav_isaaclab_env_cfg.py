@@ -111,31 +111,36 @@ class ObservationsCfg:
 
     @configclass
     class PolicyCfg(ObsGroup):
-        """Observations for policy group."""
+        """Observations for policy group.
 
-        # observation terms (order preserved)
+        Note: Observations are concatenated in order: [pose_command, rgb_flattened]
+        - pose_command: [2] - goal position (x, y)
+        - rgb_flattened: [72900] - flattened RGB-D image (4 * 135 * 240)
+        Total: [72902]
+
+        The mixed input network will split and reshape them internally.
+        """
+
+        # observation terms (order preserved - ORDER MATTERS!)
+        # 1. Vector observations (goal commands) - will be processed by MLP branch
         pose_command = ObsTerm(
             func=mdp.advanced_generated_commands,
             params={"command_name": "pose_command", "max_dim": 2, "normalize": True},
         )
 
-        def __post_init__(self) -> None:
-            self.enable_corruption = False
-            self.concatenate_terms = True
-
-    @configclass
-    class SensorCfg(ObsGroup):
-        """Sensor observations for visual navigation."""
-
-        rgb = ObsTerm(func=mdp.rgbd_processed, params={"sensor_cfg": SceneEntityCfg("camera")})
+        # 2. Visual observations (RGB-D camera) - will be processed by CNN branch
+        # Flattened to enable concatenation with vector observations
+        rgb = ObsTerm(
+            func=mdp.rgbd_processed,
+            params={"sensor_cfg": SceneEntityCfg("camera"), "flatten": True},
+        )
 
         def __post_init__(self) -> None:
             self.enable_corruption = False
-            self.concatenate_terms = True
+            self.concatenate_terms = True  # Concatenate to single tensor for RL-Games compatibility
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
-    sensor: SensorCfg = SensorCfg()
 
 
 @configclass

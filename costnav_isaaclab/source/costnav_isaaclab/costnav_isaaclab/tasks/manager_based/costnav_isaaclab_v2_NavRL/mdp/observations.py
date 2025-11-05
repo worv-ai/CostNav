@@ -52,6 +52,7 @@ def rgbd_processed(
     sensor_cfg: SceneEntityCfg = SceneEntityCfg("tiled_camera"),
     convert_perspective_to_orthogonal: bool = False,
     normalize: bool = True,
+    flatten: bool = False,
 ) -> torch.Tensor:
     """Process RGB-D images from the camera sensor.
 
@@ -65,9 +66,14 @@ def rgbd_processed(
         convert_perspective_to_orthogonal: Whether to orthogonalize perspective depth images.
             This is used only when the data type is "distance_to_camera". Defaults to False.
         normalize: Whether to normalize the images. Defaults to True.
+        flatten: Whether to flatten the image to 1D vector. Defaults to False.
+            If True, returns shape (num_envs, 4*height*width).
+            If False, returns shape (num_envs, 4, height, width).
 
     Returns:
-        Combined RGB-D tensor of shape (num_envs, 4, height, width) where channels are [R, G, B, D].
+        Combined RGB-D tensor. Shape depends on flatten parameter:
+        - If flatten=False: (num_envs, 4, height, width) where channels are [R, G, B, D]
+        - If flatten=True: (num_envs, 4*height*width) flattened vector
     """
     # extract the used quantities (to enable type-hinting)
     sensor: TiledCamera | Camera | RayCasterCamera = env.scene.sensors[sensor_cfg.name]
@@ -88,4 +94,10 @@ def rgbd_processed(
         depth[depth == float("inf")] = 0
         depth = depth.reshape(B, 1, H, W).clamp(0.0, 20.0) / 20.0
 
-    return torch.cat([images, depth], dim=1).clone()
+    rgbd = torch.cat([images, depth], dim=1).clone()
+
+    # Flatten if requested (for concatenation with vector observations)
+    if flatten:
+        rgbd = rgbd.reshape(rgbd.shape[0], -1)
+
+    return rgbd
