@@ -38,18 +38,18 @@ class CostnavIsaaclabSceneCfg(InteractiveSceneCfg):
     """Configuration for COCO robot navigation scene with custom map."""
 
     # custom map
-    # custom_map = AssetBaseCfg(
-    #     prim_path="/World/custom_map",
-    #     spawn=sim_utils.UsdFileCfg(
-    #         usd_path="omniverse://10.50.2.21/Users/worv/map/Street_road.usd"
-    #     ),
-    # )
+    custom_map = AssetBaseCfg(
+        prim_path="/World/custom_map",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path="omniverse://10.50.2.21/Users/worv/map/Street_road.usd"
+        ),
+    )
 
     # ground plane
-    ground = AssetBaseCfg(
-        prim_path="/World/ground",
-        spawn=sim_utils.GroundPlaneCfg(size=(100.0, 100.0)),
-    )
+    # ground = AssetBaseCfg(
+    #     prim_path="/World/ground",
+    #     spawn=sim_utils.GroundPlaneCfg(size=(100.0, 100.0)),
+    # )
 
     # robot - COCO robot for navigation
     robot: ArticulationCfg = COCO_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
