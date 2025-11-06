@@ -290,20 +290,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                     # Print progress
                     if completed_episodes % 10 == 0:
                         elapsed = time.time() - start_time
-                        # Calculate termination stats for progress
-                        success_count = termination_counts.get(
-                            "arrive", 0
-                        ) + termination_counts.get("success", 0)
-                        success_rate = (
-                            (success_count / completed_episodes * 100)
-                            if completed_episodes > 0
-                            else 0
-                        )
                         print(
                             f"[{completed_episodes}/{args_cli.num_episodes}] "
                             f"Avg Reward: {np.mean(episode_rewards):.2f} ± {np.std(episode_rewards):.2f} | "
                             f"Avg Length: {np.mean(episode_lengths):.1f} | "
-                            f"Success: {success_rate:.1f}% | "
                             f"Time: {elapsed:.1f}s"
                         )
 
@@ -348,22 +338,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         for term_name, count in sorted_terms:
             percentage = (count / total_episodes * 100) if total_episodes > 0 else 0
             print(f"  {term_name:20s}: {count:4d} ({percentage:5.1f}%)")
-
-        # Calculate success rate
-        success_count = termination_counts.get("arrive", 0) + termination_counts.get("success", 0)
-        failure_count = termination_counts.get("collision", 0) + termination_counts.get("fail", 0)
-        timeout_count = termination_counts.get("time_out", 0)
-
-        print(f"\n  Summary:")
-        if success_count > 0:
-            success_rate = (success_count / total_episodes * 100) if total_episodes > 0 else 0
-            print(f"    Success Rate: {success_rate:.2f}% ({success_count}/{total_episodes})")
-        if failure_count > 0:
-            failure_rate = (failure_count / total_episodes * 100) if total_episodes > 0 else 0
-            print(f"    Failure Rate: {failure_rate:.2f}% ({failure_count}/{total_episodes})")
-        if timeout_count > 0:
-            timeout_rate = (timeout_count / total_episodes * 100) if total_episodes > 0 else 0
-            print(f"    Timeout Rate: {timeout_rate:.2f}% ({timeout_count}/{total_episodes})")
 
     # Print additional metrics if available
     if episode_data:
