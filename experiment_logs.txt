@@ -1,0 +1,3 @@
+coco_one (from urban-sim) with empty map: /workspace/costnav_isaaclab/logs/rl_games/coco_static/2025-11-05_09-49-25/
+coco_one_fix_prim with empty map: /workspace/costnav_isaaclab/logs/rl_games/coco_static/2025-11-06_07-18-39/
+coco_one_fix_prim with street map: 

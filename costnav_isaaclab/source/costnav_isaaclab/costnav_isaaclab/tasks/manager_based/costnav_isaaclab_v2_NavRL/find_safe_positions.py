@@ -66,6 +66,11 @@ parser.add_argument(
     default=3.0,
     help="Margin to shrink from map edges (default: 3.0m)",
 )
+parser.add_argument(
+    "--visualize_raycasts",
+    action="store_true",
+    help="Visualize raycasts with colored lines (green=safe, red=unsafe)",
+)
 
 # Append AppLauncher cli args (this adds --headless and other args)
 AppLauncher.add_app_launcher_args(parser)
@@ -250,6 +255,7 @@ def main():
         env=env,
         raycast_height=args_cli.raycast_height,
         min_clearance=args_cli.min_clearance,
+        visualize_raycasts=args_cli.visualize_raycasts,
         debug=True,
     )
 
@@ -260,6 +266,11 @@ def main():
         z_height=args_cli.z_height,
         grid_spacing=args_cli.spacing,
     )
+
+    # Visualize raycasts if requested
+    if args_cli.visualize_raycasts:
+        print("\n[Visualizing Raycasts]")
+        validator.visualize_raycast_results()
 
     print("[5/5] Saving results...")
 
@@ -352,9 +363,16 @@ SAFE_PERCENTAGE = {100.0 * len(safe_positions) / (len(safe_positions) + len(unsa
     print("The simulator is now showing:")
     print("  🟢 Green spheres = Safe positions")
     print("  🔴 Red spheres = Unsafe positions")
+    if args_cli.visualize_raycasts:
+        print("\nRaycast visualization:")
+        print("  🟢 Green lines = Raycasts that reached the sky (no obstacle)")
+        print("  🔴 Red lines = Raycasts that hit obstacles")
+        print("  🟡 Yellow spheres = Hit points on obstacles")
     print("\nThe visualization is now active. You can:")
     print("  - Inspect the scene in the viewport")
     print("  - Navigate around to see all positions")
+    if args_cli.visualize_raycasts:
+        print("  - Examine raycast lines to understand why positions are safe/unsafe")
     print("  - Press Ctrl+C or close the window to exit")
     print("=" * 80 + "\n")
 

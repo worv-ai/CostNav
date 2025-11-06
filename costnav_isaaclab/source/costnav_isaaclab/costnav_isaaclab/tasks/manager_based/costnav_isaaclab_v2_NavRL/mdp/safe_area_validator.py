@@ -44,6 +44,7 @@ class SafeAreaValidator:
         env: ManagerBasedEnv,
         raycast_height: float = 100.0,
         min_clearance: float = 2.0,
+        visualize_raycasts: bool = False,
         debug: bool = True,
     ):
         """Initialize the safe area validator.
@@ -52,15 +53,22 @@ class SafeAreaValidator:
             env: The environment instance.
             raycast_height: How high to raycast (meters). Default 100m should reach sky.
             min_clearance: Minimum clearance required above position (meters).
+            visualize_raycasts: Whether to visualize raycasts with lines and markers.
             debug: Whether to print debug information.
         """
         self.env = env
         self.raycast_height = raycast_height
         self.min_clearance = min_clearance
+        self.visualize_raycasts = visualize_raycasts
         self.debug = debug
 
         # Get PhysX scene for raycasting
         self.physx_scene_query_interface = omni.physx.get_physx_scene_query_interface()
+
+        # Storage for raycast visualization data
+        self.raycast_origins = []
+        self.raycast_hits = []
+        self.raycast_misses = []
 
     def validate_positions(
         self,
@@ -129,6 +137,21 @@ class SafeAreaValidator:
         # Perform raycast
         hit = self.physx_scene_query_interface.raycast_closest(origin, direction, distance)
 
+        # Store visualization data
+        if self.visualize_raycasts:
+            origin_pos = (float(pos[0]), float(pos[1]), float(pos[2]) + 0.1)
+            self.raycast_origins.append(origin_pos)
+
+            if hit["hit"]:
+                # Hit something - store hit point
+                hit_distance = hit["distance"]
+                hit_pos = (float(pos[0]), float(pos[1]), float(pos[2]) + 0.1 + hit_distance)
+                self.raycast_hits.append((origin_pos, hit_pos, hit_distance))
+            else:
+                # No hit - raycast went to max distance
+                end_pos = (float(pos[0]), float(pos[1]), float(pos[2]) + 0.1 + distance)
+                self.raycast_misses.append((origin_pos, end_pos))
+
         # If no hit, can see the sky (safe)
         if not hit["hit"]:
             return True
@@ -139,6 +162,87 @@ class SafeAreaValidator:
             return True  # Enough clearance above
 
         return False  # Blocked or insufficient clearance
+
+    def visualize_raycast_results(self):
+        """Visualize raycast results using USD lines.
+
+        Creates visual lines showing:
+        - Green lines: Raycasts that didn't hit anything (safe)
+        - Red lines: Raycasts that hit something (unsafe)
+        - Yellow spheres: Hit points
+        """
+        if not self.visualize_raycasts:
+            print("[SafeAreaValidator] Visualization not enabled. Set visualize_raycasts=True")
+            return
+
+        from pxr import UsdGeom
+
+        stage = self.env.sim.stage
+
+        # Create a parent Xform for all raycast visualizations
+        raycast_viz_path = "/World/Visuals/RaycastVisualization"
+        if stage.GetPrimAtPath(raycast_viz_path):
+            stage.RemovePrim(raycast_viz_path)
+
+        raycast_viz = UsdGeom.Xform.Define(stage, raycast_viz_path)
+
+        print("\n[Raycast Visualization]")
+        print(f"  Green lines: {len(self.raycast_misses)} raycasts with no hit (SAFE)")
+        print(f"  Red lines: {len(self.raycast_hits)} raycasts with hit (UNSAFE)")
+
+        # Debug: Show some sample hit distances
+        if len(self.raycast_hits) > 0:
+            sample_distances = [dist for _, _, dist in self.raycast_hits[:5]]
+            print(f"  Sample hit distances: {sample_distances}")
+
+        # Visualize hits (red lines)
+        for idx, (origin, hit_pos, distance) in enumerate(self.raycast_hits):
+            line_path = f"{raycast_viz_path}/HitRay_{idx}"
+            line = UsdGeom.BasisCurves.Define(stage, line_path)
+
+            # Set points
+            points = [origin, hit_pos]
+            line.GetPointsAttr().Set(points)
+
+            # Set curve type
+            line.GetTypeAttr().Set("linear")
+            line.GetCurveVertexCountsAttr().Set([2])
+
+            # Set color to red
+            line.CreateDisplayColorAttr([(1.0, 0.0, 0.0)])
+            line.CreateWidthsAttr([0.05])
+
+            # Add a small sphere at hit point (yellow)
+            sphere_path = f"{raycast_viz_path}/HitPoint_{idx}"
+            sphere = UsdGeom.Sphere.Define(stage, sphere_path)
+            sphere.GetRadiusAttr().Set(0.1)
+            sphere.AddTranslateOp().Set(hit_pos)
+            sphere.CreateDisplayColorAttr([(1.0, 1.0, 0.0)])  # Yellow
+
+        # Visualize misses (green lines) - show all of them
+        print(f"  Creating {len(self.raycast_misses)} green lines...")
+        for idx, (origin, end_pos) in enumerate(self.raycast_misses):
+            line_path = f"{raycast_viz_path}/MissRay_{idx}"
+            line = UsdGeom.BasisCurves.Define(stage, line_path)
+
+            # Set points (show 30m upward to make them clearly visible)
+            short_end = (origin[0], origin[1], origin[2] + 30.0)
+            points = [origin, short_end]
+            line.GetPointsAttr().Set(points)
+
+            # Set curve type
+            line.GetTypeAttr().Set("linear")
+            line.GetCurveVertexCountsAttr().Set([2])
+
+            # Set color to bright green
+            line.CreateDisplayColorAttr([(0.0, 1.0, 0.0)])
+            line.CreateWidthsAttr([0.05])  # Make them thick to be very visible
+
+        print(f"\n  Legend:")
+        print(f"    🟢 Green lines = Raycast to sky (no obstacle)")
+        print(f"    🔴 Red lines = Raycast hit obstacle")
+        print(f"    🟡 Yellow spheres = Hit points")
+        print(f"\n  Visualization created at: {raycast_viz_path}")
 
     def generate_safe_grid(
         self,
