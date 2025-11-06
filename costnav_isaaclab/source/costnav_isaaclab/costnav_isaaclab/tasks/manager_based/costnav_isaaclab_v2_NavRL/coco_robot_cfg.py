@@ -26,7 +26,7 @@ from isaaclab.utils import configclass
 # Robot instance
 COCO_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        usd_path="omniverse://10.50.2.21/Users/worv/coco_one.usd",
+        usd_path="omniverse://10.50.2.21/Users/worv/coco_one_fix_prim.usd",
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
