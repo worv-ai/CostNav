@@ -41,7 +41,7 @@ class CostnavIsaaclabSceneCfg(InteractiveSceneCfg):
     custom_map = AssetBaseCfg(
         prim_path="/World/custom_map",
         spawn=sim_utils.UsdFileCfg(
-            usd_path="omniverse://10.50.2.21/Users/worv/map/Street_road.usd"
+            usd_path="omniverse://10.50.2.21/Users/worv/map/Street_sidewalk.usd"
         ),
     )
 

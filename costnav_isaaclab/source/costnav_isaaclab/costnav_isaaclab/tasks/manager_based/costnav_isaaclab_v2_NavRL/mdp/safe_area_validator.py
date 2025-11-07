@@ -16,6 +16,22 @@ from pxr import Gf
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
 
+# Enable NavMesh extensions
+try:
+    from isaacsim.core.utils.extensions import enable_extension
+
+    enable_extension("omni.anim.navigation.core")
+    enable_extension("omni.anim.navigation.meshtools")
+    enable_extension("omni.anim.navigation.ui")
+    enable_extension("omni.anim.navigation.bundle")
+    import omni.anim.navigation.core as nav
+    import omni.kit.commands
+
+    NAVMESH_AVAILABLE = True
+except Exception as e:
+    print(f"[SafeAreaValidator] Warning: NavMesh extensions not available: {e}")
+    NAVMESH_AVAILABLE = False
+
 
 class SafeAreaValidator:
     """Validates safe spawn areas by raycasting to the sky.
@@ -45,6 +61,8 @@ class SafeAreaValidator:
         raycast_height: float = 100.0,
         min_clearance: float = 2.0,
         visualize_raycasts: bool = False,
+        check_navmesh_reachability: bool = False,
+        navmesh_origin: tuple[float, float, float] = (0.0, 0.0, 0.5),
         debug: bool = True,
     ):
         """Initialize the safe area validator.
@@ -54,12 +72,16 @@ class SafeAreaValidator:
             raycast_height: How high to raycast (meters). Default 100m should reach sky.
             min_clearance: Minimum clearance required above position (meters).
             visualize_raycasts: Whether to visualize raycasts with lines and markers.
+            check_navmesh_reachability: Whether to check if position is reachable via NavMesh from origin.
+            navmesh_origin: Origin point (x, y, z) to check NavMesh reachability from.
             debug: Whether to print debug information.
         """
         self.env = env
         self.raycast_height = raycast_height
         self.min_clearance = min_clearance
         self.visualize_raycasts = visualize_raycasts
+        self.check_navmesh_reachability = check_navmesh_reachability
+        self.navmesh_origin = navmesh_origin
         self.debug = debug
 
         # Get PhysX scene for raycasting
@@ -70,12 +92,31 @@ class SafeAreaValidator:
         self.raycast_hits = []
         self.raycast_misses = []
 
+        # NavMesh interface
+        self.navmesh_interface = None
+        if self.check_navmesh_reachability:
+            if not NAVMESH_AVAILABLE:
+                print(
+                    "[SafeAreaValidator] Warning: NavMesh reachability requested but extensions not available!"
+                )
+                print("  Disabling NavMesh checks.")
+                self.check_navmesh_reachability = False
+            else:
+                try:
+                    self.navmesh_interface = nav.acquire_interface()
+                    if self.debug:
+                        print("[SafeAreaValidator] NavMesh interface acquired successfully")
+                except Exception as e:
+                    print(f"[SafeAreaValidator] Failed to acquire NavMesh interface: {e}")
+                    print("  Disabling NavMesh checks.")
+                    self.check_navmesh_reachability = False
+
     def validate_positions(
         self,
         positions: torch.Tensor,
         batch_size: int = 100,
     ) -> torch.Tensor:
-        """Validate if positions are safe using upward raycasting.
+        """Validate if positions are safe using upward raycasting and optionally NavMesh.
 
         Args:
             positions: Tensor of shape (N, 3) with (x, y, z) positions to check.
@@ -89,6 +130,9 @@ class SafeAreaValidator:
 
         if self.debug:
             print(f"\n[SafeAreaValidator] Validating {num_positions} positions...")
+            if self.check_navmesh_reachability:
+                print("  - Raycast check: Upward to sky")
+                print(f"  - NavMesh check: Reachability from {self.navmesh_origin}")
 
         # Process in batches for performance
         for batch_start in range(0, num_positions, batch_size):
@@ -98,7 +142,16 @@ class SafeAreaValidator:
             # Check each position in the batch
             for i, pos in enumerate(batch_positions):
                 global_idx = batch_start + i
-                is_safe[global_idx] = self._raycast_to_sky(pos)
+
+                # First check: raycast to sky
+                raycast_safe = self._raycast_to_sky(pos)
+
+                # Second check: NavMesh reachability (if enabled and raycast passed)
+                if raycast_safe and self.check_navmesh_reachability:
+                    navmesh_safe = self._check_navmesh_reachability(pos)
+                    is_safe[global_idx] = navmesh_safe
+                else:
+                    is_safe[global_idx] = raycast_safe
 
                 if self.debug and (global_idx + 1) % 50 == 0:
                     safe_count = is_safe[: global_idx + 1].sum().item()
@@ -134,8 +187,11 @@ class SafeAreaValidator:
         # Raycast distance
         distance = self.raycast_height
 
-        # Perform raycast
-        hit = self.physx_scene_query_interface.raycast_closest(origin, direction, distance)
+        # Perform raycast with bothSides=True to hit both sides of mesh faces
+        # This is critical - without it, raycasts can pass through meshes depending on face orientation
+        hit = self.physx_scene_query_interface.raycast_closest(
+            origin, direction, distance, bothSides=True
+        )
 
         # Store visualization data
         if self.visualize_raycasts:
@@ -162,6 +218,165 @@ class SafeAreaValidator:
             return True  # Enough clearance above
 
         return False  # Blocked or insufficient clearance
+
+    def bake_navmesh(
+        self,
+        volume_size: tuple[float, float, float] = (100.0, 100.0, 10.0),
+        volume_position: tuple[float, float, float] = (0.0, 0.0, 5.0),
+        agent_height: float = 1.8,
+        agent_radius: float = 0.5,
+        agent_max_slope: float = 45.0,
+    ) -> bool:
+        """Bake NavMesh for the scene.
+
+        This method triggers NavMesh baking using the navigation interface.
+        The NavMesh is used for reachability checking in the validation process.
+
+        Args:
+            volume_size: Size of the NavMesh volume (x, y, z) in meters (currently unused).
+            volume_position: Position of the NavMesh volume center (x, y, z) in meters (currently unused).
+            agent_height: Height of the navigation agent in meters (currently unused).
+            agent_radius: Radius of the navigation agent in meters (currently unused).
+            agent_max_slope: Maximum slope angle in degrees that the agent can traverse (currently unused).
+
+        Returns:
+            True if NavMesh was baked successfully, False otherwise.
+
+        Note:
+            This method assumes NavMesh volumes are already set up in the scene.
+            You need to create NavMesh Include/Exclude volumes via the UI or USD authoring
+            before calling this method.
+        """
+        if not NAVMESH_AVAILABLE:
+            print("[SafeAreaValidator] ✗ NavMesh extensions not available. Cannot bake NavMesh.")
+            return False
+
+        try:
+            import time
+
+            print("[SafeAreaValidator] Checking NavMesh status...")
+
+            # Get the current navmesh state
+            navmesh = self.navmesh_interface.get_navmesh()
+            if navmesh is not None:
+                print("[SafeAreaValidator] ✓ NavMesh already exists and is baked!")
+                return True
+
+            print("[SafeAreaValidator] NavMesh not found. Attempting to bake...")
+            print(
+                "[SafeAreaValidator] NOTE: This requires NavMesh volumes to be set up in the scene."
+            )
+            print(
+                "[SafeAreaValidator]       (Create > Navigation > NavMesh Include Volume in Isaac Sim UI)"
+            )
+
+            # Stop simulation before baking
+            print("[SafeAreaValidator] Stopping simulation for NavMesh baking...")
+            self.env.sim.stop()
+
+            # Start NavMesh baking
+            print("[SafeAreaValidator] Triggering NavMesh baking via navigation interface...")
+            self.navmesh_interface.start_navmesh_baking()
+
+            # Wait for NavMesh to be baked
+            print("[SafeAreaValidator] Waiting for NavMesh to be baked (max 10 seconds)...")
+            max_wait_time = 300.0  # Reduced to 10 seconds
+            start_time = time.time()
+            check_count = 0
+            while navmesh is None:
+                navmesh = self.navmesh_interface.get_navmesh()
+                if navmesh is not None:
+                    break
+
+                # Check timeout
+                elapsed = time.time() - start_time
+                if elapsed > max_wait_time:
+                    print(f"[SafeAreaValidator] ✗ NavMesh baking timed out after {max_wait_time}s")
+                    print(
+                        "[SafeAreaValidator]   This likely means no NavMesh volumes exist in the scene."
+                    )
+                    print("[SafeAreaValidator]   NavMesh reachability checking will be DISABLED.")
+                    print("[SafeAreaValidator]   Continuing with raycast-only validation...")
+                    self.env.sim.play()
+                    return False
+
+                check_count += 1
+                if check_count % 10 == 0:  # Print progress every second
+                    print(f"[SafeAreaValidator]   Still waiting... ({elapsed:.1f}s elapsed)")
+
+                time.sleep(0.1)
+
+            # Restart simulation
+            print("[SafeAreaValidator] Restarting simulation...")
+            self.env.sim.play()
+
+            print("[SafeAreaValidator] ✓ NavMesh baked successfully!")
+            return True
+
+        except Exception as e:
+            print(f"[SafeAreaValidator] ✗ Error baking NavMesh: {e}")
+            import traceback
+
+            traceback.print_exc()
+
+            # Make sure simulation is restarted even if there's an error
+            try:
+                self.env.sim.play()
+            except Exception:
+                pass
+
+            return False
+
+    def _check_navmesh_reachability(self, position: torch.Tensor) -> bool:
+        """Check if position is reachable from origin via NavMesh pathfinding.
+
+        Args:
+            position: Tensor of shape (3,) with (x, y, z) position.
+
+        Returns:
+            True if position is reachable from origin via NavMesh, False otherwise.
+        """
+        if not self.check_navmesh_reachability or self.navmesh_interface is None:
+            return True  # Skip check if not enabled
+
+        try:
+            # Get the NavMesh object
+            navmesh = self.navmesh_interface.get_navmesh()
+            if navmesh is None:
+                # NavMesh not baked yet
+                if self.debug:
+                    print(
+                        "[SafeAreaValidator] Warning: NavMesh not baked. Skipping reachability check."
+                    )
+                return True
+
+            # Convert to carb.Float3 for NavMesh API
+            import carb
+
+            pos = position.cpu().numpy()
+            start = carb.Float3(
+                float(self.navmesh_origin[0]),
+                float(self.navmesh_origin[1]),
+                float(self.navmesh_origin[2]),
+            )
+            end = carb.Float3(float(pos[0]), float(pos[1]), float(pos[2]))
+
+            # Query NavMesh for shortest path from origin to target
+            navmesh_path = navmesh.query_shortest_path(start_pos=start, end_pos=end)
+
+            # Check if path exists and is valid
+            if navmesh_path is not None:
+                points = navmesh_path.get_points()
+                if points and len(points) > 0:
+                    return True
+
+            return False
+
+        except Exception as e:
+            # If NavMesh query fails, log and assume reachable (fail-safe)
+            if self.debug:
+                print(f"[SafeAreaValidator] NavMesh query failed for position {position}: {e}")
+            return True
 
     def visualize_raycast_results(self):
         """Visualize raycast results using USD lines.
@@ -226,7 +441,7 @@ class SafeAreaValidator:
             line = UsdGeom.BasisCurves.Define(stage, line_path)
 
             # Set points (show 30m upward to make them clearly visible)
-            short_end = (origin[0], origin[1], origin[2] + 30.0)
+            short_end = (origin[0], origin[1], origin[2] + 100.0)
             points = [origin, short_end]
             line.GetPointsAttr().Set(points)
 

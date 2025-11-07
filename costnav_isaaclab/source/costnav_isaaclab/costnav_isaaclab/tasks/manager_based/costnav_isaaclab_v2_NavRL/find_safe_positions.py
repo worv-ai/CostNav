@@ -71,6 +71,42 @@ parser.add_argument(
     action="store_true",
     help="Visualize raycasts with colored lines (green=safe, red=unsafe)",
 )
+parser.add_argument(
+    "--check_navmesh",
+    action="store_true",
+    help="Check NavMesh reachability from origin (0, 0, 0.5)",
+)
+parser.add_argument(
+    "--navmesh_origin",
+    type=float,
+    nargs=3,
+    default=[0.0, 0.0, 0.5],
+    help="Origin point (x, y, z) for NavMesh reachability check (default: 0 0 0.5)",
+)
+parser.add_argument(
+    "--bake_navmesh",
+    action="store_true",
+    help="Automatically bake NavMesh before validation (required for --check_navmesh)",
+)
+parser.add_argument(
+    "--navmesh_volume_size",
+    type=float,
+    nargs=3,
+    default=[100.0, 100.0, 10.0],
+    help="NavMesh volume size (x, y, z) in meters (default: 100 100 10)",
+)
+parser.add_argument(
+    "--navmesh_agent_height",
+    type=float,
+    default=1.8,
+    help="NavMesh agent height in meters (default: 1.8)",
+)
+parser.add_argument(
+    "--navmesh_agent_radius",
+    type=float,
+    default=0.5,
+    help="NavMesh agent radius in meters (default: 0.5)",
+)
 
 # Append AppLauncher cli args (this adds --headless and other args)
 AppLauncher.add_app_launcher_args(parser)
@@ -219,6 +255,20 @@ def main():
     env_cfg = CostnavIsaaclabEnvCfg()
     env_cfg.scene.num_envs = 1  # Only need one environment for validation
 
+    # Remove camera from scene and observations
+    # Camera is not needed for safe position finding
+    if hasattr(env_cfg.scene, "camera"):
+        env_cfg.scene.camera = None
+        # Also remove RGB observation term that references the camera
+        if hasattr(env_cfg.observations, "policy") and hasattr(env_cfg.observations.policy, "rgb"):
+            delattr(env_cfg.observations.policy, "rgb")
+        print(
+            "  [Memory optimization] Disabled camera and RGB observations (not needed for position finding)"
+        )
+
+    # Keep robot but it won't be used - just needed for env initialization
+    # The robot is lightweight compared to the map rendering
+
     print("[1/5] Creating environment and loading map...")
     env = ManagerBasedRLEnv(cfg=env_cfg)
 
@@ -248,6 +298,66 @@ def main():
     print(f"Raycast height: {args_cli.raycast_height}m")
     print(f"Min clearance: {args_cli.min_clearance}m")
 
+    # Handle NavMesh baking and verification
+    if args_cli.bake_navmesh or args_cli.check_navmesh:
+        print("\n[3.5/5] Setting up NavMesh...")
+
+        # Create a temporary validator to check/bake NavMesh
+        temp_validator = SafeAreaValidator(
+            env=env,
+            raycast_height=args_cli.raycast_height,
+            min_clearance=args_cli.min_clearance,
+            visualize_raycasts=False,
+            check_navmesh_reachability=True,
+            navmesh_origin=tuple(args_cli.navmesh_origin),
+            debug=True,
+        )
+
+        # Check if NavMesh already exists
+        navmesh_exists = False
+        if temp_validator.navmesh_interface is not None:
+            existing_navmesh = temp_validator.navmesh_interface.get_navmesh()
+            if existing_navmesh is not None:
+                print("[SafeAreaValidator] ✓ NavMesh already exists in the scene!")
+                navmesh_exists = True
+
+        # Bake NavMesh if requested and it doesn't exist
+        if args_cli.bake_navmesh and not navmesh_exists:
+            print("[SafeAreaValidator] Baking NavMesh...")
+
+            # Calculate NavMesh volume position (center of search area)
+            volume_center_x = (args_cli.x_range[0] + args_cli.x_range[1]) / 2.0
+            volume_center_y = (args_cli.y_range[0] + args_cli.y_range[1]) / 2.0
+            volume_position = (
+                volume_center_x,
+                volume_center_y,
+                args_cli.navmesh_volume_size[2] / 2.0,
+            )
+
+            # Bake NavMesh
+            navmesh_baked = temp_validator.bake_navmesh(
+                volume_size=tuple(args_cli.navmesh_volume_size),
+                volume_position=volume_position,
+                agent_height=args_cli.navmesh_agent_height,
+                agent_radius=args_cli.navmesh_agent_radius,
+            )
+
+            if navmesh_baked:
+                navmesh_exists = True
+            elif args_cli.check_navmesh:
+                print("[WARNING] NavMesh baking failed but --check_navmesh was requested.")
+                print("          Continuing with raycast-only validation...")
+                args_cli.check_navmesh = False
+
+        # If check_navmesh is requested but NavMesh doesn't exist, disable it
+        if args_cli.check_navmesh and not navmesh_exists:
+            print("[WARNING] --check_navmesh requested but NavMesh is not available.")
+            print(
+                "          Use --bake_navmesh to bake NavMesh, or ensure it's already baked in the scene."
+            )
+            print("          Continuing with raycast-only validation...")
+            args_cli.check_navmesh = False
+
     print("\n[4/5] Validating positions (this may take a while)...")
 
     # Create validator
@@ -256,6 +366,8 @@ def main():
         raycast_height=args_cli.raycast_height,
         min_clearance=args_cli.min_clearance,
         visualize_raycasts=args_cli.visualize_raycasts,
+        check_navmesh_reachability=args_cli.check_navmesh,
+        navmesh_origin=tuple(args_cli.navmesh_origin),
         debug=True,
     )
 
@@ -368,11 +480,17 @@ SAFE_PERCENTAGE = {100.0 * len(safe_positions) / (len(safe_positions) + len(unsa
         print("  🟢 Green lines = Raycasts that reached the sky (no obstacle)")
         print("  🔴 Red lines = Raycasts that hit obstacles")
         print("  🟡 Yellow spheres = Hit points on obstacles")
+    if args_cli.check_navmesh:
+        print("\nNavMesh validation:")
+        print(f"  ✓ Positions checked for reachability from {args_cli.navmesh_origin}")
+        print("  ✓ Only positions reachable via NavMesh are marked as safe")
     print("\nThe visualization is now active. You can:")
     print("  - Inspect the scene in the viewport")
     print("  - Navigate around to see all positions")
     if args_cli.visualize_raycasts:
         print("  - Examine raycast lines to understand why positions are safe/unsafe")
+    if args_cli.check_navmesh:
+        print("  - Verify that safe positions are reachable from the origin")
     print("  - Press Ctrl+C or close the window to exit")
     print("=" * 80 + "\n")
 
