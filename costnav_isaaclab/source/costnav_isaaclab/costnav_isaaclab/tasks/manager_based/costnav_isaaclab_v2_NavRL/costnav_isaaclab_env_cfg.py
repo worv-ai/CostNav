@@ -7,7 +7,6 @@ import math
 
 import isaaclab.sim as sim_utils
 import isaaclab_tasks.manager_based.locomotion.velocity.mdp as loc_mdp
-import isaaclab_tasks.manager_based.navigation.mdp as nav_mdp
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
@@ -22,6 +21,7 @@ from isaaclab.utils import configclass
 
 from . import mdp
 from .coco_robot_cfg import COCO_CFG, ClassicalCarActionCfg
+from .safe_positions_auto_generated import SAFE_POSITIONS
 
 ##
 # Pre-defined configs
@@ -92,15 +92,15 @@ class CostnavIsaaclabSceneCfg(InteractiveSceneCfg):
 class CommandsCfg:
     """Command specifications for the MDP."""
 
-    pose_command = nav_mdp.UniformPose2dCommandCfg(
+    # Use custom command generator that samples from safe positions
+    pose_command = mdp.SafePositionPose2dCommandCfg(
         asset_name="robot",
         simple_heading=True,  # Point towards goal for easier learning
         resampling_time_range=(30.0, 30.0),
         debug_vis=True,
-        ranges=nav_mdp.UniformPose2dCommandCfg.Ranges(
-            pos_x=(3.0, 6.0),
-            pos_y=(3.0, 6.0),
-            heading=(-math.pi, math.pi),  # Closer goals for initial learning
+        safe_positions=SAFE_POSITIONS,  # Use pre-validated safe positions
+        ranges=mdp.SafePositionPose2dCommandCfg.Ranges(
+            heading=(-math.pi, math.pi),
         ),
     )
 
@@ -155,19 +155,19 @@ class ObservationsCfg:
 class EventCfg:
     """Configuration for events."""
 
-    # reset robot base position
+    # Reset robot base position using safe positions
     reset_base = EventTerm(
-        func=loc_mdp.reset_root_state_uniform,
+        func=mdp.reset_root_state_from_safe_positions,
         mode="reset",
         params={
-            "pose_range": {"x": (0.3, 0.3), "y": (0.3, 0.3), "yaw": (0.0, 0.0)},
+            "safe_positions": SAFE_POSITIONS,  # Use pre-validated safe positions
             "velocity_range": {
                 "x": (-0.0, 0.0),
                 "y": (-0.0, 0.0),
                 "z": (-0.0, 0.0),
                 "roll": (-0.0, 0.0),
                 "pitch": (-0.0, 0.0),
-                "yaw": (-0.0, 0.0),
+                "yaw": (-math.pi, math.pi),  # Random yaw orientation
             },
         },
     )
@@ -253,8 +253,8 @@ class TerminationsCfg:
 class CostnavIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for COCO robot navigation environment with custom map."""
 
-    # Scene settings - reduced num_envs for complex map
-    scene: CostnavIsaaclabSceneCfg = CostnavIsaaclabSceneCfg(num_envs=64, env_spacing=4.0)
+    # Scene settings - using safe positions for spawning, no env_spacing needed
+    scene: CostnavIsaaclabSceneCfg = CostnavIsaaclabSceneCfg(num_envs=32, env_spacing=0.0)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
