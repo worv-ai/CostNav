@@ -130,14 +130,14 @@ from isaaclab.envs import ManagerBasedRLEnv
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from pxr import Gf, Usd, UsdGeom
 
+# Import the safe area validator
+from costnav_isaaclab.source.costnav_isaaclab.costnav_isaaclab.tasks.manager_based.costnav_isaaclab_v2_NavRL.safe_area_validator import (
+    SafeAreaValidator,
+)
+
 # Import the configuration
 from costnav_isaaclab.tasks.manager_based.costnav_isaaclab_v2_NavRL.costnav_isaaclab_env_cfg import (
     CostnavIsaaclabEnvCfg,
-)
-
-# Import the safe area validator
-from costnav_isaaclab.tasks.manager_based.costnav_isaaclab_v2_NavRL.mdp.safe_area_validator import (
-    SafeAreaValidator,
 )
 
 
