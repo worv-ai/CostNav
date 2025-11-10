@@ -194,6 +194,16 @@ def distance_to_goal_progress(
         command_term._prev_distance = torch.zeros(env.num_envs, device=env.device)
         command_term._prev_distance[:] = current_distance
 
+    # Detect environments that just reset (episode_length_buf <= 1)
+    # This prevents large reward spikes when goal changes after reset
+    # episode_length_buf is incremented before reward computation, so:
+    # - After reset: episode_length_buf is set to 0, then incremented to 1
+    # - We reset _prev_distance on the first step (episode_length_buf == 1)
+    if hasattr(env, "episode_length_buf"):
+        reset_mask = env.episode_length_buf <= 1
+        if reset_mask.any():
+            command_term._prev_distance[reset_mask] = current_distance[reset_mask]
+
     # Compute progress: previous_distance - current_distance
     # Positive when moving closer to goal, negative when moving away
     progress = command_term._prev_distance - current_distance
@@ -204,12 +214,116 @@ def distance_to_goal_progress(
     # Update previous distance for next step
     command_term._prev_distance[:] = current_distance
 
-    # Reset previous distance for environments that just reset
-    # This prevents large reward spikes on reset
-    if hasattr(env, "episode_length_buf"):
-        reset_mask = env.episode_length_buf == 0
-        if reset_mask.any():
-            command_term._prev_distance[reset_mask] = current_distance[reset_mask]
-            reward[reset_mask] = -slack_penalty  # Only apply slack penalty on first step
-
     return reward
+
+
+def print_rewards(env: ManagerBasedRLEnv, print_every_n_steps: int = 1) -> torch.Tensor:
+    """Print all reward components for debugging.
+
+    This function prints detailed reward information for the first environment
+    at every N steps. It returns zero reward (doesn't affect training).
+
+    Args:
+        env: The environment instance.
+        print_every_n_steps: Print frequency (default: every step).
+
+    Returns:
+        Zero tensor (this reward doesn't contribute to training).
+    """
+    try:
+        # Only print for first environment to avoid spam
+        env_id = 0
+
+        # Check if we should print this step
+        step = env.common_step_counter
+        if step % print_every_n_steps != 0:
+            return torch.zeros(env.num_envs, device=env.device)
+
+        # Get reward manager to access individual reward terms
+        reward_manager = env.reward_manager
+
+        # Print header
+        print("\n" + "=" * 80)
+        print(f"STEP {step} | Episode Step: {env.episode_length_buf[env_id].item()}")
+        print("=" * 80)
+
+        # Print observation (goal command)
+        if hasattr(env, "observation_manager"):
+            print("\nOBSERVATION (Goal):")
+            # Try to get the pose_command observation
+            try:
+                obs_dict = env.observation_manager.compute()
+                if "policy" in obs_dict:
+                    # For concatenated observations, we need to parse it
+                    # The pose_command is the first 2 values (x, y) - normalized to max 5.0m
+                    obs = obs_dict["policy"][env_id]
+                    goal_obs = obs[:2].cpu().numpy()
+                    goal_distance_obs = torch.norm(obs[:2]).item()
+                    print(
+                        f"  Goal (normalized, max=5.0m): [{goal_obs[0]:.3f}, {goal_obs[1]:.3f}], distance={goal_distance_obs:.3f}m"
+                    )
+            except Exception as e:
+                print(f"  Could not extract observation: {e}")
+
+        # Print action
+        if hasattr(env, "action_manager"):
+            print("\nACTION:")
+            try:
+                # Get the last action applied from action_manager._action
+                action = env.action_manager._action[env_id]
+                print(f"  Action: {action.cpu().numpy()}")
+            except Exception as e:
+                print(f"  Could not extract action: {e}")
+
+        # Print command information
+        if hasattr(env, "command_manager") and len(env.command_manager.active_terms) > 0:
+            print("\nCOMMAND INFO (in base frame):")
+            for cmd_name in env.command_manager.active_terms:
+                cmd = env.command_manager.get_command(cmd_name)[env_id]
+                if cmd.shape[0] >= 2:
+                    distance = torch.norm(cmd[:2]).item()
+                    # cmd format: [x, y, z, heading]
+                    print(f"  {cmd_name}:")
+                    print(
+                        f"    Position (x, y): [{cmd[0].item():.3f}, {cmd[1].item():.3f}], distance={distance:.3f}m"
+                    )
+                    if cmd.shape[0] >= 4:
+                        print(
+                            f"    Heading: {cmd[3].item():.3f} rad ({cmd[3].item() * 180 / 3.14159:.1f}°)"
+                        )
+
+        # Print each reward term
+        print("\nREWARDS:")
+        total_reward = 0.0
+        for idx, term_name in enumerate(reward_manager.active_terms):
+            # Get the reward value for this term (already weighted and scaled by dt)
+            term_value = reward_manager._step_reward[env_id, idx].item()
+            total_reward += term_value
+
+            # Get the weight
+            term_cfg = reward_manager._term_cfgs[idx]
+            weight = term_cfg.weight
+
+            print(f"  {term_name:30s}: {term_value:10.4f} (weight: {weight:8.1f})")
+
+        print("-" * 80)
+        print(f"  {'TOTAL REWARD':30s}: {total_reward:10.4f}")
+
+        # Print termination status
+        if hasattr(env, "termination_manager"):
+            print("\nTERMINATION STATUS:")
+            for term_name in env.termination_manager.active_terms:
+                term_value = env.termination_manager.get_term(term_name)[env_id].item()
+                if term_value > 0:
+                    print(f"  {term_name}: TRIGGERED")
+
+        print("=" * 80 + "\n")
+
+    except Exception as e:
+        print(f"[DEBUG] Error in print_rewards: {e}")
+        import traceback
+
+        traceback.print_exc()
+
+    # Return zero (this reward doesn't contribute to training)
+    return torch.zeros(env.num_envs, device=env.device)

@@ -99,6 +99,7 @@ class CommandsCfg:
         resampling_time_range=(1.0e9, 1.0e9),  # is this the only way to avoid resampling lol
         debug_vis=True,
         safe_positions=SAFE_POSITIONS,  # Use pre-validated safe positions
+        min_goal_distance=10.0,  # Minimum distance between robot and goal (in meters)
         ranges=mdp.SafePositionPose2dCommandCfg.Ranges(
             heading=(-math.pi, math.pi),
         ),
@@ -225,6 +226,13 @@ class RewardsCfg:
     #     params={"command_name": "pose_command"},  # Increased from 10.0
     # )
 
+    # DEBUG: Print rewards every step (weight=0.001 is negligible but ensures it runs)
+    debug_print = RewTerm(
+        func=mdp.print_rewards,
+        weight=0.001,  # Very small weight so it runs but doesn't affect training
+        params={"print_every_n_steps": 1},  # Change to higher number to print less frequently
+    )
+
 
 @configclass
 class TerminationsCfg:
@@ -261,7 +269,7 @@ class CostnavIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for COCO robot navigation environment with custom map."""
 
     # Scene settings - using safe positions for spawning, no env_spacing needed
-    scene: CostnavIsaaclabSceneCfg = CostnavIsaaclabSceneCfg(num_envs=16, env_spacing=0.0)
+    scene: CostnavIsaaclabSceneCfg = CostnavIsaaclabSceneCfg(num_envs=1, env_spacing=0.0)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
