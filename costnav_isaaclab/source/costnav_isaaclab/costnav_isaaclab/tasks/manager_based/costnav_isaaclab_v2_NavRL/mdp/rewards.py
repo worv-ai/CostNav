@@ -160,3 +160,56 @@ def target_vel_reward(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor
     reward_vel = torch.where(torch.isfinite(reward_vel), reward_vel, torch.zeros_like(reward_vel))
 
     return reward_vel
+
+
+def distance_to_goal_progress(
+    env: ManagerBasedRLEnv, command_name: str, slack_penalty: float = 0.01
+) -> torch.Tensor:
+    """Reward based on change in distance to goal (progress reward).
+
+    This implements the reward function:
+        r_t = D(P_t, g) - D(P_{t+1}, g) - λ
+
+    where D(·, ·) is the distance to goal, and λ is a slack penalty to encourage
+    efficient paths. Positive reward is given when the robot moves closer to the goal.
+
+    Args:
+        env: The environment instance.
+        command_name: Name of the command term containing the goal position.
+        slack_penalty: Constant slack penalty (λ) to encourage efficient paths.
+
+    Returns:
+        Reward tensor of shape (num_envs,).
+    """
+    # Get the command term to access previous distance
+    command_term = env.command_manager.get_term(command_name)
+
+    # Get current distance to goal
+    command = env.command_manager.get_command(command_name)
+    target_pos = command[:, :2]  # x, y position in base frame
+    current_distance = torch.norm(target_pos, dim=1)
+
+    # Initialize previous distance buffer if it doesn't exist
+    if not hasattr(command_term, "_prev_distance"):
+        command_term._prev_distance = torch.zeros(env.num_envs, device=env.device)
+        command_term._prev_distance[:] = current_distance
+
+    # Compute progress: previous_distance - current_distance
+    # Positive when moving closer to goal, negative when moving away
+    progress = command_term._prev_distance - current_distance
+
+    # Apply slack penalty
+    reward = progress - slack_penalty
+
+    # Update previous distance for next step
+    command_term._prev_distance[:] = current_distance
+
+    # Reset previous distance for environments that just reset
+    # This prevents large reward spikes on reset
+    if hasattr(env, "episode_length_buf"):
+        reset_mask = env.episode_length_buf == 0
+        if reset_mask.any():
+            command_term._prev_distance[reset_mask] = current_distance[reset_mask]
+            reward[reset_mask] = -slack_penalty  # Only apply slack penalty on first step
+
+    return reward

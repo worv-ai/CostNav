@@ -17,21 +17,20 @@ if TYPE_CHECKING:
 
 def arrive(env: ManagerBasedRLEnv, threshold: float, command_name: str) -> torch.Tensor:
     """Terminate when the robot arrives at the goal position.
-    
+
     This function checks if the robot is within a threshold distance of the goal
     and has been running for at least 10 steps to avoid premature termination.
-    
+
     Args:
         env: The environment instance.
         threshold: Distance threshold for arrival (in meters).
         command_name: Name of the command term containing the goal position.
-        
+
     Returns:
         Boolean tensor indicating which environments should terminate.
     """
     command = env.command_manager.get_command(command_name)
     des_pos_b = command[:, :2]  # Only use x, y position (2D navigation)
     distance = torch.norm(des_pos_b, dim=1)
-    # Terminate if within threshold and episode has run for at least 10 steps
-    return ((distance <= threshold).bool() * (env.episode_length_buf >= 10).bool()).bool()
-
+    # Terminate if within threshold
+    return (distance <= threshold).bool()

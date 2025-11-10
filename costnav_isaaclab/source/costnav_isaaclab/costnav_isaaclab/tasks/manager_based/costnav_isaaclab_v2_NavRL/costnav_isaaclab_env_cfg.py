@@ -38,18 +38,18 @@ class CostnavIsaaclabSceneCfg(InteractiveSceneCfg):
     """Configuration for COCO robot navigation scene with custom map."""
 
     # custom map
-    custom_map = AssetBaseCfg(
-        prim_path="/World/custom_map",
-        spawn=sim_utils.UsdFileCfg(
-            usd_path="omniverse://10.50.2.21/Users/worv/map/Street_sidewalk.usd"
-        ),
-    )
+    # custom_map = AssetBaseCfg(
+    #     prim_path="/World/custom_map",
+    #     spawn=sim_utils.UsdFileCfg(
+    #         usd_path="omniverse://10.50.2.21/Users/worv/map/Street_sidewalk.usd"
+    #     ),
+    # )
 
     # ground plane
-    # ground = AssetBaseCfg(
-    #     prim_path="/World/ground",
-    #     spawn=sim_utils.GroundPlaneCfg(size=(100.0, 100.0)),
-    # )
+    ground = AssetBaseCfg(
+        prim_path="/World/ground",
+        spawn=sim_utils.GroundPlaneCfg(size=(100.0, 100.0)),
+    )
 
     # robot - COCO robot for navigation
     robot: ArticulationCfg = COCO_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
@@ -96,7 +96,7 @@ class CommandsCfg:
     pose_command = mdp.SafePositionPose2dCommandCfg(
         asset_name="robot",
         simple_heading=True,  # Point towards goal for easier learning
-        resampling_time_range=(30.0, 30.0),
+        resampling_time_range=(1.0e9, 1.0e9),  # is this the only way to avoid resampling lol
         debug_vis=True,
         safe_positions=SAFE_POSITIONS,  # Use pre-validated safe positions
         ranges=mdp.SafePositionPose2dCommandCfg.Ranges(
@@ -187,36 +187,43 @@ class RewardsCfg:
         func=loc_mdp.is_terminated_term, weight=-200.0, params={"term_keys": "collision"}
     )
 
-    # Position tracking reward (coarse) - increased weight and adjusted std for closer goals
-    position_tracking = RewTerm(
-        func=mdp.position_command_error_tanh,
-        weight=20.0,  # Increased from 10.0
-        params={"std": 3.0, "command_name": "pose_command"},  # Reduced from 5.0 for closer goals
+    # basic goal based distance reward
+    distance_progress = RewTerm(
+        func=mdp.distance_to_goal_progress,
+        weight=1.0,
+        params={"command_name": "pose_command", "slack_penalty": 0.01},
     )
+
+    # Position tracking reward (coarse) - increased weight and adjusted std for closer goals
+    # position_tracking = RewTerm(
+    #     func=mdp.position_command_error_tanh,
+    #     weight=50.0,  # Increased from 10.0
+    #     params={"std": 30.0, "command_name": "pose_command"},  # Reduced from 5.0 for closer goals
+    # )
 
     # Position tracking reward (fine-grained)
-    position_tracking_fine = RewTerm(
-        func=mdp.position_command_error_tanh,
-        weight=100.0,  # Increased from 50.0
-        params={
-            "std": 0.5,
-            "command_name": "pose_command",
-        },  # Reduced from 1.0 for tighter tracking
-    )
+    # position_tracking_fine = RewTerm(
+    #     func=mdp.position_command_error_tanh,
+    #     weight=200.0,  # Increased from 50.0
+    #     params={
+    #         "std": 10.0,
+    #         "command_name": "pose_command",
+    #     },  # Reduced from 1.0 for tighter tracking
+    # )
 
     # Reward for moving towards goal - CRITICAL for learning
-    moving_towards_goal = RewTerm(
-        func=mdp.moving_towards_goal_reward,
-        weight=50.0,  # Increased from 20.0 to strongly encourage movement
-        params={"command_name": "pose_command"},
-    )
+    # moving_towards_goal = RewTerm(
+    #     func=mdp.moving_towards_goal_reward,
+    #     weight=100.0,  # Increased from 20.0 to strongly encourage movement
+    #     params={"command_name": "pose_command"},
+    # )
 
     # Reward for maintaining target velocity
-    target_vel_rew = RewTerm(
-        func=mdp.target_vel_reward,
-        weight=30.0,
-        params={"command_name": "pose_command"},  # Increased from 10.0
-    )
+    # target_vel_rew = RewTerm(
+    #     func=mdp.target_vel_reward,
+    #     weight=30.0,
+    #     params={"command_name": "pose_command"},  # Increased from 10.0
+    # )
 
 
 @configclass
@@ -254,7 +261,7 @@ class CostnavIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for COCO robot navigation environment with custom map."""
 
     # Scene settings - using safe positions for spawning, no env_spacing needed
-    scene: CostnavIsaaclabSceneCfg = CostnavIsaaclabSceneCfg(num_envs=32, env_spacing=0.0)
+    scene: CostnavIsaaclabSceneCfg = CostnavIsaaclabSceneCfg(num_envs=16, env_spacing=0.0)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
@@ -269,7 +276,7 @@ class CostnavIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 10  # Control frequency: 50 Hz (500ms / 10)
-        self.episode_length_s = 30.0  # 30 second episodes for navigation
+        self.episode_length_s = 60.0  # second episodes for navigation
 
         # viewer settings
         self.viewer.eye = (8.0, 0.0, 5.0)
