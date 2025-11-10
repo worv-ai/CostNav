@@ -122,20 +122,25 @@ class ObservationsCfg:
     class PolicyCfg(ObsGroup):
         """Observations for policy group.
 
-        Note: Observations are concatenated in order: [pose_command, rgb_flattened]
-        - pose_command: [2] - goal position (x, y)
+        Note: Observations are concatenated in order: [pose_command, base_lin_vel, base_ang_vel, rgb_flattened]
+        - pose_command: [2] - goal position (x, y) in base frame
+        - base_lin_vel: [3] - linear velocity (vx, vy, vz) in base frame
+        - base_ang_vel: [3] - angular velocity (wx, wy, wz) in base frame
         - rgb_flattened: [72900] - flattened RGB-D image (4 * 135 * 240)
-        Total: [72902]
+        Total: [72908]
 
         The mixed input network will split and reshape them internally.
         """
 
         # observation terms (order preserved - ORDER MATTERS!)
-        # 1. Vector observations (goal commands) - will be processed by MLP branch
+        # 1. Vector observations (goal commands + velocities) - will be processed by MLP branch
         pose_command = ObsTerm(
             func=mdp.advanced_generated_commands,
             params={"command_name": "pose_command", "max_dim": 2, "normalize": True},
         )
+
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel)  # [3] - linear velocity in base frame
+        base_ang_vel = ObsTerm(func=mdp.base_ang_vel)  # [3] - angular velocity in base frame
 
         # 2. Visual observations (RGB-D camera) - will be processed by CNN branch
         # Flattened to enable concatenation with vector observations

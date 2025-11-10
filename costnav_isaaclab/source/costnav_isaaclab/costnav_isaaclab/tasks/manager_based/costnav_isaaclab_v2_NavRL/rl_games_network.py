@@ -303,8 +303,8 @@ class MixInputNetworkBuilder(NetworkBuilder):
             self.load(params)
 
             # Calculate sizes for splitting concatenated observations
-            # Total obs: [pose_command (2), rgb_flattened (4*135*240)]
-            self.vector_obs_size = 2  # pose_command size
+            # Total obs: [pose_command (2), base_lin_vel (3), base_ang_vel (3), rgb_flattened (4*135*240)]
+            self.vector_obs_size = 8  # pose_command (2) + base_lin_vel (3) + base_ang_vel (3)
             cnn_input_shape = self.cnn_input_shape  # [4, 135, 240]
             self.image_flat_size = (
                 cnn_input_shape[0] * cnn_input_shape[1] * cnn_input_shape[2]
@@ -317,10 +317,10 @@ class MixInputNetworkBuilder(NetworkBuilder):
                 else None
             )
 
-            # Build pre-MLP for vector observations (goal commands, etc.)
-            # This processes ONLY the vector observations (pose_command), not the full concatenated obs
+            # Build pre-MLP for vector observations (goal commands, velocities, etc.)
+            # This processes ONLY the vector observations (pose_command + velocities), not the full concatenated obs
             pre_mlp_args = {
-                "input_size": self.vector_obs_size,  # Only vector obs size (2)
+                "input_size": self.vector_obs_size,  # Only vector obs size (8: 2 + 3 + 3)
                 "units": self.units,
                 "activation": self.activation,
                 "norm_func_name": self.normalization,
@@ -423,7 +423,8 @@ class MixInputNetworkBuilder(NetworkBuilder):
                 raise TypeError(f"Expected obs to be a tensor, got {type(obs)}")
 
             # Split the concatenated observation tensor using stored sizes
-            obs_policy = obs[:, : self.vector_obs_size]  # [batch, 2]
+            # obs_policy contains: [pose_command (2), base_lin_vel (3), base_ang_vel (3)]
+            obs_policy = obs[:, : self.vector_obs_size]  # [batch, 8]
             sensor_obs_flat = obs[:, self.vector_obs_size :]  # [batch, 72900]
 
             # Reshape flattened RGB-D back to image format
