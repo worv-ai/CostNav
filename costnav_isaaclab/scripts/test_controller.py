@@ -69,16 +69,16 @@ def print_instructions():
     print("  A/D: Increase/Decrease steering angle (left/right)")
     print("  X:   Stop (v=0, steering=0)")
     print("\nPreset Commands:")
-    print("  1: Forward straight (v=1.0, steering=0°)")
-    print("  2: Forward + right turn (v=1.0, steering=20°)")
-    print("  3: Forward + left turn (v=1.0, steering=-20°)")
-    print("  4: Backward straight (v=-1.0, steering=0°)")
-    print("  5: Forward + sharp right (v=1.0, steering=35°)")
-    print("  6: Forward + sharp left (v=1.0, steering=-35°)")
+    print("  1: Forward straight (v=1.0, steering=0.0)")
+    print("  2: Forward + right turn (v=1.0, steering=0.35)")
+    print("  3: Forward + left turn (v=1.0, steering=-0.35)")
+    print("  4: Backward straight (v=-1.0, steering=0.0)")
+    print("  5: Forward + sharp right (v=1.0, steering=0.61)")
+    print("  6: Forward + sharp left (v=1.0, steering=-0.61)")
     print("\nOther:")
     print("  SPACE: Emergency stop")
     print("  Q:     Quit")
-    print("\nNote: Actions are [linear_velocity, steering_angle].")
+    print("\nNote: Actions are [linear_velocity, steering_angle] (raw numbers).")
     print("      ClassicalCarActionCfg converts them to wheel commands.")
     print("=" * 80)
 
@@ -132,13 +132,13 @@ def interactive_mode(env):
 
     # Control parameters
     v_step = 0.2  # m/s
-    steering_step = 5.0 * torch.pi / 180  # 5 degrees in radians
+    steering_step = 0.2
 
     # Reset environment
     env.reset()
 
     print("\nStarting interactive mode...")
-    print(f"Current: v={v:.2f} m/s, steering={steering*180/torch.pi:.1f}°")
+    print(f"Current: v={v:.3f}, steering={steering:.3f}")
     print("Press keys to control the robot...")
 
     # Simulate environment
@@ -153,54 +153,44 @@ def interactive_mode(env):
             # Velocity controls
             if key == "w" or key == "W":
                 v = v + v_step
-                print(f"Increase v: v={v:.2f} m/s, steering={steering*180/torch.pi:.1f}°")
+                print(f"Increase v: action=[{v:.3f}, {steering:.3f}]")
             elif key == "s" or key == "S":
                 v = v - v_step
-                print(f"Decrease v: v={v:.2f} m/s, steering={steering*180/torch.pi:.1f}°")
+                print(f"Decrease v: action=[{v:.3f}, {steering:.3f}]")
             elif key == "a" or key == "A":
                 steering = steering + steering_step
-                print(f"Turn left: v={v:.2f} m/s, steering={steering*180/torch.pi:.1f}°")
+                print(f"Turn left: action=[{v:.3f}, {steering:.3f}]")
             elif key == "d" or key == "D":
                 steering = steering - steering_step
-                print(f"Turn right: v={v:.2f} m/s, steering={steering*180/torch.pi:.1f}°")
+                print(f"Turn right: action=[{v:.3f}, {steering:.3f}]")
             elif key == "x" or key == "X":
                 v, steering = 0.0, 0.0
-                print(f"Stop: v={v:.2f} m/s, steering={steering*180/torch.pi:.1f}°")
+                print(f"Stop: action=[{v:.3f}, {steering:.3f}]")
 
             # Preset commands
             elif key == "1":
                 v, steering = 1.0, 0.0
-                print(
-                    f"Preset 1 - Forward straight: v={v:.2f} m/s, steering={steering*180/torch.pi:.1f}°"
-                )
+                print(f"Preset 1 - Forward straight: action=[{v:.3f}, {steering:.3f}]")
             elif key == "2":
                 v, steering = 1.0, 20.0 * torch.pi / 180
-                print(
-                    f"Preset 2 - Forward + right: v={v:.2f} m/s, steering={steering*180/torch.pi:.1f}°"
-                )
+                print(f"Preset 2 - Forward + right: action=[{v:.3f}, {steering:.3f}]")
             elif key == "3":
                 v, steering = 1.0, -20.0 * torch.pi / 180
-                print(
-                    f"Preset 3 - Forward + left: v={v:.2f} m/s, steering={steering*180/torch.pi:.1f}°"
-                )
+                print(f"Preset 3 - Forward + left: action=[{v:.3f}, {steering:.3f}]")
             elif key == "4":
                 v, steering = -1.0, 0.0
-                print(f"Preset 4 - Backward: v={v:.2f} m/s, steering={steering*180/torch.pi:.1f}°")
+                print(f"Preset 4 - Backward: action=[{v:.3f}, {steering:.3f}]")
             elif key == "5":
                 v, steering = 1.0, 35.0 * torch.pi / 180
-                print(
-                    f"Preset 5 - Sharp right: v={v:.2f} m/s, steering={steering*180/torch.pi:.1f}°"
-                )
+                print(f"Preset 5 - Sharp right: action=[{v:.3f}, {steering:.3f}]")
             elif key == "6":
                 v, steering = 1.0, -35.0 * torch.pi / 180
-                print(
-                    f"Preset 6 - Sharp left: v={v:.2f} m/s, steering={steering*180/torch.pi:.1f}°"
-                )
+                print(f"Preset 6 - Sharp left: action=[{v:.3f}, {steering:.3f}]")
 
             # Emergency stop
             elif key == " ":
                 v, steering = 0.0, 0.0
-                print(f"EMERGENCY STOP: v={v:.2f} m/s, steering={steering*180/torch.pi:.1f}°")
+                print(f"EMERGENCY STOP: action=[{v:.3f}, {steering:.3f}]")
 
             # Quit
             elif key == "q" or key == "Q":
@@ -219,7 +209,7 @@ def interactive_mode(env):
 
         # Print status every 100 steps
         if step_count % 100 == 0:
-            print(f"Step {step_count}: v={v:.2f} m/s, steering={steering*180/torch.pi:.1f}°")
+            print(f"Step {step_count}: action=[{v:.3f}, {steering:.3f}]")
 
         # Small delay for real-time control
         sleep_time = 0.05 - (time.time() - start_time)
