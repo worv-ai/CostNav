@@ -20,7 +20,7 @@ from isaaclab.sensors import CameraCfg, ContactSensorCfg, TiledCameraCfg
 from isaaclab.utils import configclass
 
 from . import mdp
-from .coco_robot_cfg import COCO_CFG, ClassicalCarActionCfg
+from .coco_robot_cfg import COCO_CFG, ClassicalCarActionCfg, ClassicalCarWaypointActionCfg
 from .safe_positions_auto_generated import SAFE_POSITIONS
 
 ##
@@ -111,7 +111,7 @@ class ActionsCfg:
     """Action specifications for the MDP."""
 
     # Use COCO velocity actions (linear velocity + steering angle)
-    joint_pos = ClassicalCarActionCfg(asset_name="robot")
+    joint_pos = ClassicalCarWaypointActionCfg(asset_name="robot")
 
 
 @configclass
@@ -161,6 +161,12 @@ class ObservationsCfg:
 class EventCfg:
     """Configuration for events."""
 
+    # Print episode rewards on reset (called first to show rewards before reset)
+    print_rewards = EventTerm(
+        func=mdp.print_episode_rewards,
+        mode="reset",
+    )
+
     # Reset robot base position using safe positions
     reset_base = EventTerm(
         func=mdp.reset_root_state_from_safe_positions,
@@ -185,7 +191,7 @@ class RewardsCfg:
 
     # Arrival reward
     arrived_reward = RewTerm(
-        func=loc_mdp.is_terminated_term, weight=2000.0, params={"term_keys": "arrive"}
+        func=loc_mdp.is_terminated_term, weight=200000.0, params={"term_keys": "arrive"}
     )
 
     # Collision penalty
@@ -196,8 +202,8 @@ class RewardsCfg:
     # basic goal based distance reward
     distance_progress = RewTerm(
         func=mdp.distance_to_goal_progress,
-        weight=1.0,
-        params={"command_name": "pose_command", "slack_penalty": 0.01},
+        weight=100.0,
+        params={"command_name": "pose_command", "slack_penalty": 0.0001},
     )
 
     # Position tracking reward (coarse) - increased weight and adjusted std for closer goals
@@ -274,7 +280,7 @@ class CostnavIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for COCO robot navigation environment with custom map."""
 
     # Scene settings - using safe positions for spawning, no env_spacing needed
-    scene: CostnavIsaaclabSceneCfg = CostnavIsaaclabSceneCfg(num_envs=1, env_spacing=0.0)
+    scene: CostnavIsaaclabSceneCfg = CostnavIsaaclabSceneCfg(num_envs=16, env_spacing=0.0)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()

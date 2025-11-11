@@ -94,7 +94,6 @@ COCO_CFG = ArticulationCfg(
 DT = 0.1
 MAX_W = 2.0
 MAX_V = 2.0
-ACTION_INTERVAL = 4
 
 
 class ClassicalCarAction(ActionTerm):
@@ -112,7 +111,6 @@ class ClassicalCarAction(ActionTerm):
         super().__init__(cfg, env)
 
         self.robot: Articulation = env.scene[cfg.asset_name]
-        self._counter = 0
         self.last_wheel_angle = torch.zeros(self.num_envs, 1, device=self.device)
 
         self.axle_names = ["base_to_front_axle_joint"]
@@ -158,26 +156,24 @@ class ClassicalCarAction(ActionTerm):
         self._raw_actions[:] = actions
 
     def apply_actions(self):
-        if self._counter % ACTION_INTERVAL == 0:
-            max_wheel_v = 4.0
-            wheel_base = 1.5
-            radius_rear = 0.3
-            max_ang = 40 * torch.pi / 180
-            velocity = self.raw_actions[..., :1].clamp(0.0, max_wheel_v) / radius_rear
-            angular = self.raw_actions[..., 1:2].clamp(-max_ang, max_ang)
-            angular[angular.abs() < 0.05] = torch.zeros_like(angular[angular.abs() < 0.05])
-            R = wheel_base / torch.tan(angular)
-            left_wheel_angle = torch.arctan(wheel_base / (R - 0.5 * 1.8))
-            right_wheel_angle = torch.arctan(wheel_base / (R + 0.5 * 1.8))
+        max_wheel_v = 4.0
+        wheel_base = 1.5
+        radius_rear = 0.3
+        max_ang = 40 * torch.pi / 180
+        velocity = self.raw_actions[..., :1].clamp(-max_wheel_v, max_wheel_v) / radius_rear
+        angular = self.raw_actions[..., 1:2].clamp(-max_ang, max_ang)
+        angular[angular.abs() < 0.05] = torch.zeros_like(angular[angular.abs() < 0.05])
+        R = wheel_base / torch.tan(angular)
+        left_wheel_angle = torch.arctan(wheel_base / (R - 0.5 * 1.8))
+        right_wheel_angle = torch.arctan(wheel_base / (R + 0.5 * 1.8))
 
-            self.steering_action.process_actions(((right_wheel_angle + left_wheel_angle) / 2.0))
-            self.acceleration_action.process_actions(
-                torch.cat([velocity, velocity, velocity, velocity], dim=1)
-            )
+        self.steering_action.process_actions(((right_wheel_angle + left_wheel_angle) / 2.0))
+        self.acceleration_action.process_actions(
+            torch.cat([velocity, velocity, velocity, velocity], dim=1)
+        )
 
         self.steering_action.apply_actions()
         self.acceleration_action.apply_actions()
-        self._counter += 1
 
     def _set_debug_vis_impl(self, _debug_vis: bool):
         pass
@@ -236,7 +232,6 @@ class ClassicalCarWaypointAction(ActionTerm):
         super().__init__(cfg, env)
 
         self.robot: Articulation = env.scene[cfg.asset_name]
-        self._counter = 0
         self.last_wheel_angle = torch.zeros(self.num_envs, 1, device=self.device)
 
         self.axle_names = ["base_to_front_axle_joint"]
@@ -288,26 +283,24 @@ class ClassicalCarWaypointAction(ActionTerm):
         self._raw_actions[:, 1] = steering_angle
 
     def apply_actions(self):
-        if self._counter % ACTION_INTERVAL == 0:
-            max_wheel_v = 4.0
-            wheel_base = 1.5
-            radius_rear = 0.3
-            max_ang = 40 * torch.pi / 180
-            velocity = self.raw_actions[..., :1].clamp(-max_wheel_v, max_wheel_v) / radius_rear
-            angular = self.raw_actions[..., 1:2].clamp(-max_ang, max_ang)
-            angular[angular.abs() < 0.05] = torch.zeros_like(angular[angular.abs() < 0.05])
-            R = wheel_base / torch.tan(angular)
-            left_wheel_angle = torch.arctan(wheel_base / (R - 0.5 * 1.8))
-            right_wheel_angle = torch.arctan(wheel_base / (R + 0.5 * 1.8))
+        max_wheel_v = 4.0
+        wheel_base = 1.5
+        radius_rear = 0.3
+        max_ang = 40 * torch.pi / 180
+        velocity = self.raw_actions[..., :1].clamp(-max_wheel_v, max_wheel_v) / radius_rear
+        angular = self.raw_actions[..., 1:2].clamp(-max_ang, max_ang)
+        angular[angular.abs() < 0.05] = torch.zeros_like(angular[angular.abs() < 0.05])
+        R = wheel_base / torch.tan(angular)
+        left_wheel_angle = torch.arctan(wheel_base / (R - 0.5 * 1.8))
+        right_wheel_angle = torch.arctan(wheel_base / (R + 0.5 * 1.8))
 
-            self.steering_action.process_actions(((right_wheel_angle + left_wheel_angle) / 2.0))
-            self.acceleration_action.process_actions(
-                torch.cat([velocity, velocity, velocity, velocity], dim=1)
-            )
+        self.steering_action.process_actions(((right_wheel_angle + left_wheel_angle) / 2.0))
+        self.acceleration_action.process_actions(
+            torch.cat([velocity, velocity, velocity, velocity], dim=1)
+        )
 
         self.steering_action.apply_actions()
         self.acceleration_action.apply_actions()
-        self._counter += 1
 
     def _set_debug_vis_impl(self, _debug_vis: bool):
         pass

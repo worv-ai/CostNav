@@ -23,7 +23,7 @@ params:
           name: default
         sigma_init:
           name: const_initializer
-          val: -1.5  # Increased exploration: log(sigma) = -1.5, sigma ≈ 0.22 (was -2.9, sigma ≈ 0.055)
+          val: 0  # Increased exploration: log(sigma) = -1.5, sigma ≈ 0.22 (was -2.9, sigma ≈ 0.055)
         fixed_sigma: True  # Use fixed sigma to prevent entropy Inf issues
 
     cnn:
@@ -34,7 +34,7 @@ params:
       initializer:
         name: default
       regularizer:
-        name: 'None'
+        name: None
     
     mlp:
       units: [128, 128, 128]
@@ -56,7 +56,7 @@ params:
     device_name: 'cuda:0'
     multi_gpu: False
     ppo: True
-    mixed_precision: True
+    mixed_precision: False
     normalize_input: False  # Keep False - observations already normalized in rgbd_processed()
     normalize_value: True
     value_bootstrap: True
@@ -66,23 +66,24 @@ params:
     normalize_advantage: True
     gamma: 0.99
     tau: 0.95
-    learning_rate: 5e-4  # Reduced from 1e-3 for stability
+    learning_rate: 3e-4
     lr_schedule: adaptive
     schedule_type: legacy
-    kl_threshold: 0.016  # Increased from 0.01 for better exploration
+    kl_threshold: 0.008  # Increased from 0.01 for better exploration
     score_to_win: 20000
-    max_epochs: 3000
+    max_epochs: 10000
     save_best_after: 50
     save_frequency: 10
     grad_norm: 1.0
-    entropy_coef: 0.0  # Disabled to prevent Inf with fixed_sigma
+    entropy_coef: 0.01  # Disabled to prevent Inf with fixed_sigma
     truncate_grads: True
     e_clip: 0.2
-    horizon_length: 32
-    minibatch_size: 512
+    horizon_length: 256
+    minibatch_size: 256
     mini_epochs: 5
     critic_coef: 1.0
     clip_value: True
     seq_length: 4
     bounds_loss_coef: 0.001  # Reduced from 0.01
+    games_to_track: 1  # Log every single episode without averaging (default: 100)
     

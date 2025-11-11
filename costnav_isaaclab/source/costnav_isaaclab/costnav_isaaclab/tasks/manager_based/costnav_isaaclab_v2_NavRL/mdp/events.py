@@ -7,9 +7,9 @@
 
 from __future__ import annotations
 
-import torch
 from typing import TYPE_CHECKING
 
+import torch
 from isaaclab.assets import Articulation
 from isaaclab.managers import SceneEntityCfg
 
@@ -83,3 +83,52 @@ def reset_root_state_from_safe_positions(
     # Set into physics simulation
     asset.write_root_state_to_sim(root_states, env_ids=env_ids)
 
+
+def print_episode_rewards(env: ManagerBasedEnv, env_ids: torch.Tensor):
+    """Print cumulative episode rewards for each terminated environment.
+
+    This function prints the total cumulative reward for each environment that is being reset,
+    along with the termination reason (collision, arrival, or timeout).
+
+    Args:
+        env: The environment instance.
+        env_ids: Environment IDs that are being reset (terminated).
+    """
+    if len(env_ids) == 0:
+        return
+
+    # Get cumulative rewards for each reward term
+    reward_manager = env.reward_manager
+
+    # Calculate total cumulative reward for each resetting environment
+    total_rewards = torch.zeros(len(env_ids), device=env.device)
+    for term_name, episode_sum in reward_manager._episode_sums.items():
+        total_rewards += episode_sum[env_ids]
+
+    # Get termination reasons
+    termination_manager = env.termination_manager
+
+    # Print rewards for each environment
+    for idx, env_id in enumerate(env_ids):
+        env_id_val = env_id.item()
+        total_reward = total_rewards[idx].item()
+
+        # Determine termination reason
+        termination_reason = "unknown"
+        if hasattr(termination_manager, "_term_dones"):
+            for term_name, term_dones in termination_manager._term_dones.items():
+                if term_dones[env_id]:
+                    termination_reason = term_name
+                    break
+
+        # Print the episode summary
+        print(
+            f"[Episode End] Env {env_id_val:3d} | Total Reward: {total_reward:8.3f} | Reason: {termination_reason}"
+        )
+
+        # Optionally print individual reward components
+        # Uncomment the following lines if you want to see breakdown by reward term
+        print(f"  Reward breakdown:")
+        for term_name, episode_sum in reward_manager._episode_sums.items():
+            term_reward = episode_sum[env_id].item()
+            print(f"    {term_name:30s}: {term_reward:8.3f}")
