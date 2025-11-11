@@ -195,6 +195,108 @@ class ClassicalCarActionCfg(ActionTermCfg):
     """Name of the asset in the environment for which the commands are generated."""
 
 
+class OgnCarAction(ActionTerm):
+    """OGN car action term for velocity and steering angle control.
+
+    This action term controls the COCO robot using velocity and steering angle commands.
+    The raw actions correspond to [linear_velocity, steering_angle].
+    This is the original implementation as shown by the user.
+    """
+
+    cfg: "OgnCarActionCfg"
+    """The configuration of the action term."""
+
+    def __init__(self, cfg: "OgnCarActionCfg", env: ManagerBasedRLEnv) -> None:
+        # initialize the action term
+        super().__init__(cfg, env)
+
+        self.robot: Articulation = env.scene[cfg.asset_name]
+        self.last_wheel_angle = torch.zeros(self.num_envs, 1, device=self.device)
+
+        self.axle_names = ["base_to_front_axle_joint"]
+        self.wheel_names = [
+            "front_left_wheel_joint",
+            "front_right_wheel_joint",
+            "rear_left_wheel_joint",
+            "rear_right_wheel_joint",
+        ]
+        self.shock_names = [".*shock_joint"]
+        self._raw_actions = torch.zeros(self.num_envs, 2, device=self.device)
+
+        # prepare low level actions
+        self.acceleration_action: JointVelocityAction = JointVelocityAction(
+            JointVelocityActionCfg(
+                asset_name="robot",
+                joint_names=[".*_wheel_joint"],
+                scale=10.0,
+                use_default_offset=False,
+            ),
+            env,
+        )
+        self.steering_action: JointPositionAction = JointPositionAction(
+            JointPositionActionCfg(
+                asset_name="robot", joint_names=self.axle_names, scale=1.0, use_default_offset=True
+            ),
+            env,
+        )
+
+    @property
+    def action_dim(self) -> int:
+        return 2
+
+    @property
+    def raw_actions(self) -> torch.Tensor:
+        return self._raw_actions
+
+    @property
+    def processed_actions(self) -> torch.Tensor:
+        return self.raw_actions
+
+    def process_actions(self, actions: torch.Tensor):
+        self._raw_actions[:] = actions
+
+    def apply_actions(self):
+        max_wheel_v = 4.0
+        wheel_base = 1.5
+        radius_rear = 0.3
+        max_ang = 40 * torch.pi / 180
+        velocity = self.raw_actions[..., :1].clamp(-max_wheel_v, max_wheel_v) / radius_rear
+        angular = self.raw_actions[..., 1:2].clamp(-max_ang, max_ang)
+        angular[angular.abs() < 0.05] = torch.zeros_like(angular[angular.abs() < 0.05])
+        R = wheel_base / torch.tan(angular)
+        left_wheel_angle = torch.arctan(wheel_base / (R - 0.5 * 1.8))
+        right_wheel_angle = torch.arctan(wheel_base / (R + 0.5 * 1.8))
+
+        avg_steering = (right_wheel_angle + left_wheel_angle) / 2.0
+
+        self.steering_action.process_actions(avg_steering)
+        self.acceleration_action.process_actions(
+            torch.cat([velocity, velocity, velocity, velocity], dim=1)
+        )
+
+        self.steering_action.apply_actions()
+        self.acceleration_action.apply_actions()
+
+    def _set_debug_vis_impl(self, _debug_vis: bool):
+        pass
+
+    def _debug_vis_callback(self, _event):
+        pass
+
+
+@configclass
+class OgnCarActionCfg(ActionTermCfg):
+    """Configuration for OGN car action term.
+
+    See :class:`OgnCarAction` for more details.
+    """
+
+    class_type: type[ActionTerm] = OgnCarAction
+    """Class of the action term."""
+    asset_name: str = MISSING
+    """Name of the asset in the environment for which the commands are generated."""
+
+
 @configclass
 class COCOVelocityActionsCfg:
     """Action specifications for the COCO robot with velocity control."""

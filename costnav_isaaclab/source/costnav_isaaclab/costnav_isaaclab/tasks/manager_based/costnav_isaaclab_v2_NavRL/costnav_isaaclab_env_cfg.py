@@ -20,7 +20,12 @@ from isaaclab.sensors import CameraCfg, ContactSensorCfg, TiledCameraCfg
 from isaaclab.utils import configclass
 
 from . import mdp
-from .coco_robot_cfg import COCO_CFG, ClassicalCarActionCfg, ClassicalCarWaypointActionCfg
+from .coco_robot_cfg import (
+    COCO_CFG,
+    ClassicalCarActionCfg,
+    ClassicalCarWaypointActionCfg,
+    OgnCarActionCfg,
+)
 from .safe_positions_auto_generated import SAFE_POSITIONS
 
 ##
@@ -110,8 +115,8 @@ class CommandsCfg:
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    # Use COCO velocity actions (linear velocity + steering angle)
-    joint_pos = ClassicalCarActionCfg(asset_name="robot")
+    # Use OGN car velocity actions (linear velocity + steering angle)
+    joint_pos = OgnCarActionCfg(asset_name="robot")
 
 
 @configclass
