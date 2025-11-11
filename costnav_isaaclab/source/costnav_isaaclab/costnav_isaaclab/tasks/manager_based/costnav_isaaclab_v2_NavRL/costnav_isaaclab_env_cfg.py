@@ -111,7 +111,7 @@ class ActionsCfg:
     """Action specifications for the MDP."""
 
     # Use COCO velocity actions (linear velocity + steering angle)
-    joint_pos = ClassicalCarWaypointActionCfg(asset_name="robot")
+    joint_pos = ClassicalCarActionCfg(asset_name="robot")
 
 
 @configclass
@@ -238,11 +238,11 @@ class RewardsCfg:
     # )
 
     # DEBUG: Print rewards every step (weight=0.001 is negligible but ensures it runs)
-    debug_print = RewTerm(
-        func=mdp.print_rewards,
-        weight=0.001,  # Very small weight so it runs but doesn't affect training
-        params={"print_every_n_steps": 1},  # Change to higher number to print less frequently
-    )
+    # debug_print = RewTerm(
+    #     func=mdp.print_rewards,
+    #     weight=0.001,  # Very small weight so it runs but doesn't affect training
+    #     params={"print_every_n_steps": 1},  # Change to higher number to print less frequently
+    # )
 
 
 @configclass
