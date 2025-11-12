@@ -23,8 +23,8 @@ params:
           name: default
         sigma_init:
           name: const_initializer
-          val: 0  # log(sigma) = -0.7, sigma ≈ 0.5 (reduced from 1.0 for better exploration in [-1,1] range)
-        fixed_sigma: False  # Use fixed sigma to prevent entropy Inf issues
+          val: -1.5  # log(sigma) = -0.7, sigma ≈ 0.5 (reduced from 1.0 for better exploration in [-1,1] range)
+        fixed_sigma: true  # Use fixed sigma to prevent entropy Inf issues
 
     cnn:
       permute_input: False
@@ -56,7 +56,7 @@ params:
     device_name: 'cuda:0'
     multi_gpu: False
     ppo: True
-    mixed_precision: False
+    mixed_precision: True
     normalize_input: False  # Keep False - observations already normalized in rgbd_processed()
     normalize_value: True
     value_bootstrap: True
@@ -66,20 +66,20 @@ params:
     normalize_advantage: True
     gamma: 0.99
     tau: 0.95
-    learning_rate: 3e-4
+    learning_rate: 5e-4
     lr_schedule: adaptive
     schedule_type: legacy
-    kl_threshold: 0.008  # Increased from 0.01 for better exploration
+    kl_threshold: 0.016  # Increased from 0.01 for better exploration
     score_to_win: 20000
     max_epochs: 10000
     save_best_after: 50
     save_frequency: 10
     grad_norm: 1.0
-    entropy_coef: 0  # Disabled to prevent Inf with fixed_sigma
+    entropy_coef: 0.0  # Disabled to prevent Inf with fixed_sigma
     truncate_grads: True
     e_clip: 0.2
     horizon_length: 256
-    minibatch_size: 256
+    minibatch_size: 512
     mini_epochs: 5
     critic_coef: 1.0
     clip_value: True
