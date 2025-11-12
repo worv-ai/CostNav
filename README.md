@@ -19,7 +19,7 @@ cd /workspace/costnav_isaaclab/source/costnav_isaaclab/costnav_isaaclab/tasks/ma
 python -m tensorboard.main --logdir /workspace/costnav_isaaclab/logs/rl_games/coco_static/2025-11-11_12-51-08/summaries --port 6006
 
 
-best
+## Best params
 python -m tensorboard.main --logdir /workspace/costnav_isaaclab/logs/rl_games/coco_static/2025-11-06_07-18-39/summaries --port 6006
 
 python -m tensorboard.main --logdir /workspace/costnav_isaaclab/logs/rl_games/coco_static/2025-11-11_01-08-18/summaries --port 6006
