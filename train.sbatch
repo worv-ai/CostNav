@@ -10,14 +10,21 @@
 
 echo "SLURM_JOB_GPUS: $SLURM_JOB_GPUS"
 echo "SLURM_STEP_GPUS: $SLURM_STEP_GPUS"
+echo "SLURM_JOB_ID: $SLURM_JOB_ID"
 
-NVIDIA_VISIBLE_DEVICES=$SLURM_JOB_GPUS docker compose up -d isaac-lab 
+# Use SLURM_JOB_ID to create unique container name
+export CONTAINER_NAME="costnav-isaac-lab-${SLURM_JOB_ID}"
+export COMPOSE_PROJECT_NAME="costnav-${SLURM_JOB_ID}"
 
-docker exec costnav-isaac-lab bash -c "nvidia-smi -L"
+echo "Container name: $CONTAINER_NAME"
 
-docker exec costnav-isaac-lab bash -c "cd /workspace/costnav_isaaclab \
+NVIDIA_VISIBLE_DEVICES=$SLURM_JOB_GPUS CONTAINER_NAME=$CONTAINER_NAME docker compose up -d isaac-lab
+
+docker exec $CONTAINER_NAME bash -c "nvidia-smi -L"
+
+docker exec $CONTAINER_NAME bash -c "cd /workspace/costnav_isaaclab \
     && python scripts/rl_games/train.py \
     --task=Template-Costnav-Isaaclab-v2-NavRL \
     --enable_cameras --headless"
 
-docker compose down isaac-lab
+CONTAINER_NAME=$CONTAINER_NAME docker compose down isaac-lab

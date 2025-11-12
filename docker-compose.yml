@@ -42,7 +42,7 @@ services:
       dockerfile: Dockerfile
       target: isaac-lab
     image: costnav:isaac-lab
-    container_name: costnav-isaac-lab
+    container_name: ${CONTAINER_NAME:-costnav-isaac-lab}
     runtime: nvidia
     env_file:
       - .env
