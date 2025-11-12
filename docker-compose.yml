@@ -1,7 +1,7 @@
 services:
   # Isaac Sim environment
   isaac-sim:
-    profiles: ["isaac-sim"]
+    profiles: [ "isaac-sim" ]
     build:
       context: .
       dockerfile: Dockerfile
@@ -9,14 +9,16 @@ services:
     image: costnav:isaac-sim
     container_name: costnav-isaac-sim
     runtime: nvidia
+    env_file:
+      - .env
     environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=all
-      - DISPLAY=${DISPLAY}
-      - XAUTHORITY=${XAUTHORITY}
-      - ISAAC_PATH=/isaac-sim
-      - CARB_APP_PATH=/isaac-sim/kit
-      - EXP_PATH=/isaac-sim/apps
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
+      - DISPLAY=${DISPLAY:-:0}
+      - XAUTHORITY=${XAUTHORITY:-/tmp/.X11-unix}
+      - ISAAC_PATH=${ISAAC_PATH:-/isaac-sim}
+      - CARB_APP_PATH=${CARB_APP_PATH:-/isaac-sim/kit}
+      - EXP_PATH=${EXP_PATH:-/isaac-sim/apps}
     volumes:
       - .:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -29,12 +31,12 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: ['0']  # TODO: Using 'all' GPUs
-              capabilities: [gpu]
+              device_ids: [ '${GPU_DEVICE_IDS:-0}' ]
+              capabilities: [ gpu ]
 
   # Isaac Lab environment
   isaac-lab:
-    profiles: ["isaac-lab"]
+    profiles: [ "isaac-lab" ]
     build:
       context: .
       dockerfile: Dockerfile
@@ -42,14 +44,16 @@ services:
     image: costnav:isaac-lab
     container_name: costnav-isaac-lab
     runtime: nvidia
+    env_file:
+      - .env
     environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=all
-      - DISPLAY=${DISPLAY}
-      - XAUTHORITY=${XAUTHORITY}
-      - ISAAC_PATH=/isaac-sim
-      - CARB_APP_PATH=/isaac-sim/kit
-      - EXP_PATH=/isaac-sim/apps
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
+      - DISPLAY=${DISPLAY:-:0}
+      - XAUTHORITY=${XAUTHORITY:-/tmp/.X11-unix}
+      - ISAAC_PATH=${ISAAC_PATH:-/isaac-sim}
+      - CARB_APP_PATH=${CARB_APP_PATH:-/isaac-sim/kit}
+      - EXP_PATH=${EXP_PATH:-/isaac-sim/apps}
     volumes:
       - .:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -62,22 +66,23 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: ['0']  # TODO: Using 'all' GPUs
-              capabilities: [gpu]
+              device_ids: [ '${GPU_DEVICE_IDS:-0}' ]
+              capabilities: [ gpu ]
 
   # Development environment (minimal dependencies)
   dev:
-    profiles: ["dev"]
+    profiles: [ "dev" ]
     build:
       context: .
       dockerfile: Dockerfile
       target: dev
     image: costnav:dev
     container_name: costnav-dev
+    env_file:
+      - .env
     volumes:
       - .:/workspace
     network_mode: host
     stdin_open: true
     tty: true
     command: sleep infinity
-

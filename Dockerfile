@@ -108,6 +108,11 @@ RUN uv pip install --python="${PYTHON_BIN}" --system -e ".[isaac-lab,dev]"
 # Install costnav_isaaclab project (from template)
 RUN uv pip install --python="${PYTHON_BIN}" --system -e costnav_isaaclab/source/costnav_isaaclab
 
+RUN printf '%s\n' '#!/usr/bin/env bash' \
+    'exec /isaac-sim/python.sh "$@"' > /usr/local/bin/python && \
+    chmod +x /usr/local/bin/python && \
+    ln -sf /usr/local/bin/python /usr/local/bin/python3
+
 # Use bash as entrypoint to prevent Isaac Sim auto-start
 # The devcontainer will override this with its own command
 ENTRYPOINT ["/bin/bash"]
