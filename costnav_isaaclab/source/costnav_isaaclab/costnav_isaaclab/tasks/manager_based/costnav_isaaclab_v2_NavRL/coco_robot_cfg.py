@@ -195,6 +195,115 @@ class ClassicalCarActionCfg(ActionTermCfg):
     """Name of the asset in the environment for which the commands are generated."""
 
 
+class RestrictedCarAction(ActionTerm):
+    """Restricted car action term with mapped velocity and steering ranges.
+
+    This action term controls the COCO robot using velocity and steering angle commands.
+    The raw actions are in [-1, 1] range and are mapped to:
+    - Linear velocity: [-1, 1] -> [0, 0.4] m/s (forward only)
+    - Steering angle: [-1, 1] -> [-0.5, 0.5] rad
+    """
+
+    cfg: "RestrictedCarActionCfg"
+    """The configuration of the action term."""
+
+    def __init__(self, cfg: "RestrictedCarActionCfg", env: ManagerBasedRLEnv) -> None:
+        # initialize the action term
+        super().__init__(cfg, env)
+
+        self.robot: Articulation = env.scene[cfg.asset_name]
+        self.last_wheel_angle = torch.zeros(self.num_envs, 1, device=self.device)
+
+        self.axle_names = ["base_to_front_axle_joint"]
+        self.wheel_names = [
+            "front_left_wheel_joint",
+            "front_right_wheel_joint",
+            "rear_left_wheel_joint",
+            "rear_right_wheel_joint",
+        ]
+        self.shock_names = [".*shock_joint"]
+        self._raw_actions = torch.zeros(self.num_envs, 2, device=self.device)
+
+        # prepare low level actions
+        self.acceleration_action: JointVelocityAction = JointVelocityAction(
+            JointVelocityActionCfg(
+                asset_name="robot",
+                joint_names=[".*_wheel_joint"],
+                scale=10.0,
+                use_default_offset=False,
+            ),
+            env,
+        )
+        self.steering_action: JointPositionAction = JointPositionAction(
+            JointPositionActionCfg(
+                asset_name="robot", joint_names=self.axle_names, scale=1.0, use_default_offset=True
+            ),
+            env,
+        )
+
+    @property
+    def action_dim(self) -> int:
+        return 2
+
+    @property
+    def raw_actions(self) -> torch.Tensor:
+        return self._raw_actions
+
+    @property
+    def processed_actions(self) -> torch.Tensor:
+        return self.raw_actions
+
+    def process_actions(self, actions: torch.Tensor):
+        self._raw_actions[:] = actions
+
+    def apply_actions(self):
+        wheel_base = 1.5
+        radius_rear = 0.3
+
+        # Map actions from [-1, 1] to desired ranges
+        # Linear velocity: [-1, 1] -> [0, 0.4] m/s
+        linear_vel = (self.raw_actions[..., :1] + 1.0) * 0.2  # Maps [-1,1] to [0, 0.4]
+
+        # Steering angle: [-1, 1] -> [-0.5, 0.5] rad
+        angular = self.raw_actions[..., 1:2] * 0.5  # Maps [-1,1] to [-0.5, 0.5]
+
+        # Convert linear velocity to wheel angular velocity
+        velocity = linear_vel / radius_rear
+
+        # Compute steering angles using Ackermann geometry
+        angular[angular.abs() < 0.05] = torch.zeros_like(angular[angular.abs() < 0.05])
+        R = wheel_base / torch.tan(angular)
+        left_wheel_angle = torch.arctan(wheel_base / (R - 0.5 * 1.8))
+        right_wheel_angle = torch.arctan(wheel_base / (R + 0.5 * 1.8))
+
+        self.steering_action.process_actions(((right_wheel_angle + left_wheel_angle) / 2.0))
+        self.acceleration_action.process_actions(
+            torch.cat([velocity, velocity, velocity, velocity], dim=1)
+        )
+
+        self.steering_action.apply_actions()
+        self.acceleration_action.apply_actions()
+
+    def _set_debug_vis_impl(self, _debug_vis: bool):
+        pass
+
+    def _debug_vis_callback(self, _event):
+        pass
+
+
+@configclass
+class RestrictedCarActionCfg(ActionTermCfg):
+    """Configuration for restricted car action term.
+
+    See :class:`RestrictedCarAction` for more details.
+    """
+
+    class_type: type[ActionTerm] = RestrictedCarAction
+    """Class of the action term."""
+    asset_name: str = MISSING
+    """Name of the asset in the environment for which the commands are generated."""
+
+
 class OgnCarAction(ActionTerm):
     """OGN car action term for velocity and steering angle control.
 

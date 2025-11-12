@@ -23,21 +23,21 @@ params:
           name: default
         sigma_init:
           name: const_initializer
-          val: 0  # Increased exploration: log(sigma) = -1.5, sigma ≈ 0.22 (was -2.9, sigma ≈ 0.055)
-        fixed_sigma: True  # Use fixed sigma to prevent entropy Inf issues
+          val: 0  # log(sigma) = -0.7, sigma ≈ 0.5 (reduced from 1.0 for better exploration in [-1,1] range)
+        fixed_sigma: False  # Use fixed sigma to prevent entropy Inf issues
 
     cnn:
       permute_input: False
       input_shape: [4, 135, 240]
-      conv_depths: [16, 32, 64]
+      conv_depths: [32, 64, 128, 256]  # Increased from [16, 32, 64] for better visual feature learning
       activation: relu
       initializer:
         name: default
       regularizer:
         name: None
-    
+
     mlp:
-      units: [128, 128, 128]
+      units: [256, 256, 256]  # Increased from [128, 128, 128] for better feature fusion
       activation: elu
       d2rl: False
 
@@ -75,7 +75,7 @@ params:
     save_best_after: 50
     save_frequency: 10
     grad_norm: 1.0
-    entropy_coef: 0.01  # Disabled to prevent Inf with fixed_sigma
+    entropy_coef: 0  # Disabled to prevent Inf with fixed_sigma
     truncate_grads: True
     e_clip: 0.2
     horizon_length: 256

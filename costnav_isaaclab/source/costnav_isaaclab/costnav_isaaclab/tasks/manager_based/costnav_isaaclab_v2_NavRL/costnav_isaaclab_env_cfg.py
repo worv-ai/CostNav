@@ -25,6 +25,7 @@ from .coco_robot_cfg import (
     ClassicalCarActionCfg,
     ClassicalCarWaypointActionCfg,
     OgnCarActionCfg,
+    RestrictedCarActionCfg,
 )
 from .safe_positions_auto_generated import SAFE_POSITIONS
 
@@ -116,7 +117,7 @@ class ActionsCfg:
     """Action specifications for the MDP."""
 
     # Use OGN car velocity actions (linear velocity + steering angle)
-    joint_pos = OgnCarActionCfg(asset_name="robot")
+    joint_pos = RestrictedCarActionCfg(asset_name="robot")
 
 
 @configclass
@@ -243,11 +244,11 @@ class RewardsCfg:
     # )
 
     # DEBUG: Print rewards every step (weight=0.001 is negligible but ensures it runs)
-    # debug_print = RewTerm(
-    #     func=mdp.print_rewards,
-    #     weight=0.001,  # Very small weight so it runs but doesn't affect training
-    #     params={"print_every_n_steps": 1},  # Change to higher number to print less frequently
-    # )
+    debug_print = RewTerm(
+        func=mdp.print_rewards,
+        weight=0.001,  # Very small weight so it runs but doesn't affect training
+        params={"print_every_n_steps": 1},  # Change to higher number to print less frequently
+    )
 
 
 @configclass
@@ -285,7 +286,7 @@ class CostnavIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for COCO robot navigation environment with custom map."""
 
     # Scene settings - using safe positions for spawning, no env_spacing needed
-    scene: CostnavIsaaclabSceneCfg = CostnavIsaaclabSceneCfg(num_envs=16, env_spacing=0.0)
+    scene: CostnavIsaaclabSceneCfg = CostnavIsaaclabSceneCfg(num_envs=8, env_spacing=0.0)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
