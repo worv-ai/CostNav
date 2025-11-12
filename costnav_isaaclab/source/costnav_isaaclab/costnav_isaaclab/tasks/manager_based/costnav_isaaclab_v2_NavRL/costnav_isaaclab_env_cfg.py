@@ -206,11 +206,11 @@ class RewardsCfg:
     )
 
     # basic goal based distance reward
-    distance_progress = RewTerm(
-        func=mdp.distance_to_goal_progress,
-        weight=100.0,
-        params={"command_name": "pose_command", "slack_penalty": 0.0001},
-    )
+    # distance_progress = RewTerm(
+    #     func=mdp.distance_to_goal_progress,
+    #     weight=100.0,
+    #     params={"command_name": "pose_command", "slack_penalty": 0.0001},
+    # )
 
     # Position tracking reward (coarse) - increased weight and adjusted std for closer goals
     # position_tracking = RewTerm(
@@ -230,11 +230,11 @@ class RewardsCfg:
     # )
 
     # Reward for moving towards goal - CRITICAL for learning
-    # moving_towards_goal = RewTerm(
-    #     func=mdp.moving_towards_goal_reward,
-    #     weight=100.0,  # Increased from 20.0 to strongly encourage movement
-    #     params={"command_name": "pose_command"},
-    # )
+    moving_towards_goal = RewTerm(
+        func=mdp.moving_towards_goal_reward,
+        weight=100.0,  # Increased from 20.0 to strongly encourage movement
+        params={"command_name": "pose_command"},
+    )
 
     # Reward for maintaining target velocity
     # target_vel_rew = RewTerm(

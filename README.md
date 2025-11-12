@@ -27,8 +27,10 @@ python -m tensorboard.main --logdir /workspace/costnav_isaaclab/logs/rl_games/co
 python -m tensorboard.main --logdir /workspace/costnav_isaaclab/logs/rl_games/coco_static/2025-11-12_00-42-40/summaries --port 6006
 
 python -m tensorboard.main --logdir /mnt/home/haebin/harbor/CostNav/costnav_isaaclab/logs/rl_games/coco_static/2025-11-12_06-01-31/summaries --port 6006
+---> this is much better with moving_towards_goal
 
 python -m tensorboard.main --logdir /mnt/home/haebin/harbor/CostNav/costnav_isaaclab/logs/rl_games/coco_static/2025-11-12_07-23-08/summaries --port 6006
+---> distance goal is weaker
 
 ## Docker
 
