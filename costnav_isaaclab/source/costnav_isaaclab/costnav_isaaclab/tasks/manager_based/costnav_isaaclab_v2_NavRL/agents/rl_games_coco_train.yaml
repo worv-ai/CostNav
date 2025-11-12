@@ -78,7 +78,7 @@ params:
     entropy_coef: 0.0  # Disabled to prevent Inf with fixed_sigma
     truncate_grads: True
     e_clip: 0.2
-    horizon_length: 256
+    horizon_length: 32
     minibatch_size: 512
     mini_epochs: 5
     critic_coef: 1.0
