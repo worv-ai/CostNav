@@ -44,18 +44,18 @@ class CostnavIsaaclabSceneCfg(InteractiveSceneCfg):
     """Configuration for COCO robot navigation scene with custom map."""
 
     # custom map
-    # custom_map = AssetBaseCfg(
-    #     prim_path="/World/custom_map",
-    #     spawn=sim_utils.UsdFileCfg(
-    #         usd_path="omniverse://10.50.2.21/Users/worv/map/Street_sidewalk.usd"
-    #     ),
-    # )
+    custom_map = AssetBaseCfg(
+        prim_path="/World/custom_map",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path="omniverse://10.50.2.21/Users/worv/map/Street_sidewalk.usd"
+        ),
+    )
 
     # ground plane
-    ground = AssetBaseCfg(
-        prim_path="/World/ground",
-        spawn=sim_utils.GroundPlaneCfg(size=(100.0, 100.0)),
-    )
+    # ground = AssetBaseCfg(
+    #     prim_path="/World/ground",
+    #     spawn=sim_utils.GroundPlaneCfg(size=(100.0, 100.0)),
+    # )
 
     # robot - COCO robot for navigation
     robot: ArticulationCfg = COCO_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
@@ -197,7 +197,7 @@ class RewardsCfg:
 
     # Arrival reward
     arrived_reward = RewTerm(
-        func=loc_mdp.is_terminated_term, weight=200000.0, params={"term_keys": "arrive"}
+        func=loc_mdp.is_terminated_term, weight=20000.0, params={"term_keys": "arrive"}
     )
 
     # Collision penalty
