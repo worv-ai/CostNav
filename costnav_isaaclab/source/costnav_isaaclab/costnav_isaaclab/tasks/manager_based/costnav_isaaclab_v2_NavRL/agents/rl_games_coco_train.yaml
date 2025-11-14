@@ -56,7 +56,7 @@ params:
     device_name: 'cuda:0'
     multi_gpu: False
     ppo: True
-    mixed_precision: True
+    mixed_precision: False
     normalize_input: False  # Keep False - observations already normalized in rgbd_processed()
     normalize_value: True
     value_bootstrap: True
