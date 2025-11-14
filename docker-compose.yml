@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: isaac-sim
-    image: costnav:isaac-sim
+    image: costnav-isaacsim-${ISAAC_SIM_VERSION}:${COSTNAV_VERSION}
     container_name: costnav-isaac-sim
     runtime: nvidia
     env_file:
@@ -41,7 +41,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: isaac-lab
-    image: costnav:isaac-lab
+    image: costnav-isaaclab-${ISAAC_SIM_VERSION}-${ISAAC_LAB_VERSION}:${COSTNAV_VERSION}
     container_name: ${CONTAINER_NAME:-costnav-isaac-lab}
     runtime: nvidia
     env_file:
@@ -76,7 +76,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: dev
-    image: costnav:dev
+    image: costnav-dev:${COSTNAV_VERSION}
     container_name: costnav-dev
     env_file:
       - .env

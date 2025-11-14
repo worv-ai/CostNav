@@ -10,10 +10,9 @@
   <a href="https://github.com/worv-ai/CostNav">
     <img alt="Last commit" src="https://img.shields.io/github/last-commit/worv-ai/CostNav?style=flat&logo=github">
   </a>
-  <br />
   <img alt="Isaac Sim" src="https://img.shields.io/badge/Isaac%20Sim-5.1.0-76B900?style=flat&logo=nvidia">
   <img alt="Isaac Lab" src="https://img.shields.io/badge/Isaac%20Lab-2.3.0-4CAF50?style=flat&logo=nvidia">
-  <img alt="Python" src="https://img.shields.io/badge/Python-3.10+-3776AB?style=flat&logo=python&logoColor=white">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white">
 
   <img src="assets/figures/main_figure.png" alt="CostNav benchmark overview" style="max-width: 900px; width: 100%; margin: 12px 0;">
 
@@ -55,7 +54,7 @@ Hooks are in place to compare learning vs. rule-based stacks, switch between on-
 ### 1. Prerequisites
 
 - Linux host with NVIDIA GPU, recent drivers, Docker, and `nvidia-container-toolkit`.
-- Access to `nvcr.io/nvidia/isaac-sim:5.0.0` (login via NVIDIA NGC).
+- Access to `nvcr.io/nvidia/isaac-sim:5.1.0` (login via NVIDIA NGC).
 - Optional Omniverse Nucleus endpoint containing the street-scene USD referenced by the task configs.
 
 ### 2. Clone and fetch references
@@ -85,6 +84,15 @@ docker compose --profile dev up -d         # light dev image without simulator
 
 # Tear down when finished
 docker compose down
+```
+To rebuild the images locally, use the provided `Makefile`:
+
+```bash
+# build all three targets with default tags (costnav-*:<0.1.0>)
+make build-all
+
+# override the versions as needed
+make build-isaac-lab COSTNAV_VERSION=0.2.0
 ```
 
 Inside the container the project is mounted at `/workspace`. Isaac Sim is prevented from auto-starting so you control when to launch training scripts.

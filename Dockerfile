@@ -1,7 +1,7 @@
 # ==============================================================================
 # Base stage: Common dependencies for all simulation environments
 # ==============================================================================
-FROM ubuntu:22.04 AS base
+FROM ubuntu:24.04 AS base
 
 # Install uv for fast Python package management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -29,7 +29,7 @@ RUN uv pip install --system -e ".[dev]"
 # ==============================================================================
 # Isaac Sim stage: For NVIDIA Isaac Sim environment (base for Isaac Lab)
 # ==============================================================================
-FROM nvcr.io/nvidia/isaac-sim:5.0.0 AS isaac-sim
+FROM nvcr.io/nvidia/isaac-sim:5.1.0 AS isaac-sim
 
 # Install uv for faster package management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -61,7 +61,7 @@ CMD ["-c", "sleep infinity"]
 # ==============================================================================
 # Isaac Lab stage: Isaac Lab on top of Isaac Sim
 # ==============================================================================
-FROM nvcr.io/nvidia/isaac-sim:5.0.0 AS isaac-lab
+FROM nvcr.io/nvidia/isaac-sim:5.1.0 AS isaac-lab
 
 # Install uv for faster package management and git for cloning repos
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -93,7 +93,7 @@ RUN uv pip install --python="${PYTHON_BIN}" --system \
 # Install Isaac Lab with all extensions
 # Using Isaac Sim's Python to install globally in the container (no venv needed)
 RUN uv pip install --python="${PYTHON_BIN}" --system \
-    "isaaclab[isaacsim,all]==2.2.0" \
+    "isaaclab[isaacsim,all]==2.3.0" \
     --extra-index-url https://pypi.nvidia.com
 
 # Copy project files
