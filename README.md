@@ -1,4 +1,5 @@
 # CostNav
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/a7a4b8b6-5ab4-4968-bf25-6a8ecbf55ad1" />
 
 
 cd costnav_isaaclab/
