@@ -327,3 +327,163 @@ def print_rewards(env: ManagerBasedRLEnv, print_every_n_steps: int = 1) -> torch
 
     # Return zero (this reward doesn't contribute to training)
     return torch.zeros(env.num_envs, device=env.device)
+
+def print_contact_impulses(
+    env: "ManagerBasedRLEnv",
+    sensor_name: str = "contact_forces",
+    print_every_n_steps: int = 1,
+) -> torch.Tensor:
+    """Print per-environment contact/impulse-like magnitude from a ContactSensor.
+
+    This reads the ContactSensor's net contact forces and prints a simple summary for
+    each environment. It returns zero so it does not affect training.
+
+    The reported values:
+    - Exclude the wheel links defined in ``except_part``.
+    - Include an approximate impulse per step computed as ``force * dt``.
+
+    Args:
+        env: The environment instance.
+        sensor_name: Name of the ContactSensor entity in the scene (e.g. "contact_forces").
+        print_every_n_steps: Print frequency (default: every step).
+
+    Returns:
+        Zero tensor (this reward doesn't contribute to training).
+    """
+    # Links to exclude from the contact summary (e.g., wheels).
+    except_part = [
+        "front_left_wheel_link",
+        "front_right_wheel_link",
+        "rear_left_wheel_link",
+        "rear_right_wheel_link",
+    ]
+
+    try:
+        # Only print every N steps to avoid excessive logging.
+        step = env.common_step_counter
+        if step % print_every_n_steps != 0:
+            return torch.zeros(env.num_envs, device=env.device)
+
+        # Resolve the contact sensor from the scene by name.
+        if not hasattr(env, "scene"):
+            print("[CONTACT DEBUG] Env has no 'scene' attribute; cannot access contact sensor.")
+            return torch.zeros(env.num_envs, device=env.device)
+
+        try:
+            sensor = env.scene[sensor_name]
+        except KeyError:
+            print(
+                f"[CONTACT DEBUG] Contact sensor '{sensor_name}' not found in scene. "
+                "Available entities may differ; check your SceneCfg."
+            )
+            return torch.zeros(env.num_envs, device=env.device)
+
+        # Ensure the sensor exposes the aggregated net contact forces.
+        if not hasattr(sensor, "data") or not hasattr(sensor.data, "net_forces_w"):
+            print(
+                f"[CONTACT DEBUG] Contact sensor '{sensor_name}' has no 'net_forces_w' data. "
+                "Is ContactSensor configured correctly?"
+            )
+            return torch.zeros(env.num_envs, device=env.device)
+
+        net_forces = sensor.data.net_forces_w
+
+        # Expected shape is (num_envs, num_bodies, 3). Be defensive for older versions.
+        if net_forces.ndim != 3:
+            try:
+                num_envs = env.num_envs
+                num_bodies = net_forces.shape[0] // num_envs
+                net_forces = net_forces.view(num_envs, num_bodies, 3)
+            except Exception:
+                print(f"[CONTACT DEBUG] Unexpected net_forces_w shape: {tuple(net_forces.shape)}")
+                return torch.zeros(env.num_envs, device=env.device)
+
+        # Per-body contact magnitude (||force|| in N).
+        magnitudes = torch.norm(net_forces, dim=-1)  # (num_envs, num_bodies)
+
+        # Optionally exclude wheel links from the contact summary.
+        body_names = getattr(sensor, "body_names", None)
+        if body_names is not None:
+            try:
+                # Build list of indices for bodies we want to exclude.
+                exclude_indices = []
+                except_suffixes = list(except_part)
+                for body_idx, name in enumerate(body_names):
+                    name_str = str(name)
+                    if any(name_str.endswith(suffix) for suffix in except_suffixes):
+                        exclude_indices.append(body_idx)
+
+                if exclude_indices:
+                    magnitudes[:, exclude_indices] = 0.0
+            except Exception as ex:
+                print(f"[CONTACT DEBUG] Failed to apply wheel exclusion: {ex}")
+        else:
+            print("[CONTACT DEBUG] Sensor has no 'body_names'; cannot exclude wheel links.")
+
+        # Aggregate per environment (force).
+        total_force = magnitudes.sum(dim=1)
+        max_force = magnitudes.max(dim=1).values
+
+        # Determine dt for impulse approximation.
+        dt = getattr(env, "step_dt", None)
+        if dt is None:
+            try:
+                dt = float(env.cfg.sim.dt) * float(env.cfg.decimation)
+            except Exception:
+                dt = None
+
+        if dt is not None:
+            # Approximate per-step impulse as force * dt (N * s).
+            impulse_mags = magnitudes * float(dt)
+            total_impulse = impulse_mags.sum(dim=1)
+            max_impulse = impulse_mags.max(dim=1).values
+        else:
+            impulse_mags = None
+            total_impulse = None
+            max_impulse = None
+            print(
+                "[CONTACT DEBUG] Could not determine env step_dt; impulse-by-dt will not be printed."
+            )
+
+        # Print per-env summary.
+        if dt is not None:
+            print(
+                "\n[CONTACT DEBUG] Per-env contact summary (force N, impulse-by-dt N*s; wheels excluded):"
+            )
+        else:
+            print("\n[CONTACT DEBUG] Per-env contact summary (force N; wheels excluded):")
+
+        for env_id in range(env.num_envs):
+            line = (
+                f"  env={env_id:03d}  "
+                f"total_force={total_force[env_id].item():.4f} N  "
+                f"max_body_force={max_force[env_id].item():.4f} N"
+            )
+            if total_impulse is not None and max_impulse is not None:
+                line += (
+                    f"  total_impulse_dt={total_impulse[env_id].item():.4f} N*s  "
+                    f"max_body_impulse_dt={max_impulse[env_id].item():.4f} N*s"
+                )
+            print(line)
+
+        # Optionally also show which body has the largest contact in env 0 for quick inspection.
+        if body_names is not None and env.num_envs > 0:
+            env0_mags = magnitudes[0]
+            top_val, top_idx = torch.max(env0_mags, dim=0)
+            if top_val > 0:
+                msg = (
+                    f"    [env 0] max contact (excluding wheels) on body '{body_names[top_idx]}' "
+                    f"with force {top_val.item():.4f} N"
+                )
+                if dt is not None:
+                    msg += f"  impulse_dt={(top_val * float(dt)).item():.4f} N*s"
+                print(msg)
+
+    except Exception as e:
+        print(f"[CONTACT DEBUG] Error in print_contact_impulses: {e}")
+        import traceback
+
+        traceback.print_exc()
+
+    # Return zero to keep this term from affecting learning.
+    return torch.zeros(env.num_envs, device=env.device)
