@@ -250,6 +250,16 @@ class RewardsCfg:
         params={"print_every_n_steps": 1},  # Change to higher number to print less frequently
     )
 
+    # DEBUG: Print per-env contact/impulse magnitudes from the contact_forces sensor
+    debug_contact_impulses = RewTerm(
+        func=mdp.print_contact_impulses,
+        weight=0.001,  # Very small weight so it runs but doesn't affect training
+        params={
+            "sensor_name": "contact_forces",
+            "print_every_n_steps": 1,
+        },
+    )
+
 
 @configclass
 class TerminationsCfg:

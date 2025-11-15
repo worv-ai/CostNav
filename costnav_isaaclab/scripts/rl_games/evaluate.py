@@ -69,11 +69,16 @@ import random
 import time
 from collections import defaultdict
 
-import costnav_isaaclab.tasks  # noqa: F401
+import costnav_isaaclab.tasks  # noqa: F401, E402
 import gymnasium as gym
-import isaaclab_tasks  # noqa: F401
+import isaaclab_tasks  # noqa: F401, E402
 import numpy as np
 import torch
+from costnav_isaaclab.rl_games_helpers import (
+    compute_contact_impulse_metrics,
+    compute_navigation_energy_step,
+    get_env_with_scene,
+)
 from isaaclab.envs import (
     DirectMARLEnv,
     DirectMARLEnvCfg,
@@ -172,6 +177,18 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # wrap around environment for rl-games
     env = RlGamesVecEnvWrapper(env, rl_device, clip_obs, clip_actions)
 
+    # find the underlying Isaac Lab env that exposes the scene and contact sensor
+    base_env = get_env_with_scene(env)
+    if base_env is None:
+        print(
+            "[INFO] Could not locate underlying Isaac Lab env with 'scene'; "
+            "collision/work metrics will be disabled."
+        )
+    else:
+        print(
+            "[INFO] Collision / work metrics enabled from contact_forces sensor (excluding wheels)."
+        )
+
     # register the environment to rl-games registry
     # note: in agents configuration: environment name must be "rlgpu"
     vecenv.register(
@@ -219,6 +236,23 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     current_episode_rewards = torch.zeros(num_envs, device=env.unwrapped.device)
     current_episode_lengths = torch.zeros(num_envs, device=env.unwrapped.device, dtype=torch.int)
 
+    # Collision impulse metrics (per environment, per episode)
+    current_episode_collision_steps = torch.zeros(
+        num_envs, device=env.unwrapped.device, dtype=torch.int
+    )
+    current_episode_collision_impulse = torch.zeros(num_envs, device=env.unwrapped.device)
+    current_episode_collision_any = torch.zeros(
+        num_envs, device=env.unwrapped.device, dtype=torch.bool
+    )
+
+    collision_dt = None  # Filled lazily from the contact sensor metrics
+
+    # Navigation energy / power metrics (per environment, per episode)
+    current_episode_nav_energy = torch.zeros(num_envs, device=env.unwrapped.device)
+    current_episode_nav_power_max = torch.zeros(num_envs, device=env.unwrapped.device)
+
+    nav_dt = None  # Filled lazily from the navigation energy helper
+
     # Get available termination terms from the environment
     termination_term_names = []
     if hasattr(env.unwrapped, "termination_manager"):
@@ -257,12 +291,57 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             current_episode_lengths += 1
             total_steps += num_envs
 
+            # Collision / work metrics from contact sensor (if available)
+            if base_env is not None:
+                metrics = compute_contact_impulse_metrics(base_env)
+                if metrics is not None and metrics["max_force"] is not None:
+                    max_force = metrics["max_force"]  # (num_envs,)
+                    collision_mask = max_force > 0.0
+
+                    # lazily capture dt from metrics
+                    if collision_dt is None:
+                        collision_dt = metrics["dt"]
+
+                    # Approximate per-step collision impulse (N·s) and accumulate over collision steps.
+                    step_impulse = metrics.get("total_impulse_dt")
+                    if step_impulse is None:
+                        step_impulse = metrics.get("max_impulse_dt")
+                    if step_impulse is not None:
+                        step_impulse = step_impulse.to(current_episode_collision_impulse.device)
+                        current_episode_collision_impulse += torch.where(
+                            collision_mask,
+                            step_impulse,
+                            torch.zeros_like(step_impulse),
+                        )
+
+                    current_episode_collision_steps += collision_mask.to(
+                        current_episode_collision_steps.dtype
+                    )
+                    current_episode_collision_any |= collision_mask
+
+                # Navigation energy / power metrics based on m * g * v
+                nav_metrics = compute_navigation_energy_step(base_env)
+                if nav_metrics is not None and nav_metrics.get("power") is not None:
+                    if nav_dt is None:
+                        nav_dt = nav_metrics.get("dt")
+
+                    step_power = nav_metrics["power"].to(current_episode_nav_energy.device)
+
+                    # Integrate power over time to approximate energy consumption.
+                    if nav_dt is not None:
+                        step_energy = step_power * float(nav_dt)
+                        current_episode_nav_energy += step_energy
+
+                    current_episode_nav_power_max = torch.max(
+                        current_episode_nav_power_max, step_power
+                    )
+
             # Check for completed episodes
             if len(dones) > 0:
                 done_indices = torch.where(dones)[0]
 
                 for idx in done_indices:
-                    idx_cpu = idx.item()
+                    # Episode-level reward/length
                     episode_rewards.append(current_episode_rewards[idx].item())
                     episode_lengths.append(current_episode_lengths[idx].item())
 
@@ -276,6 +355,71 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                                 termination_reason = term_name
                                 termination_counts[term_name] += 1
                                 break
+
+                    episode_terminations.append(termination_reason)
+
+                    # Collect additional info from infos dict (if provided by env)
+                    if isinstance(infos, dict):
+                        for key, value in infos.items():
+                            if isinstance(value, torch.Tensor) and value.numel() == num_envs:
+                                episode_data[key].append(value[idx].item())
+
+                    # Collision / work metrics for this finished episode
+                    if base_env is not None:
+                        # Number of steps with non-zero collision force
+                        episode_collision_steps = current_episode_collision_steps[idx].item()
+                        episode_collision_impulse = current_episode_collision_impulse[idx].item()
+
+                        episode_data["collision_steps"].append(episode_collision_steps)
+                        episode_data["collision_impulse"].append(episode_collision_impulse)
+
+                        # Navigation energy / power metrics (m * g * v) for this finished episode
+                        episode_nav_energy = current_episode_nav_energy[idx].item()
+                        episode_nav_energy_kwh = episode_nav_energy / 3_600_000.0
+                        episode_nav_power_max = current_episode_nav_power_max[idx].item()
+
+                        episode_data["nav_energy_mgv"].append(episode_nav_energy)
+                        episode_data["nav_energy_kwh_mgv"].append(episode_nav_energy_kwh)
+                        episode_data["nav_power_max_mgv"].append(episode_nav_power_max)
+
+                        if nav_dt is not None and current_episode_lengths[idx] > 0:
+                            episode_time_s_nav = float(current_episode_lengths[idx].item()) * float(
+                                nav_dt
+                            )
+                            if episode_time_s_nav > 0.0:
+                                episode_nav_power_avg = episode_nav_energy / episode_time_s_nav
+                            else:
+                                episode_nav_power_avg = 0.0
+                        else:
+                            episode_nav_power_avg = 0.0
+
+                        episode_data["nav_power_avg_mgv"].append(episode_nav_power_avg)
+
+                    completed_episodes += 1
+
+                    # Print progress
+                    if completed_episodes % 10 == 0:
+                        elapsed = time.time() - start_time
+                        print(
+                            f"[{completed_episodes}/{args_cli.num_episodes}] "
+                            f"Avg Reward: {np.mean(episode_rewards):.2f} ± {np.std(episode_rewards):.2f} | "
+                            f"Avg Length: {np.mean(episode_lengths):.1f} | "
+                            f"Time: {elapsed:.1f}s"
+                        )
+
+                    # Reset tracking for this environment
+                    current_episode_rewards[idx] = 0
+                    current_episode_lengths[idx] = 0
+                    current_episode_collision_steps[idx] = 0
+                    current_episode_collision_impulse[idx] = 0.0
+                    current_episode_collision_any[idx] = False
+                    current_episode_nav_energy[idx] = 0.0
+                    current_episode_nav_power_max[idx] = 0.0
+
+                # reset rnn state for terminated episodes
+                if agent.is_rnn and agent.states is not None:
+                    for s in agent.states:
+                        s[:, dones, :] = 0.0
 
                     episode_terminations.append(termination_reason)
 
