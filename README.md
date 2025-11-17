@@ -15,7 +15,6 @@
   <img alt="Isaac Lab" src="https://img.shields.io/badge/Isaac%20Lab-2.3.0-4CAF50?style=flat&logo=nvidia">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white">
 
-  <img src="assets/figures/main_figure.png" alt="CostNav benchmark overview" style="max-width: 900px; width: 100%; margin: 12px 0;">
 
   <h3>CostNav is a cost-driven navigation benchmark for sidewalk robots, built on Isaac Sim.</h3>
 </div>
