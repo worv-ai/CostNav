@@ -1,4 +1,5 @@
 # CostNav
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/ee4db2b1-ec4e-41c9-88b5-e6c58c78facd" />
 
 <div align="center">
   <a href="https://github.com/worv-ai/CostNav/issues">
