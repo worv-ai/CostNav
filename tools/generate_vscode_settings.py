@@ -3,12 +3,21 @@
 
 from __future__ import annotations
 
-import argparse
 import os
-import sys
 import textwrap
+import time
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Optional
+
+import typer
+from rich.console import Console
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
+    TaskProgressColumn,
+)
 
 VSCODE_TEMPLATE = """
 {
@@ -28,36 +37,23 @@ PYTHON.AUTOCOMPLETE.EXTRAPATHS
         "CARB_APP_PATH": "CARB.APP.PATH",
         "EXP_PATH": "EXP.PATH",
         "PYTHONPATH": "PYTHON.PATH.ENV"
-    },
-    "python.formatting.provider": "black",
-    "python.formatting.blackArgs": ["--line-length", "79"],
-    "python.linting.pylintEnabled": false,
-    "python.linting.flake8Enabled": true
+    }
 }
 """
 
-PYTHON_ENV_TEMPLATE = """# Python environment variables for Isaac Sim and Omni Kit
-# This file is sourced by VS Code's Python extension
-
-# Isaac Sim paths
-ISAAC_PATH=ISAAC.PATH
+PYTHON_ENV_TEMPLATE = """ISAAC_PATH=ISAAC.PATH
 CARB_APP_PATH=CARB.APP.PATH
 EXP_PATH=EXP.PATH
 
-# Python path including all Isaac Sim, Omni Kit, and extension directories
-# Omni Kit kernel and core extensions
 PYTHONPATH=${ISAAC_PATH}/kit/kernel/py
 PYTHONPATH=${PYTHONPATH}:${ISAAC_PATH}/kit/exts
 PYTHONPATH=${PYTHONPATH}:${ISAAC_PATH}/kit/extscore
-# Isaac Sim extensions
 PYTHONPATH=${PYTHONPATH}:${ISAAC_PATH}/exts
 PYTHONPATH=${PYTHONPATH}:${ISAAC_PATH}/extscache
 PYTHONPATH=${PYTHONPATH}:${ISAAC_PATH}/extsDeprecated
 PYTHONPATH=${PYTHONPATH}:${ISAAC_PATH}/extsUser
-# Python site-packages
 PYTHONPATH=${PYTHONPATH}:${ISAAC_PATH}/kit/python/lib/python3.11/site-packages
 
-# Library paths for binary interfaces
 LD_LIBRARY_PATH=${ISAAC_PATH}/kit/lib
 LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${ISAAC_PATH}/kit/plugins
 LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${ISAAC_PATH}/kit/exts
@@ -65,70 +61,93 @@ LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${ISAAC_PATH}/kit/exts
 
 
 def _find_isaac_sim_path() -> Path | None:
-    """Find Isaac Sim installation path from environment or common locations."""
-    # Try environment variable first
+    """Find Isaac Sim installation path."""
     isaac_path = os.environ.get("ISAAC_PATH") or os.environ.get("ISAAC_SIM_PATH")
     if isaac_path and Path(isaac_path).exists():
         return Path(isaac_path)
 
-    # Try common installation paths
     common_paths = [
-        Path("/isaac-sim"),  # Docker container path
+        Path("/isaac-sim"),
         Path.home() / ".local/share/ov/pkg/isaac-sim-*",
     ]
 
     for path_pattern in common_paths:
         if "*" in str(path_pattern):
-            # Handle glob patterns
             import glob
+
             matches = glob.glob(str(path_pattern))
             if matches:
-                return Path(sorted(matches)[-1])  # Use latest version
+                return Path(sorted(matches)[-1])
         elif path_pattern.exists():
             return path_pattern
 
     return None
 
 
-def _gather_extra_paths(repo_root: Path, isaac_sim_path: Path) -> List[str]:
-    """Gather all Python paths needed for Isaac Sim, Omni Kit, and CostNav.
+def _find_isaaclab_source_paths() -> List[str]:
+    """Find isaaclab source paths from the installed package.
 
-    Instead of adding individual extension directories (which creates hundreds of paths),
-    we add the parent directories that contain extensions.
+    Returns:
+        List of paths to isaaclab source modules (isaaclab, isaaclab_assets, etc.)
     """
     paths: List[str] = []
 
-    # Omni Kit paths (kernel and extension directories)
+    try:
+        # Try to import isaaclab to find its installation location
+        import isaaclab
+
+        # Get the isaaclab package location
+        isaaclab_init = Path(isaaclab.__file__)
+        isaaclab_pkg_dir = isaaclab_init.parent
+
+        # Check if there's a 'source' subdirectory (installed package structure)
+        source_dir = isaaclab_pkg_dir / "source"
+        if source_dir.is_dir():
+            # Add all subdirectories in source/ (isaaclab, isaaclab_assets, etc.)
+            for subdir in source_dir.iterdir():
+                if subdir.is_dir() and not subdir.name.startswith("_"):
+                    paths.append(str(subdir))
+        else:
+            # If no source directory, add the package directory itself
+            paths.append(str(isaaclab_pkg_dir))
+
+    except (ImportError, AttributeError):
+        # isaaclab not installed or not importable
+        pass
+
+    return paths
+
+
+def _gather_extra_paths(repo_root: Path, isaac_sim_path: Path) -> List[str]:
+    """Gather all Python paths for Isaac Sim, Omni Kit, and CostNav."""
+    paths: List[str] = []
+
     kit_path = isaac_sim_path / "kit"
     if kit_path.exists():
-        # Kernel Python bindings
         kernel_py = kit_path / "kernel" / "py"
         if kernel_py.is_dir():
             paths.append(str(kernel_py))
 
-        # Omni Kit extension directories (add parent dirs, not individual extensions)
         for folder_name in ["exts", "extscore"]:
             folder = kit_path / folder_name
             if folder.is_dir():
                 paths.append(str(folder))
 
-    # Isaac Sim extension directories (add parent dirs, not individual extensions)
     for folder_name in ["exts", "extscache", "extsDeprecated", "extsUser"]:
         folder = isaac_sim_path / folder_name
         if folder.is_dir():
             paths.append(str(folder))
 
-    # Python site-packages
-    site_packages = isaac_sim_path / "kit" / "python" / "lib" / "python3.11" / "site-packages"
+    site_packages = (
+        isaac_sim_path / "kit" / "python" / "lib" / "python3.11" / "site-packages"
+    )
     if site_packages.is_dir():
         paths.append(str(site_packages))
 
-        # Isaac Lab source if installed in site-packages
-        isaaclab_source = site_packages / "isaaclab" / "source" / "isaaclab"
-        if isaaclab_source.is_dir():
-            paths.append(str(isaaclab_source))
+    # Dynamically find isaaclab source paths from installed package
+    isaaclab_paths = _find_isaaclab_source_paths()
+    paths.extend(isaaclab_paths)
 
-    # CostNav project directories
     for local_folder in ["costnav_isaaclab", "costnav"]:
         candidate = repo_root / local_folder
         if candidate.is_dir():
@@ -139,29 +158,25 @@ def _gather_extra_paths(repo_root: Path, isaac_sim_path: Path) -> List[str]:
 
 def _render_settings(isaac_sim_path: Path, extra_paths: Iterable[str]) -> str:
     """Render VS Code settings.json content."""
-    # Use python.sh wrapper instead of direct python3 binary
     interpreter = str(isaac_sim_path / "python.sh")
 
-    # Format paths for JSON
     entries = [f'"{path}"' for path in extra_paths]
     joined = ",\n".join(entries)
     joined = textwrap.indent(joined, " " * 8)
 
-    # Build PYTHONPATH for terminal environment
     pythonpath_parts = [
-        f"${{env:ISAAC_PATH}}/kit/kernel/py",
-        f"${{env:ISAAC_PATH}}/kit/exts",
-        f"${{env:ISAAC_PATH}}/kit/extscore",
-        f"${{env:ISAAC_PATH}}/exts",
-        f"${{env:ISAAC_PATH}}/extscache",
-        f"${{env:ISAAC_PATH}}/extsDeprecated",
-        f"${{env:ISAAC_PATH}}/extsUser",
-        f"${{env:ISAAC_PATH}}/kit/python/lib/python3.11/site-packages",
-        "${{env:PYTHONPATH}}"
+        "${env:ISAAC_PATH}/kit/kernel/py",
+        "${env:ISAAC_PATH}/kit/exts",
+        "${env:ISAAC_PATH}/kit/extscore",
+        "${env:ISAAC_PATH}/exts",
+        "${env:ISAAC_PATH}/extscache",
+        "${env:ISAAC_PATH}/extsDeprecated",
+        "${env:ISAAC_PATH}/extsUser",
+        "${env:ISAAC_PATH}/kit/python/lib/python3.11/site-packages",
+        "${env:PYTHONPATH}",
     ]
     pythonpath_env = ":".join(pythonpath_parts)
 
-    # Replace placeholders in template
     settings = VSCODE_TEMPLATE
     settings = settings.replace("PYTHON.DEFAULTINTERPRETERPATH", interpreter)
     settings = settings.replace("PYTHON.ANALYSIS.EXTRAPATHS", joined)
@@ -183,69 +198,160 @@ def _render_python_env(isaac_sim_path: Path) -> str:
     return env_content
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Generate VS Code settings for CostNav + Isaac Lab"
-    )
-    parser.add_argument(
+app = typer.Typer(help="Generate VS Code settings for CostNav + Isaac Lab")
+console = Console()
+
+
+def main(
+    isaac_sim: Optional[str] = typer.Option(
+        None,
         "--isaac-sim",
-        type=str,
-        help="Path to Isaac Sim installation (default: auto-detect from ISAAC_PATH or /isaac-sim)"
-    )
-    parser.add_argument(
+        help=(
+            "Path to Isaac Sim installation "
+            "(default: auto-detect from ISAAC_PATH or /isaac-sim)"
+        ),
+    ),
+    output: str = typer.Option(
+        ".vscode/settings.json",
         "--output",
-        default=".vscode/settings.json",
-        help="Path to write settings.json (default: .vscode/settings.json)"
-    )
-    parser.add_argument(
+        help="Path to write settings.json",
+    ),
+    force: bool = typer.Option(
+        False,
         "--force",
-        action="store_true",
-        help="Overwrite existing settings file"
-    )
-    args = parser.parse_args()
-
+        help="Overwrite existing settings file",
+    ),
+) -> None:
+    """Generate VS Code settings with Isaac Lab + CostNav search paths."""
     repo_root = Path(__file__).resolve().parents[1]
+    timings = {}
 
-    # Find Isaac Sim installation
-    if args.isaac_sim:
-        isaac_sim_path = Path(args.isaac_sim)
-        if not isaac_sim_path.exists():
-            print(f"Error: Isaac Sim path does not exist: {isaac_sim_path}")
-            sys.exit(1)
-    else:
-        isaac_sim_path = _find_isaac_sim_path()
-        if not isaac_sim_path:
-            print("Error: Unable to locate Isaac Sim installation.")
-            print("Please specify --isaac-sim /path/to/isaac-sim")
-            sys.exit(1)
+    start_time = time.perf_counter()
+    with Progress(
+        TextColumn("  "),
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task(
+            description="[cyan]Locating Isaac Sim installation...",
+            total=None,
+        )
 
-    print(f"Using Isaac Sim installation: {isaac_sim_path}")
+        if isaac_sim:
+            isaac_sim_path = Path(isaac_sim)
+            if not isaac_sim_path.exists():
+                progress.stop()
+                console.print(
+                    f"[bold red]✗[/bold red] Isaac Sim path does not "
+                    f"exist: {isaac_sim_path}"
+                )
+                raise typer.Exit(1)
+        else:
+            isaac_sim_path = _find_isaac_sim_path()
+            if not isaac_sim_path:
+                progress.stop()
+                console.print(
+                    "[bold red]✗[/bold red] Unable to locate "
+                    "Isaac Sim installation."
+                )
+                console.print(
+                    "  [yellow]💡 Hint:[/yellow] Please specify "
+                    "--isaac-sim /path/to/isaac-sim"
+                )
+                raise typer.Exit(1)
 
-    # Generate settings.json
-    output_path = Path(args.output)
-    if output_path.exists() and not args.force:
-        print(f"VS Code settings already exist at {output_path}. Use --force to overwrite.")
-        return
+        progress.update(task, completed=True)
 
-    extra_paths = _gather_extra_paths(repo_root, isaac_sim_path)
+    elapsed = time.perf_counter() - start_time
+    timings["locate_isaac"] = elapsed
+    console.print(
+        f"[bold green]✓[/bold green] Found Isaac Sim: "
+        f"[cyan]{isaac_sim_path}[/cyan] [dim]({elapsed:.3f}s)[/dim]"
+    )
+
+    output_path = Path(output)
+    if output_path.exists() and not force:
+        console.print(
+            f"\n[yellow]⚠[/yellow]  VS Code settings already exist at "
+            f"[cyan]{output_path}[/cyan]"
+        )
+        console.print("[dim]Use --force to overwrite[/dim]")
+        raise typer.Exit(0)
+
+    start_time = time.perf_counter()
+    with Progress(
+        TextColumn("  "),
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task(
+            description="[cyan]Gathering Python paths...",
+            total=100,
+        )
+
+        progress.update(task, advance=30)
+        extra_paths = _gather_extra_paths(repo_root, isaac_sim_path)
+        progress.update(task, advance=70)
+
+    elapsed = time.perf_counter() - start_time
+    timings["gather_paths"] = elapsed
+
     if not extra_paths:
-        print("Warning: No extra paths found.")
+        console.print(
+            f"[yellow]⚠[/yellow]  Warning: No extra paths found. "
+            f"[dim]({elapsed:.3f}s)[/dim]"
+        )
+    else:
+        console.print(
+            f"[bold green]✓[/bold green] Gathered {len(extra_paths)} "
+            f"Python paths [dim]({elapsed:.3f}s)[/dim]"
+        )
 
-    settings = _render_settings(isaac_sim_path, extra_paths)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(settings)
-    print(f"✓ VS Code settings written to {output_path}")
+    with Progress(
+        TextColumn("  "),
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task1 = progress.add_task(
+            description="[cyan]Generating settings.json...",
+            total=None,
+        )
+        start_time = time.perf_counter()
+        settings = _render_settings(isaac_sim_path, extra_paths)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(settings)
+        elapsed = time.perf_counter() - start_time
+        timings["generate_settings"] = elapsed
+        progress.update(task1, completed=True)
 
-    # Generate .python.env
-    python_env_path = output_path.parent / ".python.env"
-    python_env = _render_python_env(isaac_sim_path)
-    python_env_path.write_text(python_env)
-    print(f"✓ Python environment file written to {python_env_path}")
+        task2 = progress.add_task(
+            description="[cyan]Generating .python.env...",
+            total=None
+        )
+        start_time = time.perf_counter()
+        python_env_path = output_path.parent / ".python.env"
+        python_env = _render_python_env(isaac_sim_path)
+        python_env_path.write_text(python_env)
+        elapsed = time.perf_counter() - start_time
+        timings["generate_env"] = elapsed
+        progress.update(task2, completed=True)
 
-    print(f"\nFound {len(extra_paths)} Python paths:")
-    for path in extra_paths:
-        print(f"  - {path}")
+    console.print(
+        f"[bold green]✓[/bold green] VS Code settings written to "
+        f"[cyan]{output_path}[/cyan] "
+        f"[dim]({timings['generate_settings']:.3f}s)[/dim]"
+    )
+    console.print(
+        f"[bold green]✓[/bold green] Python environment file written to "
+        f"[cyan]{python_env_path}[/cyan] "
+        f"[dim]({timings['generate_env']:.3f}s)[/dim]"
+    )
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

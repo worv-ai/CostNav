@@ -1,36 +1,42 @@
+
 {
-  "python.defaultInterpreterPath": "/isaac-sim/python.sh",
-  "python.analysis.extraPaths": [
-    "/isaac-sim/kit/kernel/py",
-    "/isaac-sim/kit/exts",
-    "/isaac-sim/kit/extscore",
-    "/isaac-sim/exts",
-    "/isaac-sim/extscache",
-    "/isaac-sim/extsDeprecated",
-    "/isaac-sim/extsUser",
-    "/isaac-sim/kit/python/lib/python3.11/site-packages",
-    "/isaac-sim/kit/python/lib/python3.11/site-packages/isaaclab/source/isaaclab",
-    "${workspaceFolder}/costnav_isaaclab",
-    "${workspaceFolder}/costnav"
-  ],
-  "python.autoComplete.extraPaths": [
-    "/isaac-sim/kit/kernel/py",
-    "/isaac-sim/kit/exts",
-    "/isaac-sim/kit/extscore",
-    "/isaac-sim/exts",
-    "/isaac-sim/extscache",
-    "/isaac-sim/extsDeprecated",
-    "/isaac-sim/extsUser",
-    "/isaac-sim/kit/python/lib/python3.11/site-packages",
-    "/isaac-sim/kit/python/lib/python3.11/site-packages/isaaclab/source/isaaclab",
-    "${workspaceFolder}/costnav_isaaclab",
-    "${workspaceFolder}/costnav"
-  ],
-  "python.envFile": "${workspaceFolder}/.vscode/.python.env",
-  "terminal.integrated.env.linux": {
-    "ISAAC_PATH": "/isaac-sim",
-    "CARB_APP_PATH": "/isaac-sim/kit",
-    "EXP_PATH": "/isaac-sim/apps",
-    "PYTHONPATH": "${env:ISAAC_PATH}/kit/kernel/py:${env:ISAAC_PATH}/kit/exts:${env:ISAAC_PATH}/kit/extscore:${env:ISAAC_PATH}/exts:${env:ISAAC_PATH}/extscache:${env:ISAAC_PATH}/extsDeprecated:${env:ISAAC_PATH}/extsUser:${env:ISAAC_PATH}/kit/python/lib/python3.11/site-packages:${env:PYTHONPATH}"
-  }
+    "editor.rulers": [79],
+    "python.languageServer": "Pylance",
+    "python.jediEnabled": false,
+    "python.defaultInterpreterPath": "/isaac-sim/python.sh",
+    "python.analysis.extraPaths": [
+        "/isaac-sim/kit/kernel/py",
+        "/isaac-sim/kit/extscore",
+        "/isaac-sim/exts",
+        "/isaac-sim/extscache",
+        "/isaac-sim/extsDeprecated",
+        "/isaac-sim/kit/python/lib/python3.11/site-packages",
+        "/isaac-sim/kit/python/lib/python3.11/site-packages/isaaclab/source/isaaclab_tasks",
+        "/isaac-sim/kit/python/lib/python3.11/site-packages/isaaclab/source/isaaclab_assets",
+        "/isaac-sim/kit/python/lib/python3.11/site-packages/isaaclab/source/isaaclab_rl",
+        "/isaac-sim/kit/python/lib/python3.11/site-packages/isaaclab/source/isaaclab_mimic",
+        "/isaac-sim/kit/python/lib/python3.11/site-packages/isaaclab/source/isaaclab",
+        "/workspace/costnav_isaaclab"
+    ],
+    "python.autoComplete.extraPaths": [
+        "/isaac-sim/kit/kernel/py",
+        "/isaac-sim/kit/extscore",
+        "/isaac-sim/exts",
+        "/isaac-sim/extscache",
+        "/isaac-sim/extsDeprecated",
+        "/isaac-sim/kit/python/lib/python3.11/site-packages",
+        "/isaac-sim/kit/python/lib/python3.11/site-packages/isaaclab/source/isaaclab_tasks",
+        "/isaac-sim/kit/python/lib/python3.11/site-packages/isaaclab/source/isaaclab_assets",
+        "/isaac-sim/kit/python/lib/python3.11/site-packages/isaaclab/source/isaaclab_rl",
+        "/isaac-sim/kit/python/lib/python3.11/site-packages/isaaclab/source/isaaclab_mimic",
+        "/isaac-sim/kit/python/lib/python3.11/site-packages/isaaclab/source/isaaclab",
+        "/workspace/costnav_isaaclab"
+    ],
+    "python.envFile": "${workspaceFolder}/.vscode/.python.env",
+    "terminal.integrated.env.linux": {
+        "ISAAC_PATH": "/isaac-sim",
+        "CARB_APP_PATH": "/isaac-sim/kit",
+        "EXP_PATH": "/isaac-sim/apps",
+        "PYTHONPATH": "${env:ISAAC_PATH}/kit/kernel/py:${env:ISAAC_PATH}/kit/exts:${env:ISAAC_PATH}/kit/extscore:${env:ISAAC_PATH}/exts:${env:ISAAC_PATH}/extscache:${env:ISAAC_PATH}/extsDeprecated:${env:ISAAC_PATH}/extsUser:${env:ISAAC_PATH}/kit/python/lib/python3.11/site-packages:${env:PYTHONPATH}"
+    }
 }
