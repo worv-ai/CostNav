@@ -218,5 +218,12 @@ __marimo__/
 # MacOs
 .DS_Store
 
+# Outputs
 logs/
 outputs/
+
+# Training outputs with timestamps
+costnav_isaaclab/source/costnav_isaaclab/20*/
+
+# Work-in-progress refactored source
+src/

@@ -1,56 +1,216 @@
 # CostNav
 <img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/ee4db2b1-ec4e-41c9-88b5-e6c58c78facd" />
 
+<div align="center">
+  <a href="https://github.com/worv-ai/CostNav/issues">
+    <img alt="Open issues" src="https://img.shields.io/github/issues/worv-ai/CostNav?style=flat">
+  </a>
+  <a href="https://github.com/worv-ai/CostNav/stargazers">
+    <img alt="GitHub stars" src="https://img.shields.io/github/stars/worv-ai/CostNav?style=flat">
+  </a>
+  <a href="https://github.com/worv-ai/CostNav">
+    <img alt="Last commit" src="https://img.shields.io/github/last-commit/worv-ai/CostNav?style=flat&logo=github">
+  </a>
+  <img alt="Isaac Sim" src="https://img.shields.io/badge/Isaac%20Sim-5.1.0-76B900?style=flat&logo=nvidia">
+  <img alt="Isaac Lab" src="https://img.shields.io/badge/Isaac%20Lab-2.3.0-4CAF50?style=flat&logo=nvidia">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white">
 
-cd costnav_isaaclab/
-python scripts/rl_games/train.py --task=Template-Costnav-Isaaclab-v0
-python scripts/rl_games/train.py --task=Template-Costnav-Isaaclab-v1-CustomMap
+
+  <h3>CostNav is a cost-driven navigation benchmark for sidewalk robots, built on Isaac Sim.</h3>
+</div>
+
+---
+
+## Overview
+
+CostNav supports a wide range of robot platforms and diverse outdoor environments, and evaluates navigation policies with a unified cost model that captures SLA compliance, operational cost, profitability, and break-even time.
+The toolkit enables scalable variation in robots, payloads, maps, and cloud-inference settings, and supports both learning-based and rule-based navigation stacks—making it easy to prototype and compare cost-aware policies without manual tuning for each scenario.
+
+## Highlights
+
+- **Business-first benchmark:**
+Policies are evaluated not only on navigation success but also on their operational impact, including robot safety, SLA compliance, profitability, and break-even time—metrics directly tied to real-world deployment.
+- **Diverse environment suite:**
+CostNav provides a set of tasks that span urban, suburban, rural, wild, port, and orchard-style maps, all using the COCO delivery robot with mixed observation (vector + RGB-D) pipelines for consistent evaluation.
+- **Roadmap-ready:**
+Hooks are in place to compare learning vs. rule-based stacks, switch between on-device and cloud inference, and study cost-aware reward shaping.
+
+## Simulation Overview
+
+### Simulation Environment
+
+| Scenario | Description |
+| --- | --- |
+| Sidewalk | City-scale sidewalk map featuring crosswalks, curbs, planters, and other street furniture, delivered via Omniverse USD assets for reproducible layouts. |
+
+### Simulation Agents
+
+| Agent | Description |
+| --- | --- |
+| COCO delivery robot | Four-wheeled sidewalk courier platform from `coco_robot_cfg.py` with configurable drive models, cameras, and LiDAR for learning or rule-based controllers. |
+
+## Getting Started
+
+### 1. Prerequisites
+
+- Linux host with NVIDIA GPU, recent drivers, Docker, and `nvidia-container-toolkit`.
+- Access to `nvcr.io/nvidia/isaac-sim:5.1.0` (login via NVIDIA NGC).
+- Optional Omniverse Nucleus endpoint containing the street-scene USD referenced by the task configs.
+
+### 2. Clone and fetch references
+
+```bash
+git clone https://github.com/worv-ai/CostNav.git
+cd CostNav
+git submodule update --init --recursive third_party/IsaacLab third_party/urban-sim
+```
+
+### 3. Configure environment variables
+
+1. Copy `.env.example` to `.env`.
+2. Set `DISPLAY`, `NVIDIA_VISIBLE_DEVICES`, Isaac Sim search paths, and any Omniverse auth tokens your setup requires.
+3. The same `.env` is used by Docker Compose, the devcontainer, and SLURM jobs.
+
+### 4. Build/run with Docker Compose
+
+```bash
+# Isaac Lab + Isaac Sim stack (GPU + Omniverse)
+docker compose --profile isaac-lab up -d
+docker exec -it costnav-isaac-lab bash
+
+# Alternate profiles
+docker compose --profile isaac-sim up -d    # bare Isaac Sim
+docker compose --profile dev up -d         # light dev image without simulator
+
+# Tear down when finished
+docker compose down
+```
+To rebuild the images locally, use the provided `Makefile`:
+
+```bash
+# build all three targets with default tags (costnav-*:<0.1.0>)
+make build-all
+
+# override the versions as needed
+make build-isaac-lab COSTNAV_VERSION=0.2.0
+```
+
+Inside the container the project is mounted at `/workspace`. Isaac Sim is prevented from auto-starting so you control when to launch training scripts.
+
+### 5. Manual / bare-metal install
+
+If you already installed Isaac Lab into your Python environment:
+
+```bash
+python -m pip install -e costnav_isaaclab/source/costnav_isaaclab
+python -m pip install -e ".[dev]"
+python costnav_isaaclab/scripts/list_envs.py
+```
+
+### 6. IDE helpers
+
+```bash
+python tools/generate_vscode_settings.py --isaac-sim /path/to/isaac-sim
+```
+
+The script creates `.vscode/.python.env` with search paths so Pylance can index Isaac modules without indexing the entire Omniverse cache.
+
+### 7. SLURM / cluster runs
+
+Use the provided batch file to spin up per-job containers:
+
+```bash
+sbatch train.sbatch
+```
+
+`train.sbatch` derives the container name from `SLURM_JOB_ID`, pins GPUs via `NVIDIA_VISIBLE_DEVICES`, launches the `isaac-lab` compose profile, runs RL-Games training headlessly, and tears the container down when finished.
+
+## Running Experiments
+
+All commands assume `cd costnav_isaaclab` (which mirrors `/workspace/costnav_isaaclab` inside containers).
+
+```bash
+# Inspect available environments
+python scripts/list_envs.py | grep Template-Costnav
+
+# PPO baseline on COCO sidewalk navigation (RGB-D input + cameras)
 python scripts/rl_games/train.py --task=Template-Costnav-Isaaclab-v2-NavRL --enable_cameras 2>&1 | tee run_log.txt
 python scripts/rl_games/train.py --task=Template-Costnav-Isaaclab-v2-NavRL --enable_cameras --headless 2>&1 | tee run_log.txt
 
+# Alternate curriculum / maps
+python scripts/rl_games/train.py --task=Template-Costnav-Isaaclab-v1-CustomMap
+python scripts/rl_games/train.py --task=Template-Costnav-Isaaclab-v0
 
+# Evaluate, demo, or play with trained checkpoints
 python scripts/rl_games/evaluate.py --task=Template-Costnav-Isaaclab-v2-NavRL --enable_cameras
+python scripts/rl_games/play.py --task=Template-Costnav-Isaaclab-v2-NavRL --enable_cameras
 
-
+# Deterministic controller + reward sanity checks
 python scripts/test_controller.py --task Template-Costnav-Isaaclab-v2-NavRL --enable_cameras
+python scripts/test_v2_rewards.py --task Template-Costnav-Isaaclab-v2-NavRL
 
+# Dummy zero or random agents to confirm scene wiring
+python scripts/zero_agent.py --task=Template-Costnav-Isaaclab-v2-NavRL
+python scripts/random_agent.py --task=Template-Costnav-Isaaclab-v2-NavRL
+```
 
-cd /workspace/costnav_isaaclab/source/costnav_isaaclab/costnav_isaaclab/tasks/manager_based/costnav_isaaclab_v2_NavRL && python find_safe_positions.py --visualize_raycasts
+### Safe position discovery and NavMesh debugging
 
-python -m tensorboard.main --logdir /workspace/costnav_isaaclab/logs/rl_games/coco_static/2025-11-11_12-51-08/summaries --port 6006
+```bash
+cd costnav_isaaclab/source/costnav_isaaclab/costnav_isaaclab/tasks/manager_based/costnav_isaaclab_v2_NavRL
+python find_safe_positions.py --visualize_raycasts
+python safe_area_validator.py               # validates a set of candidate poses
+python check_navmesh.py                     # optional NavMesh diagnostics
+python check_impulse.py                     # contact impulse sweeps
+```
 
+Generated safe poses will be written back to `safe_positions_auto_generated.py`, which is consumed by both the command generator and environment reset hooks.
 
-## Best params
-python -m tensorboard.main --logdir /workspace/costnav_isaaclab/logs/rl_games/coco_static/2025-11-06_07-18-39/summaries --port 6006
+### Monitoring training
 
-python -m tensorboard.main --logdir /workspace/costnav_isaaclab/logs/rl_games/coco_static/2025-11-11_01-08-18/summaries --port 6006
+```bash
+python -m tensorboard.main --logdir costnav_isaaclab/logs/rl_games/<experiment>/summaries --port 6006
+```
 
-python -m tensorboard.main --logdir /workspace/costnav_isaaclab/logs/rl_games/coco_static/2025-11-12_00-42-40/summaries --port 6006
+TensorBoard logs include both standard RL metrics (success, distance, reward components) and cost-model summaries emitted as custom scalars.
 
-python -m tensorboard.main --logdir /mnt/home/haebin/harbor/CostNav/costnav_isaaclab/logs/rl_games/coco_static/2025-11-12_06-01-31/summaries --port 6006
----> this is much better with moving_towards_goal
+## Cost & Revenue Model
 
-python -m tensorboard.main --logdir /mnt/home/haebin/harbor/CostNav/costnav_isaaclab/logs/rl_games/coco_static/2025-11-12_07-23-08/summaries --port 6006
----> distance goal is weaker
+- **Lifecycle coverage:** CostNav accounts for capex (robot hardware amortized across operating years), energy costs per-kWh, street-level maintenance/repair, and SLA-driven revenue for each delivery slot.
+- **Baseline economics:** The current RL-Games policy operating on-device reaches 43.0% SLA compliance, maintains a 46.5% operating margin, and breaks even in roughly 0.90 years.
+- **Cost breakdown:** Maintenance (33.7%) and hardware amortization (34.9%) dominate the expense report, making collision avoidance and smoother driving the highest-leverage improvements.
+- **Inputs & tuning:** Industry-sourced rates (utility tariffs, fleet service pricing) seed the configs. These parameters live alongside experiment metadata under `outputs/` so each run logs the assumptions used to compute profitability.
+- **Future axes:** Rule-based navigation stacks, cloud inference policies, and cost-aware reinforcement learning curricula will reuse the same accounting layer, enabling apple-to-apple comparisons across control paradigms.
 
-## Docker
+## Development Notes
 
-### Environment Configuration
+- **Coding standards:** Python 3.10, `black` (100 char lines), `ruff`, and `mypy` settings live in `pyproject.toml`. Run `uv pip install --system -e ".[dev]"` or `pip install -e ".[dev]"` to install formatters and tests.
+- **Testing:** Unit tests live under `tests/` (populate as features mature). Use `pytest` or targeted scripts like `scripts/test_v2_rewards.py` to validate reward shaping before launching long training jobs.
+- **Submodules:** Refer to `third_party/README.md` for guidance on keeping IsaacLab and Urban-Sim references in sync without polluting CostNav source directories.
+- **IDE & linting:** `tools/generate_vscode_settings.py` ensures VS Code/Pylance knows where Omniverse packages live. For PyCharm or other IDEs, mirror the generated `.python.env` paths.
+- **Omniverse assets:** Update `CostnavIsaaclabSceneCfg` if your Nucleus path differs. Keep URLs in sync via the `.env` file so Docker and local runs agree on map locations.
 
-The Docker containers use environment variables defined in the `.env` file. A template file `.env.example` is provided.
+## Roadmap
 
-To customize your environment:
-1. Copy `.env.example` to `.env` (already done by default)
-2. Edit `.env` to set your custom values
-3. The `.env` file is automatically loaded by docker-compose
+1. **Rule-based baselines:** Integrate classical planners/pure-pursuit controllers to ground the benchmark with non-learning references.
+2. **Cloud inference toggles:** Decouple policy execution from the robot and simulate cloud latency + bandwidth costs.
+3. **Cost-aware RL training:** Incorporate direct profit margins, SLA penalties, and maintenance risk into the reward to study economically aligned policies.
+4. **Expanded asset suite:** Add night-time lighting variations, more COCO payload types (food containers, mail), and additional sidewalk geometries.
+5. **Analytics tooling:** Publish notebooks/notebooks dashboards that convert `outputs/` records into ROI charts for entire fleets.
 
-Key environment variables:
-- `DISPLAY`: X11 display for GUI applications (default: `:0`)
-- `NVIDIA_VISIBLE_DEVICES`: Which GPUs to use (default: `all`)
-- `GPU_DEVICE_IDS`: Specific GPU device IDs for containers (default: `0`)
-- `ISAAC_PATH`, `CARB_APP_PATH`, `EXP_PATH`: Isaac Sim paths
+## Contributing
 
-### Running Containers
+Issues and pull requests are welcome! Open a discussion or issue with
 
-docker compose up -d isaac-lab
-docker exec -it costnav-isaac-lab bash
+- The scenario or subsystem you want to improve (e.g., safe position sampling, cost accounting hooks, RL hyper-parameters).
+- Links to supporting logs or Omniverse USD assets if relevant.
+
+Please run formatters (`black`, `ruff`) and targeted validation scripts before submitting a PR.
+
+## Acknowledgements
+
+CostNav is built on NVIDIA Isaac Sim/Isaac Lab, Omniverse USD tooling, and the COCO delivery robot model. Many of the safe navigation utilities borrow ideas from the wider robotics community--huge thanks to everyone who made their work available.
+
+## Contact
+
+Maintained by the worv.ai robotics research team. For research collaborations or enterprise deployments, please contact your worv.ai point of contact or open an issue on GitHub.
