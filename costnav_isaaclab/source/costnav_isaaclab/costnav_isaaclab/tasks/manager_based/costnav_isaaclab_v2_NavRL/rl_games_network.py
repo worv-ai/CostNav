@@ -278,7 +278,7 @@ class MixInputNetworkBuilder(NetworkBuilder):
             input_shape = kwargs.pop("input_shape")
             if type(input_shape) is dict:
                 input_shape = input_shape["observation"]
-            self.num_seqs = num_seqs = kwargs.pop("num_seqs", 1)
+            self.num_seqs = kwargs.pop("num_seqs", 1)
             self.value_size = kwargs.pop("value_size", 1)
 
             NetworkBuilder.BaseNetwork.__init__(self)

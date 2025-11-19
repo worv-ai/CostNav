@@ -469,7 +469,7 @@ SAFE_PERCENTAGE = {100.0 * len(safe_positions) / (len(safe_positions) + len(unsa
     print("\n" + "=" * 80)
     print("VISUALIZATION")
     print("=" * 80)
-    markers = visualize_positions(safe_positions, unsafe_positions)
+    markers = visualize_positions(safe_positions, unsafe_positions)  # noqa: F841
 
     # Keep simulation running for visualization
     print("\n" + "=" * 80)

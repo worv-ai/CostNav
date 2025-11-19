@@ -387,7 +387,7 @@ class SafeAreaValidator:
         if stage.GetPrimAtPath(raycast_viz_path):
             stage.RemovePrim(raycast_viz_path)
 
-        raycast_viz = UsdGeom.Xform.Define(stage, raycast_viz_path)
+        raycast_viz = UsdGeom.Xform.Define(stage, raycast_viz_path)  # noqa: F841
 
         print("\n[Raycast Visualization]")
         print(f"  Green lines: {len(self.raycast_misses)} raycasts with no hit (SAFE)")

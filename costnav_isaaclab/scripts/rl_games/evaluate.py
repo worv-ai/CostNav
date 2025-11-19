@@ -244,7 +244,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 done_indices = torch.where(dones)[0]
 
                 for idx in done_indices:
-                    idx_cpu = idx.item()
                     episode_rewards.append(current_episode_rewards[idx].item())
                     episode_lengths.append(current_episode_lengths[idx].item())
 
