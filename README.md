@@ -215,6 +215,7 @@ Please run formatters (`black`, `ruff`) and targeted validation scripts before s
 - [ ] sensor + robot + battery + compute specsheet and cost
 - [ ] Repo Packaging
 - [ ] mkdocs
+- [ ] isaac sim & nav2 support for rule-based navigation
 
 ## Acknowledgements
 
