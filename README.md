@@ -207,6 +207,16 @@ Issues and pull requests are welcome! Open a discussion or issue with
 
 Please run formatters (`black`, `ruff`) and targeted validation scripts before submitting a PR.
 
+
+## What's next?
+
+- [] Paper release
+- [] camera specsheet and cost
+- [] sensor + robot + battery + compute specsheet and cost
+- [] Repo Packaging
+- [] mkdocs
+- [] 
+
 ## Acknowledgements
 
 CostNav is built on NVIDIA Isaac Sim/Isaac Lab, Omniverse USD tooling, and the COCO delivery robot model. Many of the safe navigation utilities borrow ideas from the wider robotics community--huge thanks to everyone who made their work available.
