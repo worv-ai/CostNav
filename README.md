@@ -216,6 +216,7 @@ Please run formatters (`black`, `ruff`) and targeted validation scripts before s
 - [ ] Repo Packaging
 - [ ] mkdocs
 - [ ] isaac sim & nav2 support for rule-based navigation
+- [ ] revenue references for delivery
 
 ## Acknowledgements
 
