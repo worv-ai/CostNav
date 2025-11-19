@@ -210,12 +210,11 @@ Please run formatters (`black`, `ruff`) and targeted validation scripts before s
 
 ## What's next?
 
-- [] Paper release
-- [] camera specsheet and cost
-- [] sensor + robot + battery + compute specsheet and cost
-- [] Repo Packaging
-- [] mkdocs
-- [] 
+- [ ] Paper release
+- [ ] camera specsheet and cost
+- [ ] sensor + robot + battery + compute specsheet and cost
+- [ ] Repo Packaging
+- [ ] mkdocs
 
 ## Acknowledgements
 
