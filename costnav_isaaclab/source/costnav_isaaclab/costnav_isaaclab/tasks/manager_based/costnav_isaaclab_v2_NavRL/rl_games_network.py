@@ -88,9 +88,7 @@ class ResidualBlock(nn.Module):
 class ImpalaSequential(nn.Module):
     """IMPALA-style convolutional block with max pooling and residual connections."""
 
-    def __init__(
-        self, in_channels, out_channels, activation="relu", use_bn=False, use_zero_init=False
-    ):
+    def __init__(self, in_channels, out_channels, activation="relu", use_bn=False, use_zero_init=False):
         super().__init__()
         self.conv = ConvBlock(in_channels, out_channels, use_bn)
         self.max_pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -134,16 +132,12 @@ class NetworkBuilder:
             self.activations_factory = object_factory.ObjectFactory()
             self.activations_factory.register_builder("relu", lambda **kwargs: nn.ReLU(**kwargs))
             self.activations_factory.register_builder("tanh", lambda **kwargs: nn.Tanh(**kwargs))
-            self.activations_factory.register_builder(
-                "sigmoid", lambda **kwargs: nn.Sigmoid(**kwargs)
-            )
+            self.activations_factory.register_builder("sigmoid", lambda **kwargs: nn.Sigmoid(**kwargs))
             self.activations_factory.register_builder("elu", lambda **kwargs: nn.ELU(**kwargs))
             self.activations_factory.register_builder("selu", lambda **kwargs: nn.SELU(**kwargs))
             self.activations_factory.register_builder("swish", lambda **kwargs: nn.SiLU(**kwargs))
             self.activations_factory.register_builder("gelu", lambda **kwargs: nn.GELU(**kwargs))
-            self.activations_factory.register_builder(
-                "softplus", lambda **kwargs: nn.Softplus(**kwargs)
-            )
+            self.activations_factory.register_builder("softplus", lambda **kwargs: nn.Softplus(**kwargs))
             self.activations_factory.register_builder("None", lambda **kwargs: nn.Identity())
 
             # Weight initializers factory
@@ -166,9 +160,7 @@ class NetworkBuilder:
             )
             self.init_factory.register_builder(
                 "variance_scaling_initializer",
-                lambda **kwargs: _create_initializer(
-                    torch_ext.variance_scaling_initializer, **kwargs
-                ),
+                lambda **kwargs: _create_initializer(torch_ext.variance_scaling_initializer, **kwargs),
             )
             self.init_factory.register_builder(
                 "random_uniform_initializer",
@@ -245,14 +237,10 @@ class NetworkBuilder:
         ):
             """Build MLP with optional D2RL architecture."""
             if d2rl:
-                act_layers = [
-                    self.activations_factory.create(activation) for i in range(len(units))
-                ]
+                act_layers = [self.activations_factory.create(activation) for i in range(len(units))]
                 return D2RLNet(input_size, units, act_layers, norm_func_name)
             else:
-                return self._build_sequential_mlp(
-                    input_size, units, activation, dense_func, norm_func_name=None
-                )
+                return self._build_sequential_mlp(input_size, units, activation, dense_func, norm_func_name=None)
 
         def _build_value_layer(self, input_size, output_size, value_type="legacy"):
             """Build value layer."""
@@ -279,15 +267,9 @@ class MixInputNetworkBuilder(NetworkBuilder):
             """Calculate the flattened size after CNN layers."""
             if cnn_layers is None:
                 assert len(input_shape) == 1
-                return (
-                    input_shape[0] + extra_shape[0] if extra_shape is not None else input_shape[0]
-                )
+                return input_shape[0] + extra_shape[0] if extra_shape is not None else input_shape[0]
             else:
-                cnn_out = (
-                    nn.Sequential(*cnn_layers)(torch.rand(1, *(input_shape)))
-                    .flatten(1)
-                    .data.size(1)
-                )
+                cnn_out = nn.Sequential(*cnn_layers)(torch.rand(1, *(input_shape))).flatten(1).data.size(1)
                 return cnn_out + extra_shape[0] if extra_shape is not None else cnn_out
 
         def __init__(self, params, **kwargs):
@@ -306,16 +288,10 @@ class MixInputNetworkBuilder(NetworkBuilder):
             # Total obs: [pose_command (2), base_lin_vel (3), base_ang_vel (3), rgb_flattened (4*135*240)]
             self.vector_obs_size = 8  # pose_command (2) + base_lin_vel (3) + base_ang_vel (3)
             cnn_input_shape = self.cnn_input_shape  # [4, 135, 240]
-            self.image_flat_size = (
-                cnn_input_shape[0] * cnn_input_shape[1] * cnn_input_shape[2]
-            )  # 72900
+            self.image_flat_size = cnn_input_shape[0] * cnn_input_shape[1] * cnn_input_shape[2]  # 72900
 
             # Build CNN branch for visual observations
-            self.cnn = (
-                self._build_impala(cnn_input_shape, self.conv_depths)
-                if len(cnn_input_shape) == 3
-                else None
-            )
+            self.cnn = self._build_impala(cnn_input_shape, self.conv_depths) if len(cnn_input_shape) == 3 else None
 
             # Build pre-MLP for vector observations (goal commands, velocities, etc.)
             # This processes ONLY the vector observations (pose_command + velocities), not the full concatenated obs
@@ -352,9 +328,7 @@ class MixInputNetworkBuilder(NetworkBuilder):
                     rnn_in_size += 1
                 if self.require_last_actions:
                     rnn_in_size += actions_num
-                self.rnn = self._build_rnn(
-                    self.rnn_name, rnn_in_size, self.rnn_units, self.rnn_layers
-                )
+                self.rnn = self._build_rnn(self.rnn_name, rnn_in_size, self.rnn_units, self.rnn_layers)
 
             # Build main MLP for fused features
             mlp_args = {
@@ -376,9 +350,7 @@ class MixInputNetworkBuilder(NetworkBuilder):
                 self.mu = torch.nn.Linear(out_size, actions_num)
                 self.mu_act = self.activations_factory.create(self.space_config["mu_activation"])
                 mu_init = self.init_factory.create(**self.space_config["mu_init"])
-                self.sigma_act = self.activations_factory.create(
-                    self.space_config["sigma_activation"]
-                )
+                self.sigma_act = self.activations_factory.create(self.space_config["sigma_activation"])
                 sigma_init = self.init_factory.create(**self.space_config["sigma_init"])
 
                 if self.fixed_sigma:
@@ -431,9 +403,7 @@ class MixInputNetworkBuilder(NetworkBuilder):
             # Original shape: [batch, 4, 135, 240]
             batch_size = sensor_obs_flat.shape[0]
             cnn_shape = self.cnn_input_shape
-            sensor_obs = sensor_obs_flat.reshape(
-                batch_size, cnn_shape[0], cnn_shape[1], cnn_shape[2]
-            )
+            sensor_obs = sensor_obs_flat.reshape(batch_size, cnn_shape[0], cnn_shape[1], cnn_shape[2])
 
             # Permute sensor observations if needed (already in NCHW format, so skip)
             # Note: permute_input should be False in config since rgbd_processed returns NCHW
@@ -583,9 +553,7 @@ def register_mix_input_network():
         from rl_games.algos_torch import model_builder
 
         # Register the mix_input_actor_critic network
-        model_builder.register_network(
-            "mix_input_actor_critic", lambda **kwargs: MixInputNetworkBuilder()
-        )
+        model_builder.register_network("mix_input_actor_critic", lambda **kwargs: MixInputNetworkBuilder())
         print("[INFO] Successfully registered mix_input_actor_critic network builder")
         return True
     except ImportError as e:

@@ -46,9 +46,7 @@ class CostnavIsaaclabSceneCfg(InteractiveSceneCfg):
     # custom map
     custom_map = AssetBaseCfg(
         prim_path="/World/custom_map",
-        spawn=sim_utils.UsdFileCfg(
-            usd_path="omniverse://10.50.2.21/Users/worv/map/Street_sidewalk.usd"
-        ),
+        spawn=sim_utils.UsdFileCfg(usd_path="omniverse://10.50.2.21/Users/worv/map/Street_sidewalk.usd"),
     )
 
     # ground plane
@@ -61,9 +59,7 @@ class CostnavIsaaclabSceneCfg(InteractiveSceneCfg):
     robot: ArticulationCfg = COCO_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
     # sensors
-    contact_forces = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True
-    )
+    contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True)
 
     # camera sensor for visual observations
     camera = TiledCameraCfg(
@@ -77,9 +73,7 @@ class CostnavIsaaclabSceneCfg(InteractiveSceneCfg):
             width=1920,
             height=1080,
         ),
-        offset=CameraCfg.OffsetCfg(
-            pos=(0.51, 0.0, 0.015), rot=(0.5, -0.5, 0.5, -0.5), convention="ros"
-        ),
+        offset=CameraCfg.OffsetCfg(pos=(0.51, 0.0, 0.015), rot=(0.5, -0.5, 0.5, -0.5), convention="ros"),
     )
 
     # lights
@@ -196,14 +190,10 @@ class RewardsCfg:
     """Reward terms for the MDP."""
 
     # Arrival reward
-    arrived_reward = RewTerm(
-        func=loc_mdp.is_terminated_term, weight=20000.0, params={"term_keys": "arrive"}
-    )
+    arrived_reward = RewTerm(func=loc_mdp.is_terminated_term, weight=20000.0, params={"term_keys": "arrive"})
 
     # Collision penalty
-    collision_penalty = RewTerm(
-        func=loc_mdp.is_terminated_term, weight=-200.0, params={"term_keys": "collision"}
-    )
+    collision_penalty = RewTerm(func=loc_mdp.is_terminated_term, weight=-200.0, params={"term_keys": "collision"})
 
     # basic goal based distance reward
     # distance_progress = RewTerm(
@@ -312,15 +302,9 @@ class CostnavIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.disable_contact_processing = True
 
         # increase PhysX GPU collision buffers for complex scenes with many collision objects
-        self.sim.physx.gpu_collision_stack_size = (
-            536870912  # 512 MB to handle complex map collisions
-        )
-        self.sim.physx.gpu_found_lost_pairs_capacity = (
-            8000000  # Increased to handle many collision pairs
-        )
-        self.sim.physx.gpu_total_aggregate_pairs_capacity = (
-            7000000  # Increased to handle aggregate collision pairs
-        )
+        self.sim.physx.gpu_collision_stack_size = 536870912  # 512 MB to handle complex map collisions
+        self.sim.physx.gpu_found_lost_pairs_capacity = 8000000  # Increased to handle many collision pairs
+        self.sim.physx.gpu_total_aggregate_pairs_capacity = 7000000  # Increased to handle aggregate collision pairs
 
         # Update camera period based on decimation
         if hasattr(self.scene, "camera"):

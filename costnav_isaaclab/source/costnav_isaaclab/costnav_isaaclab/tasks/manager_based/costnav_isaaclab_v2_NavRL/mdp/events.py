@@ -122,9 +122,7 @@ def print_episode_rewards(env: ManagerBasedEnv, env_ids: torch.Tensor):
                     break
 
         # Print the episode summary
-        print(
-            f"[Episode End] Env {env_id_val:3d} | Total Reward: {total_reward:8.3f} | Reason: {termination_reason}"
-        )
+        print(f"[Episode End] Env {env_id_val:3d} | Total Reward: {total_reward:8.3f} | Reason: {termination_reason}")
 
         # Optionally print individual reward components
         # Uncomment the following lines if you want to see breakdown by reward term

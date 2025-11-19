@@ -138,9 +138,7 @@ def _gather_extra_paths(repo_root: Path, isaac_sim_path: Path) -> List[str]:
         if folder.is_dir():
             paths.append(str(folder))
 
-    site_packages = (
-        isaac_sim_path / "kit" / "python" / "lib" / "python3.11" / "site-packages"
-    )
+    site_packages = isaac_sim_path / "kit" / "python" / "lib" / "python3.11" / "site-packages"
     if site_packages.is_dir():
         paths.append(str(site_packages))
 
@@ -206,10 +204,7 @@ def main(
     isaac_sim: Optional[str] = typer.Option(
         None,
         "--isaac-sim",
-        help=(
-            "Path to Isaac Sim installation "
-            "(default: auto-detect from ISAAC_PATH or /isaac-sim)"
-        ),
+        help=("Path to Isaac Sim installation (default: auto-detect from ISAAC_PATH or /isaac-sim)"),
     ),
     output: str = typer.Option(
         ".vscode/settings.json",
@@ -242,23 +237,14 @@ def main(
             isaac_sim_path = Path(isaac_sim)
             if not isaac_sim_path.exists():
                 progress.stop()
-                console.print(
-                    f"[bold red]✗[/bold red] Isaac Sim path does not "
-                    f"exist: {isaac_sim_path}"
-                )
+                console.print(f"[bold red]✗[/bold red] Isaac Sim path does not exist: {isaac_sim_path}")
                 raise typer.Exit(1)
         else:
             isaac_sim_path = _find_isaac_sim_path()
             if not isaac_sim_path:
                 progress.stop()
-                console.print(
-                    "[bold red]✗[/bold red] Unable to locate "
-                    "Isaac Sim installation."
-                )
-                console.print(
-                    "  [yellow]💡 Hint:[/yellow] Please specify "
-                    "--isaac-sim /path/to/isaac-sim"
-                )
+                console.print("[bold red]✗[/bold red] Unable to locate Isaac Sim installation.")
+                console.print("  [yellow]💡 Hint:[/yellow] Please specify --isaac-sim /path/to/isaac-sim")
                 raise typer.Exit(1)
 
         progress.update(task, completed=True)
@@ -266,16 +252,12 @@ def main(
     elapsed = time.perf_counter() - start_time
     timings["locate_isaac"] = elapsed
     console.print(
-        f"[bold green]✓[/bold green] Found Isaac Sim: "
-        f"[cyan]{isaac_sim_path}[/cyan] [dim]({elapsed:.3f}s)[/dim]"
+        f"[bold green]✓[/bold green] Found Isaac Sim: [cyan]{isaac_sim_path}[/cyan] [dim]({elapsed:.3f}s)[/dim]"
     )
 
     output_path = Path(output)
     if output_path.exists() and not force:
-        console.print(
-            f"\n[yellow]⚠[/yellow]  VS Code settings already exist at "
-            f"[cyan]{output_path}[/cyan]"
-        )
+        console.print(f"\n[yellow]⚠[/yellow]  VS Code settings already exist at [cyan]{output_path}[/cyan]")
         console.print("[dim]Use --force to overwrite[/dim]")
         raise typer.Exit(0)
 
@@ -301,14 +283,10 @@ def main(
     timings["gather_paths"] = elapsed
 
     if not extra_paths:
-        console.print(
-            f"[yellow]⚠[/yellow]  Warning: No extra paths found. "
-            f"[dim]({elapsed:.3f}s)[/dim]"
-        )
+        console.print(f"[yellow]⚠[/yellow]  Warning: No extra paths found. [dim]({elapsed:.3f}s)[/dim]")
     else:
         console.print(
-            f"[bold green]✓[/bold green] Gathered {len(extra_paths)} "
-            f"Python paths [dim]({elapsed:.3f}s)[/dim]"
+            f"[bold green]✓[/bold green] Gathered {len(extra_paths)} Python paths [dim]({elapsed:.3f}s)[/dim]"
         )
 
     with Progress(
@@ -329,10 +307,7 @@ def main(
         timings["generate_settings"] = elapsed
         progress.update(task1, completed=True)
 
-        task2 = progress.add_task(
-            description="[cyan]Generating .python.env...",
-            total=None
-        )
+        task2 = progress.add_task(description="[cyan]Generating .python.env...", total=None)
         start_time = time.perf_counter()
         python_env_path = output_path.parent / ".python.env"
         python_env = _render_python_env(isaac_sim_path)

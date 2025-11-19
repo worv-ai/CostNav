@@ -75,7 +75,6 @@ try:
     # Try to import NavMesh extensions
     print("\n[Step 1] Loading NavMesh extensions...")
     try:
-
         print("  ✓ NavMesh extensions loaded successfully")
     except Exception as e:
         print(f"  ✗ Failed to load NavMesh extensions: {e}")
@@ -177,13 +176,9 @@ try:
                 if points and len(points) > 0:
                     print(f"    ✓ Path found with {len(points)} waypoints")
                     if len(points) > 0:
-                        print(
-                            f"      First point: ({points[0].x:.2f}, {points[0].y:.2f}, {points[0].z:.2f})"
-                        )
+                        print(f"      First point: ({points[0].x:.2f}, {points[0].y:.2f}, {points[0].z:.2f})")
                     if len(points) > 1:
-                        print(
-                            f"      Last point: ({points[-1].x:.2f}, {points[-1].y:.2f}, {points[-1].z:.2f})"
-                        )
+                        print(f"      Last point: ({points[-1].x:.2f}, {points[-1].y:.2f}, {points[-1].z:.2f})")
                 else:
                     print("    ✗ Path returned but has no points")
 
