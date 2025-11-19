@@ -22,9 +22,6 @@ from isaaclab.utils import configclass
 from . import mdp
 from .coco_robot_cfg import (
     COCO_CFG,
-    ClassicalCarActionCfg,
-    ClassicalCarWaypointActionCfg,
-    OgnCarActionCfg,
     RestrictedCarActionCfg,
 )
 from .safe_positions_auto_generated import SAFE_POSITIONS

@@ -166,7 +166,7 @@ try:
             test_start = carb.Float3(0.0, 0.0, 0.5)
             test_end = carb.Float3(5.0, 5.0, 0.5)
 
-            print(f"  Testing path query from (0,0,0.5) to (5,5,0.5)...")
+            print("  Testing path query from (0,0,0.5) to (5,5,0.5)...")
             path = navmesh.query_shortest_path(start_pos=test_start, end_pos=test_end)
 
             if path is None:

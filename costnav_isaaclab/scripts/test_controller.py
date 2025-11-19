@@ -47,7 +47,6 @@ import threading
 import costnav_isaaclab.tasks  # noqa: F401
 import gymnasium as gym
 import isaaclab_tasks  # noqa: F401
-import numpy as np
 import torch
 from isaaclab_tasks.utils import parse_env_cfg
 

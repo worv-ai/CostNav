@@ -180,7 +180,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     agent.reset()
 
     print(f"\n{'=' * 80}")
-    print(f"STARTING EVALUATION")
+    print("STARTING EVALUATION")
     print(f"{'=' * 80}")
     print(f"Task: {args_cli.task}")
     print(f"Checkpoint: {resume_path}")
@@ -292,18 +292,18 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     elapsed_time = time.time() - start_time
 
     print(f"\n{'=' * 80}")
-    print(f"EVALUATION COMPLETE")
+    print("EVALUATION COMPLETE")
     print(f"{'=' * 80}")
     print(f"Total episodes: {completed_episodes}")
     print(f"Total steps: {total_steps}")
     print(f"Total time: {elapsed_time:.2f}s")
     print(f"Steps per second: {total_steps / elapsed_time:.1f}")
-    print(f"\nEpisode Rewards:")
+    print("\nEpisode Rewards:")
     print(f"  Mean: {np.mean(episode_rewards):.4f}")
     print(f"  Std:  {np.std(episode_rewards):.4f}")
     print(f"  Min:  {np.min(episode_rewards):.4f}")
     print(f"  Max:  {np.max(episode_rewards):.4f}")
-    print(f"\nEpisode Lengths:")
+    print("\nEpisode Lengths:")
     print(f"  Mean: {np.mean(episode_lengths):.2f}")
     print(f"  Std:  {np.std(episode_lengths):.2f}")
     print(f"  Min:  {int(np.min(episode_lengths))}")
@@ -311,7 +311,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # Print termination statistics
     if termination_counts:
-        print(f"\nEpisode Terminations:")
+        print("\nEpisode Terminations:")
         total_episodes = sum(termination_counts.values())
 
         # Sort by count (descending)
@@ -323,7 +323,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # Print additional metrics if available
     if episode_data:
-        print(f"\nAdditional Metrics:")
+        print("\nAdditional Metrics:")
         for key, values in episode_data.items():
             if len(values) > 0:
                 print(f"  {key}:")

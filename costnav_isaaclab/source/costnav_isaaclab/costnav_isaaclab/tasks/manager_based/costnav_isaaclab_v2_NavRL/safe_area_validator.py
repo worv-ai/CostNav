@@ -441,10 +441,10 @@ class SafeAreaValidator:
             line.CreateDisplayColorAttr([(0.0, 1.0, 0.0)])
             line.CreateWidthsAttr([0.05])  # Make them thick to be very visible
 
-        print(f"\n  Legend:")
-        print(f"    🟢 Green lines = Raycast to sky (no obstacle)")
-        print(f"    🔴 Red lines = Raycast hit obstacle")
-        print(f"    🟡 Yellow spheres = Hit points")
+        print("\n  Legend:")
+        print("    🟢 Green lines = Raycast to sky (no obstacle)")
+        print("    🔴 Red lines = Raycast hit obstacle")
+        print("    🟡 Yellow spheres = Hit points")
         print(f"\n  Visualization created at: {raycast_viz_path}")
 
     def generate_safe_grid(

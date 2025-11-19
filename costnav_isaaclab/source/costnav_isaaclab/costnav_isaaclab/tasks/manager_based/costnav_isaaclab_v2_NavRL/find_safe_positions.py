@@ -124,7 +124,7 @@ import isaaclab.sim as sim_utils
 import numpy as np
 from isaaclab.envs import ManagerBasedRLEnv
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
-from pxr import Gf, Usd, UsdGeom
+from pxr import Usd, UsdGeom
 
 # Import the safe area validator
 from costnav_isaaclab.source.costnav_isaaclab.costnav_isaaclab.tasks.manager_based.costnav_isaaclab_v2_NavRL.safe_area_validator import (
@@ -175,7 +175,7 @@ def compute_map_bounds(env, map_prim_path: str = "/World/custom_map", margin: fl
     y_min = min_point[1] + margin
     y_max = max_point[1] - margin
 
-    print(f"\n[Map Bounds Detection]")
+    print("\n[Map Bounds Detection]")
     print(
         f"  Raw bounds: X=[{min_point[0]:.2f}, {max_point[0]:.2f}], Y=[{min_point[1]:.2f}, {max_point[1]:.2f}], Z=[{min_point[2]:.2f}, {max_point[2]:.2f}]"
     )

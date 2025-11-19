@@ -126,7 +126,7 @@ def print_episode_rewards(env: ManagerBasedEnv, env_ids: torch.Tensor):
 
         # Optionally print individual reward components
         # Uncomment the following lines if you want to see breakdown by reward term
-        print(f"  Reward breakdown:")
+        print("  Reward breakdown:")
         for term_name, episode_sum in reward_manager._episode_sums.items():
             term_reward = episode_sum[env_id].item()
             print(f"    {term_name:30s}: {term_reward:8.3f}")
