@@ -25,7 +25,7 @@ ensure_gymnasium_compat()
 ensure_isaaclab_imports()
 
 # Register Gym environments.
-from .tasks import *
+from .tasks import *  # noqa: F403
 
 # Register UI extensions.
-from .ui_extension_example import *
+from .ui_extension_example import *  # noqa: F403

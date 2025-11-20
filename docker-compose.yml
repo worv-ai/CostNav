@@ -6,12 +6,22 @@ services:
       context: .
       dockerfile: Dockerfile
       target: isaac-sim
-    image: costnav:isaac-sim
+    image: costnav-isaacsim-${ISAAC_SIM_VERSION}:${COSTNAV_VERSION}
     container_name: costnav-isaac-sim
-    runtime: nvidia
+    user: "${ISAAC_UID:-1234}:${ISAAC_GID:-1234}"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ "${GPU_DEVICE_IDS:-0}" ]
+              capabilities: [ gpu ]
     env_file:
       - .env
     environment:
+      - ACCEPT_EULA=Y
+      - PRIVACY_CONSENT=Y
+      - OMNI_KIT_ACCEPT_EULA=YES
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
       - DISPLAY=${DISPLAY:-:0}
@@ -23,16 +33,15 @@ services:
       - .:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ~/omniverse_map:/omniverse_map:ro
+      - ${HOME}/docker/isaac-sim/cache/main:/isaac-sim/.cache:rw
+      - ${HOME}/docker/isaac-sim/cache/computecache:/isaac-sim/.nv/ComputeCache:rw
+      - ${HOME}/docker/isaac-sim/logs:/isaac-sim/.nvidia-omniverse/logs:rw
+      - ${HOME}/docker/isaac-sim/config:/isaac-sim/.nvidia-omniverse/config:rw
+      - ${HOME}/docker/isaac-sim/data:/isaac-sim/.local/share/ov/data:rw
+      - ${HOME}/docker/isaac-sim/pkg:/isaac-sim/.local/share/ov/pkg:rw
     network_mode: host
     stdin_open: true
     tty: true
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: [ '${GPU_DEVICE_IDS:-0}' ]
-              capabilities: [ gpu ]
 
   # Isaac Lab environment
   isaac-lab:
@@ -41,12 +50,21 @@ services:
       context: .
       dockerfile: Dockerfile
       target: isaac-lab
-    image: costnav:isaac-lab
+    image: costnav-isaaclab-${ISAAC_SIM_VERSION}-${ISAAC_LAB_VERSION}:${COSTNAV_VERSION}
     container_name: ${CONTAINER_NAME:-costnav-isaac-lab}
-    runtime: nvidia
+    user: "${ISAAC_UID:-1234}:${ISAAC_GID:-1234}"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ "${GPU_DEVICE_IDS:-0}" ]
+              capabilities: [ gpu ]
     env_file:
       - .env
     environment:
+      - ACCEPT_EULA=Y
+      - PRIVACY_CONSENT=Y
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
       - DISPLAY=${DISPLAY:-:0}
@@ -58,16 +76,15 @@ services:
       - .:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ~/omniverse_map:/omniverse_map:ro
+      - ${HOME}/docker/isaac-sim/cache/main:/isaac-sim/.cache:rw
+      - ${HOME}/docker/isaac-sim/cache/computecache:/isaac-sim/.nv/ComputeCache:rw
+      - ${HOME}/docker/isaac-sim/logs:/isaac-sim/.nvidia-omniverse/logs:rw
+      - ${HOME}/docker/isaac-sim/config:/isaac-sim/.nvidia-omniverse/config:rw
+      - ${HOME}/docker/isaac-sim/data:/isaac-sim/.local/share/ov/data:rw
+      - ${HOME}/docker/isaac-sim/pkg:/isaac-sim/.local/share/ov/pkg:rw
     network_mode: host
     stdin_open: true
     tty: true
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           device_ids: [ '${GPU_DEVICE_IDS:-0}' ]
-    #           capabilities: [ gpu ]
 
     # Development environment (minimal dependencies)
   dev:
@@ -76,7 +93,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: dev
-    image: costnav:dev
+    image: costnav-dev:${COSTNAV_VERSION}
     container_name: costnav-dev
     env_file:
       - .env

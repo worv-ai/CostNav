@@ -17,7 +17,10 @@ parser = argparse.ArgumentParser(description="Play a checkpoint of an RL agent f
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument(
-    "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
+    "--disable_fabric",
+    action="store_true",
+    default=False,
+    help="Disable fabric and use USD I/O operations.",
 )
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
@@ -51,17 +54,16 @@ simulation_app = app_launcher.app
 """Rest everything follows."""
 
 
-import gymnasium as gym
 import math
 import os
 import random
 import time
+
+import costnav_isaaclab.tasks  # noqa: F401
+import gymnasium as gym
+import isaaclab_tasks  # noqa: F401
 import torch
-
-from rl_games.common import env_configurations, vecenv
-from rl_games.common.player import BasePlayer
-from rl_games.torch_runner import Runner
-
+from costnav_isaaclab.rl_games_helpers import compute_contact_impulse_metrics, get_env_with_scene
 from isaaclab.envs import (
     DirectMARLEnv,
     DirectMARLEnvCfg,
@@ -72,14 +74,12 @@ from isaaclab.envs import (
 from isaaclab.utils.assets import retrieve_file_path
 from isaaclab.utils.dict import print_dict
 from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
-
 from isaaclab_rl.rl_games import RlGamesGpuEnv, RlGamesVecEnvWrapper
-
-import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
-
-import costnav_isaaclab.tasks  # noqa: F401
+from rl_games.common import env_configurations, vecenv
+from rl_games.common.player import BasePlayer
+from rl_games.torch_runner import Runner
 
 
 @hydra_task_config(args_cli.task, "rl_games_cfg_entry_point")
@@ -154,10 +154,18 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # wrap around environment for rl-games
     env = RlGamesVecEnvWrapper(env, rl_device, clip_obs, clip_actions)
 
+    # find the underlying Isaac Lab env that exposes the scene and contact sensor
+    base_env = get_env_with_scene(env)
+    if base_env is None:
+        print(
+            "[INFO] Could not locate underlying Isaac Lab env with 'scene'; contact impulse metrics will be disabled."
+        )
+
     # register the environment to rl-games registry
     # note: in agents configuration: environment name must be "rlgpu"
     vecenv.register(
-        "IsaacRlgWrapper", lambda config_name, num_actors, **kwargs: RlGamesGpuEnv(config_name, num_actors, **kwargs)
+        "IsaacRlgWrapper",
+        lambda config_name, num_actors, **kwargs: RlGamesGpuEnv(config_name, num_actors, **kwargs),
     )
     env_configurations.register("rlgpu", {"vecenv_type": "IsaacRlgWrapper", "env_creator": lambda **kwargs: env})
 
@@ -202,6 +210,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             actions = agent.get_action(obs, is_deterministic=agent.is_deterministic)
             # env stepping
             obs, _, dones, _ = env.step(actions)
+
+            # compute and print contact impulse metrics (if available)
+            if base_env is not None:
+                metrics = compute_contact_impulse_metrics(base_env)
+                if metrics is not None and metrics["max_impulse_dt"] is not None:
+                    max_force = metrics["max_force"].max().item()
+                    max_impulse = metrics["max_impulse_dt"].max().item()
+                    print(f"[IMPULSE METRIC] max_force={max_force:.4f} N  max_impulse_dt={max_impulse:.4f} N*s")
 
             # perform operations for terminated episodes
             if len(dones) > 0:

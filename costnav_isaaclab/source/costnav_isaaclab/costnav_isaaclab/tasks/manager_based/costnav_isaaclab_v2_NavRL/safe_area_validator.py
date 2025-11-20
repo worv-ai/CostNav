@@ -96,9 +96,7 @@ class SafeAreaValidator:
         self.navmesh_interface = None
         if self.check_navmesh_reachability:
             if not NAVMESH_AVAILABLE:
-                print(
-                    "[SafeAreaValidator] Warning: NavMesh reachability requested but extensions not available!"
-                )
+                print("[SafeAreaValidator] Warning: NavMesh reachability requested but extensions not available!")
                 print("  Disabling NavMesh checks.")
                 self.check_navmesh_reachability = False
             else:
@@ -189,9 +187,7 @@ class SafeAreaValidator:
 
         # Perform raycast with bothSides=True to hit both sides of mesh faces
         # This is critical - without it, raycasts can pass through meshes depending on face orientation
-        hit = self.physx_scene_query_interface.raycast_closest(
-            origin, direction, distance, bothSides=True
-        )
+        hit = self.physx_scene_query_interface.raycast_closest(origin, direction, distance, bothSides=True)
 
         # Store visualization data
         if self.visualize_raycasts:
@@ -263,12 +259,8 @@ class SafeAreaValidator:
                 return True
 
             print("[SafeAreaValidator] NavMesh not found. Attempting to bake...")
-            print(
-                "[SafeAreaValidator] NOTE: This requires NavMesh volumes to be set up in the scene."
-            )
-            print(
-                "[SafeAreaValidator]       (Create > Navigation > NavMesh Include Volume in Isaac Sim UI)"
-            )
+            print("[SafeAreaValidator] NOTE: This requires NavMesh volumes to be set up in the scene.")
+            print("[SafeAreaValidator]       (Create > Navigation > NavMesh Include Volume in Isaac Sim UI)")
 
             # Stop simulation before baking
             print("[SafeAreaValidator] Stopping simulation for NavMesh baking...")
@@ -292,9 +284,7 @@ class SafeAreaValidator:
                 elapsed = time.time() - start_time
                 if elapsed > max_wait_time:
                     print(f"[SafeAreaValidator] ✗ NavMesh baking timed out after {max_wait_time}s")
-                    print(
-                        "[SafeAreaValidator]   This likely means no NavMesh volumes exist in the scene."
-                    )
+                    print("[SafeAreaValidator]   This likely means no NavMesh volumes exist in the scene.")
                     print("[SafeAreaValidator]   NavMesh reachability checking will be DISABLED.")
                     print("[SafeAreaValidator]   Continuing with raycast-only validation...")
                     self.env.sim.play()
@@ -345,9 +335,7 @@ class SafeAreaValidator:
             if navmesh is None:
                 # NavMesh not baked yet
                 if self.debug:
-                    print(
-                        "[SafeAreaValidator] Warning: NavMesh not baked. Skipping reachability check."
-                    )
+                    print("[SafeAreaValidator] Warning: NavMesh not baked. Skipping reachability check.")
                 return True
 
             # Convert to carb.Float3 for NavMesh API
@@ -399,7 +387,7 @@ class SafeAreaValidator:
         if stage.GetPrimAtPath(raycast_viz_path):
             stage.RemovePrim(raycast_viz_path)
 
-        raycast_viz = UsdGeom.Xform.Define(stage, raycast_viz_path)
+        raycast_viz = UsdGeom.Xform.Define(stage, raycast_viz_path)  # noqa: F841
 
         print("\n[Raycast Visualization]")
         print(f"  Green lines: {len(self.raycast_misses)} raycasts with no hit (SAFE)")
@@ -453,10 +441,10 @@ class SafeAreaValidator:
             line.CreateDisplayColorAttr([(0.0, 1.0, 0.0)])
             line.CreateWidthsAttr([0.05])  # Make them thick to be very visible
 
-        print(f"\n  Legend:")
-        print(f"    🟢 Green lines = Raycast to sky (no obstacle)")
-        print(f"    🔴 Red lines = Raycast hit obstacle")
-        print(f"    🟡 Yellow spheres = Hit points")
+        print("\n  Legend:")
+        print("    🟢 Green lines = Raycast to sky (no obstacle)")
+        print("    🔴 Red lines = Raycast hit obstacle")
+        print("    🟡 Yellow spheres = Hit points")
         print(f"\n  Visualization created at: {raycast_viz_path}")
 
     def generate_safe_grid(
@@ -487,12 +475,8 @@ class SafeAreaValidator:
             print(f"  Grid spacing: {grid_spacing}")
 
         # Create grid points
-        x_points = torch.arange(
-            x_range[0], x_range[1] + grid_spacing, grid_spacing, device=self.env.device
-        )
-        y_points = torch.arange(
-            y_range[0], y_range[1] + grid_spacing, grid_spacing, device=self.env.device
-        )
+        x_points = torch.arange(x_range[0], x_range[1] + grid_spacing, grid_spacing, device=self.env.device)
+        y_points = torch.arange(y_range[0], y_range[1] + grid_spacing, grid_spacing, device=self.env.device)
 
         # Create meshgrid
         xx, yy = torch.meshgrid(x_points, y_points, indexing="ij")
@@ -546,9 +530,7 @@ class SafeAreaValidator:
             grid_spacing: Spacing between grid points.
             output_file: Path to save the positions.
         """
-        safe_positions, unsafe_positions = self.generate_safe_grid(
-            x_range, y_range, z_height, grid_spacing
-        )
+        safe_positions, unsafe_positions = self.generate_safe_grid(x_range, y_range, z_height, grid_spacing)
 
         # Generate Python code
         code = f"""# Auto-generated safe positions for custom map
@@ -564,9 +546,7 @@ INIT_POSITIONS = [
 
 # Safe goal positions ({} total)
 TARGET_POSITIONS = [
-""".format(
-            len(safe_positions) - len(safe_positions) // 2
-        )
+""".format(len(safe_positions) - len(safe_positions) // 2)
 
         for pos in safe_positions[len(safe_positions) // 2 :]:  # Use other half for goals
             code += f"    {pos},\n"
@@ -576,9 +556,7 @@ TARGET_POSITIONS = [
 # Unsafe positions (for reference, {0} total)
 # These positions are inside buildings or have insufficient clearance
 UNSAFE_POSITIONS = [
-""".format(
-            len(unsafe_positions)
-        )
+""".format(len(unsafe_positions))
 
         # Only include first 20 unsafe positions to keep file small
         for pos in unsafe_positions[:20]:
@@ -595,6 +573,6 @@ UNSAFE_POSITIONS = [
         if self.debug:
             print(f"\n[SafeAreaValidator] Saved positions to: {output_file}")
             print(f"  Safe positions: {len(safe_positions)}")
-            print(f"  - Spawn positions: {len(safe_positions)//2}")
-            print(f"  - Goal positions: {len(safe_positions) - len(safe_positions)//2}")
+            print(f"  - Spawn positions: {len(safe_positions) // 2}")
+            print(f"  - Goal positions: {len(safe_positions) - len(safe_positions) // 2}")
             print(f"  Unsafe positions: {len(unsafe_positions)}")

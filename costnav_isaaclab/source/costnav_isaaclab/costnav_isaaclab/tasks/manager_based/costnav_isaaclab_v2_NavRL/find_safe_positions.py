@@ -42,12 +42,8 @@ parser.add_argument(
     default=None,
     help="Y range to search (min max). If not specified, auto-detect from map bounds.",
 )
-parser.add_argument(
-    "--z_height", type=float, default=0.5, help="Height above ground to spawn (default: 0.5m)"
-)
-parser.add_argument(
-    "--spacing", type=float, default=4.0, help="Grid spacing in meters (default: 4.0m)"
-)
+parser.add_argument("--z_height", type=float, default=0.5, help="Height above ground to spawn (default: 0.5m)")
+parser.add_argument("--spacing", type=float, default=4.0, help="Grid spacing in meters (default: 4.0m)")
 parser.add_argument(
     "--raycast_height",
     type=float,
@@ -128,7 +124,7 @@ import isaaclab.sim as sim_utils
 import numpy as np
 from isaaclab.envs import ManagerBasedRLEnv
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
-from pxr import Gf, Usd, UsdGeom
+from pxr import Usd, UsdGeom
 
 # Import the safe area validator
 from costnav_isaaclab.source.costnav_isaaclab.costnav_isaaclab.tasks.manager_based.costnav_isaaclab_v2_NavRL.safe_area_validator import (
@@ -179,7 +175,7 @@ def compute_map_bounds(env, map_prim_path: str = "/World/custom_map", margin: fl
     y_min = min_point[1] + margin
     y_max = max_point[1] - margin
 
-    print(f"\n[Map Bounds Detection]")
+    print("\n[Map Bounds Detection]")
     print(
         f"  Raw bounds: X=[{min_point[0]:.2f}, {max_point[0]:.2f}], Y=[{min_point[1]:.2f}, {max_point[1]:.2f}], Z=[{min_point[2]:.2f}, {max_point[2]:.2f}]"
     )
@@ -268,9 +264,7 @@ def main():
         # Also remove RGB observation term that references the camera
         if hasattr(env_cfg.observations, "policy") and hasattr(env_cfg.observations.policy, "rgb"):
             delattr(env_cfg.observations.policy, "rgb")
-        print(
-            "  [Memory optimization] Disabled camera and RGB observations (not needed for position finding)"
-        )
+        print("  [Memory optimization] Disabled camera and RGB observations (not needed for position finding)")
 
     # Keep robot but it won't be used - just needed for env initialization
     # The robot is lightweight compared to the map rendering
@@ -358,9 +352,7 @@ def main():
         # If check_navmesh is requested but NavMesh doesn't exist, disable it
         if args_cli.check_navmesh and not navmesh_exists:
             print("[WARNING] --check_navmesh requested but NavMesh is not available.")
-            print(
-                "          Use --bake_navmesh to bake NavMesh, or ensure it's already baked in the scene."
-            )
+            print("          Use --bake_navmesh to bake NavMesh, or ensure it's already baked in the scene.")
             print("          Continuing with raycast-only validation...")
             args_cli.check_navmesh = False
 
@@ -432,7 +424,7 @@ TOTAL_UNSAFE = {len(unsafe_positions)}
 SAFE_PERCENTAGE = {100.0 * len(safe_positions) / (len(safe_positions) + len(unsafe_positions)) if (len(safe_positions) + len(unsafe_positions)) > 0 else 0:.1f}
 
 # Example usage:
-# from {args_cli.output.replace('.py', '')} import SAFE_POSITIONS
+# from {args_cli.output.replace(".py", "")} import SAFE_POSITIONS
 #
 # Use SAFE_POSITIONS for spawning robots and goals
 """
@@ -477,7 +469,7 @@ SAFE_PERCENTAGE = {100.0 * len(safe_positions) / (len(safe_positions) + len(unsa
     print("\n" + "=" * 80)
     print("VISUALIZATION")
     print("=" * 80)
-    markers = visualize_positions(safe_positions, unsafe_positions)
+    markers = visualize_positions(safe_positions, unsafe_positions)  # noqa: F841
 
     # Keep simulation running for visualization
     print("\n" + "=" * 80)

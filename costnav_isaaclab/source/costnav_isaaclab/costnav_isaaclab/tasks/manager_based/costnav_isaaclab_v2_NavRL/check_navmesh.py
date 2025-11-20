@@ -75,7 +75,6 @@ try:
     # Try to import NavMesh extensions
     print("\n[Step 1] Loading NavMesh extensions...")
     try:
-
         print("  ✓ NavMesh extensions loaded successfully")
     except Exception as e:
         print(f"  ✗ Failed to load NavMesh extensions: {e}")
@@ -167,7 +166,7 @@ try:
             test_start = carb.Float3(0.0, 0.0, 0.5)
             test_end = carb.Float3(5.0, 5.0, 0.5)
 
-            print(f"  Testing path query from (0,0,0.5) to (5,5,0.5)...")
+            print("  Testing path query from (0,0,0.5) to (5,5,0.5)...")
             path = navmesh.query_shortest_path(start_pos=test_start, end_pos=test_end)
 
             if path is None:
@@ -177,13 +176,9 @@ try:
                 if points and len(points) > 0:
                     print(f"    ✓ Path found with {len(points)} waypoints")
                     if len(points) > 0:
-                        print(
-                            f"      First point: ({points[0].x:.2f}, {points[0].y:.2f}, {points[0].z:.2f})"
-                        )
+                        print(f"      First point: ({points[0].x:.2f}, {points[0].y:.2f}, {points[0].z:.2f})")
                     if len(points) > 1:
-                        print(
-                            f"      Last point: ({points[-1].x:.2f}, {points[-1].y:.2f}, {points[-1].z:.2f})"
-                        )
+                        print(f"      Last point: ({points[-1].x:.2f}, {points[-1].y:.2f}, {points[-1].z:.2f})")
                 else:
                     print("    ✗ Path returned but has no points")
 

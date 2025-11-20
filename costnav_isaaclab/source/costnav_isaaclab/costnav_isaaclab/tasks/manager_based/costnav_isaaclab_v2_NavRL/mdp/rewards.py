@@ -16,9 +16,7 @@ if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
 
-def joint_pos_target_l2(
-    env: ManagerBasedRLEnv, target: float, asset_cfg: SceneEntityCfg
-) -> torch.Tensor:
+def joint_pos_target_l2(env: ManagerBasedRLEnv, target: float, asset_cfg: SceneEntityCfg) -> torch.Tensor:
     """Penalize joint position deviation from a target value."""
     # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
@@ -28,9 +26,7 @@ def joint_pos_target_l2(
     return torch.sum(torch.square(joint_pos - target), dim=1)
 
 
-def position_command_error_tanh(
-    env: ManagerBasedRLEnv, std: float, command_name: str
-) -> torch.Tensor:
+def position_command_error_tanh(env: ManagerBasedRLEnv, std: float, command_name: str) -> torch.Tensor:
     """Reward position tracking with tanh kernel.
 
     This function computes a reward based on the distance to the goal position.
@@ -162,9 +158,7 @@ def target_vel_reward(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor
     return reward_vel
 
 
-def distance_to_goal_progress(
-    env: ManagerBasedRLEnv, command_name: str, slack_penalty: float = 0.01
-) -> torch.Tensor:
+def distance_to_goal_progress(env: ManagerBasedRLEnv, command_name: str, slack_penalty: float = 0.01) -> torch.Tensor:
     """Reward based on change in distance to goal (progress reward).
 
     This implements the reward function:
@@ -284,13 +278,9 @@ def print_rewards(env: ManagerBasedRLEnv, print_every_n_steps: int = 1) -> torch
                     distance = torch.norm(cmd[:2]).item()
                     # cmd format: [x, y, z, heading]
                     print(f"  {cmd_name}:")
-                    print(
-                        f"    Position (x, y): [{cmd[0].item():.3f}, {cmd[1].item():.3f}], distance={distance:.3f}m"
-                    )
+                    print(f"    Position (x, y): [{cmd[0].item():.3f}, {cmd[1].item():.3f}], distance={distance:.3f}m")
                     if cmd.shape[0] >= 4:
-                        print(
-                            f"    Heading: {cmd[3].item():.3f} rad ({cmd[3].item() * 180 / 3.14159:.1f}°)"
-                        )
+                        print(f"    Heading: {cmd[3].item():.3f} rad ({cmd[3].item() * 180 / 3.14159:.1f}°)")
 
         # Print each reward term
         print("\nREWARDS:")

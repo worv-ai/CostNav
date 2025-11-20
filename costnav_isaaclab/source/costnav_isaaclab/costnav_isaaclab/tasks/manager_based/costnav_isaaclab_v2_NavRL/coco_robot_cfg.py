@@ -168,9 +168,7 @@ class ClassicalCarAction(ActionTerm):
         right_wheel_angle = torch.arctan(wheel_base / (R + 0.5 * 1.8))
 
         self.steering_action.process_actions(((right_wheel_angle + left_wheel_angle) / 2.0))
-        self.acceleration_action.process_actions(
-            torch.cat([velocity, velocity, velocity, velocity], dim=1)
-        )
+        self.acceleration_action.process_actions(torch.cat([velocity, velocity, velocity, velocity], dim=1))
 
         self.steering_action.apply_actions()
         self.acceleration_action.apply_actions()
@@ -277,9 +275,7 @@ class RestrictedCarAction(ActionTerm):
         right_wheel_angle = torch.arctan(wheel_base / (R + 0.5 * 1.8))
 
         self.steering_action.process_actions(((right_wheel_angle + left_wheel_angle) / 2.0))
-        self.acceleration_action.process_actions(
-            torch.cat([velocity, velocity, velocity, velocity], dim=1)
-        )
+        self.acceleration_action.process_actions(torch.cat([velocity, velocity, velocity, velocity], dim=1))
 
         self.steering_action.apply_actions()
         self.acceleration_action.apply_actions()
@@ -379,9 +375,7 @@ class OgnCarAction(ActionTerm):
         avg_steering = (right_wheel_angle + left_wheel_angle) / 2.0
 
         self.steering_action.process_actions(avg_steering)
-        self.acceleration_action.process_actions(
-            torch.cat([velocity, velocity, velocity, velocity], dim=1)
-        )
+        self.acceleration_action.process_actions(torch.cat([velocity, velocity, velocity, velocity], dim=1))
 
         self.steering_action.apply_actions()
         self.acceleration_action.apply_actions()
@@ -506,9 +500,7 @@ class ClassicalCarWaypointAction(ActionTerm):
         right_wheel_angle = torch.arctan(wheel_base / (R + 0.5 * 1.8))
 
         self.steering_action.process_actions(((right_wheel_angle + left_wheel_angle) / 2.0))
-        self.acceleration_action.process_actions(
-            torch.cat([velocity, velocity, velocity, velocity], dim=1)
-        )
+        self.acceleration_action.process_actions(torch.cat([velocity, velocity, velocity, velocity], dim=1))
 
         self.steering_action.apply_actions()
         self.acceleration_action.apply_actions()
