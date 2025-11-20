@@ -38,9 +38,7 @@ class CostnavIsaaclabSceneCfg(InteractiveSceneCfg):
     # custom map
     custom_map = AssetBaseCfg(
         prim_path="/World/custom_map",
-        spawn=sim_utils.UsdFileCfg(
-            usd_path="omniverse://10.50.2.21/Users/worv/map/Street_road.usd"
-        ),
+        spawn=sim_utils.UsdFileCfg(usd_path="omniverse://10.50.2.21/Users/worv/map/Street_road.usd"),
     )
 
     # robot
@@ -62,9 +60,7 @@ class CostnavIsaaclabSceneCfg(InteractiveSceneCfg):
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    joint_effort = mdp.JointEffortActionCfg(
-        asset_name="robot", joint_names=["slider_to_cart"], scale=100.0
-    )
+    joint_effort = mdp.JointEffortActionCfg(asset_name="robot", joint_names=["slider_to_cart"], scale=100.0)
 
 
 @configclass
@@ -186,12 +182,6 @@ class CostnavIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 1 / 120
         self.sim.render_interval = self.decimation
         # increase PhysX GPU collision buffers for complex scenes with many collision objects
-        self.sim.physx.gpu_collision_stack_size = (
-            536870912  # 512 MB to handle complex map collisions
-        )
-        self.sim.physx.gpu_found_lost_pairs_capacity = (
-            8000000  # Increased to handle many collision pairs
-        )
-        self.sim.physx.gpu_total_aggregate_pairs_capacity = (
-            7000000  # Increased to handle aggregate collision pairs
-        )
+        self.sim.physx.gpu_collision_stack_size = 536870912  # 512 MB to handle complex map collisions
+        self.sim.physx.gpu_found_lost_pairs_capacity = 8000000  # Increased to handle many collision pairs
+        self.sim.physx.gpu_total_aggregate_pairs_capacity = 7000000  # Increased to handle aggregate collision pairs

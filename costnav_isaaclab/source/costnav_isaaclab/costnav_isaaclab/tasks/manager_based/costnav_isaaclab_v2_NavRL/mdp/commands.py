@@ -47,9 +47,7 @@ class SafePositionPose2dCommand(UniformPose2dCommand):
         if len(cfg.safe_positions) == 0:
             raise ValueError("No safe positions provided for goal sampling!")
 
-        self.safe_positions = torch.tensor(
-            cfg.safe_positions, dtype=torch.float32, device=self.device
-        )
+        self.safe_positions = torch.tensor(cfg.safe_positions, dtype=torch.float32, device=self.device)
         self.num_safe_positions = len(cfg.safe_positions)
 
     def _resample_command(self, env_ids: Sequence[int]):
@@ -59,9 +57,7 @@ class SafePositionPose2dCommand(UniformPose2dCommand):
             env_ids: Environment IDs for which to resample commands.
         """
         num_resets = len(env_ids)
-        min_distance = (
-            self.cfg.min_goal_distance
-        )  # Minimum distance between robot and goal in meters
+        min_distance = self.cfg.min_goal_distance  # Minimum distance between robot and goal in meters
 
         # Get current robot positions
         robot_positions = self.robot.data.root_pos_w[env_ids, :3]
@@ -76,9 +72,7 @@ class SafePositionPose2dCommand(UniformPose2dCommand):
 
             for _ in range(max_attempts):
                 # Sample a random position from safe positions
-                position_idx = torch.randint(
-                    0, self.num_safe_positions, (1,), device=self.device
-                ).item()
+                position_idx = torch.randint(0, self.num_safe_positions, (1,), device=self.device).item()
                 candidate_position = self.safe_positions[position_idx]
 
                 # Calculate distance to robot (using only x, y coordinates)
@@ -91,9 +85,7 @@ class SafePositionPose2dCommand(UniformPose2dCommand):
 
             if not valid_position_found:
                 # If no valid position found after max attempts, use the farthest position
-                distances = torch.norm(
-                    self.safe_positions[:, :2] - robot_positions[i, :2].unsqueeze(0), dim=1
-                )
+                distances = torch.norm(self.safe_positions[:, :2] - robot_positions[i, :2].unsqueeze(0), dim=1)
                 farthest_idx = torch.argmax(distances)
                 sampled_positions[i] = self.safe_positions[farthest_idx]
 
@@ -104,9 +96,7 @@ class SafePositionPose2dCommand(UniformPose2dCommand):
         if self.cfg.simple_heading:
             # Compute heading to point towards the target
             target_vec = self.pos_command_w[env_ids] - self.robot.data.root_pos_w[env_ids, :3]
-            self.heading_command_w[env_ids] = math_utils.wrap_to_pi(
-                torch.atan2(target_vec[:, 1], target_vec[:, 0])
-            )
+            self.heading_command_w[env_ids] = math_utils.wrap_to_pi(torch.atan2(target_vec[:, 1], target_vec[:, 0]))
         else:
             # Random heading command
             r = torch.empty(num_resets, device=self.device)
@@ -123,9 +113,7 @@ class SafePositionPose2dCommand(UniformPose2dCommand):
         self.pos_command_b[:] = math_utils.quat_apply_inverse(
             math_utils.yaw_quat(self.robot.data.root_quat_w), target_vec
         )
-        self.heading_command_b[:] = math_utils.wrap_to_pi(
-            self.heading_command_w - self.robot.data.heading_w
-        )
+        self.heading_command_b[:] = math_utils.wrap_to_pi(self.heading_command_w - self.robot.data.heading_w)
 
 
 @configclass

@@ -14,21 +14,15 @@ from isaaclab.app import AppLauncher
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Play a checkpoint of an RL agent from RL-Games.")
-parser.add_argument(
-    "--video", action="store_true", default=False, help="Record videos during training."
-)
-parser.add_argument(
-    "--video_length", type=int, default=200, help="Length of the recorded video (in steps)."
-)
+parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
+parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument(
     "--disable_fabric",
     action="store_true",
     default=False,
     help="Disable fabric and use USD I/O operations.",
 )
-parser.add_argument(
-    "--num_envs", type=int, default=None, help="Number of environments to simulate."
-)
+parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
@@ -42,9 +36,7 @@ parser.add_argument(
     action="store_true",
     help="When no checkpoint provided, use the last saved model. Otherwise use the best saved model.",
 )
-parser.add_argument(
-    "--real-time", action="store_true", default=False, help="Run in real-time, if possible."
-)
+parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
@@ -98,18 +90,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     train_task_name = task_name.replace("-Play", "")
 
     # override configurations with non-hydra CLI arguments
-    env_cfg.scene.num_envs = (
-        args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
-    )
+    env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
     env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
 
     # randomly sample a seed if seed = -1
     if args_cli.seed == -1:
         args_cli.seed = random.randint(0, 10000)
 
-    agent_cfg["params"]["seed"] = (
-        args_cli.seed if args_cli.seed is not None else agent_cfg["params"]["seed"]
-    )
+    agent_cfg["params"]["seed"] = args_cli.seed if args_cli.seed is not None else agent_cfg["params"]["seed"]
     # set the environment seed (after multi-gpu config for updated rank from agent seed)
     # note: certain randomizations occur in the environment initialization so we set the seed here
     env_cfg.seed = agent_cfg["params"]["seed"]
@@ -122,9 +110,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     if args_cli.use_pretrained_checkpoint:
         resume_path = get_published_pretrained_checkpoint("rl_games", train_task_name)
         if not resume_path:
-            print(
-                "[INFO] Unfortunately a pre-trained checkpoint is currently unavailable for this task."
-            )
+            print("[INFO] Unfortunately a pre-trained checkpoint is currently unavailable for this task.")
             return
     elif args_cli.checkpoint is None:
         # specify directory for logging runs
@@ -136,9 +122,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             # this loads the best checkpoint
             checkpoint_file = f"{agent_cfg['params']['config']['name']}.pth"
         # get path to previous checkpoint
-        resume_path = get_checkpoint_path(
-            log_root_path, run_dir, checkpoint_file, other_dirs=["nn"]
-        )
+        resume_path = get_checkpoint_path(log_root_path, run_dir, checkpoint_file, other_dirs=["nn"])
     else:
         resume_path = retrieve_file_path(args_cli.checkpoint)
     log_dir = os.path.dirname(os.path.dirname(resume_path))
@@ -174,8 +158,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     base_env = get_env_with_scene(env)
     if base_env is None:
         print(
-            "[INFO] Could not locate underlying Isaac Lab env with 'scene'; "
-            "contact impulse metrics will be disabled."
+            "[INFO] Could not locate underlying Isaac Lab env with 'scene'; contact impulse metrics will be disabled."
         )
 
     # register the environment to rl-games registry
@@ -184,9 +167,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         "IsaacRlgWrapper",
         lambda config_name, num_actors, **kwargs: RlGamesGpuEnv(config_name, num_actors, **kwargs),
     )
-    env_configurations.register(
-        "rlgpu", {"vecenv_type": "IsaacRlgWrapper", "env_creator": lambda **kwargs: env}
-    )
+    env_configurations.register("rlgpu", {"vecenv_type": "IsaacRlgWrapper", "env_creator": lambda **kwargs: env})
 
     # load previously trained model
     agent_cfg["params"]["load_checkpoint"] = True
@@ -236,10 +217,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 if metrics is not None and metrics["max_impulse_dt"] is not None:
                     max_force = metrics["max_force"].max().item()
                     max_impulse = metrics["max_impulse_dt"].max().item()
-                    print(
-                        f"[IMPULSE METRIC] max_force={max_force:.4f} N  "
-                        f"max_impulse_dt={max_impulse:.4f} N*s"
-                    )
+                    print(f"[IMPULSE METRIC] max_force={max_force:.4f} N  max_impulse_dt={max_impulse:.4f} N*s")
 
             # perform operations for terminated episodes
             if len(dones) > 0:

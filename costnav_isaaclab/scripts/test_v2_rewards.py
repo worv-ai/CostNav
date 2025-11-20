@@ -3,6 +3,7 @@
 Quick test script to verify reward functions don't produce NaN/Inf values.
 Run this before starting full training to catch issues early.
 """
+
 from isaaclab.app import AppLauncher
 
 app = AppLauncher()
@@ -57,10 +58,7 @@ def test_reward_functions():
         reward = rewards.position_command_error_tanh(env, std=std, command_name="pose_command")
         has_nan = torch.isnan(reward).any()
         has_inf = torch.isinf(reward).any()
-        print(
-            f"  std={std:5.1f}: min={reward.min():.4f}, max={reward.max():.4f}, "
-            f"NaN={has_nan}, Inf={has_inf}"
-        )
+        print(f"  std={std:5.1f}: min={reward.min():.4f}, max={reward.max():.4f}, NaN={has_nan}, Inf={has_inf}")
         assert not has_nan, f"NaN detected with std={std}"
         assert not has_inf, f"Inf detected with std={std}"
 
@@ -113,10 +111,7 @@ def test_reward_functions():
         reward = rewards.moving_towards_goal_reward(env, command_name="pose_command")
         has_nan = torch.isnan(reward).any()
         has_inf = torch.isinf(reward).any()
-        print(
-            f"  {scenario_name:20s}: min={reward.min():7.4f}, max={reward.max():7.4f}, "
-            f"NaN={has_nan}, Inf={has_inf}"
-        )
+        print(f"  {scenario_name:20s}: min={reward.min():7.4f}, max={reward.max():7.4f}, NaN={has_nan}, Inf={has_inf}")
         assert not has_nan, f"NaN detected in {scenario_name}"
         assert not has_inf, f"Inf detected in {scenario_name}"
 
@@ -139,10 +134,7 @@ def test_reward_functions():
         reward = rewards.target_vel_reward(env, command_name="pose_command")
         has_nan = torch.isnan(reward).any()
         has_inf = torch.isinf(reward).any()
-        print(
-            f"  {case_name:20s}: min={reward.min():7.4f}, max={reward.max():7.4f}, "
-            f"NaN={has_nan}, Inf={has_inf}"
-        )
+        print(f"  {case_name:20s}: min={reward.min():7.4f}, max={reward.max():7.4f}, NaN={has_nan}, Inf={has_inf}")
         assert not has_nan, f"NaN detected in {case_name}"
         assert not has_inf, f"Inf detected in {case_name}"
 
@@ -158,10 +150,7 @@ def test_reward_functions():
     reward = rewards.target_vel_reward(env, command_name="pose_command")
     has_nan = torch.isnan(reward).any()
     has_inf = torch.isinf(reward).any()
-    print(
-        f"  At target (dist=0):     min={reward.min():7.4f}, max={reward.max():7.4f}, "
-        f"NaN={has_nan}, Inf={has_inf}"
-    )
+    print(f"  At target (dist=0):     min={reward.min():7.4f}, max={reward.max():7.4f}, NaN={has_nan}, Inf={has_inf}")
     assert not has_nan, "NaN detected when at target"
     assert not has_inf, "Inf detected when at target"
 

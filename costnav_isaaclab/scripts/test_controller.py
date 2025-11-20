@@ -22,9 +22,7 @@ parser.add_argument(
     help="Disable fabric and use USD I/O operations.",
 )
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument(
-    "--task", type=str, default="Template-Costnav-Isaaclab-v2-NavRL", help="Name of the task."
-)
+parser.add_argument("--task", type=str, default="Template-Costnav-Isaaclab-v2-NavRL", help="Name of the task.")
 parser.add_argument(
     "--mode",
     type=str,
@@ -49,7 +47,6 @@ import threading
 import costnav_isaaclab.tasks  # noqa: F401
 import gymnasium as gym
 import isaaclab_tasks  # noqa: F401
-import numpy as np
 import torch
 from isaaclab_tasks.utils import parse_env_cfg
 
@@ -253,15 +250,13 @@ def sweep_mode(env):
     for i, (v, steering_deg, duration, description) in enumerate(test_cases):
         steering_rad = steering_deg * torch.pi / 180
 
-        print(f"\n[Test {i+1}/{len(test_cases)}] {description}")
+        print(f"\n[Test {i + 1}/{len(test_cases)}] {description}")
         print(f"  Velocity: {v:.2f} m/s")
         print(f"  Steering: {steering_deg:.1f}° ({steering_rad:.3f} rad)")
         print(f"  Duration: {duration} steps ({duration * 0.05:.1f} seconds)")
 
         # Create action tensor - [linear_velocity, steering_angle]
-        actions = torch.tensor(
-            [[v, steering_rad]], device=env.unwrapped.device, dtype=torch.float32
-        )
+        actions = torch.tensor([[v, steering_rad]], device=env.unwrapped.device, dtype=torch.float32)
 
         # Run for specified duration
         for _ in range(duration):
