@@ -318,6 +318,7 @@ def print_rewards(env: ManagerBasedRLEnv, print_every_n_steps: int = 1) -> torch
     # Return zero (this reward doesn't contribute to training)
     return torch.zeros(env.num_envs, device=env.device)
 
+
 def print_contact_impulses(
     env: "ManagerBasedRLEnv",
     sensor_name: str = "contact_forces",
@@ -431,15 +432,11 @@ def print_contact_impulses(
             impulse_mags = None
             total_impulse = None
             max_impulse = None
-            print(
-                "[CONTACT DEBUG] Could not determine env step_dt; impulse-by-dt will not be printed."
-            )
+            print("[CONTACT DEBUG] Could not determine env step_dt; impulse-by-dt will not be printed.")
 
         # Print per-env summary.
         if dt is not None:
-            print(
-                "\n[CONTACT DEBUG] Per-env contact summary (force N, impulse-by-dt N*s; wheels excluded):"
-            )
+            print("\n[CONTACT DEBUG] Per-env contact summary (force N, impulse-by-dt N*s; wheels excluded):")
         else:
             print("\n[CONTACT DEBUG] Per-env contact summary (force N; wheels excluded):")
 

@@ -118,9 +118,7 @@ def compute_contact_impulse_metrics(
     }
 
 
-def compute_navigation_energy_step(
-    env_with_scene: Any, gravity: float = 9.81
-) -> Optional[Dict[str, Any]]:
+def compute_navigation_energy_step(env_with_scene: Any, gravity: float = 9.81) -> Optional[Dict[str, Any]]:
     """Compute per-env navigation energy/power proxy based on ``m * g * v``.
 
     - ``m``: robot mass (sum of body/link masses) if available; otherwise 1.0.

@@ -165,13 +165,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     base_env = get_env_with_scene(env)
     if base_env is None:
         print(
-            "[INFO] Could not locate underlying Isaac Lab env with 'scene'; "
-            "collision/work metrics will be disabled."
+            "[INFO] Could not locate underlying Isaac Lab env with 'scene'; collision/work metrics will be disabled."
         )
     else:
-        print(
-            "[INFO] Collision / work metrics enabled from contact_forces sensor (excluding wheels)."
-        )
+        print("[INFO] Collision / work metrics enabled from contact_forces sensor (excluding wheels).")
 
     # register the environment to rl-games registry
     # note: in agents configuration: environment name must be "rlgpu"
@@ -219,13 +216,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     current_episode_lengths = torch.zeros(num_envs, device=env.unwrapped.device, dtype=torch.int)
 
     # Collision impulse metrics (per environment, per episode)
-    current_episode_collision_steps = torch.zeros(
-        num_envs, device=env.unwrapped.device, dtype=torch.int
-    )
+    current_episode_collision_steps = torch.zeros(num_envs, device=env.unwrapped.device, dtype=torch.int)
     current_episode_collision_impulse = torch.zeros(num_envs, device=env.unwrapped.device)
-    current_episode_collision_any = torch.zeros(
-        num_envs, device=env.unwrapped.device, dtype=torch.bool
-    )
+    current_episode_collision_any = torch.zeros(num_envs, device=env.unwrapped.device, dtype=torch.bool)
 
     collision_dt = None  # Filled lazily from the contact sensor metrics
 
@@ -296,9 +289,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                             torch.zeros_like(step_impulse),
                         )
 
-                    current_episode_collision_steps += collision_mask.to(
-                        current_episode_collision_steps.dtype
-                    )
+                    current_episode_collision_steps += collision_mask.to(current_episode_collision_steps.dtype)
                     current_episode_collision_any |= collision_mask
 
                 # Navigation energy / power metrics based on m * g * v
@@ -314,9 +305,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                         step_energy = step_power * float(nav_dt)
                         current_episode_nav_energy += step_energy
 
-                    current_episode_nav_power_max = torch.max(
-                        current_episode_nav_power_max, step_power
-                    )
+                    current_episode_nav_power_max = torch.max(current_episode_nav_power_max, step_power)
 
             # Check for completed episodes
             if len(dones) > 0:
@@ -365,9 +354,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                         episode_data["nav_power_max_mgv"].append(episode_nav_power_max)
 
                         if nav_dt is not None and current_episode_lengths[idx] > 0:
-                            episode_time_s_nav = float(current_episode_lengths[idx].item()) * float(
-                                nav_dt
-                            )
+                            episode_time_s_nav = float(current_episode_lengths[idx].item()) * float(nav_dt)
                             if episode_time_s_nav > 0.0:
                                 episode_nav_power_avg = episode_nav_energy / episode_time_s_nav
                             else:
