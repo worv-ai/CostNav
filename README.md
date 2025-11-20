@@ -14,6 +14,9 @@
   <img alt="Isaac Sim" src="https://img.shields.io/badge/Isaac%20Sim-5.1.0-76B900?style=flat&logo=nvidia">
   <img alt="Isaac Lab" src="https://img.shields.io/badge/Isaac%20Lab-2.3.0-4CAF50?style=flat&logo=nvidia">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white">
+  <a href="https://worv-ai.github.io/CostNav">
+    <img alt="Documentation" src="https://img.shields.io/badge/docs-material-blue?style=flat&logo=materialformkdocs&logoColor=white">
+  </a>
 
 
   <h3>CostNav is a cost-driven navigation benchmark for sidewalk robots, built on Isaac Sim.</h3>
@@ -25,6 +28,8 @@
 
 CostNav supports a wide range of robot platforms and diverse outdoor environments, and evaluates navigation policies with a unified cost model that captures SLA compliance, operational cost, profitability, and break-even time.
 The toolkit enables scalable variation in robots, payloads, maps, and cloud-inference settings, and supports both learning-based and rule-based navigation stacks—making it easy to prototype and compare cost-aware policies without manual tuning for each scenario.
+
+You can find more details in our [CostNav docs](https://worv-ai.github.io/CostNav).
 
 ## Highlights
 
@@ -214,7 +219,7 @@ Please run formatters (`black`, `ruff`) and targeted validation scripts before s
 - [ ] camera specsheet and cost
 - [ ] sensor + robot + battery + compute specsheet and cost
 - [ ] Repo Packaging
-- [ ] mkdocs
+- [x] mkdocs
 - [ ] isaac sim & nav2 support for rule-based navigation
 - [ ] revenue references for delivery
 
