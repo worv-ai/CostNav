@@ -1,0 +1,55 @@
+site_name: CostNav
+site_url: https://github.com/worv-ai/CostNav
+repo_url: https://github.com/worv-ai/CostNav
+repo_name: worv-ai/CostNav
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: lime
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [costnav_isaaclab/source/costnav_isaaclab]
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Quick Reference: quick_reference.md
+    - Architecture Overview: architecture.md
+    - Environment Versions: environment_versions.md
+  - Core Concepts:
+    - MDP Components: mdp_components.md
+    - Robot Configuration: robot_configuration.md
+    - Cost Model: cost_model.md
+  - Guides:
+    - Training Guide: training_guide.md
+  - Reference:
+    - API Reference: api.md
+    - Scripts Reference: scripts_reference.md
+    - Food Delivery Business: references/FOOD_DELIVERY_BUSINESS.md
+  - Contributing: contributing.md
+  - Roadmap: TODO.md
