@@ -10,27 +10,32 @@
 
 ## Executive Summary
 
-This document outlines the implementation plan for integrating ROS2 Navigation Stack 2 (Nav2) into CostNav to enable rule-based navigation alongside the existing learning-based approaches. This integration will allow for:
+This document outlines a **simplified 1-month implementation plan** for integrating ROS2 Navigation Stack 2 (Nav2) into CostNav, following NVIDIA's official [Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html).
 
-- Direct comparison between learning-based and rule-based navigation policies
-- Hybrid approaches combining both paradigms
-- Industry-standard navigation baselines for benchmarking
-- Flexible rule-based constraints and decision-making in dynamic environments
+**Scope:** Basic Nav2 integration with COCO robot for rule-based navigation baseline
+
+**Timeline:** 4 weeks (1 month)
+
+**Approach:** Adapt the official Nova Carter Nav2 example to CostNav's COCO delivery robot
+
+This integration will enable:
+- Rule-based navigation baseline for comparison with RL-based approaches
+- Industry-standard Nav2 navigation stack
+- Foundation for future hybrid RL+Nav2 approaches
+- Cost model evaluation of rule-based navigation
 
 ---
 
 ## Table of Contents
 
 1. [Background & Motivation](#background--motivation)
-2. [Architecture Overview](#architecture-overview)
-3. [Implementation Phases](#implementation-phases)
-4. [Technical Requirements](#technical-requirements)
-5. [Integration Points](#integration-points)
-6. [Testing Strategy](#testing-strategy)
-7. [Success Metrics](#success-metrics)
-8. [Timeline & Milestones](#timeline--milestones)
-9. [Risk Assessment](#risk-assessment)
-10. [References](#references)
+2. [Reference Tutorial](#reference-tutorial)
+3. [Architecture Overview](#architecture-overview)
+4. [Implementation Plan (4 Weeks)](#implementation-plan-4-weeks)
+5. [Technical Requirements](#technical-requirements)
+6. [Success Metrics](#success-metrics)
+7. [References](#references)
+8. [Appendices](#appendices)
 
 ---
 
@@ -59,6 +64,33 @@ CostNav currently supports:
 3. **Maintain compatibility** with existing RL-based path planners
 4. **Support hybrid approaches** combining learning and rule-based methods
 5. **Preserve cost model evaluation** for fair comparison
+
+---
+
+## Reference Tutorial
+
+**Primary Reference:** [Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html)
+
+This implementation follows NVIDIA's official tutorial which covers:
+- ✅ Multi-container Docker setup (Isaac Sim + ROS2/Nav2)
+- ✅ ROS2 bridge configuration with `omni.isaac.ros2_bridge`
+- ✅ Occupancy map generation using Isaac Sim tools
+- ✅ Nav2 stack setup (AMCL, planners, controllers, behavior servers)
+- ✅ Robot description with `robot_state_publisher`
+- ✅ Navigation goal sending (RViz2, programmatic, ActionGraph)
+
+**Our Adaptation:**
+- Replace **Nova Carter** → **COCO delivery robot**
+- Add **cost model tracking** for economic metrics
+- Integrate with **existing CostNav benchmark framework**
+- Enable **comparison with RL-based navigation**
+
+**Tutorial Sections to Follow:**
+1. [Getting Started](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#getting-started)
+2. [Nav2 Setup](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#nav2-setup)
+3. [Occupancy Map Generation](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#occupancy-map)
+4. [Running Nav2](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#running-nav2)
+5. [Sending Goals Programmatically](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#sending-goals-programmatically)
 
 ---
 
@@ -108,273 +140,121 @@ CostNav currently supports:
 
 ---
 
-## Implementation Phases
+## Implementation Plan (4 Weeks)
 
-### Phase 1: Foundation & ROS2 Bridge (Weeks 1-3)
-
-**Objective:** Establish ROS2 communication bridge between Isaac Sim and Nav2
-
-**Tasks:**
-
-1. **ROS2 Bridge Setup**
-   - [ ] Install ROS2 Humble/Iron in Isaac Sim container
-   - [ ] Configure ROS2-Isaac Sim bridge using `omni.isaac.ros2_bridge`
-   - [ ] Verify TF tree publishing (REP-105 compliance)
-   - [ ] Test sensor data publishing (RGB-D, LaserScan, Odometry)
-
-2. **Environment Configuration**
-   - [ ] Update Dockerfile to include ROS2 dependencies
-   - [ ] Add Nav2 packages to container build
-   - [ ] Configure environment variables for ROS2/Isaac Sim coexistence
-   - [ ] Update docker-compose.yml with ROS2 networking
-
-3. **URDF/Robot Description**
-   - [ ] Generate URDF from COCO robot USD file
-   - [ ] Configure robot_state_publisher
-   - [ ] Define TF frames (base_link, odom, map, camera, sensors)
-   - [ ] Validate robot footprint parameters
-
-**Deliverables:**
-- Working ROS2 bridge in Isaac Sim
-- COCO robot URDF with proper TF tree
-- Documentation: `docs/ros2_bridge_setup.md`
-
-**Success Criteria:**
-- `ros2 topic list` shows Isaac Sim sensor topics
-- `ros2 run tf2_tools view_frames` generates valid TF tree
-- Sensor data visualizes correctly in RViz2
+Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html), we will implement a basic Nav2 integration in 4 weeks.
 
 ---
 
-### Phase 2: Costmap & Localization (Weeks 4-6)
+### Week 1: Docker Setup & ROS2 Bridge
 
-**Objective:** Configure Nav2 costmap layers and localization system
+**Objective:** Set up multi-container architecture and establish ROS2 communication
+
+**Reference:** [Getting Started](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#getting-started) | [Nav2 Setup](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#nav2-setup)
 
 **Tasks:**
-
-1. **Map Server Configuration**
-   - [ ] Convert USD sidewalk map to occupancy grid (map.yaml + map.pgm)
-   - [ ] Configure map_server for static map publishing
-   - [ ] Implement dynamic map updates from Isaac Sim scene
-   - [ ] Test map visualization in RViz2
-
-2. **Costmap 2D Setup**
-   - [ ] Configure global costmap (static layer, inflation layer)
-   - [ ] Configure local costmap (obstacle layer, voxel layer)
-   - [ ] Integrate RGB-D camera data as obstacle source
-   - [ ] Tune inflation radius and cost scaling parameters
-
-3. **Localization System**
-   - [ ] Configure AMCL for map-based localization
-   - [ ] Alternative: Use ground-truth pose from Isaac Sim
-   - [ ] Configure robot_localization for sensor fusion
-   - [ ] Implement pose initialization from safe positions
-
-4. **Sensor Integration**
-   - [ ] Publish RGB-D as PointCloud2 for obstacle detection
-   - [ ] Convert depth image to LaserScan (optional)
-   - [ ] Configure sensor transforms and timing
-   - [ ] Validate obstacle detection in costmap
+- [ ] Create `Dockerfile.nav2` for ROS2/Nav2 container (based on `ros:humble-ros-base`)
+- [ ] Update `docker-compose.yml` with multi-container setup
+- [ ] Install Nav2 packages in ROS2 container
+- [ ] Configure shared Docker network and volumes
+- [ ] Enable `omni.isaac.ros2_bridge` extension in Isaac Sim
+- [ ] Verify ROS2 topics published from Isaac Sim (odom, tf, sensor data)
+- [ ] Test inter-container communication
 
 **Deliverables:**
-- Configured costmap parameters (YAML files)
-- Map conversion tools/scripts
-- Localization configuration
-- Documentation: `docs/nav2_costmap_config.md`
+- `Dockerfile.nav2`
+- `docker-compose.nav2.yml`
+- Working ROS2 bridge between containers
 
 **Success Criteria:**
-- Costmap visualizes obstacles correctly in RViz2
-- Robot localizes accurately on the map
-- Dynamic obstacles appear in local costmap
+- `ros2 topic list` shows Isaac Sim topics from Nav2 container
+- TF tree visualizes correctly
 
 ---
 
-### Phase 3: Planners & Controllers (Weeks 7-10)
+### Week 2: COCO Robot Setup & Occupancy Map
 
-**Objective:** Integrate and configure Nav2 planners and controllers
+**Objective:** Adapt COCO robot for Nav2 and generate occupancy map
+
+**Reference:** [Occupancy Map](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#occupancy-map)
 
 **Tasks:**
-
-1. **Planner Server Configuration**
-   - [ ] Configure NavFn planner (Dijkstra/A*)
-   - [ ] Configure Smac Planner (Hybrid-A*, 2D, Lattice)
-   - [ ] Configure Theta* planner
-   - [ ] Implement planner selection API
-   - [ ] Benchmark planner performance
-
-2. **Controller Server Configuration**
-   - [ ] Configure DWB controller (Dynamic Window Approach)
-   - [ ] Configure Regulated Pure Pursuit (RPP)
-   - [ ] Configure MPPI controller (Model Predictive Path Integral)
-   - [ ] Tune controller parameters for COCO robot kinematics
-   - [ ] Implement controller switching logic
-
-3. **Smoother Server Configuration**
-   - [ ] Configure Constrained Smoother
-   - [ ] Configure Savitzky-Golay Smoother
-   - [ ] Configure Simple Smoother
-   - [ ] Tune smoothing parameters
-
-4. **Behavior Server Configuration**
-   - [ ] Configure recovery behaviors (Spin, BackUp, Wait)
-   - [ ] Implement custom recovery behaviors if needed
-   - [ ] Define behavior timeout parameters
+- [ ] Create COCO robot URDF from USD (or adapt existing)
+- [ ] Configure `robot_state_publisher` for COCO robot
+- [ ] Set up joint state publishing from Isaac Sim
+- [ ] Generate occupancy map using Isaac Sim Occupancy Map Generator
+  - Configure bounds for COCO robot sensor height
+  - Export PNG + YAML in ROS format
+- [ ] Configure `map_server` in Nav2 container
+- [ ] Verify map visualization in RViz2
 
 **Deliverables:**
-- Planner/controller configuration files
-- Performance benchmarking results
-- Tuning guidelines document
-- Documentation: `docs/nav2_planners_controllers.md`
+- COCO robot URDF
+- Occupancy map (PNG + YAML)
+- ROS2 launch file for robot description
 
 **Success Criteria:**
-- Robot successfully navigates to goal poses
-- Controllers respect kinematic constraints
-- Recovery behaviors execute on failure
+- Robot model displays in RViz2
+- Occupancy map loads correctly
 
 ---
 
-### Phase 4: Behavior Trees & Rule System (Weeks 11-14)
+### Week 3: Nav2 Stack Configuration & Basic Navigation
 
-**Objective:** Implement custom behavior trees and rule-based navigation logic
+**Objective:** Configure Nav2 components and achieve basic navigation
+
+**Reference:** [Running Nav2](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#running-nav2)
 
 **Tasks:**
-
-1. **Behavior Tree Development**
-   - [ ] Create base navigation BT (NavigateToPose)
-   - [ ] Create waypoint following BT (NavigateThroughPoses)
-   - [ ] Implement custom BT nodes for CostNav-specific logic
-   - [ ] Add cost-aware decision nodes
-   - [ ] Integrate with Groot2 for visualization
-
-2. **Rule-Based Navigation API**
-   - [ ] Design rule specification interface (YAML/Python)
-   - [ ] Implement rule evaluation engine
-   - [ ] Create rule types:
-     - [ ] Speed limits based on area/context
-     - [ ] Keepout zones (dynamic/static)
-     - [ ] Priority zones (delivery areas, crosswalks)
-     - [ ] Time-based constraints
-     - [ ] Cost-based path selection
-   - [ ] Integrate rules with BT decision nodes
-
-3. **Custom BT Plugins**
-   - [ ] Cost-aware planner selector node
-   - [ ] SLA-aware goal checker node
-   - [ ] Energy-efficient controller selector
-   - [ ] Maintenance-risk evaluator node
-
-4. **Integration with Existing System**
-   - [ ] Create Nav2 task environment (costnav_isaaclab_v3_Nav2)
-   - [ ] Implement observation/action wrappers
-   - [ ] Maintain compatibility with cost model
-   - [ ] Support hybrid RL+Nav2 approaches
+- [ ] Configure Nav2 parameters for COCO robot
+  - Costmap configuration (global + local)
+  - AMCL localization parameters
+  - Planner server (NavFn or Smac)
+  - Controller server (DWB or RPP)
+  - Behavior server (recovery behaviors)
+- [ ] Create ROS2 launch file for Nav2 stack
+- [ ] Test navigation with RViz2 "Nav2 Goal" button
+- [ ] Tune parameters for COCO robot kinematics
 
 **Deliverables:**
-- Custom behavior tree XML files
-- Rule specification schema and examples
-- Custom BT plugin library
-- New task environment: `costnav_isaaclab_v3_Nav2`
-- Documentation: `docs/nav2_behavior_trees.md`, `docs/rule_based_navigation.md`
+- Nav2 configuration files (YAML)
+- Nav2 launch file
+- RViz2 configuration
 
 **Success Criteria:**
-- Custom BTs execute successfully
-- Rules correctly influence navigation decisions
-- Cost model evaluates Nav2 navigation
-- Groot2 visualizes BT execution
+- Robot navigates to goals successfully
+- Avoids obstacles
+- Recovery behaviors work
 
 ---
 
-### Phase 5: Testing & Benchmarking (Weeks 15-17)
+### Week 4: Cost Model Integration & Testing
 
-**Objective:** Comprehensive testing and performance comparison
+**Objective:** Integrate cost tracking and validate against RL baseline
 
-**Tasks:**
-
-1. **Unit Testing**
-   - [ ] Test ROS2 bridge components
-   - [ ] Test costmap layer integration
-   - [ ] Test planner/controller plugins
-   - [ ] Test custom BT nodes
-   - [ ] Test rule evaluation engine
-
-2. **Integration Testing**
-   - [ ] End-to-end navigation tests
-   - [ ] Multi-waypoint mission tests
-   - [ ] Recovery behavior tests
-   - [ ] Sensor failure handling tests
-   - [ ] Dynamic obstacle avoidance tests
-
-3. **Performance Benchmarking**
-   - [ ] Compare Nav2 vs RL-based navigation
-   - [ ] Measure planning time, success rate, path quality
-   - [ ] Evaluate cost metrics (SLA, energy, maintenance)
-   - [ ] Test scalability (multiple robots, large maps)
-   - [ ] Profile computational overhead
-
-4. **Scenario Testing**
-   - [ ] Sidewalk navigation scenarios
-   - [ ] Crosswalk handling
-   - [ ] Narrow passage navigation
-   - [ ] Dynamic pedestrian avoidance
-   - [ ] Delivery mission completion
-
-**Deliverables:**
-- Test suite for Nav2 integration
-- Benchmark results and comparison report
-- Performance optimization recommendations
-- Documentation: `docs/nav2_testing_guide.md`, `docs/nav2_benchmarks.md`
-
-**Success Criteria:**
-- All tests pass with >95% success rate
-- Nav2 baseline established for comparison
-- Cost model accurately captures Nav2 performance
-- Documentation complete and validated
-
----
-
-### Phase 6: Documentation & Examples (Weeks 18-19)
-
-**Objective:** Complete documentation and provide usage examples
+**Reference:** [Sending Goals Programmatically](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#sending-goals-programmatically)
 
 **Tasks:**
-
-1. **User Documentation**
-   - [ ] Installation guide for Nav2 integration
-   - [ ] Configuration guide for planners/controllers
-   - [ ] Rule specification tutorial
-   - [ ] Behavior tree customization guide
-   - [ ] Troubleshooting guide
-
-2. **Developer Documentation**
-   - [ ] Architecture documentation
-   - [ ] API reference for rule system
-   - [ ] Custom plugin development guide
-   - [ ] Integration points documentation
-
-3. **Examples & Tutorials**
-   - [ ] Basic Nav2 navigation example
-   - [ ] Rule-based navigation example
-   - [ ] Hybrid RL+Nav2 example
-   - [ ] Custom behavior tree example
-   - [ ] Multi-robot coordination example
-
-4. **Video Demonstrations**
-   - [ ] Record navigation demonstrations
-   - [ ] Create tutorial videos
-   - [ ] Prepare presentation materials
+- [ ] Implement cost model tracker for Nav2 navigation
+  - Track energy consumption
+  - Track time to goal
+  - Track SLA compliance
+  - Track collision/recovery events
+- [ ] Create programmatic goal sender (Python script)
+- [ ] Run benchmark scenarios (same as RL evaluation)
+- [ ] Compare Nav2 vs RL performance
+- [ ] Document results and findings
 
 **Deliverables:**
-- Complete documentation set
-- Example configurations and scripts
-- Tutorial notebooks/guides
-- Demo videos
-- Updated README.md
+- `nav2_cost_tracker.py`
+- Goal sender script
+- Benchmark comparison report
+- Documentation
 
 **Success Criteria:**
-- New users can set up Nav2 in <1 hour
-- All examples run successfully
-- Documentation covers all features
-- Community feedback incorporated
+- Cost metrics collected for Nav2 navigation
+- Comparison with RL baseline complete
+- Documentation published
 
 ---
 
@@ -382,7 +262,32 @@ CostNav currently supports:
 
 ### Software Dependencies
 
-**ROS2 Packages:**
+**Docker Container Architecture:**
+
+```yaml
+# Multi-container setup
+containers:
+  isaac_sim:
+    base_image: nvcr.io/nvidia/isaac-sim:5.1.0
+    purpose: Robot simulation and sensor data generation
+    extensions:
+      - omni.isaac.ros2_bridge
+      - omni.isaac.sensor
+      - omni.isaac.range_sensor
+      - omni.isaac.wheeled_robots
+      - omni.anim.navigation.core
+      - omni.anim.navigation.bundle
+    network: costnav_network
+
+  nav2:
+    base_image: ros:humble-ros-base  # or ros:iron-ros-base
+    purpose: ROS2 Navigation Stack 2
+    packages: [see below]
+    network: costnav_network
+    depends_on: isaac_sim
+```
+
+**ROS2 Packages (Nav2 Container):**
 ```yaml
 ros2_packages:
   core:
@@ -407,33 +312,37 @@ ros2_packages:
     - ros-humble-nav2-map-server
     - ros-humble-nav2-amcl
     - ros-humble-robot-localization
+    - ros-humble-pointcloud-to-laserscan  # For RGB-D to LaserScan conversion
 
   visualization:
     - ros-humble-rviz2
     - ros-humble-nav2-rviz-plugins
-    - groot2  # Behavior tree visualization
+    - ros-humble-tf2-tools
+
+  development:
+    - ros-humble-rqt
+    - ros-humble-rqt-common-plugins
+    - groot2  # Behavior tree visualization (optional)
 ```
 
-**Isaac Sim Extensions:**
-```yaml
-isaac_sim_extensions:
-  - omni.isaac.ros2_bridge
-  - omni.isaac.sensor
-  - omni.isaac.range_sensor
-  - omni.isaac.wheeled_robots
-  - omni.anim.navigation.core
-  - omni.anim.navigation.bundle
-```
-
-**Python Dependencies:**
+**Python Dependencies (Nav2 Container):**
 ```python
-# Add to pyproject.toml [project.optional-dependencies]
-nav2 = [
-    "rclpy>=3.3.0",
-    "nav2-simple-commander>=1.0.0",
-    "transforms3d>=0.4.1",
-    "pyyaml>=6.0",
-]
+# Add to Nav2 container requirements.txt
+rclpy>=3.3.0
+nav2-simple-commander>=1.0.0
+transforms3d>=0.4.1
+pyyaml>=6.0
+numpy>=1.24.0
+```
+
+**DDS Middleware (Both Containers):**
+```yaml
+# Recommended: CycloneDDS for better cross-container performance
+dds_middleware:
+  - ros-humble-rmw-cyclonedds-cpp
+
+# Alternative: FastDDS (default)
+# - ros-humble-rmw-fastrtps-cpp
 ```
 
 ### Hardware Requirements
@@ -458,163 +367,143 @@ nav2 = [
 
 ## Integration Points
 
-### 1. Isaac Sim ↔ Nav2 Bridge
+### 1. Isaac Sim ↔ Nav2 Bridge (Multi-Container)
 
-**Data Flow:**
+**Container Architecture:**
 
 ```
-Isaac Sim                          ROS2 Nav2
-─────────────────────────────────────────────────────
+┌─────────────────────────────────────────────────────────────────┐
+│                     Docker Network Bridge                        │
+│                      (costnav_network)                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌────────────────────────────┐  ┌────────────────────────────┐│
+│  │   Isaac Sim Container      │  │   Nav2 Container           ││
+│  │  (nvcr.io/nvidia/          │  │  (ros:humble-ros-base)     ││
+│  │   isaac-sim:5.1.0)         │  │                            ││
+│  │                            │  │                            ││
+│  │  ┌──────────────────────┐  │  │  ┌──────────────────────┐ ││
+│  │  │ Isaac Sim Simulation │  │  │  │  Nav2 Stack          │ ││
+│  │  │ - COCO Robot         │  │  │  │  - BT Navigator      │ ││
+│  │  │ - Sensors (RGB-D)    │  │  │  │  - Planner Server    │ ││
+│  │  │ - Environment        │  │  │  │  - Controller Server │ ││
+│  │  └──────────────────────┘  │  │  │  - Costmap 2D        │ ││
+│  │           │                 │  │  │  - AMCL              │ ││
+│  │  ┌────────▼──────────────┐ │  │  │  - Map Server        │ ││
+│  │  │ ROS2 Bridge Extension │ │  │  └──────────────────────┘ ││
+│  │  │ (omni.isaac.ros2_     │ │  │           │               ││
+│  │  │  bridge)              │ │  │  ┌────────▼──────────────┐││
+│  │  └───────────────────────┘ │  │  │ RViz2 Visualization  │││
+│  │           │                 │  │  └──────────────────────┘││
+│  └───────────┼─────────────────┘  └────────────┼─────────────┘│
+│              │                                  │               │
+│              └──────────────────────────────────┘               │
+│                    ROS2 DDS Communication                       │
+│              (Topics, Services, Actions, TF)                    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Data Flow (Cross-Container):**
+
+```
+Isaac Sim Container                Nav2 Container
+────────────────────────────────────────────────────────────────
 Robot State        ──────────────► /odom (nav_msgs/Odometry)
-                   ──────────────► /tf, /tf_static
+Joint States       ──────────────► /joint_states (sensor_msgs/JointState)
+                   ──────────────► /tf (tf2_msgs/TFMessage)
+                   ──────────────► /tf_static (tf2_msgs/TFMessage)
 RGB-D Camera       ──────────────► /camera/depth/points (PointCloud2)
-                   ──────────────► /scan (LaserScan, optional)
+                   ──────────────► /camera/rgb/image_raw (Image)
+                   ──────────────► /camera/depth/image_raw (Image)
+Lidar (optional)   ──────────────► /scan (LaserScan)
 Contact Sensors    ──────────────► /bumper (sensor_msgs/Range)
-Ground Truth       ──────────────► /ground_truth/pose
+Ground Truth       ──────────────► /ground_truth/pose (PoseStamped)
 
 Nav2 Commands      ◄────────────── /cmd_vel (geometry_msgs/Twist)
 Goal Poses         ◄────────────── /goal_pose (PoseStamped)
-Map                ◄────────────── /map (OccupancyGrid)
+Initial Pose       ◄────────────── /initialpose (PoseWithCovarianceStamped)
 ```
 
 **Implementation:**
-- Use `omni.isaac.ros2_bridge` for topic publishing/subscribing
-- Implement custom Isaac Sim action graph for ROS2 integration
-- Create wrapper nodes for data format conversion
+
+**Isaac Sim Container:**
+- Enable `omni.isaac.ros2_bridge` extension
+- Configure ROS2 bridge to publish on Docker network
+- Use Action Graphs for sensor data publishing
+- Implement velocity command subscriber
+- Set ROS_DOMAIN_ID environment variable
+- Configure DDS discovery for cross-container communication
+
+**Nav2 Container:**
+- Source ROS2 environment on startup
+- Launch Nav2 stack with proper parameters
+- Run RViz2 for visualization
+- Use same ROS_DOMAIN_ID as Isaac Sim
+- Configure DDS middleware (CycloneDDS recommended)
+
+**Network Configuration:**
+```yaml
+# docker-compose.yml network settings
+networks:
+  costnav_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Environment variables for both containers
+environment:
+  - ROS_DOMAIN_ID=0
+  - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+  - CYCLONEDDS_URI=/config/cyclonedds.xml
+```
+
+**DDS Configuration (cyclonedds.xml):**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<CycloneDDS xmlns="https://cdds.io/config">
+  <Domain id="any">
+    <General>
+      <NetworkInterfaceAddress>auto</NetworkInterfaceAddress>
+      <AllowMulticast>true</AllowMulticast>
+    </General>
+  </Domain>
+</CycloneDDS>
+```
 
 ### 2. Cost Model Integration
 
-**Approach:**
-- Extend `rl_games_helpers.py` to support Nav2 metrics
-- Create `nav2_cost_tracker.py` for cost computation
-- Log Nav2-specific metrics (planning time, path length, etc.)
-- Maintain unified cost reporting format
+Track Nav2 navigation metrics for comparison with RL baseline:
 
-**Metrics to Track:**
 ```python
+# nav2_cost_tracker.py - Subscribe to Nav2 topics and compute costs
 nav2_metrics = {
-    "planning_time": float,  # Time to compute path
-    "path_length": float,    # Total path distance
-    "smoothness": float,     # Path curvature metric
-    "collision_count": int,  # Number of collisions
-    "recovery_count": int,   # Recovery behavior invocations
-    "goal_reached": bool,    # Success indicator
-    "time_to_goal": float,   # Mission completion time
+    "energy_consumed": float,    # From /cmd_vel
+    "time_to_goal": float,       # From action status
+    "collision_count": int,      # From costmap
+    "sla_compliance": bool,      # From timestamps
 }
 ```
 
-### 3. Hybrid RL + Nav2 Architecture
-
-**Option A: Sequential**
-- Use RL for high-level planning (waypoint selection)
-- Use Nav2 for low-level control (waypoint navigation)
-
-**Option B: Parallel**
-- Run both systems simultaneously
-- Use arbitration logic to select best action
-- Learn when to use which approach
-
-**Option C: Hierarchical**
-- RL learns to configure Nav2 parameters
-- Nav2 executes with learned configuration
-- Adaptive tuning based on context
+**Integration:** Create `nav2_cost_tracker.py` that subscribes to Nav2 topics and computes CostNav economic metrics.
 
 ---
 
 ## Testing Strategy
 
-### Test Levels
+**Basic Testing Approach:**
 
-**1. Unit Tests**
-- ROS2 bridge message conversion
-- Costmap layer updates
-- Rule evaluation logic
-- BT node execution
-- Planner/controller plugins
+1. **Unit Tests** - Test ROS2 bridge, costmap, cost tracker
+2. **Integration Tests** - End-to-end navigation scenarios
+3. **Benchmark Tests** - Compare Nav2 vs RL baseline
 
-**2. Integration Tests**
-- End-to-end navigation pipeline
-- Sensor data → Costmap → Planning → Control
-- Recovery behavior triggering
-- Multi-waypoint missions
-- Cost model computation
+**Key Test Scenarios:**
+- Basic navigation to goal
+- Obstacle avoidance
+- Delivery mission completion
+- Cost metric validation
 
-**3. System Tests**
-- Full navigation scenarios
-- Performance benchmarks
-- Stress tests (many obstacles, long paths)
-- Failure mode testing
-- Multi-robot scenarios
-
-### Test Scenarios
-
-**Scenario 1: Basic Navigation**
-- Start: Random safe position
-- Goal: Random safe position >10m away
-- Success: Reach goal within 2x optimal time
-- Metrics: Path length, time, collisions
-
-**Scenario 2: Dynamic Obstacles**
-- Start: Fixed position
-- Goal: Fixed position
-- Obstacles: Moving pedestrians
-- Success: Reach goal without collision
-- Metrics: Avoidance maneuvers, time penalty
-
-**Scenario 3: Narrow Passages**
-- Start: Open area
-- Goal: Through narrow doorway/passage
-- Success: Navigate without collision
-- Metrics: Clearance, speed reduction
-
-**Scenario 4: Delivery Mission**
-- Start: Depot
-- Waypoints: 5 delivery locations
-- Goal: Return to depot
-- Success: Complete all deliveries within SLA
-- Metrics: SLA compliance, energy, profit
-
-**Scenario 5: Recovery Behaviors**
-- Start: Random position
-- Goal: Random position
-- Inject: Localization failure, sensor noise
-- Success: Recover and reach goal
-- Metrics: Recovery time, success rate
-
-### Continuous Integration
-
-```yaml
-# .github/workflows/nav2_tests.yml
-name: Nav2 Integration Tests
-
-on: [push, pull_request]
-
-jobs:
-  nav2_tests:
-    runs-on: ubuntu-22.04
-    container: costnav-isaaclab:latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Build Nav2 integration
-        run: |
-          source /opt/ros/humble/setup.bash
-          colcon build --packages-select costnav_nav2
-
-      - name: Run unit tests
-        run: pytest tests/nav2/
-
-      - name: Run integration tests
-        run: python scripts/test_nav2_integration.py
-
-      - name: Generate coverage report
-        run: pytest --cov=costnav_nav2 --cov-report=xml
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v3
-```
+**Reference:** Use same test scenarios as RL evaluation for fair comparison.
 
 ---
 
@@ -624,213 +513,19 @@ jobs:
 
 | Metric | Target | Measurement |
 |--------|--------|-------------|
-| Navigation Success Rate | >90% | Goals reached / Total attempts |
-| Collision-Free Rate | >95% | Collision-free runs / Total runs |
-| Recovery Success Rate | >80% | Successful recoveries / Recovery attempts |
+| Navigation Success Rate | >85% | Goals reached / Total attempts |
+| Collision-Free Rate | >90% | Collision-free runs / Total runs |
 | SLA Compliance | >40% | Deliveries on-time / Total deliveries |
-| Path Optimality | <1.5x | Actual path / Optimal path length |
 
-### Performance Metrics
+### Cost Model Metrics (Comparison with RL Baseline)
 
-| Metric | Target | Measurement |
-|--------|--------|-------------|
-| Planning Time | <500ms | Average global planning time |
-| Control Frequency | >20Hz | Controller update rate |
-| Costmap Update Rate | >5Hz | Costmap refresh frequency |
-| End-to-End Latency | <100ms | Sensor → Action latency |
-| Memory Usage | <4GB | Peak RAM consumption |
+| Metric | RL Baseline | Nav2 Target |
+|--------|-------------|-------------|
+| Operating Margin | 46.5% | >40% |
+| Break-Even Time | 0.90 years | <1.2 years |
+| SLA Compliance | 43.0% | >40% |
 
-### Cost Model Metrics
-
-| Metric | Baseline (RL) | Target (Nav2) | Measurement |
-|--------|---------------|---------------|-------------|
-| Operating Margin | 46.5% | >40% | (Revenue - Costs) / Revenue |
-| Break-Even Time | 0.90 years | <1.2 years | Time to ROI |
-| Energy Efficiency | Baseline | >90% of RL | kWh per delivery |
-| Maintenance Cost | 33.7% | <40% | % of total costs |
-| SLA Compliance | 43.0% | >40% | % on-time deliveries |
-
-### Comparison Metrics (Nav2 vs RL)
-
-```python
-comparison_metrics = {
-    "success_rate": {
-        "nav2": float,
-        "rl": float,
-        "improvement": float,  # percentage
-    },
-    "average_time_to_goal": {
-        "nav2": float,
-        "rl": float,
-        "improvement": float,
-    },
-    "collision_rate": {
-        "nav2": float,
-        "rl": float,
-        "improvement": float,
-    },
-    "energy_per_delivery": {
-        "nav2": float,
-        "rl": float,
-        "improvement": float,
-    },
-    "computational_cost": {
-        "nav2": float,  # CPU/GPU usage
-        "rl": float,
-        "improvement": float,
-    },
-}
-```
-
----
-
-## Timeline & Milestones
-
-### Overall Timeline: 19 Weeks (~4.5 Months)
-
-```
-Week 1-3:   Phase 1 - Foundation & ROS2 Bridge
-Week 4-6:   Phase 2 - Costmap & Localization
-Week 7-10:  Phase 3 - Planners & Controllers
-Week 11-14: Phase 4 - Behavior Trees & Rule System
-Week 15-17: Phase 5 - Testing & Benchmarking
-Week 18-19: Phase 6 - Documentation & Examples
-```
-
-### Key Milestones
-
-**M1: ROS2 Bridge Operational (Week 3)**
-- ✓ Isaac Sim publishes sensor data to ROS2
-- ✓ Nav2 commands control robot in simulation
-- ✓ TF tree validated
-
-**M2: Basic Navigation Working (Week 6)**
-- ✓ Robot navigates to goal using NavFn + DWB
-- ✓ Costmap shows obstacles correctly
-- ✓ Localization functional
-
-**M3: Multi-Planner Support (Week 10)**
-- ✓ All planners/controllers configured
-- ✓ Performance benchmarks completed
-- ✓ Parameter tuning documented
-
-**M4: Rule-Based System Complete (Week 14)**
-- ✓ Custom behavior trees operational
-- ✓ Rule specification API functional
-- ✓ Cost model integration complete
-
-**M5: Testing Complete (Week 17)**
-- ✓ All test scenarios pass
-- ✓ Benchmark comparison published
-- ✓ Performance validated
-
-**M6: Documentation & Release (Week 19)**
-- ✓ All documentation complete
-- ✓ Examples validated
-- ✓ Ready for community use
-
-### Gantt Chart
-
-```
-Phase 1: Foundation          [████████████]
-Phase 2: Costmap             [            ████████████]
-Phase 3: Planners            [                        ████████████████]
-Phase 4: Behavior Trees      [                                        ████████████████]
-Phase 5: Testing             [                                                        ████████████]
-Phase 6: Documentation       [                                                                    ████████]
-         ─────────────────────────────────────────────────────────────────────────────────────────────────
-         Week: 1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19
-```
-
----
-
-## Risk Assessment
-
-### High-Priority Risks
-
-**Risk 1: ROS2-Isaac Sim Integration Complexity**
-- **Probability:** Medium
-- **Impact:** High
-- **Mitigation:**
-  - Start with simple bridge examples
-  - Leverage existing Isaac Sim ROS2 tutorials
-  - Allocate buffer time in Phase 1
-  - Engage NVIDIA support if needed
-
-**Risk 2: Performance Overhead**
-- **Probability:** Medium
-- **Impact:** Medium
-- **Mitigation:**
-  - Profile early and often
-  - Optimize critical paths
-  - Consider async processing
-  - Use GPU acceleration where possible
-
-**Risk 3: Costmap Synchronization**
-- **Probability:** Medium
-- **Impact:** Medium
-- **Mitigation:**
-  - Use Isaac Sim's built-in occupancy grid
-  - Implement efficient update mechanisms
-  - Test with various map sizes
-  - Consider hierarchical costmaps
-
-**Risk 4: Parameter Tuning Complexity**
-- **Probability:** High
-- **Impact:** Medium
-- **Mitigation:**
-  - Start with default Nav2 parameters
-  - Use systematic tuning approach
-  - Document parameter effects
-  - Provide tuning guidelines
-
-### Medium-Priority Risks
-
-**Risk 5: Behavior Tree Complexity**
-- **Probability:** Medium
-- **Impact:** Low
-- **Mitigation:**
-  - Start with simple BTs
-  - Incrementally add complexity
-  - Use Groot2 for visualization
-  - Provide BT templates
-
-**Risk 6: Rule System Scalability**
-- **Probability:** Low
-- **Impact:** Medium
-- **Mitigation:**
-  - Design efficient rule evaluation
-  - Cache rule results
-  - Profile rule engine
-  - Limit rule complexity
-
-**Risk 7: Multi-Robot Interference**
-- **Probability:** Low
-- **Impact:** Low
-- **Mitigation:**
-  - Test single robot first
-  - Use ROS2 namespacing
-  - Implement coordination layer
-  - Document multi-robot setup
-
-### Contingency Plans
-
-**If ROS2 bridge fails:**
-- Fallback to custom message passing
-- Use shared memory for high-frequency data
-- Consider alternative simulation platforms
-
-**If performance is insufficient:**
-- Reduce costmap resolution
-- Decrease update frequencies
-- Simplify planner algorithms
-- Use cloud offloading for planning
-
-**If timeline slips:**
-- Prioritize core functionality
-- Defer advanced features to v0.3.0
-- Release incremental versions
-- Engage community contributors
+**Goal:** Establish Nav2 as a competitive rule-based baseline for comparison with RL approaches.
 
 ---
 
@@ -843,9 +538,11 @@ Phase 6: Documentation       [                                                  
 - [Nav2 Configuration Guide](https://docs.nav2.org/configuration/index.html)
 
 ### Isaac Sim Integration
-- [Isaac Sim ROS2 Bridge](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/index.html)
-- [Isaac Sim Navigation Tutorial](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html)
+- [**Isaac Sim ROS2 Navigation Tutorial (Official)**](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html) - Primary reference for Nav2 integration
+- [Isaac Sim ROS2 Bridge Documentation](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/index.html)
 - [Isaac Sim Multi-Robot Navigation](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_multi_navigation.html)
+- [Isaac Sim ROS2 Joint States Tutorial](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#nav2-with-nova-carter-with-robot-state-publisher-in-a-small-warehouse)
+- [Isaac Sim Occupancy Map Generator](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#occupancy-map)
 
 ### Related Projects
 - [BehaviorTree.CPP](https://www.behaviortree.dev/)
@@ -871,6 +568,77 @@ Phase 6: Documentation       [                                                  
 ### New Files to Create
 
 ```
+# Root directory
+.
+├── Dockerfile                                 # Existing Isaac Sim container
+├── Dockerfile.nav2                            # NEW: ROS2/Nav2 container
+├── docker-compose.yml                         # UPDATED: Multi-container setup
+├── docker-compose.nav2.yml                    # NEW: Nav2-specific compose file
+└── .env                                       # NEW: Environment variables
+
+# Docker configuration
+docker/
+├── nav2/
+│   ├── Dockerfile                             # Nav2 container definition
+│   ├── entrypoint.sh                          # Container startup script
+│   ├── requirements.txt                       # Python dependencies
+│   └── cyclonedds.xml                         # DDS configuration
+└── isaac-sim/
+    └── ros2_bridge_config.yaml                # ROS2 bridge settings
+
+# ROS2 workspace (for Nav2 container)
+ros2_ws/
+├── src/
+│   ├── costnav_nav2/                          # Main Nav2 package
+│   │   ├── package.xml
+│   │   ├── CMakeLists.txt
+│   │   ├── launch/
+│   │   │   ├── navigation.launch.py
+│   │   │   ├── coco_navigation.launch.py
+│   │   │   └── robot_description.launch.py
+│   │   ├── config/
+│   │   │   ├── nav2_params.yaml
+│   │   │   ├── costmap_common.yaml
+│   │   │   ├── global_costmap.yaml
+│   │   │   ├── local_costmap.yaml
+│   │   │   ├── planner_server.yaml
+│   │   │   ├── controller_server.yaml
+│   │   │   └── behavior_server.yaml
+│   │   ├── maps/
+│   │   │   ├── coco_warehouse.yaml
+│   │   │   └── coco_warehouse.png
+│   │   ├── urdf/
+│   │   │   ├── coco_robot.urdf
+│   │   │   └── coco_robot.xacro
+│   │   ├── rviz/
+│   │   │   └── nav2_default.rviz
+│   │   └── behavior_trees/
+│   │       ├── navigate_to_pose.xml
+│   │       ├── navigate_through_poses.xml
+│   │       └── cost_aware_navigation.xml
+│   ├── costnav_nav2_plugins/                  # Custom Nav2 plugins
+│   │   ├── package.xml
+│   │   ├── CMakeLists.txt
+│   │   ├── include/
+│   │   │   └── costnav_nav2_plugins/
+│   │   │       ├── cost_aware_planner_selector.hpp
+│   │   │       ├── sla_goal_checker.hpp
+│   │   │       └── energy_efficient_controller.hpp
+│   │   └── src/
+│   │       ├── cost_aware_planner_selector.cpp
+│   │       ├── sla_goal_checker.cpp
+│   │       └── energy_efficient_controller.cpp
+│   └── costnav_nav2_msgs/                     # Custom messages
+│       ├── package.xml
+│       ├── CMakeLists.txt
+│       ├── msg/
+│       │   ├── CostMetrics.msg
+│       │   └── NavigationRule.msg
+│       └── srv/
+│           └── SetNavigationRule.srv
+└── install/                                   # Built packages
+
+# Isaac Lab integration
 costnav_isaaclab/
 ├── source/costnav_isaaclab/costnav_isaaclab/
 │   ├── tasks/manager_based/
@@ -879,53 +647,53 @@ costnav_isaaclab/
 │   │       ├── nav2_env_cfg.py
 │   │       ├── nav2_bridge.py
 │   │       ├── nav2_cost_tracker.py
-│   │       ├── behavior_trees/
-│   │       │   ├── navigate_to_pose.xml
-│   │       │   ├── navigate_through_poses.xml
-│   │       │   └── cost_aware_navigation.xml
-│   │       ├── rules/
-│   │       │   ├── rule_engine.py
-│   │       │   ├── rule_schema.yaml
-│   │       │   └── example_rules.yaml
-│   │       └── config/
-│   │           ├── nav2_params.yaml
-│   │           ├── costmap_common.yaml
-│   │           ├── global_costmap.yaml
-│   │           ├── local_costmap.yaml
-│   │           ├── planner_server.yaml
-│   │           ├── controller_server.yaml
-│   │           └── behavior_server.yaml
-│   └── nav2_plugins/                          # Custom Nav2 plugins
-│       ├── cost_aware_planner_selector.cpp
-│       ├── sla_goal_checker.cpp
-│       └── energy_efficient_controller.cpp
+│   │       ├── action_graphs/
+│   │       │   ├── ros2_publishers.py
+│   │       │   └── ros2_subscribers.py
+│   │       └── rules/
+│   │           ├── rule_engine.py
+│   │           ├── rule_schema.yaml
+│   │           └── example_rules.yaml
+│   └── utils/
+│       ├── usd_to_occupancy_map.py
+│       └── ros2_bridge_helpers.py
 ├── scripts/
 │   ├── nav2/
-│   │   ├── launch_nav2.py
+│   │   ├── launch_multi_container.sh          # Start both containers
 │   │   ├── test_nav2_integration.py
 │   │   ├── benchmark_nav2_vs_rl.py
+│   │   ├── send_navigation_goal.py
 │   │   └── visualize_nav2.py
 │   └── tools/
 │       ├── convert_usd_to_map.py
-│       └── generate_nav2_config.py
+│       ├── generate_nav2_config.py
+│       └── validate_ros2_bridge.py
 └── config/
     └── nav2/
-        ├── coco_robot.urdf
-        └── robot_description.yaml
+        ├── network_config.yaml
+        └── bridge_topics.yaml
 
+# Documentation
 docs/
-├── nav2_implementation_plan.md                # This file
-├── ros2_bridge_setup.md
-├── nav2_costmap_config.md
-├── nav2_planners_controllers.md
-├── nav2_behavior_trees.md
-├── rule_based_navigation.md
-├── nav2_testing_guide.md
-└── nav2_benchmarks.md
+├── nav2/
+│   ├── nav2_implementation_plan.md            # This file
+│   ├── nav2_architecture.png
+│   ├── ros2_bridge_setup.md
+│   ├── multi_container_setup.md               # NEW: Docker setup guide
+│   ├── nav2_costmap_config.md
+│   ├── nav2_planners_controllers.md
+│   ├── nav2_behavior_trees.md
+│   ├── rule_based_navigation.md
+│   ├── nav2_testing_guide.md
+│   └── nav2_benchmarks.md
+└── diagrams/
+    └── multi_container_architecture.png
 
+# Tests
 tests/
 └── nav2/
     ├── test_ros2_bridge.py
+    ├── test_multi_container_communication.py  # NEW
     ├── test_costmap_integration.py
     ├── test_planners.py
     ├── test_controllers.py
@@ -1172,40 +940,523 @@ class Nav2CostTracker:
 
 ## Appendix E: Quick Start Guide
 
-### Minimal Nav2 Setup (5 Steps)
+### Minimal Nav2 Setup (Multi-Container Architecture)
 
-**Step 1: Build Nav2-enabled container**
+**Prerequisites:**
+- Docker and Docker Compose installed
+- NVIDIA Container Toolkit configured
+- ROS2 workspace built (in nav2 container)
+
+**Step 1: Build both containers**
 ```bash
-# Update Dockerfile to include ROS2 Humble + Nav2
+# Build Isaac Sim container (existing)
 docker compose --profile isaac-lab build
-docker compose --profile isaac-lab up -d
-docker exec -it costnav-isaac-lab bash
+
+# Build Nav2 container (new)
+docker compose -f docker-compose.nav2.yml build
+
+# Or build both at once
+docker compose -f docker-compose.yml -f docker-compose.nav2.yml build
 ```
 
-**Step 2: Source ROS2 environment**
+**Step 2: Start multi-container setup**
 ```bash
-source /opt/ros/humble/setup.bash
-source /workspace/install/setup.bash
+# Start both containers with shared network
+docker compose -f docker-compose.yml -f docker-compose.nav2.yml up -d
+
+# Verify containers are running
+docker ps | grep costnav
+
+# Expected output:
+# costnav-isaac-sim    (Isaac Sim container)
+# costnav-nav2         (ROS2/Nav2 container)
 ```
 
-**Step 3: Launch Isaac Sim with ROS2 bridge**
+**Step 3: Launch Isaac Sim with ROS2 bridge (Isaac Sim container)**
 ```bash
+# Enter Isaac Sim container
+docker exec -it costnav-isaac-sim bash
+
+# Launch Isaac Sim with Nav2 task
 python scripts/nav2/launch_nav2.py --task=Template-Costnav-Isaaclab-v3-Nav2
+
+# Or use the standalone script
+./IsaacSim.sh --ext-folder /workspace/costnav_isaaclab/source/extensions \
+              --enable omni.isaac.ros2_bridge
 ```
 
-**Step 4: Launch Nav2 stack**
+**Step 4: Verify ROS2 communication (Nav2 container)**
 ```bash
-# In another terminal
-ros2 launch costnav_nav2 navigation.launch.py
+# In a new terminal, enter Nav2 container
+docker exec -it costnav-nav2 bash
+
+# Source ROS2 environment
+source /opt/ros/humble/setup.bash
+source /workspace/ros2_ws/install/setup.bash
+
+# Verify topics from Isaac Sim are visible
+ros2 topic list
+
+# Expected topics:
+# /odom
+# /tf
+# /tf_static
+# /joint_states
+# /camera/depth/points
+# /scan (if configured)
+
+# Check TF tree
+ros2 run tf2_tools view_frames
+# This generates frames.pdf showing the TF tree
 ```
 
-**Step 5: Send navigation goal**
+**Step 5: Generate occupancy map (Nav2 container)**
 ```bash
-# Using RViz2
-ros2 run rviz2 rviz2 -d config/nav2/costnav_nav2.rviz
+# Option A: Use pre-generated map
+# Maps are shared via volume mount at /workspace/maps
 
-# Or using Python API
-python scripts/nav2/send_goal.py --x 10.0 --y 5.0
+# Option B: Generate new map from Isaac Sim
+# In Isaac Sim GUI:
+# 1. Go to Tools > Robotics > Occupancy Map
+# 2. Configure bounds and parameters
+# 3. Click CALCULATE > VISUALIZE IMAGE
+# 4. Save as PNG and YAML to /workspace/maps/
+```
+
+**Step 6: Launch Nav2 stack (Nav2 container)**
+```bash
+# Still in Nav2 container
+ros2 launch costnav_nav2 coco_navigation.launch.py
+
+# This launches:
+# - Map Server
+# - AMCL Localizer
+# - Planner Server
+# - Controller Server
+# - Behavior Server
+# - Lifecycle Manager
+# - RViz2 (if DISPLAY is configured)
+```
+
+**Step 7: Visualize in RViz2 (Nav2 container or host)**
+```bash
+# Option A: From Nav2 container (requires X11 forwarding)
+ros2 run rviz2 rviz2 -d /workspace/ros2_ws/src/costnav_nav2/rviz/nav2_default.rviz
+
+# Option B: From host machine (if ROS2 installed locally)
+# Set ROS_DOMAIN_ID to match containers
+export ROS_DOMAIN_ID=0
+ros2 run rviz2 rviz2 -d ros2_ws/src/costnav_nav2/rviz/nav2_default.rviz
+```
+
+**Step 8: Send navigation goal**
+```bash
+# Method 1: Using RViz2
+# - Click "2D Pose Estimate" to set initial pose
+# - Click "Nav2 Goal" and click/drag on map to set goal
+
+# Method 2: Using command line
+ros2 topic pub --once /goal_pose geometry_msgs/PoseStamped \
+  "{header: {frame_id: 'map'}, \
+    pose: {position: {x: 10.0, y: 5.0, z: 0.0}, \
+           orientation: {w: 1.0}}}"
+
+# Method 3: Using Python script
+python /workspace/scripts/nav2/send_navigation_goal.py --x 10.0 --y 5.0 --theta 0.0
+
+# Method 4: Using Nav2 Simple Commander API
+python3 << EOF
+from nav2_simple_commander.robot_navigator import BasicNavigator
+from geometry_msgs.msg import PoseStamped
+import rclpy
+
+rclpy.init()
+navigator = BasicNavigator()
+goal_pose = PoseStamped()
+goal_pose.header.frame_id = 'map'
+goal_pose.pose.position.x = 10.0
+goal_pose.pose.position.y = 5.0
+goal_pose.pose.orientation.w = 1.0
+navigator.goToPose(goal_pose)
+EOF
+```
+
+**Step 9: Monitor navigation (Nav2 container)**
+```bash
+# Monitor robot pose
+ros2 topic echo /odom
+
+# Monitor velocity commands
+ros2 topic echo /cmd_vel
+
+# Monitor navigation status
+ros2 topic echo /navigate_to_pose/_action/status
+
+# Monitor cost metrics (custom)
+ros2 topic echo /cost_metrics
+```
+
+**Step 10: Shutdown**
+```bash
+# Stop containers
+docker compose -f docker-compose.yml -f docker-compose.nav2.yml down
+
+# Or stop individual containers
+docker stop costnav-isaac-sim costnav-nav2
+```
+
+---
+
+### Troubleshooting Multi-Container Setup
+
+**Issue: Topics not visible across containers**
+```bash
+# Check network connectivity
+docker exec costnav-nav2 ping costnav-isaac-sim
+
+# Check ROS_DOMAIN_ID matches
+docker exec costnav-isaac-sim printenv | grep ROS_DOMAIN_ID
+docker exec costnav-nav2 printenv | grep ROS_DOMAIN_ID
+
+# Check DDS discovery
+docker exec costnav-nav2 ros2 daemon stop
+docker exec costnav-nav2 ros2 daemon start
+docker exec costnav-nav2 ros2 topic list
+```
+
+**Issue: High latency between containers**
+```bash
+# Switch to CycloneDDS (if using FastDDS)
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
+# Increase DDS buffer sizes in cyclonedds.xml
+# See docker/nav2/cyclonedds.xml
+```
+
+**Issue: RViz2 not displaying**
+```bash
+# Enable X11 forwarding
+xhost +local:docker
+
+# Add to docker-compose.yml:
+environment:
+  - DISPLAY=$DISPLAY
+volumes:
+  - /tmp/.X11-unix:/tmp/.X11-unix:rw
+```
+
+**Issue: Map not loading**
+```bash
+# Verify map files exist
+docker exec costnav-nav2 ls -la /workspace/maps/
+
+# Check map_server logs
+ros2 run nav2_map_server map_server --ros-args \
+  -p yaml_filename:=/workspace/maps/coco_warehouse.yaml
+
+# Verify map topic
+ros2 topic echo /map --once
+```
+
+---
+
+## Appendix F: Docker Configuration Examples
+
+### Dockerfile.nav2
+
+```dockerfile
+# ROS2 Nav2 Container for CostNav
+FROM ros:humble-ros-base
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV ROS_DISTRO=humble
+ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
+# Install Nav2 and dependencies
+RUN apt-get update && apt-get install -y \
+    ros-${ROS_DISTRO}-navigation2 \
+    ros-${ROS_DISTRO}-nav2-bringup \
+    ros-${ROS_DISTRO}-nav2-msgs \
+    ros-${ROS_DISTRO}-nav2-rviz-plugins \
+    ros-${ROS_DISTRO}-rviz2 \
+    ros-${ROS_DISTRO}-robot-localization \
+    ros-${ROS_DISTRO}-pointcloud-to-laserscan \
+    ros-${ROS_DISTRO}-tf2-tools \
+    ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
+    ros-${ROS_DISTRO}-rqt \
+    ros-${ROS_DISTRO}-rqt-common-plugins \
+    python3-pip \
+    python3-colcon-common-extensions \
+    git \
+    vim \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip3 install \
+    nav2-simple-commander \
+    transforms3d \
+    numpy
+
+# Create workspace
+RUN mkdir -p /workspace/ros2_ws/src
+WORKDIR /workspace/ros2_ws
+
+# Copy ROS2 packages
+COPY ros2_ws/src /workspace/ros2_ws/src
+
+# Build workspace
+RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
+    colcon build --symlink-install
+
+# Copy DDS configuration
+COPY docker/nav2/cyclonedds.xml /config/cyclonedds.xml
+
+# Copy entrypoint script
+COPY docker/nav2/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Set up entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["bash"]
+```
+
+### docker-compose.nav2.yml
+
+```yaml
+version: '3.8'
+
+services:
+  nav2:
+    build:
+      context: .
+      dockerfile: Dockerfile.nav2
+    image: costnav-nav2:latest
+    container_name: costnav-nav2
+    hostname: costnav-nav2
+
+    networks:
+      - costnav_network
+
+    environment:
+      - ROS_DOMAIN_ID=0
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      - CYCLONEDDS_URI=/config/cyclonedds.xml
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+
+    volumes:
+      # ROS2 workspace
+      - ./ros2_ws:/workspace/ros2_ws
+      # Shared maps directory
+      - ./maps:/workspace/maps
+      # Shared config directory
+      - ./config/nav2:/workspace/config
+      # Scripts
+      - ./scripts:/workspace/scripts
+      # X11 for RViz2
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      # DDS configuration
+      - ./docker/nav2/cyclonedds.xml:/config/cyclonedds.xml:ro
+
+    depends_on:
+      - isaac-sim
+
+    stdin_open: true
+    tty: true
+
+    command: bash
+
+networks:
+  costnav_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+```
+
+### Updated docker-compose.yml (Isaac Sim)
+
+```yaml
+version: '3.8'
+
+services:
+  isaac-sim:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: isaac-lab
+    image: costnav-isaac-lab:latest
+    container_name: costnav-isaac-sim
+    hostname: costnav-isaac-sim
+
+    networks:
+      - costnav_network
+
+    environment:
+      - ROS_DOMAIN_ID=0
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      - ACCEPT_EULA=Y
+      - PRIVACY_CONSENT=Y
+
+    volumes:
+      - ./costnav_isaaclab:/workspace/costnav_isaaclab
+      - ./maps:/workspace/maps
+      - ./config:/workspace/config
+      - ./scripts:/workspace/scripts
+      - isaac-sim-cache:/root/.nvidia-omniverse/cache
+      - isaac-sim-data:/root/.local/share/ov/data
+
+    runtime: nvidia
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    stdin_open: true
+    tty: true
+
+    ports:
+      - "8211:8211"  # Isaac Sim streaming
+      - "8899:8899"  # Isaac Sim web UI
+
+    command: bash
+
+networks:
+  costnav_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  isaac-sim-cache:
+  isaac-sim-data:
+```
+
+### docker/nav2/entrypoint.sh
+
+```bash
+#!/bin/bash
+set -e
+
+# Source ROS2 environment
+source /opt/ros/${ROS_DISTRO}/setup.bash
+
+# Source workspace if built
+if [ -f /workspace/ros2_ws/install/setup.bash ]; then
+    source /workspace/ros2_ws/install/setup.bash
+fi
+
+# Set up DDS
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=/config/cyclonedds.xml
+
+# Print environment info
+echo "ROS2 Nav2 Container Ready"
+echo "ROS_DISTRO: ${ROS_DISTRO}"
+echo "ROS_DOMAIN_ID: ${ROS_DOMAIN_ID}"
+echo "RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION}"
+
+# Execute command
+exec "$@"
+```
+
+### docker/nav2/cyclonedds.xml
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<CycloneDDS xmlns="https://cdds.io/config" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://cdds.io/config https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.xsd">
+  <Domain id="any">
+    <General>
+      <NetworkInterfaceAddress>auto</NetworkInterfaceAddress>
+      <AllowMulticast>true</AllowMulticast>
+      <MaxMessageSize>65500B</MaxMessageSize>
+    </General>
+    <Internal>
+      <Watermarks>
+        <WhcHigh>500kB</WhcHigh>
+      </Watermarks>
+    </Internal>
+    <Tracing>
+      <Verbosity>warning</Verbosity>
+      <OutputFile>stdout</OutputFile>
+    </Tracing>
+  </Domain>
+</CycloneDDS>
+```
+
+### .env (Environment Variables)
+
+```bash
+# ROS2 Configuration
+ROS_DOMAIN_ID=0
+RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
+# Display for RViz2
+DISPLAY=:0
+
+# Isaac Sim Configuration
+ACCEPT_EULA=Y
+PRIVACY_CONSENT=Y
+
+# Network Configuration
+COSTNAV_NETWORK_SUBNET=172.20.0.0/16
+```
+
+### scripts/nav2/launch_multi_container.sh
+
+```bash
+#!/bin/bash
+# Launch both Isaac Sim and Nav2 containers
+
+set -e
+
+echo "Starting CostNav Multi-Container Setup..."
+
+# Build containers if needed
+echo "Building containers..."
+docker compose -f docker-compose.yml -f docker-compose.nav2.yml build
+
+# Start containers
+echo "Starting containers..."
+docker compose -f docker-compose.yml -f docker-compose.nav2.yml up -d
+
+# Wait for containers to be ready
+echo "Waiting for containers to start..."
+sleep 5
+
+# Verify containers are running
+echo "Verifying containers..."
+docker ps | grep costnav
+
+# Check network connectivity
+echo "Testing network connectivity..."
+docker exec costnav-nav2 ping -c 3 costnav-isaac-sim
+
+# Verify ROS2 environment in Nav2 container
+echo "Verifying ROS2 environment..."
+docker exec costnav-nav2 bash -c "source /opt/ros/humble/setup.bash && ros2 topic list"
+
+echo ""
+echo "Multi-container setup complete!"
+echo ""
+echo "Next steps:"
+echo "1. Launch Isaac Sim:"
+echo "   docker exec -it costnav-isaac-sim bash"
+echo "   python scripts/nav2/launch_nav2.py --task=Template-Costnav-Isaaclab-v3-Nav2"
+echo ""
+echo "2. Launch Nav2 (in another terminal):"
+echo "   docker exec -it costnav-nav2 bash"
+echo "   ros2 launch costnav_nav2 coco_navigation.launch.py"
+echo ""
+echo "3. Send navigation goals:"
+echo "   docker exec -it costnav-nav2 bash"
+echo "   python /workspace/scripts/nav2/send_navigation_goal.py --x 10.0 --y 5.0"
 ```
 
 ---
@@ -1215,6 +1466,7 @@ python scripts/nav2/send_goal.py --x 10.0 --y 5.0
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 0.1 | 2025-11-21 | CostNav Team | Initial draft |
+| 0.2 | 2025-11-21 | CostNav Team | Updated with multi-container architecture and official Isaac Sim Nav2 tutorial references |
 
 ---
 
