@@ -47,3 +47,22 @@ Hooks are in place to compare learning vs. rule-based stacks, switch between on-
 | Agent | Description |
 | --- | --- |
 | COCO delivery robot | Four-wheeled sidewalk courier platform from `coco_robot_cfg.py` with configurable drive models, cameras, and LiDAR for learning or rule-based controllers. |
+
+## Documentation
+
+### Getting Started
+- **[Architecture Overview](architecture.md)**: Understand the codebase structure and how components work together
+- **[Environment Versions](environment_versions.md)**: Learn about v0, v1, and v2 environments and when to use each
+
+### Core Concepts
+- **[MDP Components](mdp_components.md)**: Deep dive into observations, actions, rewards, and terminations
+- **[Robot Configuration](robot_configuration.md)**: Detailed explanation of the COCO robot's physical properties, actuators, and sensors
+- **[Cost Model](cost_model.md)**: Understanding business metrics: SLA compliance, operational costs, and profitability
+
+### Guides
+- **[Training Guide](training_guide.md)**: Complete guide to training navigation policies with RL-Games and other frameworks
+
+### Reference
+- **[API Reference](api.md)**: Auto-generated API documentation for all modules
+- **[Scripts Reference](scripts_reference.md)**: Comprehensive reference for all training, evaluation, and utility scripts
+- **[Food Delivery Business](references/FOOD_DELIVERY_BUSINESS.md)**: Industry data and economics for food delivery robots

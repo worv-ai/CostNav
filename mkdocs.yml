@@ -37,6 +37,19 @@ plugins:
 
 nav:
   - Home: index.md
-  - API Reference: api.md
+  - Getting Started:
+    - Quick Reference: quick_reference.md
+    - Architecture Overview: architecture.md
+    - Environment Versions: environment_versions.md
+  - Core Concepts:
+    - MDP Components: mdp_components.md
+    - Robot Configuration: robot_configuration.md
+    - Cost Model: cost_model.md
+  - Guides:
+    - Training Guide: training_guide.md
+  - Reference:
+    - API Reference: api.md
+    - Scripts Reference: scripts_reference.md
+    - Food Delivery Business: references/FOOD_DELIVERY_BUSINESS.md
   - Contributing: contributing.md
   - Roadmap: TODO.md
