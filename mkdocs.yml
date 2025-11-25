@@ -88,6 +88,7 @@ nav:
     - API Reference: api.md
     - Scripts Reference: scripts_reference.md
     - Food Delivery Business: references/FOOD_DELIVERY_BUSINESS.md
+  - Paper: paper.md
   - Development:
     - Contributing: contributing.md
     - Roadmap: TODO.md
