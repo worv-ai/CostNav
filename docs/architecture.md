@@ -1,42 +1,64 @@
-# Architecture Overview
+# :building_construction: Architecture Overview
 
 This document provides a comprehensive overview of the CostNav codebase architecture, explaining how different components work together to create a cost-driven navigation benchmark for sidewalk robots.
 
-## High-Level Architecture
+---
 
-CostNav is built on top of NVIDIA Isaac Sim and Isaac Lab, providing a simulation environment for evaluating navigation policies with business-oriented metrics. The architecture consists of several key layers:
+## :telescope: High-Level Architecture
 
+CostNav is built on top of NVIDIA Isaac Sim and Isaac Lab, providing a simulation environment for evaluating navigation policies with business-oriented metrics.
+
+```mermaid
+graph TB
+    subgraph Training["Training Scripts"]
+        RL[RL-Games / RSL-RL / SB3 / SKRL]
+    end
+
+    subgraph Envs["Environment Configurations"]
+        V0[v0: CartPole]
+        V1[v1: CustomMap]
+        V2[v2: NavRL]
+    end
+
+    subgraph MDP["MDP Components"]
+        OBS[Observations]
+        ACT[Actions]
+        REW[Rewards]
+        TERM[Terminations]
+        CMD[Commands]
+        EVT[Events]
+    end
+
+    subgraph Isaac["Isaac Lab Framework"]
+        MENV[ManagerBasedRLEnv]
+        SCENE[Scene]
+        SENS[Sensors]
+        ASSETS[Assets]
+    end
+
+    subgraph Sim["Isaac Sim"]
+        PHY[Physics]
+        REND[Rendering]
+        USD[USD]
+    end
+
+    Training --> Envs
+    Envs --> MDP
+    MDP --> Isaac
+    Isaac --> Sim
+
+    style Training fill:#009688,color:#fff
+    style Envs fill:#4db6ac,color:#fff
+    style MDP fill:#7c4dff,color:#fff
+    style Isaac fill:#ff9800,color:#fff
+    style Sim fill:#76B900,color:#fff
 ```
-┌─────────────────────────────────────────────────────────┐
-│                   Training Scripts                       │
-│         (RL-Games, RSL-RL, SB3, SKRL)                   │
-└─────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────┐
-│              Environment Configurations                  │
-│    (v0: CartPole, v1: CustomMap, v2: NavRL)            │
-└─────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────┐
-│                  MDP Components                          │
-│  (Observations, Actions, Rewards, Terminations,         │
-│   Commands, Events)                                      │
-└─────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────┐
-│              Isaac Lab Framework                         │
-│  (ManagerBasedRLEnv, Scene, Sensors, Assets)           │
-└─────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────┐
-│                  Isaac Sim                               │
-│         (Physics, Rendering, USD)                        │
-└─────────────────────────────────────────────────────────┘
-```
 
-## Directory Structure
+---
 
-### Core Source Code
+## :file_folder: Directory Structure
+
+### :package: Core Source Code
 
 ```
 costnav_isaaclab/source/costnav_isaaclab/costnav_isaaclab/
@@ -62,7 +84,7 @@ costnav_isaaclab/source/costnav_isaaclab/costnav_isaaclab/
                 └── events.py                # Event handlers
 ```
 
-### Scripts
+### :hammer_and_wrench: Scripts
 
 ```
 costnav_isaaclab/scripts/
@@ -77,63 +99,117 @@ costnav_isaaclab/scripts/
     └── evaluate.py           # Evaluation script
 ```
 
-## Key Components
+---
 
-### 1. Environment Configuration (`costnav_isaaclab_env_cfg.py`)
+## :jigsaw: Key Components
 
-The environment configuration defines the complete MDP specification:
+### 1. :gear: Environment Configuration
 
-- **Scene Configuration**: Defines all assets in the simulation (robot, map, sensors)
-- **Observation Configuration**: Specifies what the agent observes
-- **Action Configuration**: Defines the action space
-- **Command Configuration**: Goal generation and command management
-- **Reward Configuration**: Reward function components and weights
-- **Termination Configuration**: Success and failure conditions
-- **Event Configuration**: Reset and initialization logic
+The environment configuration (`costnav_isaaclab_env_cfg.py`) defines the complete MDP specification:
 
-### 2. MDP Components
+| Component | Description |
+|:----------|:------------|
+| **Scene Configuration** | Defines all assets in the simulation (robot, map, sensors) |
+| **Observation Configuration** | Specifies what the agent observes |
+| **Action Configuration** | Defines the action space |
+| **Command Configuration** | Goal generation and command management |
+| **Reward Configuration** | Reward function components and weights |
+| **Termination Configuration** | Success and failure conditions |
+| **Event Configuration** | Reset and initialization logic |
 
-#### Commands (`mdp/commands.py`)
+### 2. :brain: MDP Components
+
+```mermaid
+graph LR
+    subgraph Commands
+        SAFE[SafePositionPose2dCommand]
+    end
+
+    subgraph Observations
+        POSE[pose_command_2d]
+        RGBD[rgbd_processed]
+        LINV[base_lin_vel]
+        ANGV[base_ang_vel]
+    end
+
+    subgraph Rewards
+        POS_ERR[position_error]
+        HEAD_ERR[heading_error]
+        MOVE[moving_towards_goal]
+        PROG[distance_progress]
+        ARR[arrived_reward]
+        COL[collision_penalty]
+    end
+
+    subgraph Terminations
+        ARRIVE[arrive]
+        CRASH[collision]
+        TIME[time_out]
+    end
+
+    Commands --> Observations
+    Observations --> Rewards
+    Rewards --> Terminations
+
+    style Commands fill:#009688,color:#fff
+    style Observations fill:#2196f3,color:#fff
+    style Rewards fill:#4caf50,color:#fff
+    style Terminations fill:#f44336,color:#fff
+```
+
+#### :compass: Commands (`mdp/commands.py`)
+
 - **SafePositionPose2dCommand**: Generates navigation goals from pre-validated safe positions
 - Ensures goals are not inside buildings or obstacles
 - Supports both simple heading (pointing towards goal) and random heading
 
-#### Observations (`mdp/observations.py`)
-- **pose_command_2d**: 2D goal position in robot's base frame
-- **rgbd_processed**: RGB-D camera images (normalized and processed)
-- **base_lin_vel**: Robot's linear velocity
-- **base_ang_vel**: Robot's angular velocity
+#### :eye: Observations (`mdp/observations.py`)
 
-#### Rewards (`mdp/rewards.py`)
-- **position_command_error_tanh**: Reward for being close to goal
-- **heading_command_error_abs**: Penalty for heading error
-- **moving_towards_goal_reward**: Reward for velocity towards goal
-- **distance_to_goal_progress**: Reward for reducing distance to goal
-- **arrived_reward**: Large reward for reaching goal
-- **collision_penalty**: Penalty for collisions
+| Observation | Description |
+|:------------|:------------|
+| `pose_command_2d` | 2D goal position in robot's base frame |
+| `rgbd_processed` | RGB-D camera images (normalized and processed) |
+| `base_lin_vel` | Robot's linear velocity |
+| `base_ang_vel` | Robot's angular velocity |
 
-#### Terminations (`mdp/terminations.py`)
-- **arrive**: Success condition (within threshold of goal)
-- **collision**: Failure condition (contact force exceeds threshold)
-- **time_out**: Episode length limit
+#### :trophy: Rewards (`mdp/rewards.py`)
 
-#### Events (`mdp/events.py`)
-- **reset_base**: Reset robot to safe position with random orientation
-- **print_rewards**: Debug logging of reward components
+| Reward | Type | Description |
+|:-------|:-----|:------------|
+| `position_command_error_tanh` | :green_circle: Positive | Reward for being close to goal |
+| `heading_command_error_abs` | :red_circle: Penalty | Penalty for heading error |
+| `moving_towards_goal_reward` | :green_circle: Positive | Reward for velocity towards goal |
+| `distance_to_goal_progress` | :green_circle: Positive | Reward for reducing distance to goal |
+| `arrived_reward` | :star: Bonus | Large reward for reaching goal |
+| `collision_penalty` | :red_circle: Penalty | Penalty for collisions |
 
-### 3. Robot Configuration (`coco_robot_cfg.py`)
+#### :stop_sign: Terminations (`mdp/terminations.py`)
+
+| Condition | Type | Description |
+|:----------|:-----|:------------|
+| `arrive` | :white_check_mark: Success | Within threshold of goal |
+| `collision` | :x: Failure | Contact force exceeds threshold |
+| `time_out` | :hourglass: Timeout | Episode length limit |
+
+#### :zap: Events (`mdp/events.py`)
+
+- `reset_base`: Reset robot to safe position with random orientation
+- `print_rewards`: Debug logging of reward components
+
+### 3. :robot: Robot Configuration (`coco_robot_cfg.py`)
 
 Defines the COCO delivery robot:
 
-- **Physical Properties**: Mass, inertia, collision shapes
-- **Actuators**: 
-  - Wheels: DelayedPDActuator for realistic wheel dynamics
-  - Axle: DCMotor for steering
-  - Shock: ImplicitActuator for suspension
-- **Action Space**: RestrictedCarAction (velocity and steering angle)
-- **Sensors**: Cameras, contact sensors
+| Component | Details |
+|:----------|:--------|
+| **Physical Properties** | Mass, inertia, collision shapes |
+| **Wheel Actuators** | DelayedPDActuator for realistic wheel dynamics |
+| **Axle Actuator** | DCMotor for steering |
+| **Shock Actuator** | ImplicitActuator for suspension |
+| **Action Space** | RestrictedCarAction (velocity and steering angle) |
+| **Sensors** | Cameras, contact sensors |
 
-### 4. Scene Configuration
+### 4. :world_map: Scene Configuration
 
 The scene includes:
 
@@ -142,62 +218,111 @@ The scene includes:
 - **Contact Sensors**: For collision detection
 - **Cameras**: RGB-D cameras for visual observations
 
-## Data Flow
+---
 
-### Training Loop
+## :arrows_counterclockwise: Data Flow
 
-1. **Environment Reset**:
-   - Robot spawned at safe position (from `safe_positions_auto_generated.py`)
-   - Goal sampled from safe positions
-   - Sensors initialized
+### :repeat: Training Loop
 
-2. **Observation Collection**:
-   - Goal position transformed to robot's base frame
-   - RGB-D images captured and processed
-   - Robot state (velocity, orientation) collected
-   - All observations concatenated into policy input
+```mermaid
+sequenceDiagram
+    participant Env as Environment
+    participant Robot as Robot
+    participant Policy as Policy
+    participant Reward as Reward System
 
-3. **Action Execution**:
-   - Policy outputs action (velocity, steering angle)
-   - Action processed by `RestrictedCarAction`
-   - Low-level joint commands sent to actuators
-   - Physics simulation steps forward
+    loop Each Episode
+        Env->>Robot: Reset to safe position
+        Env->>Policy: Initial observation
 
-4. **Reward Computation**:
-   - Multiple reward components computed
-   - Weighted sum produces total reward
-   - Reward components logged for analysis
+        loop Each Step
+            Policy->>Robot: Action (velocity, steering)
+            Robot->>Env: Execute action
+            Env->>Reward: Compute rewards
+            Reward-->>Policy: Reward signal
+            Env->>Policy: Next observation
 
-5. **Termination Check**:
-   - Check if robot reached goal (success)
-   - Check if robot collided (failure)
-   - Check if episode timeout reached
+            alt Goal Reached
+                Env->>Policy: Success termination
+            else Collision
+                Env->>Policy: Failure termination
+            else Timeout
+                Env->>Policy: Timeout termination
+            end
+        end
+    end
+```
+
+#### Step-by-step:
+
+1. **Environment Reset** :arrows_counterclockwise:
+    - Robot spawned at safe position (from `safe_positions_auto_generated.py`)
+    - Goal sampled from safe positions
+    - Sensors initialized
+
+2. **Observation Collection** :eye:
+    - Goal position transformed to robot's base frame
+    - RGB-D images captured and processed
+    - Robot state (velocity, orientation) collected
+    - All observations concatenated into policy input
+
+3. **Action Execution** :joystick:
+    - Policy outputs action (velocity, steering angle)
+    - Action processed by `RestrictedCarAction`
+    - Low-level joint commands sent to actuators
+    - Physics simulation steps forward
+
+4. **Reward Computation** :moneybag:
+    - Multiple reward components computed
+    - Weighted sum produces total reward
+    - Reward components logged for analysis
+
+5. **Termination Check** :checkered_flag:
+    - Check if robot reached goal (success)
+    - Check if robot collided (failure)
+    - Check if episode timeout reached
 
 6. **Repeat** until termination, then reset
 
-### Inference/Evaluation
+---
 
-Same as training loop but:
-- No gradient computation
-- Policy in evaluation mode
-- Additional metrics logged (success rate, episode length, etc.)
-
-## Integration with Isaac Lab
+## :link: Integration with Isaac Lab
 
 CostNav extends Isaac Lab's `ManagerBasedRLEnv`:
 
-- **Managers**: Observation, Action, Command, Reward, Termination, Event managers
-- **Scene**: Interactive scene with assets and sensors
-- **Simulation**: Physics simulation context
-- **Logging**: TensorBoard integration for metrics
+| Component | Description |
+|:----------|:------------|
+| **Managers** | Observation, Action, Command, Reward, Termination, Event managers |
+| **Scene** | Interactive scene with assets and sensors |
+| **Simulation** | Physics simulation context |
+| **Logging** | TensorBoard integration for metrics |
 
-## Cost Model Integration
+---
+
+## :chart_with_upwards_trend: Cost Model Integration
 
 The `rl_games_helpers.py` module provides cost model integration:
+
+```mermaid
+graph LR
+    A[Episode Data] --> B[Energy Computation]
+    A --> C[SLA Check]
+    A --> D[Maintenance Cost]
+
+    B --> E[Business Metrics]
+    C --> E
+    D --> E
+
+    E --> F[TensorBoard Logs]
+
+    style A fill:#009688,color:#fff
+    style E fill:#ff9800,color:#fff
+    style F fill:#4caf50,color:#fff
+```
 
 - **Energy Computation**: `compute_navigation_energy_step()` calculates power consumption
 - **Business Metrics**: SLA compliance, operational costs, profitability
 - **Logging**: Custom scalars for TensorBoard
 
-These metrics are computed during training and logged alongside standard RL metrics, enabling evaluation of policies based on business objectives rather than just task success.
-
+!!! tip "Business-Oriented Evaluation"
+    These metrics are computed during training and logged alongside standard RL metrics, enabling evaluation of policies based on business objectives rather than just task success.

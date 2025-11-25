@@ -1,47 +1,51 @@
-# Quick Reference
+# :zap: Quick Reference
 
 This page provides quick commands and code snippets for common tasks in CostNav.
 
-## Installation
+---
 
-### Docker (Recommended)
+## :package: Installation
 
-```bash
-# Clone repository
-git clone https://github.com/worv-ai/CostNav.git
-cd CostNav
+=== ":whale: Docker (Recommended)"
 
-# Initialize submodules
-git submodule update --init --recursive
+    ```bash
+    # Clone repository
+    git clone https://github.com/worv-ai/CostNav.git
+    cd CostNav
 
-# Configure environment
-cp .env.example .env
-# Edit .env with your settings
+    # Initialize submodules
+    git submodule update --init --recursive
 
-# Start Isaac Lab container
-docker compose --profile isaac-lab up -d
+    # Configure environment
+    cp .env.example .env
+    # Edit .env with your settings
 
-# Enter container
-docker exec -it costnav-isaac-lab bash
-```
+    # Start Isaac Lab container
+    docker compose --profile isaac-lab up -d
 
-### Manual Installation
+    # Enter container
+    docker exec -it costnav-isaac-lab bash
+    ```
 
-```bash
-# Install Isaac Lab first (see Isaac Lab docs)
+=== ":computer: Manual Installation"
 
-# Install CostNav
-cd CostNav
-python -m pip install -e costnav_isaaclab/source/costnav_isaaclab
-python -m pip install -e ".[dev]"
+    ```bash
+    # Install Isaac Lab first (see Isaac Lab docs)
 
-# Verify installation
-python costnav_isaaclab/scripts/list_envs.py
-```
+    # Install CostNav
+    cd CostNav
+    python -m pip install -e costnav_isaaclab/source/costnav_isaaclab
+    python -m pip install -e ".[dev]"
 
-## Training
+    # Verify installation
+    python costnav_isaaclab/scripts/list_envs.py
+    ```
 
-### Quick Start
+---
+
+## :rocket: Training
+
+### :sparkles: Quick Start
 
 ```bash
 cd costnav_isaaclab
@@ -58,32 +62,40 @@ python scripts/rl_games/train.py \
     --headless
 ```
 
-### Common Training Commands
+### :keyboard: Common Training Commands
 
-```bash
-# Resume from checkpoint
-python scripts/rl_games/train.py \
-    --task=Template-Costnav-Isaaclab-v2-NavRL \
-    --resume
+| Use Case | Command |
+|:---------|:--------|
+| Resume from checkpoint | `--resume` |
+| More environments (faster) | `--num_envs=128` |
+| With visualization | Remove `--headless` |
+| SLURM cluster | `sbatch train.sbatch` |
 
-# Train with more environments (faster)
-python scripts/rl_games/train.py \
-    --task=Template-Costnav-Isaaclab-v2-NavRL \
-    --num_envs=128 \
-    --headless
+??? example "Full Command Examples"
 
-# Train with visualization (slower, for debugging)
-python scripts/rl_games/train.py \
-    --task=Template-Costnav-Isaaclab-v2-NavRL \
-    --enable_cameras
+    ```bash
+    # Resume from checkpoint
+    python scripts/rl_games/train.py \
+        --task=Template-Costnav-Isaaclab-v2-NavRL \
+        --resume
 
-# Train on SLURM cluster
-sbatch train.sbatch
-```
+    # Train with more environments (faster)
+    python scripts/rl_games/train.py \
+        --task=Template-Costnav-Isaaclab-v2-NavRL \
+        --num_envs=128 \
+        --headless
 
-## Evaluation
+    # Train with visualization (slower, for debugging)
+    python scripts/rl_games/train.py \
+        --task=Template-Costnav-Isaaclab-v2-NavRL \
+        --enable_cameras
+    ```
 
-### Evaluate Trained Policy
+---
+
+## :bar_chart: Evaluation
+
+### :clipboard: Evaluate Trained Policy
 
 ```bash
 # Evaluate with metrics
@@ -99,42 +111,42 @@ python scripts/rl_games/play.py \
     --checkpoint=logs/rl_games/Template-Costnav-Isaaclab-v2-NavRL/nn/last_checkpoint.pth
 ```
 
-### Baseline Comparisons
+### :balance_scale: Baseline Comparisons
 
-```bash
-# Zero agent (no actions)
-python scripts/zero_agent.py --task=Template-Costnav-Isaaclab-v2-NavRL
+| Baseline | Command |
+|:---------|:--------|
+| :zero: Zero agent | `python scripts/zero_agent.py --task=Template-Costnav-Isaaclab-v2-NavRL` |
+| :game_die: Random agent | `python scripts/random_agent.py --task=Template-Costnav-Isaaclab-v2-NavRL` |
+| :robot: Deterministic | `python scripts/test_controller.py --task=Template-Costnav-Isaaclab-v2-NavRL` |
 
-# Random agent
-python scripts/random_agent.py --task=Template-Costnav-Isaaclab-v2-NavRL
+---
 
-# Deterministic controller
-python scripts/test_controller.py --task=Template-Costnav-Isaaclab-v2-NavRL
-```
+## :mag: Monitoring
 
-## Monitoring
-
-### TensorBoard
+### :chart_with_upwards_trend: TensorBoard
 
 ```bash
 # Start TensorBoard
 tensorboard --logdir costnav_isaaclab/logs/rl_games --port 6006
 
-# Open in browser
-# http://localhost:6006
+# Open in browser: http://localhost:6006
 ```
 
-### Key Metrics to Watch
+### :dart: Key Metrics to Watch
 
-- `rewards/iter`: Total reward per iteration
-- `Episode/arrive_rate`: Success rate
-- `Episode/collision_rate`: Collision rate
-- `losses/kl`: Policy change magnitude
-- `cost_model/sla_compliance`: SLA compliance rate
+| Metric | Description | Target |
+|:-------|:------------|:-------|
+| `rewards/iter` | Total reward per iteration | :arrow_up: Increasing |
+| `Episode/arrive_rate` | Success rate | :arrow_up: > 50% |
+| `Episode/collision_rate` | Collision rate | :arrow_down: < 10% |
+| `losses/kl` | Policy change magnitude | :wavy_dash: < 0.02 |
+| `cost_model/sla_compliance` | SLA compliance rate | :arrow_up: > 70% |
 
-## Testing and Debugging
+---
 
-### Verify Environment Setup
+## :hammer_and_wrench: Testing and Debugging
+
+### :white_check_mark: Verify Environment Setup
 
 ```bash
 # List all environments
@@ -147,7 +159,7 @@ python scripts/test_controller.py --task=Template-Costnav-Isaaclab-v2-NavRL
 python scripts/test_v2_rewards.py --task=Template-Costnav-Isaaclab-v2-NavRL
 ```
 
-### Debug Observations
+### :eye: Debug Observations
 
 ```python
 # In Python
@@ -164,7 +176,7 @@ print(f"Observation max: {obs['policy'].max()}")
 print(f"Observation mean: {obs['policy'].mean()}")
 ```
 
-### Debug Rewards
+### :moneybag: Debug Rewards
 
 ```python
 # Enable reward printing in config
@@ -176,9 +188,11 @@ rewards:
     )
 ```
 
-## Configuration
+---
 
-### Modify Reward Weights
+## :gear: Configuration
+
+### :balance_scale: Modify Reward Weights
 
 Edit `costnav_isaaclab_env_cfg.py`:
 
@@ -191,7 +205,7 @@ class RewardsCfg:
         weight=30000.0,  # Changed from 20000.0
         params={"term_keys": "arrive"}
     )
-    
+
     # Increase collision penalty
     collision_penalty = RewTerm(
         func=loc_mdp.is_terminated_term,
@@ -200,7 +214,7 @@ class RewardsCfg:
     )
 ```
 
-### Modify Observation Space
+### :eye: Modify Observation Space
 
 Edit `costnav_isaaclab_env_cfg.py`:
 
@@ -211,7 +225,7 @@ class ObservationsCfg:
     class PolicyCfg(ObsGroup):
         # Add new observation
         robot_height = ObsTerm(func=mdp.base_pos_z)
-        
+
         # Modify existing observation
         pose_command = ObsTerm(
             func=mdp.pose_command_2d,
@@ -220,7 +234,7 @@ class ObservationsCfg:
         )
 ```
 
-### Modify Action Space
+### :joystick: Modify Action Space
 
 Edit `coco_robot_cfg.py`:
 
@@ -232,9 +246,11 @@ max_velocity = 6.0  # Changed from 4.0
 max_steering_angle = 50 * torch.pi / 180  # Changed from 40°
 ```
 
-## Safe Position Management
+---
 
-### Generate Safe Positions
+## :world_map: Safe Position Management
+
+### :mag: Generate Safe Positions
 
 ```bash
 cd costnav_isaaclab/source/costnav_isaaclab/costnav_isaaclab/tasks/manager_based/costnav_isaaclab_v2_NavRL
@@ -246,7 +262,7 @@ python find_safe_positions.py --visualize_raycasts
 python find_safe_positions.py
 ```
 
-### Validate Safe Positions
+### :white_check_mark: Validate Safe Positions
 
 ```bash
 # Validate existing positions
@@ -256,67 +272,71 @@ python safe_area_validator.py
 python check_impulse.py
 ```
 
-## Common Issues
+---
 
-### Issue: "No module named 'isaaclab'"
+## :rotating_light: Common Issues
 
-**Solution**:
-```bash
-# Ensure Isaac Lab is in Python path
-export PYTHONPATH=/path/to/isaac-lab/source:$PYTHONPATH
+### :x: "No module named 'isaaclab'"
 
-# Or use the compatibility layer (already included in CostNav)
-```
+??? solution "Solution"
+    ```bash
+    # Ensure Isaac Lab is in Python path
+    export PYTHONPATH=/path/to/isaac-lab/source:$PYTHONPATH
 
-### Issue: "CUDA out of memory"
+    # Or use the compatibility layer (already included in CostNav)
+    ```
 
-**Solution**:
-```bash
-# Reduce number of environments
-python scripts/rl_games/train.py --task=... --num_envs=32
+### :boom: "CUDA out of memory"
 
-# Disable cameras
-python scripts/rl_games/train.py --task=... # Remove --enable_cameras
+??? solution "Solution"
+    ```bash
+    # Reduce number of environments
+    python scripts/rl_games/train.py --task=... --num_envs=32
 
-# Use smaller image resolution (edit config)
-```
+    # Disable cameras
+    python scripts/rl_games/train.py --task=... # Remove --enable_cameras
 
-### Issue: "Reward is NaN"
+    # Use smaller image resolution (edit config)
+    ```
 
-**Solution**:
-```bash
-# Test reward function
-python scripts/test_v2_rewards.py --task=Template-Costnav-Isaaclab-v2-NavRL
+### :warning: "Reward is NaN"
 
-# Check for division by zero in reward functions
-# Check observation normalization is enabled
-```
+??? solution "Solution"
+    ```bash
+    # Test reward function
+    python scripts/test_v2_rewards.py --task=Template-Costnav-Isaaclab-v2-NavRL
 
-### Issue: "Policy not learning"
+    # Check for division by zero in reward functions
+    # Check observation normalization is enabled
+    ```
 
-**Solution**:
-1. Verify reward function: `python scripts/test_v2_rewards.py`
-2. Check observations are informative (not constant)
-3. Try simpler task first (v0 or v1)
-4. Reduce learning rate or increase minibatch size
-5. Check for NaN/Inf in logs
+### :zzz: "Policy not learning"
 
-## Code Snippets
+??? solution "Solution"
+    1. Verify reward function: `python scripts/test_v2_rewards.py`
+    2. Check observations are informative (not constant)
+    3. Try simpler task first (v0 or v1)
+    4. Reduce learning rate or increase minibatch size
+    5. Check for NaN/Inf in logs
 
-### Custom Reward Function
+---
+
+## :memo: Code Snippets
+
+### :moneybag: Custom Reward Function
 
 ```python
 # In mdp/rewards.py
 def my_custom_reward(env: ManagerBasedRLEnv) -> torch.Tensor:
     """Custom reward function."""
     robot = env.scene["robot"]
-    
+
     # Get robot velocity
     velocity = robot.data.root_lin_vel_b[:, 0]
-    
+
     # Reward forward motion
     reward = velocity.clamp(min=0.0)
-    
+
     return reward
 
 # In costnav_isaaclab_env_cfg.py
@@ -325,17 +345,17 @@ class RewardsCfg:
     my_reward = RewTerm(func=mdp.my_custom_reward, weight=1.0)
 ```
 
-### Custom Observation
+### :eye: Custom Observation
 
 ```python
 # In mdp/observations.py
 def my_custom_observation(env: ManagerBasedEnv) -> torch.Tensor:
     """Custom observation function."""
     robot = env.scene["robot"]
-    
+
     # Get robot height
     height = robot.data.root_pos_w[:, 2]
-    
+
     return height.unsqueeze(-1)
 
 # In costnav_isaaclab_env_cfg.py
@@ -346,18 +366,18 @@ class ObservationsCfg:
         robot_height = ObsTerm(func=mdp.my_custom_observation)
 ```
 
-### Custom Termination
+### :stop_sign: Custom Termination
 
 ```python
 # In mdp/terminations.py
 def my_custom_termination(env: ManagerBasedRLEnv) -> torch.Tensor:
     """Custom termination condition."""
     robot = env.scene["robot"]
-    
+
     # Terminate if robot is too high
     height = robot.data.root_pos_w[:, 2]
     too_high = height > 2.0
-    
+
     return too_high
 
 # In costnav_isaaclab_env_cfg.py
@@ -366,10 +386,13 @@ class TerminationsCfg:
     my_termination = DoneTerm(func=mdp.my_custom_termination)
 ```
 
-## Useful Links
+---
 
-- **GitHub**: https://github.com/worv-ai/CostNav
-- **Documentation**: https://worv-ai.github.io/CostNav
-- **Isaac Lab**: https://isaac-sim.github.io/IsaacLab
-- **Isaac Sim**: https://developer.nvidia.com/isaac-sim
+## :link: Useful Links
 
+| Resource | Link |
+|:---------|:-----|
+| :octocat: GitHub | [github.com/worv-ai/CostNav](https://github.com/worv-ai/CostNav) |
+| :book: Documentation | [worv-ai.github.io/CostNav](https://worv-ai.github.io/CostNav) |
+| :green_book: Isaac Lab | [isaac-sim.github.io/IsaacLab](https://isaac-sim.github.io/IsaacLab) |
+| :robot: Isaac Sim | [developer.nvidia.com/isaac-sim](https://developer.nvidia.com/isaac-sim) |
