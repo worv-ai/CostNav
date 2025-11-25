@@ -159,9 +159,11 @@ graph LR
 
 #### :compass: Commands (`mdp/commands.py`)
 
-- **SafePositionPose2dCommand**: Generates navigation goals from pre-validated safe positions
-- Ensures goals are not inside buildings or obstacles
-- Supports both simple heading (pointing towards goal) and random heading
+| Command | Description |
+|:--------|:------------|
+| `SafePositionPose2dCommand` | Generates navigation goals from pre-validated safe positions |
+| Goal Validation | Ensures goals are not inside buildings or obstacles |
+| Heading Modes | Supports both simple heading (pointing towards goal) and random heading |
 
 #### :eye: Observations (`mdp/observations.py`)
 
@@ -193,8 +195,10 @@ graph LR
 
 #### :zap: Events (`mdp/events.py`)
 
-- `reset_base`: Reset robot to safe position with random orientation
-- `print_rewards`: Debug logging of reward components
+| Event | Description |
+|:------|:------------|
+| `reset_base` | Reset robot to safe position with random orientation |
+| `print_rewards` | Debug logging of reward components |
 
 ### 3. :robot: Robot Configuration (`coco_robot_cfg.py`)
 

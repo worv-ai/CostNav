@@ -34,9 +34,9 @@ CostNav adds **business-oriented metrics**:
 **Robot Hardware Cost**: Initial investment in robot platform
 
 ```python
-robot_cost = $15,000  # Estimated COCO robot cost
-operating_years = 5   # Expected lifetime
-annual_capex = robot_cost / operating_years = $3,000/year
+robot_cost = 15000  # USD, estimated COCO robot cost
+operating_years = 5  # Expected lifetime
+annual_capex = robot_cost / operating_years  # = 3000 USD/year
 ```
 
 | Component | Description |
@@ -78,7 +78,7 @@ total_energy_joules = sum(energy_per_step)
 total_energy_kwh = total_energy_joules / 3.6e6
 
 # Apply electricity rate
-electricity_rate = $0.15 / kWh  # US average
+electricity_rate = 0.15  # USD per kWh, US average
 energy_cost = total_energy_kwh * electricity_rate
 ```
 
@@ -112,13 +112,13 @@ graph LR
 ```python
 def compute_maintenance_cost(episode):
     # Base maintenance (wear and tear)
-    base_maintenance = $0.10  # per delivery
+    base_maintenance = 0.10  # USD per delivery
 
     # Collision damage
     if collision_occurred:
-        collision_cost = $5.00  # Average repair cost
+        collision_cost = 5.00  # USD, average repair cost
     else:
-        collision_cost = $0.00
+        collision_cost = 0.00
 
     # Total maintenance
     maintenance_cost = base_maintenance + collision_cost
@@ -179,17 +179,17 @@ graph TD
 
 ```python
 def compute_revenue(episode):
-    base_revenue = $9.00
+    base_revenue = 9.00  # USD
 
     # SLA compliance bonus/penalty
     if delivery_time <= sla_threshold:
         revenue = base_revenue  # On-time delivery
-    elif delivery_time <= sla_threshold + 10_minutes:
-        revenue = base_revenue - $2.00  # Slight delay
-    elif delivery_time <= sla_threshold + 30_minutes:
-        revenue = base_revenue - $5.00  # Major delay
+    elif delivery_time <= sla_threshold + 10:  # minutes
+        revenue = base_revenue - 2.00  # Slight delay
+    elif delivery_time <= sla_threshold + 30:  # minutes
+        revenue = base_revenue - 5.00  # Major delay
     else:
-        revenue = $0.00  # Extreme delay: full refund
+        revenue = 0.00  # Extreme delay: full refund
 
     return revenue
 ```
@@ -293,7 +293,7 @@ graph LR
 ```python
 def compute_break_even_time(policy_performance):
     # Initial investment
-    robot_cost = $15,000
+    robot_cost = 15000  # USD
 
     # Average profit per delivery
     avg_profit_per_delivery = compute_average_profit(policy_performance)
