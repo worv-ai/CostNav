@@ -29,7 +29,7 @@
 CostNav supports a wide range of robot platforms and diverse outdoor environments, and evaluates navigation policies with a unified cost model that captures SLA compliance, operational cost, profitability, and break-even time.
 The toolkit enables scalable variation in robots, payloads, maps, and cloud-inference settings, and supports both learning-based and rule-based navigation stacks—making it easy to prototype and compare cost-aware policies without manual tuning for each scenario.
 
-You can find more details in our [CostNav docs](https://worv-ai.github.io/CostNav).
+<!-- You can find more details in our [CostNav docs](https://worv-ai.github.io/CostNav). -->
 
 ## Highlights
 
