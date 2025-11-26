@@ -3,6 +3,7 @@
 
 <div align="center">
   <a href="https://arxiv.org/abs/2511.20216"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2511.20216-b31b1b.svg?style=flat"></a>
+  <a href="https://worv.ghost.io/costnav-2/"><img alt="Blog Post" src="https://img.shields.io/badge/blog-post-blueviolet?style=flat&logo=ghost&logoColor=white"></a>
   <a href="https://github.com/worv-ai/CostNav/issues"><img alt="Open issues" src="https://img.shields.io/github/issues/worv-ai/CostNav?style=flat"></a>
   <a href="https://github.com/worv-ai/CostNav/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/worv-ai/CostNav?style=flat"></a>
   <a href="https://github.com/worv-ai/CostNav"><img alt="Last commit" src="https://img.shields.io/github/last-commit/worv-ai/CostNav?style=flat&logo=github"></a>
