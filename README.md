@@ -2,24 +2,14 @@
 <img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/ee4db2b1-ec4e-41c9-88b5-e6c58c78facd" />
 
 <div align="center">
-  <a href="https://arxiv.org/abs/2511.20216">
-    <img alt="arXiv" src="https://img.shields.io/badge/arXiv-2511.20216-b31b1b.svg?style=flat">
-  </a>
-  <a href="https://github.com/worv-ai/CostNav/issues">
-    <img alt="Open issues" src="https://img.shields.io/github/issues/worv-ai/CostNav?style=flat">
-  </a>
-  <a href="https://github.com/worv-ai/CostNav/stargazers">
-    <img alt="GitHub stars" src="https://img.shields.io/github/stars/worv-ai/CostNav?style=flat">
-  </a>
-  <a href="https://github.com/worv-ai/CostNav">
-    <img alt="Last commit" src="https://img.shields.io/github/last-commit/worv-ai/CostNav?style=flat&logo=github">
-  </a>
+  <a href="https://arxiv.org/abs/2511.20216"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2511.20216-b31b1b.svg?style=flat"></a>
+  <a href="https://github.com/worv-ai/CostNav/issues"><img alt="Open issues" src="https://img.shields.io/github/issues/worv-ai/CostNav?style=flat"></a>
+  <a href="https://github.com/worv-ai/CostNav/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/worv-ai/CostNav?style=flat"></a>
+  <a href="https://github.com/worv-ai/CostNav"><img alt="Last commit" src="https://img.shields.io/github/last-commit/worv-ai/CostNav?style=flat&logo=github"></a>
   <img alt="Isaac Sim" src="https://img.shields.io/badge/Isaac%20Sim-5.1.0-76B900?style=flat&logo=nvidia">
   <img alt="Isaac Lab" src="https://img.shields.io/badge/Isaac%20Lab-2.3.0-4CAF50?style=flat&logo=nvidia">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white">
-  <a href="https://worv-ai.github.io/CostNav">
-    <img alt="Documentation" src="https://img.shields.io/badge/docs-material-blue?style=flat&logo=materialformkdocs&logoColor=white">
-  </a>
+  <a href="https://worv-ai.github.io/CostNav"><img alt="Documentation" src="https://img.shields.io/badge/docs-material-blue?style=flat&logo=materialformkdocs&logoColor=white"></a>
 
 
   <h3>CostNav is a cost-driven navigation benchmark for sidewalk robots, built on Isaac Sim.</h3>
