@@ -2,6 +2,9 @@
 <img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/ee4db2b1-ec4e-41c9-88b5-e6c58c78facd" />
 
 <div align="center">
+  <a href="https://arxiv.org/abs/2511.20216">
+    <img alt="arXiv" src="https://img.shields.io/badge/arXiv-2511.20216-b31b1b.svg?style=flat">
+  </a>
   <a href="https://github.com/worv-ai/CostNav/issues">
     <img alt="Open issues" src="https://img.shields.io/github/issues/worv-ai/CostNav?style=flat">
   </a>
@@ -230,3 +233,18 @@ CostNav is built on NVIDIA Isaac Sim/Isaac Lab, Omniverse USD tooling, and the C
 ## Contact
 
 Maintained by the worv.ai robotics research team. For research collaborations or enterprise deployments, please contact your worv.ai point of contact or open an issue on GitHub.
+
+## Citation
+
+To Cite CostNav, please use the following bibtex citation
+```
+@misc{seong2025costnavnavigationbenchmarkcostaware,
+      title={CostNav: A Navigation Benchmark for Cost-Aware Evaluation of Embodied Agents}, 
+      author={Haebin Seong and Sungmin Kim and Minchan Kim and Yongjun Cho and Myunchul Joe and Suhwan Choi and Jaeyoon Jung and Jiyong Youn and Yoonshik Kim and Samwoo Seong and Yubeen Park and Youngjae Yu and Yunsung Lee},
+      year={2025},
+      eprint={2511.20216},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI},
+      url={https://arxiv.org/abs/2511.20216}, 
+}
+```
