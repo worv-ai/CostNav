@@ -1,6 +1,6 @@
 # CostNav :robot:
 
-<div style="text-align: center;" markdown>
+<div style="text-align: center;" markdown="1">
 
 [![Open Issues](https://img.shields.io/github/issues/worv-ai/CostNav?style=flat)](https://github.com/worv-ai/CostNav/issues)
 [![GitHub Stars](https://img.shields.io/github/stars/worv-ai/CostNav?style=flat)](https://github.com/worv-ai/CostNav/stargazers)
