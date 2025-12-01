@@ -1,6 +1,6 @@
-[submodule "IsaacLab"]
+[submodule "third_party/IsaacLab"]
 	path = third_party/IsaacLab
 	url = git@github.com:isaac-sim/IsaacLab.git
-[submodule "urban-sim"]
+[submodule "third_party/urban-sim"]
 	path = third_party/urban-sim
 	url = git@github.com:metadriverse/urban-sim.git
