@@ -72,8 +72,8 @@ params:
     kl_threshold: 0.016  # Increased from 0.01 for better exploration
     score_to_win: 20000
     max_epochs: 10000
-    save_best_after: 50
-    save_frequency: 10
+    save_best_after: 500
+    save_frequency: 100
     grad_norm: 1.0
     entropy_coef: 0.0  # Disabled to prevent Inf with fixed_sigma
     truncate_grads: True
