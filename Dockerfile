@@ -59,6 +59,9 @@ ${LD_LIBRARY_PATH}"
 COPY pyproject.toml ./
 COPY README.md ./
 
+# Copy custom extensions to Isaac Sim extensions folder
+COPY extensions/ /isaac-sim/extsUser/
+
 # python -> python3 shim
 RUN ln -sf /isaac-sim/kit/python/bin/python3 /isaac-sim/kit/python/bin/python
 
@@ -131,6 +134,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY pyproject.toml ./
 COPY README.md ./
 COPY costnav_isaaclab/ ./costnav_isaaclab/
+
+# Copy custom extensions to Isaac Sim extensions folder
+COPY extensions/ /isaac-sim/extsUser/
 
 # CostNav Isaac Lab deps
 RUN --mount=type=cache,target=/root/.cache/uv \

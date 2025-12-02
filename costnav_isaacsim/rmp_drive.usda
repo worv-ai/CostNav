@@ -1,0 +1,491 @@
+#usda 1.0
+(
+    defaultPrim = "Root"
+    upAxis = "Z"
+)
+
+def Xform "Root"
+{
+    def OmniGraph "rmp_drive"
+    {
+        token evaluationMode = "Automatic"
+        token evaluator:type = "execution"
+        token fabricCacheBacking = "Shared"
+        int2 fileFormatVersion = (1, 9)
+        token pipelineStage = "pipelineStageSimulation"
+        token ui:displayGroup = "Material Graphs"
+        token ui:displayName = "rmp_drive"
+        int ui:order = 1024
+        uniform token[] xformOpOrder = []
+
+        def OmniGraphNode "on_playback_tick" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            token node:type = "omni.graph.action.OnPlaybackTick"
+            int node:typeVersion = 2
+            custom double outputs:deltaSeconds
+            custom double outputs:frame
+            custom uint outputs:tick (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            custom double outputs:time
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (111.42525, 35.40088)
+        }
+
+        def OmniGraphNode "node_namespace" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom string inputs:value
+            token node:type = "omni.graph.nodes.ConstantString"
+            int node:typeVersion = 1
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (168.64421, 270.7155)
+        }
+
+        def OmniGraphNode "break_3_vector" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom token inputs:tuple
+            token inputs:tuple.connect = </Root/rmp_drive/ros2_subscribe_twist.outputs:angularVelocity>
+            token node:type = "omni.graph.nodes.BreakVector3"
+            int node:typeVersion = 1
+            custom token outputs:x
+            custom token outputs:y
+            custom token outputs:z
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (773.9851, -127.574265)
+        }
+
+        def OmniGraphNode "break_3_vector_01" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom token inputs:tuple
+            token inputs:tuple.connect = </Root/rmp_drive/scale_to_from_stage_units.outputs:result>
+            token node:type = "omni.graph.nodes.BreakVector3"
+            int node:typeVersion = 1
+            custom token outputs:x
+            custom token outputs:y
+            custom token outputs:z
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (868.87573, 238.89056)
+        }
+
+        def OmniGraphNode "scale_to_from_stage_units" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom token inputs:conversion (
+                allowedTokens = ["Convert to stage units", "Convert to meters"]
+            )
+            custom token inputs:value
+            token inputs:value.connect = </Root/rmp_drive/ros2_subscribe_twist.outputs:linearVelocity>
+            token node:type = "isaacsim.core.nodes.OgnIsaacScaleToFromStageUnit"
+            int node:typeVersion = 1
+            custom token outputs:result
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (636.35834, 339.64304)
+        }
+
+        def OmniGraphNode "articulation_controller" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom double[] inputs:effortCommand
+            custom uint inputs:execIn (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            uint inputs:execIn.connect = </Root/rmp_drive/on_playback_tick.outputs:tick>
+            custom int[] inputs:jointIndices
+            custom token[] inputs:jointNames
+            token[] inputs:jointNames.connect = </Root/rmp_drive/joint_name_array.outputs:array>
+            custom double[] inputs:positionCommand
+            custom string inputs:robotPath
+            custom rel inputs:targetPrim = </Isaac_Houndbot_End/Main/Body> (
+                customData = {
+                    dictionary omni = {
+                        dictionary graph = {
+                            string relType = "target"
+                        }
+                    }
+                }
+            )
+            custom double[] inputs:velocityCommand
+            double[] inputs:velocityCommand.connect = [
+                </Root/rmp_drive/rmp_controller_01.outputs:velocityCommand>,
+                </Root/rmp_drive/rmp_controller.outputs:velocityCommand>,
+            ]
+            token node:type = "isaacsim.core.nodes.IsaacArticulationController"
+            int node:typeVersion = 1
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (1737.6816, 92.49882)
+        }
+
+        def OmniGraphNode "joint_name_array" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom int inputs:arraySize = 4
+            custom token inputs:arrayType = "token[]" (
+                allowedTokens = ["auto", "bool[]", "double[]", "float[]", "half[]", "int[]", "int64[]", "token[]", "uchar[]", "uint[]", "uint64[]", "double[2][]", "double[3][]", "double[4][]", "matrixd[2][]", "matrixd[3][]", "matrixd[4][]", "float[2][]", "float[3][]", "float[4][]", "half[2][]", "half[3][]", "half[4][]", "int[2][]", "int[3][]", "int[4][]", "timecode[]", "frame[4][]", "colord[3][]", "colorf[3][]", "colorh[3][]", "colord[4][]", "colorf[4][]", "colorh[4][]", "normald[3][]", "normalf[3][]", "normalh[3][]", "pointd[3][]", "pointf[3][]", "pointh[3][]", "quatd[4][]", "quatf[4][]", "quath[4][]", "texcoordd[2][]", "texcoordf[2][]", "texcoordh[2][]", "texcoordd[3][]", "texcoordf[3][]", "texcoordh[3][]", "vectord[3][]", "vectorf[3][]", "vectorh[3][]"]
+            )
+            custom token inputs:input0
+            token inputs:input0.connect = </Root/rmp_drive/joint_wheel_front_left_name.inputs:value>
+            custom token inputs:input1 (
+                customData = {
+                    string ExtendedAttributeType = "Union-->bool,colord[3],colord[4],colorf[3],colorf[4],colorh[3],colorh[4],double,double[2],double[3],double[4],float,float[2],float[3],float[4],frame[4],half,half[2],half[3],half[4],int,int64,int[2],int[3],int[4],matrixd[2],matrixd[3],matrixd[4],normald[3],normalf[3],normalh[3],pointd[3],pointf[3],pointh[3],quatd[4],quatf[4],quath[4],texcoordd[2],texcoordd[3],texcoordf[2],texcoordf[3],texcoordh[2],texcoordh[3],timecode,token,transform[4],uchar,uint,uint64,vectord[3],vectorf[3],vectorh[3]"
+                    dictionary omni = {
+                        dictionary graph = {
+                            string attrType = "Union-->bool,colord[3],colord[4],colorf[3],colorf[4],colorh[3],colorh[4],double,double[2],double[3],double[4],float,float[2],float[3],float[4],frame[4],half,half[2],half[3],half[4],int,int64,int[2],int[3],int[4],matrixd[2],matrixd[3],matrixd[4],normald[3],normalf[3],normalh[3],pointd[3],pointf[3],pointh[3],quatd[4],quatf[4],quath[4],texcoordd[2],texcoordd[3],texcoordf[2],texcoordf[3],texcoordh[2],texcoordh[3],timecode,token,transform[4],uchar,uint,uint64,vectord[3],vectorf[3],vectorh[3]"
+                        }
+                    }
+                }
+            )
+            token inputs:input1.connect = </Root/rmp_drive/joint_wheel_front_right_name.inputs:value>
+            custom token inputs:input2 (
+                customData = {
+                    string ExtendedAttributeType = "Union-->bool,colord[3],colord[4],colorf[3],colorf[4],colorh[3],colorh[4],double,double[2],double[3],double[4],float,float[2],float[3],float[4],frame[4],half,half[2],half[3],half[4],int,int64,int[2],int[3],int[4],matrixd[2],matrixd[3],matrixd[4],normald[3],normalf[3],normalh[3],pointd[3],pointf[3],pointh[3],quatd[4],quatf[4],quath[4],texcoordd[2],texcoordd[3],texcoordf[2],texcoordf[3],texcoordh[2],texcoordh[3],timecode,token,transform[4],uchar,uint,uint64,vectord[3],vectorf[3],vectorh[3]"
+                    dictionary omni = {
+                        dictionary graph = {
+                            string attrType = "Union-->bool,colord[3],colord[4],colorf[3],colorf[4],colorh[3],colorh[4],double,double[2],double[3],double[4],float,float[2],float[3],float[4],frame[4],half,half[2],half[3],half[4],int,int64,int[2],int[3],int[4],matrixd[2],matrixd[3],matrixd[4],normald[3],normalf[3],normalh[3],pointd[3],pointf[3],pointh[3],quatd[4],quatf[4],quath[4],texcoordd[2],texcoordd[3],texcoordf[2],texcoordf[3],texcoordh[2],texcoordh[3],timecode,token,transform[4],uchar,uint,uint64,vectord[3],vectorf[3],vectorh[3]"
+                        }
+                    }
+                }
+            )
+            token inputs:input2.connect = </Root/rmp_drive/joint_wheel_back_left_name.inputs:value>
+            custom token inputs:input3 (
+                customData = {
+                    string ExtendedAttributeType = "Union-->bool,colord[3],colord[4],colorf[3],colorf[4],colorh[3],colorh[4],double,double[2],double[3],double[4],float,float[2],float[3],float[4],frame[4],half,half[2],half[3],half[4],int,int64,int[2],int[3],int[4],matrixd[2],matrixd[3],matrixd[4],normald[3],normalf[3],normalh[3],pointd[3],pointf[3],pointh[3],quatd[4],quatf[4],quath[4],texcoordd[2],texcoordd[3],texcoordf[2],texcoordf[3],texcoordh[2],texcoordh[3],timecode,token,transform[4],uchar,uint,uint64,vectord[3],vectorf[3],vectorh[3]"
+                    dictionary omni = {
+                        dictionary graph = {
+                            string attrType = "Union-->bool,colord[3],colord[4],colorf[3],colorf[4],colorh[3],colorh[4],double,double[2],double[3],double[4],float,float[2],float[3],float[4],frame[4],half,half[2],half[3],half[4],int,int64,int[2],int[3],int[4],matrixd[2],matrixd[3],matrixd[4],normald[3],normalf[3],normalh[3],pointd[3],pointf[3],pointh[3],quatd[4],quatf[4],quath[4],texcoordd[2],texcoordd[3],texcoordf[2],texcoordf[3],texcoordh[2],texcoordh[3],timecode,token,transform[4],uchar,uint,uint64,vectord[3],vectorf[3],vectorh[3]"
+                        }
+                    }
+                }
+            )
+            token inputs:input3.connect = </Root/rmp_drive/joint_wheel_back_right_name.inputs:value>
+            token node:type = "omni.graph.nodes.ConstructArray"
+            int node:typeVersion = 1
+            custom token outputs:array
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (1349.1152, 471.84946)
+        }
+
+        def OmniGraphNode "joint_front_bar_name" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom token inputs:value = "joint_front_bar"
+            token node:type = "omni.graph.nodes.ConstantToken"
+            int node:typeVersion = 1
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (1486.1053, -337.77103)
+        }
+
+        def OmniGraphNode "joint_wheel_front_left_name" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom token inputs:value = "joint_wheel_front_left"
+            token node:type = "omni.graph.nodes.ConstantToken"
+            int node:typeVersion = 1
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (1080.9209, 460.61438)
+        }
+
+        def OmniGraphNode "joint_wheel_front_right_name" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom token inputs:value = "joint_wheel_front_right"
+            token node:type = "omni.graph.nodes.ConstantToken"
+            int node:typeVersion = 1
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (1084.1245, 558.1156)
+        }
+
+        def OmniGraphNode "joint_wheel_back_right_name" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom token inputs:value = "joint_wheel_back_right"
+            token node:type = "omni.graph.nodes.ConstantToken"
+            int node:typeVersion = 1
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (1075.1486, 779.0871)
+        }
+
+        def OmniGraphNode "joint_wheel_back_left_name" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom token inputs:value = "joint_wheel_back_left"
+            token node:type = "omni.graph.nodes.ConstantToken"
+            int node:typeVersion = 1
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (1075.2759, 667.4874)
+        }
+
+        def OmniGraphNode "articulation_controller_01" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom double[] inputs:effortCommand
+            custom uint inputs:execIn (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            uint inputs:execIn.connect = </Root/rmp_drive/on_playback_tick.outputs:tick>
+            custom int[] inputs:jointIndices
+            custom token[] inputs:jointNames
+            token[] inputs:jointNames.connect = </Root/rmp_drive/joint_name_array_01.outputs:array>
+            custom double[] inputs:positionCommand
+            double[] inputs:positionCommand.connect = </Root/rmp_drive/joint_name_array_02.outputs:array>
+            custom string inputs:robotPath
+            custom rel inputs:targetPrim = </Isaac_Houndbot_End/Main/Body> (
+                customData = {
+                    dictionary omni = {
+                        dictionary graph = {
+                            string relType = "target"
+                        }
+                    }
+                }
+            )
+            custom double[] inputs:velocityCommand
+            token node:type = "isaacsim.core.nodes.IsaacArticulationController"
+            int node:typeVersion = 1
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (1752.2206, -188.8601)
+        }
+
+        def OmniGraphNode "joint_name_array_01" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom int inputs:arraySize = 1
+            custom token inputs:arrayType = "token[]" (
+                allowedTokens = ["auto", "bool[]", "double[]", "float[]", "half[]", "int[]", "int64[]", "token[]", "uchar[]", "uint[]", "uint64[]", "double[2][]", "double[3][]", "double[4][]", "matrixd[2][]", "matrixd[3][]", "matrixd[4][]", "float[2][]", "float[3][]", "float[4][]", "half[2][]", "half[3][]", "half[4][]", "int[2][]", "int[3][]", "int[4][]", "timecode[]", "frame[4][]", "colord[3][]", "colorf[3][]", "colorh[3][]", "colord[4][]", "colorf[4][]", "colorh[4][]", "normald[3][]", "normalf[3][]", "normalh[3][]", "pointd[3][]", "pointf[3][]", "pointh[3][]", "quatd[4][]", "quatf[4][]", "quath[4][]", "texcoordd[2][]", "texcoordf[2][]", "texcoordh[2][]", "texcoordd[3][]", "texcoordf[3][]", "texcoordh[3][]", "vectord[3][]", "vectorf[3][]", "vectorh[3][]"]
+            )
+            custom token inputs:input0
+            token inputs:input0.connect = </Root/rmp_drive/joint_front_bar_name.inputs:value>
+            token node:type = "omni.graph.nodes.ConstructArray"
+            int node:typeVersion = 1
+            custom token outputs:array
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (1493.2533, -202.35805)
+        }
+
+        def OmniGraphNode "joint_name_array_02" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom int inputs:arraySize = 1
+            custom token inputs:arrayType = "double[]" (
+                allowedTokens = ["auto", "bool[]", "double[]", "float[]", "half[]", "int[]", "int64[]", "token[]", "uchar[]", "uint[]", "uint64[]", "double[2][]", "double[3][]", "double[4][]", "matrixd[2][]", "matrixd[3][]", "matrixd[4][]", "float[2][]", "float[3][]", "float[4][]", "half[2][]", "half[3][]", "half[4][]", "int[2][]", "int[3][]", "int[4][]", "timecode[]", "frame[4][]", "colord[3][]", "colorf[3][]", "colorh[3][]", "colord[4][]", "colorf[4][]", "colorh[4][]", "normald[3][]", "normalf[3][]", "normalh[3][]", "pointd[3][]", "pointf[3][]", "pointh[3][]", "quatd[4][]", "quatf[4][]", "quath[4][]", "texcoordd[2][]", "texcoordf[2][]", "texcoordh[2][]", "texcoordd[3][]", "texcoordf[3][]", "texcoordh[3][]", "vectord[3][]", "vectorf[3][]", "vectorh[3][]"]
+            )
+            custom token inputs:input0
+            token inputs:input0.connect = </Root/rmp_drive/rmp_controller.outputs:frontWheelAngle>
+            token node:type = "omni.graph.nodes.ConstructArray"
+            int node:typeVersion = 1
+            custom token outputs:array
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (1482.8394, -54.861603)
+        }
+
+        def OmniGraphNode "rmp_controller" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom double inputs:angularVelocity
+            double inputs:angularVelocity.connect = </Root/rmp_drive/break_3_vector.outputs:z>
+            custom double inputs:dt
+            double inputs:dt.connect = </Root/rmp_drive/on_playback_tick.outputs:deltaSeconds>
+            custom uint inputs:execIn (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            uint inputs:execIn.connect = </Root/rmp_drive/on_playback_tick.outputs:tick>
+            custom double inputs:linearVelocity
+            double inputs:linearVelocity.connect = </Root/rmp_drive/break_3_vector_01.outputs:x>
+            custom double inputs:maxAcceleration = 2.8
+            custom double inputs:maxAngularSpeed
+            custom double inputs:maxDeceleration = 2.8
+            custom double inputs:maxLinearSpeed
+            custom double inputs:maxWheelRotation
+            custom double inputs:maxWheelRotationVelocity
+            custom double inputs:trackWidth
+            custom double inputs:wheelBase
+            custom double inputs:wheelRadius
+            token node:type = "OmniIsaacRmp_robotExtension.RmpController"
+            int node:typeVersion = 1
+            custom double outputs:frontWheelAngle
+            custom double[] outputs:velocityCommand
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (1198.7316, -34.808987)
+        }
+
+        def OmniGraphNode "isaac_read_simulation_time" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom uint64 inputs:referenceTimeDenominator
+            custom int64 inputs:referenceTimeNumerator
+            custom bool inputs:resetOnStop
+            custom int64 inputs:swhFrameNumber
+            token node:type = "isaacsim.core.nodes.IsaacReadSimulationTime"
+            int node:typeVersion = 1
+            custom double outputs:simulationTime
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (3.1463404, 426.72473)
+        }
+
+        def OmniGraphNode "ros2_subscribe_twist" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom uint64 inputs:context
+            uint64 inputs:context.connect = </Root/rmp_drive/ros2_context.outputs:context>
+            custom uint inputs:execIn (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            uint inputs:execIn.connect = </Root/rmp_drive/on_playback_tick.outputs:tick>
+            custom string inputs:nodeNamespace
+            string inputs:nodeNamespace.connect = </Root/rmp_drive/node_namespace.inputs:value>
+            custom string inputs:qosProfile
+            string inputs:qosProfile.connect = </Root/rmp_drive/ros2_qos_profile.outputs:qosProfile>
+            custom uint64 inputs:queueSize
+            custom string inputs:topicName
+            token node:type = "isaacsim.ros2.bridge.ROS2SubscribeTwist"
+            int node:typeVersion = 1
+            custom vector3d outputs:angularVelocity
+            custom uint outputs:execOut (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            custom vector3d outputs:linearVelocity
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (395.10092, 101.78446)
+        }
+
+        def OmniGraphNode "ros2_publish_joint_state" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom uint64 inputs:context
+            uint64 inputs:context.connect = </Root/rmp_drive/ros2_context.outputs:context>
+            custom uint inputs:execIn (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            uint inputs:execIn.connect = </Root/rmp_drive/on_playback_tick.outputs:tick>
+            custom string inputs:nodeNamespace
+            custom string inputs:qosProfile
+            string inputs:qosProfile.connect = </Root/rmp_drive/ros2_qos_profile_01.outputs:qosProfile>
+            custom uint64 inputs:queueSize
+            custom rel inputs:targetPrim = </Isaac_Houndbot_End> (
+                customData = {
+                    dictionary omni = {
+                        dictionary graph = {
+                            string relType = "target"
+                        }
+                    }
+                }
+            )
+            custom double inputs:timeStamp
+            double inputs:timeStamp.connect = </Root/rmp_drive/isaac_read_simulation_time.outputs:simulationTime>
+            custom string inputs:topicName = "sim_joint_states"
+            token node:type = "isaacsim.ros2.bridge.ROS2PublishJointState"
+            int node:typeVersion = 1
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (350.05502, 394.66675)
+        }
+
+        def OmniGraphNode "ros2_context" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom uchar inputs:domain_id
+            custom bool inputs:useDomainIDEnvVar
+            token node:type = "isaacsim.ros2.bridge.ROS2Context"
+            int node:typeVersion = 2
+            custom uint64 outputs:context
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (-111.88593, 266.35715)
+        }
+
+        def OmniGraphNode "ros2_qos_profile" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom token inputs:createProfile = "Custom" (
+                allowedTokens = ["Default for publishers/subscribers", "Services", "Sensor Data", "System Default", "Custom"]
+            )
+            custom double inputs:deadline
+            custom uint64 inputs:depth = 1
+            custom token inputs:durability (
+                allowedTokens = ["systemDefault", "transientLocal", "volatile", "unknown"]
+            )
+            custom token inputs:history (
+                allowedTokens = ["systemDefault", "keepLast", "keepAll", "unknown"]
+            )
+            custom double inputs:leaseDuration
+            custom double inputs:lifespan
+            custom token inputs:liveliness (
+                allowedTokens = ["systemDefault", "automatic", "manualByTopic", "unknown"]
+            )
+            custom token inputs:reliability = "bestEffort" (
+                allowedTokens = ["systemDefault", "reliable", "bestEffort", "unknown"]
+            )
+            token node:type = "isaacsim.ros2.bridge.ROS2QoSProfile"
+            int node:typeVersion = 1
+            custom string outputs:qosProfile
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (387.67184, -192.9356)
+        }
+
+        def OmniGraphNode "ros2_qos_profile_01" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom token inputs:createProfile = "Sensor Data" (
+                allowedTokens = ["Default for publishers/subscribers", "Services", "Sensor Data", "System Default", "Custom"]
+            )
+            custom double inputs:deadline
+            custom uint64 inputs:depth
+            custom token inputs:durability (
+                allowedTokens = ["systemDefault", "transientLocal", "volatile", "unknown"]
+            )
+            custom token inputs:history (
+                allowedTokens = ["systemDefault", "keepLast", "keepAll", "unknown"]
+            )
+            custom double inputs:leaseDuration
+            custom double inputs:lifespan
+            custom token inputs:liveliness (
+                allowedTokens = ["systemDefault", "automatic", "manualByTopic", "unknown"]
+            )
+            custom token inputs:reliability (
+                allowedTokens = ["systemDefault", "reliable", "bestEffort", "unknown"]
+            )
+            token node:type = "isaacsim.ros2.bridge.ROS2QoSProfile"
+            int node:typeVersion = 1
+            custom string outputs:qosProfile
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (41.25622, 592.19934)
+        }
+    }
+}
+

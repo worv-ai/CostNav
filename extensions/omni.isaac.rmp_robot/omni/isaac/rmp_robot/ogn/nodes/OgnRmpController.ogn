@@ -1,0 +1,95 @@
+{
+    "RmpController": {
+        "version": 1,
+        "description": "Rmp Controller",
+        "language": "Python",
+        "metadata": {
+            "uiName": "Rmp Controller"
+        },
+        "inputs": {
+            "execIn": {
+                "type": "execution",
+                "description": "The input execution",
+                "default": 0
+            },
+            "wheelRadius": {
+                "type": "double",
+                "description": "radius of the wheels",
+                "default": 0.11
+            },
+            "wheelBase": {
+                "type": "double",
+                "description": "Distance between the front and rear axles of the robot in meters",
+                "default": 0.456
+            },
+            "trackWidth": {
+                "type": "double",
+                "description": "Distance between the left and right rear wheels of the robot in meters",
+                "default": 0.545
+            },
+            "dt": {
+                "type": "double",
+                "description": "delta time",
+                "default": 0.0
+            },
+            "maxAcceleration": {
+                "type": "double",
+                "description": "maximum linear acceleration of the robot for forward and reverse, 0.0 means not set",
+                "default": 2.8
+            },
+            "maxDeceleration": {
+                "type": "double",
+                "description": "maximum linear braking of the robot, 0.0 means not set.",
+                "default": 2.8
+            },
+            "maxWheelRotationVelocity": {
+                "type": "double",
+                "description": "Maximum velocity of rotation for the front wheels in radians",
+                "default": 1.257
+            },
+            "maxLinearSpeed": {
+                "type": "double",
+                "description": "max linear speed allowed for vehicle, 0.0 means not set",
+                "default": 2.5
+            },
+            "maxAngularSpeed": {
+                "type": "double",
+                "description": "max angular speed allowed for vehicle, 0.0 means not set",
+                "default": 1.8
+            },
+            "maxWheelRotation": {
+                "type": "double",
+                "description": "Maximum angle of rotation for the front wheels in radians",
+                "default": 0.349
+            },
+            "linearVelocity": {
+                "type": "double",
+                "description": "desired target linear velocity",
+                "default": 0.0
+            },
+            "angularVelocity": {
+                "type": "double",
+                "description": "desired target rotation velocity",
+                "default": 0.0
+            }
+        },
+        "outputs": {
+            "velocityCommand": {
+                "type": "double[]",
+                "description": "velocity commands",
+                "metadata": {},
+                "default": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ]
+            },
+            "frontWheelAngle": {
+                "type": "double",
+                "description": "Angle for the front turning wheel in radians",
+                "default": 0.0
+            }
+        }
+    }
+}
