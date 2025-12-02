@@ -6,6 +6,9 @@ services:
       context: .
       dockerfile: Dockerfile
       target: isaac-sim
+      args:
+        - ISAAC_SIM_VERSION=${ISAAC_SIM_VERSION}
+        - ISAAC_LAB_VERSION=${ISAAC_LAB_VERSION}
     image: costnav-isaacsim-${ISAAC_SIM_VERSION}:${COSTNAV_VERSION}
     container_name: costnav-isaac-sim
     user: "${ISAAC_UID:-1234}:${ISAAC_GID:-1234}"
@@ -50,6 +53,9 @@ services:
       context: .
       dockerfile: Dockerfile
       target: isaac-lab
+      args:
+        - ISAAC_SIM_VERSION=${ISAAC_SIM_VERSION}
+        - ISAAC_LAB_VERSION=${ISAAC_LAB_VERSION}
     image: costnav-isaaclab-${ISAAC_SIM_VERSION}-${ISAAC_LAB_VERSION}:${COSTNAV_VERSION}
     container_name: ${CONTAINER_NAME:-costnav-isaac-lab}
     user: "${ISAAC_UID:-1234}:${ISAAC_GID:-1234}"
@@ -85,7 +91,6 @@ services:
     network_mode: host
     stdin_open: true
     tty: true
-
     # Development environment (minimal dependencies)
   dev:
     profiles: [ "dev" ]
