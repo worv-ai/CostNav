@@ -61,7 +61,6 @@ Hooks are in place to compare learning vs. rule-based stacks, switch between on-
 ```bash
 git clone https://github.com/worv-ai/CostNav.git
 cd CostNav
-git submodule update --init --recursive third_party/IsaacLab third_party/urban-sim
 ```
 
 ### 3. Configure environment variables
