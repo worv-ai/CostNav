@@ -1,3 +1,7 @@
+# Build arguments for versions
+ARG ISAAC_SIM_VERSION
+ARG ISAAC_LAB_VERSION
+
 # === Base stage with shared deps ===
 FROM ubuntu:24.04 AS base
 
@@ -23,7 +27,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system -e ".[dev]"
 
 # === Isaac Sim image ===
-FROM nvcr.io/nvidia/isaac-sim:5.1.0 AS isaac-sim
+ARG ISAAC_SIM_VERSION
+FROM nvcr.io/nvidia/isaac-sim:${ISAAC_SIM_VERSION} AS isaac-sim
 
 # Reuse uv binary
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -39,22 +44,22 @@ ENV PYTHON_BIN="/isaac-sim/kit/python/bin/python3"
 
 # Set PYTHONPATH to include all Isaac Sim, Omni Kit, and extension directories
 ENV PYTHONPATH="\
-${ISAAC_PATH}/kit/kernel/py:\
-${ISAAC_PATH}/kit/exts:\
-${ISAAC_PATH}/kit/extscore:\
-${ISAAC_PATH}/exts:\
-${ISAAC_PATH}/extscache:\
-${ISAAC_PATH}/extsDeprecated:\
-${ISAAC_PATH}/extsUser:\
-${ISAAC_PATH}/kit/python/lib/python3.11/site-packages:\
-${PYTHONPATH}"
+    ${ISAAC_PATH}/kit/kernel/py:\
+    ${ISAAC_PATH}/kit/exts:\
+    ${ISAAC_PATH}/kit/extscore:\
+    ${ISAAC_PATH}/exts:\
+    ${ISAAC_PATH}/extscache:\
+    ${ISAAC_PATH}/extsDeprecated:\
+    ${ISAAC_PATH}/extsUser:\
+    ${ISAAC_PATH}/kit/python/lib/python3.11/site-packages:\
+    ${PYTHONPATH}"
 
 # Set LD_LIBRARY_PATH for binary interfaces
 ENV LD_LIBRARY_PATH="\
-${ISAAC_PATH}/kit/lib:\
-${ISAAC_PATH}/kit/plugins:\
-${ISAAC_PATH}/kit/exts:\
-${LD_LIBRARY_PATH}"
+    ${ISAAC_PATH}/kit/lib:\
+    ${ISAAC_PATH}/kit/plugins:\
+    ${ISAAC_PATH}/kit/exts:\
+    ${LD_LIBRARY_PATH}"
 
 COPY pyproject.toml ./
 COPY README.md ./
@@ -74,7 +79,8 @@ ENTRYPOINT ["/bin/bash"]
 CMD ["-c", "sleep infinity"]
 
 # === Isaac Lab image ===
-FROM nvcr.io/nvidia/isaac-sim:5.1.0 AS isaac-lab
+ARG ISAAC_SIM_VERSION
+FROM nvcr.io/nvidia/isaac-sim:${ISAAC_SIM_VERSION} AS isaac-lab
 
 # uv + git for installs
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -93,22 +99,22 @@ ENV PYTHON_BIN="/isaac-sim/kit/python/bin/python3"
 
 # Set PYTHONPATH to include all Isaac Sim, Omni Kit, and extension directories
 ENV PYTHONPATH="\
-${ISAAC_PATH}/kit/kernel/py:\
-${ISAAC_PATH}/kit/exts:\
-${ISAAC_PATH}/kit/extscore:\
-${ISAAC_PATH}/exts:\
-${ISAAC_PATH}/extscache:\
-${ISAAC_PATH}/extsDeprecated:\
-${ISAAC_PATH}/extsUser:\
-${ISAAC_PATH}/kit/python/lib/python3.11/site-packages:\
-${PYTHONPATH}"
+    ${ISAAC_PATH}/kit/kernel/py:\
+    ${ISAAC_PATH}/kit/exts:\
+    ${ISAAC_PATH}/kit/extscore:\
+    ${ISAAC_PATH}/exts:\
+    ${ISAAC_PATH}/extscache:\
+    ${ISAAC_PATH}/extsDeprecated:\
+    ${ISAAC_PATH}/extsUser:\
+    ${ISAAC_PATH}/kit/python/lib/python3.11/site-packages:\
+    ${PYTHONPATH}"
 
 # Set LD_LIBRARY_PATH for binary interfaces
 ENV LD_LIBRARY_PATH="\
-${ISAAC_PATH}/kit/lib:\
-${ISAAC_PATH}/kit/plugins:\
-${ISAAC_PATH}/kit/exts:\
-${LD_LIBRARY_PATH}"
+    ${ISAAC_PATH}/kit/lib:\
+    ${ISAAC_PATH}/kit/plugins:\
+    ${ISAAC_PATH}/kit/exts:\
+    ${LD_LIBRARY_PATH}"
 
 # python -> python3 shim
 RUN ln -sf /isaac-sim/kit/python/bin/python3 /isaac-sim/kit/python/bin/python
@@ -126,9 +132,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     git+https://github.com/isaac-sim/rl_games.git@python3.11
 
 # Isaac Lab + extras
+ARG ISAAC_LAB_VERSION
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python="${PYTHON_BIN}" --system \
-    "isaaclab[isaacsim,all]==2.3.0" \
+    "isaaclab[isaacsim,all]==${ISAAC_LAB_VERSION}" \
     --extra-index-url https://pypi.nvidia.com
 
 COPY pyproject.toml ./
