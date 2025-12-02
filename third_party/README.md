@@ -5,13 +5,16 @@ The folders in this directory mirror the external projects we draw inspiration o
 <h2 align="center"><em>Huge thanks to the wider robotics and simulation communities whose work powers these references.</em></h2>
 
 ## Layout
+
 - `IsaacLab/` — reference checkout of NVIDIA's IsaacLab. Useful for reading upstream tasks, assets, and training utilities while building CostNav-specific environments.
 - `urban-sim/` — reference checkout of the Metadriverse urban simulator, used for the COCO robot configuration and related assets.
+- `IsaacSim-ros_workspaces/` — reference checkout of the Isaac Sim ROS workspaces. Contains two workspaces: `humble_ws` (ROS2 Humble) and `jazzy_ws` (ROS2 Jazzy). See [Isaac Sim documentation](https://docs.omniverse.nvidia.com/isaacsim/latest/installation/install_ros.html) for usage and installation instructions.
 
 ## Usage
+
 1. Initialize the submodules when you need to browse the upstream sources:
    ```bash
-   git submodule update --init --recursive third_party/IsaacLab third_party/urban-sim
+   git submodule update --init --recursive
    ```
 2. Treat these directories as read-only references. All CostNav-specific code should live under `costnav_isaaclab/` or the appropriate top-level package.
 3. When updating to newer upstream commits, use standard submodule commands (e.g., `git submodule update --remote`) and capture the resulting commit hashes in your PR description for traceability.
