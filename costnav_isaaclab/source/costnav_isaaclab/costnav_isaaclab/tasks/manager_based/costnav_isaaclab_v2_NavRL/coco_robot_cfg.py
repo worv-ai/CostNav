@@ -364,18 +364,17 @@ class OgnCarAction(ActionTerm):
         max_wheel_v = 4.0
         wheel_base = 1.5
         radius_rear = 0.3
-        max_ang = 40 * torch.pi / 180
-        velocity = self.raw_actions[..., :1].clamp(-max_wheel_v, max_wheel_v) / radius_rear
-        angular = self.raw_actions[..., 1:2].clamp(-max_ang, max_ang)
-        angular[angular.abs() < 0.05] = torch.zeros_like(angular[angular.abs() < 0.05])
-        R = wheel_base / torch.tan(angular)
-        left_wheel_angle = torch.arctan(wheel_base / (R - 0.5 * 1.8))
-        right_wheel_angle = torch.arctan(wheel_base / (R + 0.5 * 1.8))
+        max_steering_angle = 40 * torch.pi / 180
 
-        avg_steering = (right_wheel_angle + left_wheel_angle) / 2.0
+        target_v = self.raw_actions[..., :1].clamp(-max_wheel_v, max_wheel_v)
 
-        self.steering_action.process_actions(avg_steering)
-        self.acceleration_action.process_actions(torch.cat([velocity, velocity, velocity, velocity], dim=1))
+        target_omega = self.raw_actions[..., 1:2]
+        wheel_velocities = target_v / radius_rear
+        steering_angle = torch.arctan((target_omega * wheel_base) / (target_v.abs() + 1e-5)) * torch.sign(target_v)
+        steering_angle = steering_angle.clamp(-max_steering_angle, max_steering_angle)
+
+        self.steering_action.process_actions(steering_angle)
+        self.acceleration_action.process_actions(torch.cat([wheel_velocities] * 4, dim=1))
 
         self.steering_action.apply_actions()
         self.acceleration_action.apply_actions()
