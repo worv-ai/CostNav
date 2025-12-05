@@ -22,6 +22,7 @@ from isaaclab.utils import configclass
 from . import mdp
 from .coco_robot_cfg import (
     COCO_CFG,
+    OgnCarActionCfg,
     RestrictedCarActionCfg,
 )
 from .safe_positions_auto_generated import SAFE_POSITIONS
@@ -41,16 +42,16 @@ class CostnavIsaaclabSceneCfg(InteractiveSceneCfg):
     """Configuration for COCO robot navigation scene with custom map."""
 
     # custom map
-    custom_map = AssetBaseCfg(
-        prim_path="/World/custom_map",
-        spawn=sim_utils.UsdFileCfg(usd_path="omniverse://10.50.2.21/Users/worv/map/Street_sidewalk.usd"),
-    )
+    # custom_map = AssetBaseCfg(
+    #     prim_path="/World/custom_map",
+    #     spawn=sim_utils.UsdFileCfg(usd_path="omniverse://10.50.2.21/Users/worv/map/Street_sidewalk.usd"),
+    # )
 
     # ground plane
-    # ground = AssetBaseCfg(
-    #     prim_path="/World/ground",
-    #     spawn=sim_utils.GroundPlaneCfg(size=(100.0, 100.0)),
-    # )
+    ground = AssetBaseCfg(
+        prim_path="/World/ground",
+        spawn=sim_utils.GroundPlaneCfg(size=(100.0, 100.0)),
+    )
 
     # robot - COCO robot for navigation
     robot: ArticulationCfg = COCO_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
@@ -108,7 +109,7 @@ class ActionsCfg:
     """Action specifications for the MDP."""
 
     # Use OGN car velocity actions (linear velocity + steering angle)
-    joint_pos = RestrictedCarActionCfg(asset_name="robot")
+    joint_pos = OgnCarActionCfg(asset_name="robot")
 
 
 @configclass
@@ -231,21 +232,21 @@ class RewardsCfg:
     # )
 
     # DEBUG: Print rewards every step (weight=0.001 is negligible but ensures it runs)
-    debug_print = RewTerm(
-        func=mdp.print_rewards,
-        weight=0.001,  # Very small weight so it runs but doesn't affect training
-        params={"print_every_n_steps": 1},  # Change to higher number to print less frequently
-    )
+    # debug_print = RewTerm(
+    #     func=mdp.print_rewards,
+    #     weight=0.001,  # Very small weight so it runs but doesn't affect training
+    #     params={"print_every_n_steps": 1},  # Change to higher number to print less frequently
+    # )
 
-    # DEBUG: Print per-env contact/impulse magnitudes from the contact_forces sensor
-    debug_contact_impulses = RewTerm(
-        func=mdp.print_contact_impulses,
-        weight=0.001,  # Very small weight so it runs but doesn't affect training
-        params={
-            "sensor_name": "contact_forces",
-            "print_every_n_steps": 1,
-        },
-    )
+    # # DEBUG: Print per-env contact/impulse magnitudes from the contact_forces sensor
+    # debug_contact_impulses = RewTerm(
+    #     func=mdp.print_contact_impulses,
+    #     weight=0.001,  # Very small weight so it runs but doesn't affect training
+    #     params={
+    #         "sensor_name": "contact_forces",
+    #         "print_every_n_steps": 1,
+    #     },
+    # )
 
 
 @configclass
