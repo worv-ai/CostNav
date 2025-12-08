@@ -1,9 +1,9 @@
 {
   "name": "CostNav - Isaac Lab",
   "dockerComposeFile": "../docker-compose.yml",
-  "service": "isaac-lab",
+  "service": "isaac-sim",
   "runServices": [
-    "isaac-lab"
+    "isaac-sim"
   ],
   "workspaceFolder": "/workspace",
   "remoteUser": "root",
@@ -13,7 +13,8 @@
         "ms-python.python",
         "ms-python.vscode-pylance",
         "charliermarsh.ruff",
-        "Augment.vscode-augment"
+        "Augment.vscode-augment",
+        "ms-vscode.cpptools"
       ],
       "settings": {
         "python.defaultInterpreterPath": "/isaac-sim/kit/python/bin/python3",
