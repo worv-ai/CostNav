@@ -131,6 +131,5 @@ services:
       # X11 display forwarding for GUI applications like rviz2
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
     network_mode: host
-    ipc: host
     stdin_open: true
     tty: true
