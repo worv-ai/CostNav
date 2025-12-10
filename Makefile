@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 run-ros2
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 run-ros2 run-isaac-sim run-navigation
 
 DOCKERFILE ?= Dockerfile
 DOCKER_BUILD ?= docker build
@@ -44,3 +44,17 @@ build-ros2:
 run-ros2:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile ros2 up ros2
+
+# =============================================================================
+# Isaac Sim and Navigation Targets
+# =============================================================================
+
+# Run the Isaac Sim container with launch.py
+run-isaac-sim:
+	xhost +local:docker 2>/dev/null || true
+	$(DOCKER_COMPOSE) --profile isaac-sim up isaac-sim
+
+# Run both Isaac Sim and ROS2 navigation together
+run-navigation:
+	xhost +local:docker 2>/dev/null || true
+	$(DOCKER_COMPOSE) --profile isaac-sim --profile ros2 up isaac-sim ros2

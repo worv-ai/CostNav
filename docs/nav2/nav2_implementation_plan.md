@@ -2,27 +2,44 @@
 
 **Issue Reference:** [#5 - Support rule-based navigation with nav2](https://github.com/worv-ai/CostNav/issues/5)
 
-**Status:** Planning Phase  
-**Target Version:** CostNav v0.2.0  
-**Last Updated:** 2025-11-21
+**Status:** ✅ Nav2 Integration Complete | ⏳ Parameter Tuning In Progress
+**Target Version:** CostNav v0.2.0
+**Last Updated:** 2025-12-10
+
+---
+
+## Current Status
+
+### ✅ Completed
+- **Nav2 Integration with Nova Carter**: Full ROS2 Navigation Stack 2 integration complete
+- **Docker Setup**: Multi-container architecture configured
+- **ROS2 Bridge**: Communication between Isaac Sim and Nav2 established
+- **Occupancy Map**: Generated and configured for Street_sidewalk environment
+- **Basic Navigation**: Nova Carter successfully navigates to goals
+
+### ⏳ In Progress
+1. **Start and Goal Sampling**: Mission planning system for autonomous goal generation
+2. **Parameter Tuning**: Optimizing Nav2 parameters for Nova Carter performance
+
+### 📋 Future Work
+- **COCO Robot Integration**: Adapt Nav2 for COCO delivery robot (lower priority)
+- **Cost Model Integration**: Track economic metrics for Nav2 navigation
+- **Hybrid RL+Nav2**: Combine learning-based and rule-based approaches
 
 ---
 
 ## Executive Summary
 
-This document outlines a **simplified 1-month implementation plan** for integrating ROS2 Navigation Stack 2 (Nav2) into CostNav, following NVIDIA's official [Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html).
+This document outlines the Nav2 integration for CostNav, following NVIDIA's official [Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html).
 
-**Scope:** Basic Nav2 integration with COCO robot for rule-based navigation baseline
+**Primary Robot:** Nova Carter (NVIDIA's reference platform)
+**Future Robot:** COCO delivery robot (planned)
 
-**Timeline:** 4 weeks (1 month)
-
-**Approach:** Adapt the official Nova Carter Nav2 example to CostNav's COCO delivery robot
-
-This integration will enable:
+**Current Capabilities:**
 - Rule-based navigation baseline for comparison with RL-based approaches
 - Industry-standard Nav2 navigation stack
 - Foundation for future hybrid RL+Nav2 approaches
-- Cost model evaluation of rule-based navigation
+- Ready for cost model evaluation integration
 
 ---
 
@@ -46,24 +63,26 @@ This integration will enable:
 CostNav currently supports:
 - **Learning-based navigation** using RL-Games, RSL-RL, SKRL, and Stable-Baselines3
 - **Isaac Sim/Isaac Lab** simulation environment (v5.1.0 / v2.3.0)
-- **COCO delivery robot** with RGB-D cameras and configurable sensors
+- **✅ Nav2 Integration with Nova Carter** - Complete and operational
+- **Nova Carter robot** (primary) - NVIDIA's reference platform with full sensor suite
+- **COCO delivery robot** (future) - Custom delivery robot for urban navigation
 - **Cost-driven evaluation** metrics (SLA compliance, profitability, break-even time)
 - **Custom MDP components** for navigation (commands, observations, rewards, terminations)
 
-### Gaps
+### Completed Achievements
 
-- No rule-based navigation baseline for comparison
-- Limited ability to define custom navigation constraints
-- No integration with industry-standard ROS2 navigation stack
-- Missing classical planner benchmarks (A*, DWA, TEB, etc.)
+- ✅ Rule-based navigation baseline with Nav2
+- ✅ Integration with industry-standard ROS2 navigation stack
+- ✅ Classical planner implementation (NavFn, DWB, etc.)
+- ✅ Multi-container Docker architecture
+- ✅ ROS2 bridge for Isaac Sim communication
 
-### Goals
+### Remaining Tasks
 
-1. **Enable Nav2 integration** within Isaac Sim environment
-2. **Provide rule-based navigation API** for defining custom logic and constraints
-3. **Maintain compatibility** with existing RL-based path planners
-4. **Support hybrid approaches** combining learning and rule-based methods
-5. **Preserve cost model evaluation** for fair comparison
+1. **Start and Goal Sampling** - Implement mission planning system for autonomous goal generation
+2. **Parameter Tuning** - Optimize Nav2 parameters for Nova Carter navigation performance
+3. **Cost Model Integration** - Track economic metrics for Nav2 navigation
+4. **COCO Robot Adaptation** - Extend Nav2 support to COCO delivery robot (future work)
 
 ---
 
@@ -72,15 +91,20 @@ CostNav currently supports:
 **Primary Reference:** [Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html)
 
 This implementation follows NVIDIA's official tutorial which covers:
-- ✅ Multi-container Docker setup (Isaac Sim + ROS2/Nav2)
-- ✅ ROS2 bridge configuration with `omni.isaac.ros2_bridge`
-- ✅ Occupancy map generation using Isaac Sim tools
-- ✅ Nav2 stack setup (AMCL, planners, controllers, behavior servers)
-- ✅ Robot description with `robot_state_publisher`
-- ✅ Navigation goal sending (RViz2, programmatic, ActionGraph)
+- ✅ Multi-container Docker setup (Isaac Sim + ROS2/Nav2) - **COMPLETE**
+- ✅ ROS2 bridge configuration with `omni.isaac.ros2_bridge` - **COMPLETE**
+- ✅ Occupancy map generation using Isaac Sim tools - **COMPLETE**
+- ✅ Nav2 stack setup (AMCL, planners, controllers, behavior servers) - **COMPLETE**
+- ✅ Robot description with `robot_state_publisher` - **COMPLETE**
+- ✅ Navigation goal sending (RViz2, programmatic, ActionGraph) - **COMPLETE**
 
-**Our Adaptation:**
-- Replace **Nova Carter** → **COCO delivery robot**
+**Current Implementation:**
+- **Primary Robot:** Nova Carter (NVIDIA's reference platform)
+- **Status:** Fully operational Nav2 integration
+- **Remaining Work:** Start/goal sampling and parameter tuning
+
+**Future Adaptation:**
+- Extend to **COCO delivery robot** (lower priority)
 - Add **cost model tracking** for economic metrics
 - Integrate with **existing CostNav benchmark framework**
 - Enable **comparison with RL-based navigation**
@@ -106,7 +130,7 @@ This implementation follows NVIDIA's official tutorial which covers:
 │  ┌──────────────────┐              ┌──────────────────┐        │
 │  │  Learning-Based  │              │   Rule-Based     │        │
 │  │   Navigation     │              │   Navigation     │        │
-│  │   (Existing)     │              │   (New - Nav2)   │        │
+│  │   (Existing)     │              │   (Nav2) ✅      │        │
 │  └────────┬─────────┘              └────────┬─────────┘        │
 │           │                                  │                   │
 │           │         ┌──────────────┐        │                   │
@@ -116,10 +140,15 @@ This implementation follows NVIDIA's official tutorial which covers:
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │              Isaac Sim / Isaac Lab Environment           │  │
-│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐         │  │
-│  │  │ COCO Robot │  │   Sensors  │  │  Sidewalk  │         │  │
-│  │  │            │  │  (RGB-D)   │  │    Map     │         │  │
-│  │  └────────────┘  └────────────┘  └────────────┘         │  │
+│  │  ┌──────────────┐  ┌────────────┐  ┌────────────┐       │  │
+│  │  │ Nova Carter  │  │   Sensors  │  │  Sidewalk  │       │  │
+│  │  │  (Primary)   │  │  (RGB-D,   │  │    Map     │       │  │
+│  │  │              │  │   LiDAR)   │  │            │       │  │
+│  │  └──────────────┘  └────────────┘  └────────────┘       │  │
+│  │  ┌──────────────┐                                        │  │
+│  │  │ COCO Robot   │  (Future Work)                        │  │
+│  │  │  (Future)    │                                        │  │
+│  │  └──────────────┘                                        │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -140,91 +169,141 @@ This implementation follows NVIDIA's official tutorial which covers:
 
 ---
 
-## Implementation Plan (4 Weeks)
+## Running Nav2 with Nova Carter
 
-Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html), we will implement a basic Nav2 integration in 4 weeks.
+### Quick Start
+
+**1. Launch Isaac Sim with Nova Carter:**
+```bash
+cd /workspace/costnav_isaacsim
+python launch.py --simulate --robot carter
+```
+
+**2. In Docker Container, Launch Nav2:**
+```bash
+# Source ROS2 environment
+source /opt/ros/jazzy/setup.bash
+source /workspace/build_ws/install/local_setup.sh
+
+# Launch Nav2 with Nova Carter
+ros2 launch carter_navigation carter_navigation.launch.py \
+    map:=/workspace/costnav_isaacsim/nav2_params/carter_sidewalk.yaml \
+    params_file:=/workspace/costnav_isaacsim/nav2_params/carter_navigation_params.yaml
+```
+
+**Configuration Files:**
+- **Map:** `/workspace/costnav_isaacsim/nav2_params/carter_sidewalk.yaml`
+- **Parameters:** `/workspace/costnav_isaacsim/nav2_params/carter_navigation_params.yaml`
+- **Map Image:** `/workspace/costnav_isaacsim/nav2_params/carter_sidewalk.png`
+
+### Docker Volume Mounting
+
+Ensure the following volumes are mounted in `docker-compose.yml`:
+```yaml
+volumes:
+  - /workspace/costnav_isaacsim/nav2_params:/workspace/costnav_isaacsim/nav2_params:ro
+```
 
 ---
 
-### Week 1: Docker Setup & ROS2 Bridge
+## Implementation Plan (4 Weeks) - ⏳ IN PROGRESS
+
+Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html), we are implementing Nav2 integration.
+
+**Status:**
+- ✅ Week 1: Docker Setup & ROS2 Bridge - Complete
+- ✅ Week 2: Nova Carter Setup & Occupancy Map - Complete
+- ⏳ Week 3: Nav2 Stack Configuration & Basic Navigation - Parameter tuning in progress
+- ⏳ Week 4: Cost Model Integration & Testing - In progress
+
+**Remaining Work:**
+- Parameter tuning for optimal Nova Carter performance
+- Start and goal sampling system implementation
+- Cost model integration (future)
+
+---
+
+### Week 1: Docker Setup & ROS2 Bridge - ✅ COMPLETE
 
 **Objective:** Set up multi-container architecture and establish ROS2 communication
 
 **Reference:** [Getting Started](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#getting-started) | [Nav2 Setup](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#nav2-setup)
 
 **Tasks:**
-- [ ] Create `Dockerfile.nav2` for ROS2/Nav2 container (based on `ros:humble-ros-base`)
-- [ ] Update `docker-compose.yml` with multi-container setup
-- [ ] Install Nav2 packages in ROS2 container
-- [ ] Configure shared Docker network and volumes
-- [ ] Enable `omni.isaac.ros2_bridge` extension in Isaac Sim
-- [ ] Verify ROS2 topics published from Isaac Sim (odom, tf, sensor data)
-- [ ] Test inter-container communication
+- [x] Create `Dockerfile.ros` for ROS2/Nav2 container (based on `ros:jazzy-ros-base`)
+- [x] Update `docker-compose.yml` with multi-container setup
+- [x] Install Nav2 packages in ROS2 container
+- [x] Configure shared Docker network and volumes
+- [x] Enable `omni.isaac.ros2_bridge` extension in Isaac Sim
+- [x] Verify ROS2 topics published from Isaac Sim (odom, tf, sensor data)
+- [x] Test inter-container communication
 
 **Deliverables:**
-- `Dockerfile.nav2`
-- `docker-compose.nav2.yml`
-- Working ROS2 bridge between containers
+- ✅ `/workspace/Dockerfile.ros`
+- ✅ `/workspace/docker-compose.yml`
+- ✅ Working ROS2 bridge between containers
 
 **Success Criteria:**
-- `ros2 topic list` shows Isaac Sim topics from Nav2 container
-- TF tree visualizes correctly
+- ✅ `ros2 topic list` shows Isaac Sim topics from Nav2 container
+- ✅ TF tree visualizes correctly
 
 ---
 
-### Week 2: COCO Robot Setup & Occupancy Map
+### Week 2: Nova Carter Setup & Occupancy Map - ✅ COMPLETE
 
-**Objective:** Adapt COCO robot for Nav2 and generate occupancy map
+**Objective:** Configure Nova Carter for Nav2 and generate occupancy map
 
 **Reference:** [Occupancy Map](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#occupancy-map)
 
 **Tasks:**
-- [ ] Create COCO robot URDF from USD (or adapt existing)
-- [ ] Configure `robot_state_publisher` for COCO robot
-- [ ] Set up joint state publishing from Isaac Sim
-- [ ] Generate occupancy map using Isaac Sim Occupancy Map Generator
-  - Configure bounds for COCO robot sensor height
+- [x] Configure Nova Carter robot in Isaac Sim
+- [x] Configure `robot_state_publisher` for Nova Carter
+- [x] Set up joint state publishing from Isaac Sim
+- [x] Generate occupancy map using Isaac Sim Occupancy Map Generator
+  - Configure bounds for Nova Carter sensor height
   - Export PNG + YAML in ROS format
-- [ ] Configure `map_server` in Nav2 container
-- [ ] Verify map visualization in RViz2
+- [x] Configure `map_server` in Nav2 container
+- [x] Verify map visualization in RViz2
 
 **Deliverables:**
-- COCO robot URDF
-- Occupancy map (PNG + YAML)
-- ROS2 launch file for robot description
+- ✅ Nova Carter robot configuration
+- ✅ Occupancy map (PNG + YAML) at `/workspace/costnav_isaacsim/nav2_params/carter_sidewalk.*`
+- ✅ ROS2 launch file for robot description
 
 **Success Criteria:**
-- Robot model displays in RViz2
-- Occupancy map loads correctly
+- ✅ Robot model displays in RViz2
+- ✅ Occupancy map loads correctly
 
 ---
 
-### Week 3: Nav2 Stack Configuration & Basic Navigation
+### Week 3: Nav2 Stack Configuration & Basic Navigation -(⏳ Parameter Tuning In Progress)
 
 **Objective:** Configure Nav2 components and achieve basic navigation
 
 **Reference:** [Running Nav2](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#running-nav2)
 
 **Tasks:**
-- [ ] Configure Nav2 parameters for COCO robot
+- [x] Configure Nav2 parameters for Nova Carter
   - Costmap configuration (global + local)
   - AMCL localization parameters
   - Planner server (NavFn or Smac)
   - Controller server (DWB or RPP)
   - Behavior server (recovery behaviors)
-- [ ] Create ROS2 launch file for Nav2 stack
-- [ ] Test navigation with RViz2 "Nav2 Goal" button
-- [ ] Tune parameters for COCO robot kinematics
+- [x] Create ROS2 launch file for Nav2 stack
+- [x] Test navigation with RViz2 "Nav2 Goal" button
+- [ ] ⏳ **Tune parameters for Nova Carter kinematics** (In Progress)
 
 **Deliverables:**
-- Nav2 configuration files (YAML)
-- Nav2 launch file
-- RViz2 configuration
+- ✅ Nav2 configuration files at `/workspace/costnav_isaacsim/nav2_params/carter_navigation_params.yaml`
+- ✅ Nav2 launch file (`carter_navigation.launch.py`)
+- ✅ RViz2 configuration
+- ⏳ Optimized parameters (in progress)
 
 **Success Criteria:**
-- Robot navigates to goals successfully
-- Avoids obstacles
-- Recovery behaviors work
+- ✅ Robot navigates to goals successfully
+- ✅ Avoids obstacles
+- ✅ Recovery behaviors work
+- ⏳ Parameters optimized for performance (in progress)
 
 ---
 
@@ -235,115 +314,33 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 **Reference:** [Sending Goals Programmatically](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#sending-goals-programmatically)
 
 **Tasks:**
-- [ ] Implement cost model tracker for Nav2 navigation
+- [x] Basic Nav2 integration complete
+- [x] Create programmatic goal sender (Python script)
+- [x] Document usage and API
+- [ ] Implement cost model tracker for Nav2 navigation (⏳ Future work)
   - Track energy consumption
   - Track time to goal
   - Track SLA compliance
   - Track collision/recovery events
-- [ ] Create programmatic goal sender (Python script)
-- [ ] Run benchmark scenarios (same as RL evaluation)
-- [ ] Compare Nav2 vs RL performance
-- [ ] Document results and findings
+- [ ] Run benchmark scenarios (same as RL evaluation) (⏳ Future work)
+- [ ] Compare Nav2 vs RL performance (⏳ Future work)
 
 **Deliverables:**
-- `nav2_cost_tracker.py`
-- Goal sender script
-- Benchmark comparison report
-- Documentation
+- ✅ Python launch script (`launch.py`)
+- ✅ Nav2 configuration files
+- ✅ Documentation
+- 📋 `nav2_cost_tracker.py` (future)
+- 📋 Benchmark comparison report (future)
 
 **Success Criteria:**
-- Cost metrics collected for Nav2 navigation
-- Comparison with RL baseline complete
-- Documentation published
+- ✅ Nav2 runs successfully with Nova Carter
+- ✅ Documentation published
+- ⏳ Cost metrics collection (future)
+- ⏳ Comparison with RL baseline (future)
 
 ---
 
 ## Technical Requirements
-
-### Software Dependencies
-
-**Docker Container Architecture:**
-
-```yaml
-# Multi-container setup
-containers:
-  isaac_sim:
-    base_image: nvcr.io/nvidia/isaac-sim:5.1.0
-    purpose: Robot simulation and sensor data generation
-    extensions:
-      - omni.isaac.ros2_bridge
-      - omni.isaac.sensor
-      - omni.isaac.range_sensor
-      - omni.isaac.wheeled_robots
-      - omni.anim.navigation.core
-      - omni.anim.navigation.bundle
-    network: costnav_network
-
-  nav2:
-    base_image: ros:humble-ros-base  # or ros:iron-ros-base
-    purpose: ROS2 Navigation Stack 2
-    packages: [see below]
-    network: costnav_network
-    depends_on: isaac_sim
-```
-
-**ROS2 Packages (Nav2 Container):**
-```yaml
-ros2_packages:
-  core:
-    - ros-humble-navigation2
-    - ros-humble-nav2-bringup
-    - ros-humble-nav2-common
-    - ros-humble-nav2-msgs
-
-  planners:
-    - ros-humble-nav2-navfn-planner
-    - ros-humble-nav2-smac-planner
-    - ros-humble-nav2-theta-star-planner
-
-  controllers:
-    - ros-humble-nav2-dwb-controller
-    - ros-humble-nav2-regulated-pure-pursuit-controller
-    - ros-humble-nav2-mppi-controller
-
-  utilities:
-    - ros-humble-nav2-costmap-2d
-    - ros-humble-nav2-lifecycle-manager
-    - ros-humble-nav2-map-server
-    - ros-humble-nav2-amcl
-    - ros-humble-robot-localization
-    - ros-humble-pointcloud-to-laserscan  # For RGB-D to LaserScan conversion
-
-  visualization:
-    - ros-humble-rviz2
-    - ros-humble-nav2-rviz-plugins
-    - ros-humble-tf2-tools
-
-  development:
-    - ros-humble-rqt
-    - ros-humble-rqt-common-plugins
-    - groot2  # Behavior tree visualization (optional)
-```
-
-**Python Dependencies (Nav2 Container):**
-```python
-# Add to Nav2 container requirements.txt
-rclpy>=3.3.0
-nav2-simple-commander>=1.0.0
-transforms3d>=0.4.1
-pyyaml>=6.0
-numpy>=1.24.0
-```
-
-**DDS Middleware (Both Containers):**
-```yaml
-# Recommended: CycloneDDS for better cross-container performance
-dds_middleware:
-  - ros-humble-rmw-cyclonedds-cpp
-
-# Alternative: FastDDS (default)
-# - ros-humble-rmw-fastrtps-cpp
-```
 
 ### Hardware Requirements
 
@@ -441,35 +438,7 @@ Initial Pose       ◄────────────── /initialpose (P
 - Use same ROS_DOMAIN_ID as Isaac Sim
 - Configure DDS middleware (CycloneDDS recommended)
 
-**Network Configuration:**
-```yaml
-# docker-compose.yml network settings
-networks:
-  costnav_network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
 
-# Environment variables for both containers
-environment:
-  - ROS_DOMAIN_ID=0
-  - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-  - CYCLONEDDS_URI=/config/cyclonedds.xml
-```
-
-**DDS Configuration (cyclonedds.xml):**
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<CycloneDDS xmlns="https://cdds.io/config">
-  <Domain id="any">
-    <General>
-      <NetworkInterfaceAddress>auto</NetworkInterfaceAddress>
-      <AllowMulticast>true</AllowMulticast>
-    </General>
-  </Domain>
-</CycloneDDS>
-```
 
 ### 2. Cost Model Integration
 
@@ -556,10 +525,7 @@ nav2_metrics = {
 - [Cost Model](cost_model.md)
 - [Training Guide](training_guide.md)
 
-### Academic Papers
-- Macenski, S., et al. (2020). "The Marathon 2: A Navigation System." IEEE/RSJ IROS.
-- Macenski, S., et al. (2023). "From the Lab to the Real World: Practical Considerations for Deploying Nav2."
-- CostNav Paper (forthcoming)
+
 
 ---
 
@@ -569,6 +535,7 @@ nav2_metrics = {
 |---------|------|--------|---------|
 | 0.1 | 2025-11-21 | CostNav Team | Initial draft |
 | 0.2 | 2025-11-21 | CostNav Team | Updated with multi-container architecture and official Isaac Sim Nav2 tutorial references |
+| 1.0 | 2025-12-10 | CostNav Team | Updated to reflect completed Nav2 integration with Nova Carter, removed network config, updated priorities |
 
 ---
 
