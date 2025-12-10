@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Script to evaluate a trained RL agent from RL-Games and collect statistics."""
+"""Script to evaluate a trained RL agent from skrl and collect statistics."""
 
 """Launch Isaac Sim Simulator first."""
 
@@ -13,7 +13,7 @@ import sys
 from isaaclab.app import AppLauncher
 
 # add argparse arguments
-parser = argparse.ArgumentParser(description="Evaluate a trained RL agent from RL-Games.")
+parser = argparse.ArgumentParser(description="Evaluate a trained RL agent from skrl.")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during evaluation.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument(
@@ -38,6 +38,20 @@ parser.add_argument(
 )
 parser.add_argument("--num_episodes", type=int, default=100, help="Number of episodes to evaluate.")
 parser.add_argument("--output_file", type=str, default=None, help="Path to save evaluation results (CSV).")
+parser.add_argument(
+    "--ml_framework",
+    type=str,
+    default="torch",
+    choices=["torch", "jax", "jax-numpy"],
+    help="The ML framework used for training the skrl agent.",
+)
+parser.add_argument(
+    "--algorithm",
+    type=str,
+    default="PPO",
+    choices=["AMP", "PPO", "IPPO", "MAPPO"],
+    help="The RL algorithm used for training the skrl agent.",
+)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
@@ -54,8 +68,6 @@ simulation_app = app_launcher.app
 
 """Rest everything follows."""
 
-
-import math
 import os
 import random
 import time
@@ -65,6 +77,7 @@ import costnav_isaaclab.tasks  # noqa: F401, E402
 import gymnasium as gym
 import isaaclab_tasks  # noqa: F401, E402
 import numpy as np
+import skrl
 import torch
 from costnav_isaaclab.env_helpers import (
     compute_contact_impulse_metrics,
@@ -78,20 +91,35 @@ from isaaclab.envs import (
     ManagerBasedRLEnvCfg,
     multi_agent_to_single_agent,
 )
-from isaaclab.utils.assets import retrieve_file_path
 from isaaclab.utils.dict import print_dict
 from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
-from isaaclab_rl.rl_games import RlGamesGpuEnv, RlGamesVecEnvWrapper
+from isaaclab_rl.skrl import SkrlVecEnvWrapper
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
-from rl_games.common import env_configurations, vecenv
-from rl_games.common.player import BasePlayer
-from rl_games.torch_runner import Runner
+from packaging import version
+
+# check for minimum supported skrl version
+SKRL_VERSION = "1.4.3"
+if version.parse(skrl.__version__) < version.parse(SKRL_VERSION):
+    skrl.logger.error(
+        f"Unsupported skrl version: {skrl.__version__}. "
+        f"Install supported version using 'pip install skrl>={SKRL_VERSION}'"
+    )
+    exit()
+
+if args_cli.ml_framework.startswith("torch"):
+    from skrl.utils.runner.torch import Runner
+elif args_cli.ml_framework.startswith("jax"):
+    from skrl.utils.runner.jax import Runner
+
+# config shortcuts
+algorithm = args_cli.algorithm.lower()
+agent_cfg_entry_point = "skrl_cfg_entry_point" if algorithm in ["ppo"] else f"skrl_{algorithm}_cfg_entry_point"
 
 
-@hydra_task_config(args_cli.task, "rl_games_cfg_entry_point")
-def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: dict):
-    """Evaluate RL-Games agent and collect statistics."""
+@hydra_task_config(args_cli.task, agent_cfg_entry_point)
+def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, experiment_cfg: dict):
+    """Evaluate skrl agent and collect statistics."""
     # grab task name for checkpoint path
     task_name = args_cli.task.split(":")[-1]
     train_task_name = task_name.replace("-Play", "")
@@ -100,56 +128,57 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
     env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
 
+    # configure the ML framework into the global skrl variable
+    if args_cli.ml_framework.startswith("jax"):
+        skrl.config.jax.backend = "jax" if args_cli.ml_framework == "jax" else "numpy"
+
     # randomly sample a seed if seed = -1
     if args_cli.seed == -1:
         args_cli.seed = random.randint(0, 10000)
 
-    agent_cfg["params"]["seed"] = args_cli.seed if args_cli.seed is not None else agent_cfg["params"]["seed"]
-    # set the environment seed (after multi-gpu config for updated rank from agent seed)
-    # note: certain randomizations occur in the environment initialization so we set the seed here
-    env_cfg.seed = agent_cfg["params"]["seed"]
+    # set the agent and environment seed from command line
+    experiment_cfg["seed"] = args_cli.seed if args_cli.seed is not None else experiment_cfg["seed"]
+    env_cfg.seed = experiment_cfg["seed"]
 
-    # specify directory for logging experiments
-    log_root_path = os.path.join("logs", "rl_games", agent_cfg["params"]["config"]["name"])
+    # specify directory for logging experiments (load checkpoint)
+    log_root_path = os.path.join("logs", "skrl", experiment_cfg["agent"]["experiment"]["directory"])
     log_root_path = os.path.abspath(log_root_path)
     print(f"[INFO] Loading experiment from directory: {log_root_path}")
-    # find checkpoint
+
+    # get checkpoint path
     if args_cli.use_pretrained_checkpoint:
-        resume_path = get_published_pretrained_checkpoint("rl_games", train_task_name)
+        resume_path = get_published_pretrained_checkpoint("skrl", train_task_name)
         if not resume_path:
             print("[INFO] Unfortunately a pre-trained checkpoint is currently unavailable for this task.")
             return
-    elif args_cli.checkpoint is None:
-        # specify directory for logging runs
-        run_dir = agent_cfg["params"]["config"].get("full_experiment_name", ".*")
+    elif args_cli.checkpoint:
+        resume_path = os.path.abspath(args_cli.checkpoint)
+    else:
         # specify name of checkpoint
         if args_cli.use_last_checkpoint:
             checkpoint_file = ".*"
         else:
-            # this loads the best checkpoint
-            checkpoint_file = f"{agent_cfg['params']['config']['name']}.pth"
-        # get path to previous checkpoint
-        resume_path = get_checkpoint_path(log_root_path, run_dir, checkpoint_file, other_dirs=["nn"])
-    else:
-        resume_path = retrieve_file_path(args_cli.checkpoint)
+            # this loads the best checkpoint (default behavior)
+            checkpoint_file = "best_agent.pt"
+        resume_path = get_checkpoint_path(
+            log_root_path,
+            run_dir=f".*_{algorithm}_{args_cli.ml_framework}",
+            checkpoint=checkpoint_file,
+            other_dirs=["checkpoints"],
+        )
     log_dir = os.path.dirname(os.path.dirname(resume_path))
-
-    # wrap around environment for rl-games
-    rl_device = agent_cfg["params"]["config"]["device"]
-    clip_obs = agent_cfg["params"]["env"].get("clip_observations", math.inf)
-    clip_actions = agent_cfg["params"]["env"].get("clip_actions", math.inf)
 
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
     # convert to single-agent instance if required by the RL algorithm
-    if isinstance(env.unwrapped, DirectMARLEnv):
+    if isinstance(env.unwrapped, DirectMARLEnv) and algorithm in ["ppo"]:
         env = multi_agent_to_single_agent(env)
 
     # wrap for video recording
     if args_cli.video:
         video_kwargs = {
-            "video_folder": os.path.join(log_root_path, log_dir, "videos", "eval"),
+            "video_folder": os.path.join(log_dir, "videos", "eval"),
             "step_trigger": lambda step: step == 0,
             "video_length": args_cli.video_length,
             "disable_logger": True,
@@ -158,8 +187,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         print_dict(video_kwargs, nesting=4)
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
-    # wrap around environment for rl-games
-    env = RlGamesVecEnvWrapper(env, rl_device, clip_obs, clip_actions)
+    # wrap around environment for skrl
+    env = SkrlVecEnvWrapper(env, ml_framework=args_cli.ml_framework)
 
     # find the underlying Isaac Lab env that exposes the scene and contact sensor
     base_env = get_env_with_scene(env)
@@ -170,28 +199,16 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     else:
         print("[INFO] Collision / work metrics enabled from contact_forces sensor (excluding wheels).")
 
-    # register the environment to rl-games registry
-    # note: in agents configuration: environment name must be "rlgpu"
-    vecenv.register(
-        "IsaacRlgWrapper",
-        lambda config_name, num_actors, **kwargs: RlGamesGpuEnv(config_name, num_actors, **kwargs),
-    )
-    env_configurations.register("rlgpu", {"vecenv_type": "IsaacRlgWrapper", "env_creator": lambda **kwargs: env})
+    # configure and instantiate the skrl runner
+    experiment_cfg["trainer"]["close_environment_at_exit"] = False
+    experiment_cfg["agent"]["experiment"]["write_interval"] = 0  # don't log to TensorBoard
+    experiment_cfg["agent"]["experiment"]["checkpoint_interval"] = 0  # don't generate checkpoints
+    runner = Runner(env, experiment_cfg)
 
-    # load previously trained model
-    agent_cfg["params"]["load_checkpoint"] = True
-    agent_cfg["params"]["load_path"] = resume_path
-    print(f"[INFO]: Loading model checkpoint from: {agent_cfg['params']['load_path']}")
-
-    # set number of actors into agent config
-    agent_cfg["params"]["config"]["num_actors"] = env.unwrapped.num_envs
-    # create runner from rl-games
-    runner = Runner()
-    runner.load(agent_cfg)
-    # obtain the agent from the runner
-    agent: BasePlayer = runner.create_player()
-    agent.restore(resume_path)
-    agent.reset()
+    print(f"[INFO] Loading model checkpoint from: {resume_path}")
+    runner.agent.load(resume_path)
+    # set agent to evaluation mode
+    runner.agent.set_running_mode("eval")
 
     print(f"\n{'=' * 80}")
     print("STARTING EVALUATION")
@@ -209,24 +226,25 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # Termination tracking
     termination_counts = defaultdict(int)
-    episode_terminations = []  # Store termination reason for each episode
+    episode_terminations = []
 
     num_envs = env.unwrapped.num_envs
-    current_episode_rewards = torch.zeros(num_envs, device=env.unwrapped.device)
-    current_episode_lengths = torch.zeros(num_envs, device=env.unwrapped.device, dtype=torch.int)
+    device = env.unwrapped.device
+    current_episode_rewards = torch.zeros(num_envs, device=device)
+    current_episode_lengths = torch.zeros(num_envs, device=device, dtype=torch.int)
 
     # Collision impulse metrics (per environment, per episode)
-    current_episode_collision_steps = torch.zeros(num_envs, device=env.unwrapped.device, dtype=torch.int)
-    current_episode_collision_impulse = torch.zeros(num_envs, device=env.unwrapped.device)
-    current_episode_collision_any = torch.zeros(num_envs, device=env.unwrapped.device, dtype=torch.bool)
+    current_episode_collision_steps = torch.zeros(num_envs, device=device, dtype=torch.int)
+    current_episode_collision_impulse = torch.zeros(num_envs, device=device)
+    current_episode_collision_any = torch.zeros(num_envs, device=device, dtype=torch.bool)
 
-    collision_dt = None  # Filled lazily from the contact sensor metrics
+    collision_dt = None
 
     # Navigation energy / power metrics (per environment, per episode)
-    current_episode_nav_energy = torch.zeros(num_envs, device=env.unwrapped.device)
-    current_episode_nav_power_max = torch.zeros(num_envs, device=env.unwrapped.device)
+    current_episode_nav_energy = torch.zeros(num_envs, device=device)
+    current_episode_nav_power_max = torch.zeros(num_envs, device=device)
 
-    nav_dt = None  # Filled lazily from the navigation energy helper
+    nav_dt = None
 
     # Get available termination terms from the environment
     termination_term_names = []
@@ -238,15 +256,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     total_steps = 0
 
     # reset environment
-    obs = env.reset()
-    if isinstance(obs, dict):
-        obs = obs["obs"]
-
-    # required: enables the flag for batched observations
-    _ = agent.get_batch_size(obs, 1)
-    # initialize RNN states if used
-    if agent.is_rnn:
-        agent.init_rnn()
+    obs, _ = env.reset()
 
     start_time = time.time()
 
@@ -254,15 +264,19 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     while simulation_app.is_running() and completed_episodes < args_cli.num_episodes:
         # run everything in inference mode
         with torch.inference_mode():
-            # convert obs to agent format
-            obs = agent.obs_to_torch(obs)
-            # agent stepping
-            actions = agent.get_action(obs, is_deterministic=agent.is_deterministic)
+            # agent stepping - get deterministic actions
+            outputs = runner.agent.act(obs, timestep=0, timesteps=0)
+            # extract deterministic actions (mean_actions for stochastic policies)
+            if hasattr(env, "possible_agents"):
+                actions = {a: outputs[-1][a].get("mean_actions", outputs[0][a]) for a in env.possible_agents}
+            else:
+                actions = outputs[-1].get("mean_actions", outputs[0])
             # env stepping
-            obs, rewards, dones, infos = env.step(actions)
+            obs, rewards, terminated, truncated, infos = env.step(actions)
+            dones = terminated | truncated
 
             # Track rewards and lengths
-            current_episode_rewards += rewards
+            current_episode_rewards += rewards.squeeze()
             current_episode_lengths += 1
             total_steps += num_envs
 
@@ -270,14 +284,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             if base_env is not None:
                 metrics = compute_contact_impulse_metrics(base_env)
                 if metrics is not None and metrics["max_force"] is not None:
-                    max_force = metrics["max_force"]  # (num_envs,)
+                    max_force = metrics["max_force"]
                     collision_mask = max_force > 0.0
 
-                    # lazily capture dt from metrics
                     if collision_dt is None:
                         collision_dt = metrics["dt"]
 
-                    # Approximate per-step collision impulse (N·s) and accumulate over collision steps.
                     step_impulse = metrics.get("total_impulse_dt")
                     if step_impulse is None:
                         step_impulse = metrics.get("max_impulse_dt")
@@ -292,7 +304,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                     current_episode_collision_steps += collision_mask.to(current_episode_collision_steps.dtype)
                     current_episode_collision_any |= collision_mask
 
-                # Navigation energy / power metrics based on m * g * v
+                # Navigation energy / power metrics
                 nav_metrics = compute_navigation_energy_step(base_env)
                 if nav_metrics is not None and nav_metrics.get("power") is not None:
                     if nav_dt is None:
@@ -300,7 +312,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
                     step_power = nav_metrics["power"].to(current_episode_nav_energy.device)
 
-                    # Integrate power over time to approximate energy consumption.
                     if nav_dt is not None:
                         step_energy = step_power * float(nav_dt)
                         current_episode_nav_energy += step_energy
@@ -308,8 +319,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                     current_episode_nav_power_max = torch.max(current_episode_nav_power_max, step_power)
 
             # Check for completed episodes
-            if len(dones) > 0:
-                done_indices = torch.where(dones)[0]
+            if dones.any():
+                done_indices = torch.where(dones.squeeze())[0]
 
                 for idx in done_indices:
                     # Episode-level reward/length
@@ -319,7 +330,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                     # Track termination reason
                     termination_reason = "unknown"
                     if hasattr(env.unwrapped, "termination_manager") and termination_term_names:
-                        # Check which termination term triggered
                         for term_name in termination_term_names:
                             term_value = env.unwrapped.termination_manager.get_term(term_name)
                             if term_value[idx]:
@@ -329,7 +339,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
                     episode_terminations.append(termination_reason)
 
-                    # Collect additional info from infos dict (if provided by env)
+                    # Collect additional info from infos dict
                     if isinstance(infos, dict):
                         for key, value in infos.items():
                             if isinstance(value, torch.Tensor) and value.numel() == num_envs:
@@ -337,14 +347,13 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
                     # Collision / work metrics for this finished episode
                     if base_env is not None:
-                        # Number of steps with non-zero collision force
                         episode_collision_steps = current_episode_collision_steps[idx].item()
                         episode_collision_impulse = current_episode_collision_impulse[idx].item()
 
                         episode_data["collision_steps"].append(episode_collision_steps)
                         episode_data["collision_impulse"].append(episode_collision_impulse)
 
-                        # Navigation energy / power metrics (m * g * v) for this finished episode
+                        # Navigation energy / power metrics
                         episode_nav_energy = current_episode_nav_energy[idx].item()
                         episode_nav_energy_kwh = episode_nav_energy / 3_600_000.0
                         episode_nav_power_max = current_episode_nav_power_max[idx].item()
@@ -384,40 +393,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                     current_episode_collision_any[idx] = False
                     current_episode_nav_energy[idx] = 0.0
                     current_episode_nav_power_max[idx] = 0.0
-
-                # reset rnn state for terminated episodes
-                if agent.is_rnn and agent.states is not None:
-                    for s in agent.states:
-                        s[:, dones, :] = 0.0
-
-                    episode_terminations.append(termination_reason)
-
-                    # Collect additional info if available
-                    if isinstance(infos, dict):
-                        for key, value in infos.items():
-                            if isinstance(value, torch.Tensor) and value.numel() == num_envs:
-                                episode_data[key].append(value[idx].item())
-
-                    completed_episodes += 1
-
-                    # Print progress
-                    if completed_episodes % 10 == 0:
-                        elapsed = time.time() - start_time
-                        print(
-                            f"[{completed_episodes}/{args_cli.num_episodes}] "
-                            f"Avg Reward: {np.mean(episode_rewards):.2f} ± {np.std(episode_rewards):.2f} | "
-                            f"Avg Length: {np.mean(episode_lengths):.1f} | "
-                            f"Time: {elapsed:.1f}s"
-                        )
-
-                    # Reset tracking for this environment
-                    current_episode_rewards[idx] = 0
-                    current_episode_lengths[idx] = 0
-
-                # reset rnn state for terminated episodes
-                if agent.is_rnn and agent.states is not None:
-                    for s in agent.states:
-                        s[:, dones, :] = 0.0
 
     # Calculate final statistics
     elapsed_time = time.time() - start_time

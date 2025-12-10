@@ -63,7 +63,7 @@ import costnav_isaaclab.tasks  # noqa: F401
 import gymnasium as gym
 import isaaclab_tasks  # noqa: F401
 import torch
-from costnav_isaaclab.rl_games_helpers import compute_contact_impulse_metrics, get_env_with_scene
+from costnav_isaaclab.env_helpers import compute_contact_impulse_metrics, get_env_with_scene
 from isaaclab.envs import (
     DirectMARLEnv,
     DirectMARLEnvCfg,

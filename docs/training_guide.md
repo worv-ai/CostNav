@@ -124,6 +124,56 @@ python scripts/rl_games/train.py \
 
 ---
 
+## :jigsaw: Training with SKRL
+
+### :rocket: Basic Training Command
+
+```bash
+cd costnav_isaaclab
+python scripts/skrl/train.py \
+    --task=Template-Costnav-Isaaclab-v2-NavRL \
+    --enable_cameras \
+    --headless
+```
+
+### :keyboard: SKRL Command-Line Arguments
+
+#### Basic Arguments
+
+```bash
+--task=TASK_NAME     # Environment name (required)
+--enable_cameras     # Enable RGB-D camera observations
+--headless           # Run without GUI (faster)
+--num_envs=64        # Number of parallel environments
+--seed=42            # Random seed
+--checkpoint=PATH    # Resume from specific checkpoint
+```
+
+#### Wandb Tracking
+
+```bash
+--track                        # Enable wandb tracking
+--wandb-project-name=PROJECT   # Wandb project name
+--wandb-entity=ENTITY          # Wandb entity (username or team)
+--wandb-name=RUN_NAME          # Custom run name
+```
+
+??? example "Full Training Command with Wandb"
+
+    ```bash
+    python scripts/skrl/train.py \
+        --task=Template-Costnav-Isaaclab-v2-NavRL \
+        --enable_cameras \
+        --headless \
+        --num_envs=64 \
+        --track \
+        --wandb-project-name=costnav \
+        --wandb-entity=my-team \
+        --wandb-name=skrl-ppo-run-1
+    ```
+
+---
+
 ## :gear: Training Configuration
 
 ### PPO Hyperparameters

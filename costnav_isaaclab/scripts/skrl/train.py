@@ -44,6 +44,15 @@ parser.add_argument(
     choices=["AMP", "PPO", "IPPO", "MAPPO"],
     help="The RL algorithm used for training the skrl agent.",
 )
+parser.add_argument("--wandb-project-name", type=str, default=None, help="the wandb's project name")
+parser.add_argument("--wandb-entity", type=str, default=None, help="the entity (team) of wandb's project")
+parser.add_argument("--wandb-name", type=str, default=None, help="the name of wandb's run")
+parser.add_argument(
+    "--track",
+    action="store_true",
+    default=False,
+    help="if toggled, this experiment will be tracked with Weights and Biases",
+)
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -62,11 +71,11 @@ simulation_app = app_launcher.app
 
 """Rest everything follows."""
 
-import gymnasium as gym
 import os
 import random
 from datetime import datetime
 
+import gymnasium as gym
 import skrl
 from packaging import version
 
@@ -84,6 +93,8 @@ if args_cli.ml_framework.startswith("torch"):
 elif args_cli.ml_framework.startswith("jax"):
     from skrl.utils.runner.jax import Runner
 
+import costnav_isaaclab.tasks  # noqa: F401
+import isaaclab_tasks  # noqa: F401
 from isaaclab.envs import (
     DirectMARLEnv,
     DirectMARLEnvCfg,
@@ -94,13 +105,8 @@ from isaaclab.envs import (
 from isaaclab.utils.assets import retrieve_file_path
 from isaaclab.utils.dict import print_dict
 from isaaclab.utils.io import dump_pickle, dump_yaml
-
 from isaaclab_rl.skrl import SkrlVecEnvWrapper
-
-import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils.hydra import hydra_task_config
-
-import costnav_isaaclab.tasks  # noqa: F401
 
 # config shortcuts
 algorithm = args_cli.algorithm.lower()
@@ -181,14 +187,137 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # wrap around environment for skrl
     env = SkrlVecEnvWrapper(env, ml_framework=args_cli.ml_framework)  # same as: `wrap_env(env, wrapper="auto")`
 
-    # configure and instantiate the skrl runner
-    # https://skrl.readthedocs.io/en/latest/api/utils/runner.html
-    runner = Runner(env, agent_cfg)
+    # Check if custom models are enabled
+    custom_model_cfg = agent_cfg.get("custom_model", {})
+    use_custom_models = custom_model_cfg.get("enabled", False)
+
+    if use_custom_models:
+        # Import and instantiate custom models
+        import importlib
+
+        module_path = custom_model_cfg["module"]
+        factory_name = custom_model_cfg["factory"]
+        model_params = custom_model_cfg.get("params", {})
+
+        print(f"[INFO] Using custom models from {module_path}.{factory_name}")
+
+        # Import the factory function
+        module = importlib.import_module(module_path)
+        factory_fn = getattr(module, factory_name)
+
+        # Create custom models
+        models = factory_fn(
+            observation_space=env.observation_space,
+            action_space=env.action_space,
+            device=env.device,
+            **model_params,
+        )
+
+        # Create agent and trainer manually with custom models
+        from skrl.agents.torch.ppo import PPO
+        from skrl.memories.torch import RandomMemory
+        from skrl.trainers.torch import SequentialTrainer
+
+        # Configure memory
+        memory_cfg = agent_cfg.get("memory", {})
+        memory_size = memory_cfg.get("memory_size", -1)
+        if memory_size == -1:
+            memory_size = agent_cfg["agent"]["rollouts"]
+        memory = RandomMemory(memory_size=memory_size, num_envs=env.num_envs, device=env.device)
+
+        # Configure PPO agent
+        ppo_cfg = agent_cfg["agent"].copy()
+        ppo_cfg.pop("class", None)  # Remove class key
+
+        # Handle learning rate scheduler
+        lr_scheduler = ppo_cfg.pop("learning_rate_scheduler", None)
+        lr_scheduler_kwargs = ppo_cfg.pop("learning_rate_scheduler_kwargs", {})
+        if lr_scheduler == "KLAdaptiveLR":
+            from skrl.resources.schedulers.torch import KLAdaptiveLR
+
+            ppo_cfg["learning_rate_scheduler"] = KLAdaptiveLR
+            ppo_cfg["learning_rate_scheduler_kwargs"] = lr_scheduler_kwargs or {}
+
+        # Handle state/value preprocessors
+        state_preprocessor = ppo_cfg.pop("state_preprocessor", None)
+        ppo_cfg.pop("state_preprocessor_kwargs", None)  # Remove from config, we'll set our own
+        if state_preprocessor == "RunningStandardScaler":
+            from skrl.resources.preprocessors.torch import RunningStandardScaler
+
+            ppo_cfg["state_preprocessor"] = RunningStandardScaler
+            ppo_cfg["state_preprocessor_kwargs"] = {"size": env.observation_space, "device": env.device}
+
+        value_preprocessor = ppo_cfg.pop("value_preprocessor", None)
+        ppo_cfg.pop("value_preprocessor_kwargs", None)  # Remove from config, we'll set our own
+        if value_preprocessor == "RunningStandardScaler":
+            from skrl.resources.preprocessors.torch import RunningStandardScaler
+
+            ppo_cfg["value_preprocessor"] = RunningStandardScaler
+            ppo_cfg["value_preprocessor_kwargs"] = {"size": 1, "device": env.device}
+
+        # Create PPO agent
+        agent = PPO(
+            models=models,
+            memory=memory,
+            observation_space=env.observation_space,
+            action_space=env.action_space,
+            device=env.device,
+            cfg=ppo_cfg,
+        )
+
+        # Configure trainer
+        trainer_cfg = agent_cfg.get("trainer", {}).copy()
+        trainer_cfg.pop("class", None)
+        trainer = SequentialTrainer(env=env, agents=agent, cfg=trainer_cfg)
+
+        # Create a simple runner-like object for compatibility
+        class CustomRunner:
+            def __init__(self, agent, trainer):
+                self.agent = agent
+                self.trainer = trainer
+
+            def run(self, mode="train"):
+                if mode == "train":
+                    self.trainer.train()
+                else:
+                    self.trainer.eval()
+
+        runner = CustomRunner(agent, trainer)
+    else:
+        # Use standard Runner with model instantiators
+        # configure and instantiate the skrl runner
+        # https://skrl.readthedocs.io/en/latest/api/utils/runner.html
+        runner = Runner(env, agent_cfg)
 
     # load checkpoint (if specified)
     if resume_path:
         print(f"[INFO] Loading model checkpoint from: {resume_path}")
         runner.agent.load(resume_path)
+
+    # initialize wandb tracking (if specified)
+    global_rank = int(os.getenv("RANK", "0"))
+    if args_cli.track and global_rank == 0:
+        if args_cli.wandb_entity is None:
+            raise ValueError("Weights and Biases entity must be specified for tracking.")
+        import wandb
+
+        wandb_project = (
+            agent_cfg["agent"]["experiment"]["directory"]
+            if args_cli.wandb_project_name is None
+            else args_cli.wandb_project_name
+        )
+        experiment_name = log_dir if args_cli.wandb_name is None else args_cli.wandb_name
+
+        wandb.init(
+            project=wandb_project,
+            entity=args_cli.wandb_entity,
+            name=experiment_name,
+            sync_tensorboard=True,
+            monitor_gym=True,
+            save_code=True,
+        )
+        wandb.config.update({"env_cfg": env_cfg.to_dict()})
+        wandb.config.update({"agent_cfg": agent_cfg})
 
     # run training
     runner.run()

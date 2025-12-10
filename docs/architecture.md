@@ -64,7 +64,7 @@ graph TB
 costnav_isaaclab/source/costnav_isaaclab/costnav_isaaclab/
 ├── __init__.py                    # Package initialization, environment registration
 ├── compat.py                      # Compatibility layer for Gymnasium and Isaac Lab
-├── rl_games_helpers.py           # Helper functions for RL-Games integration
+├── env_helpers.py           # Helper functions for RL-Games integration
 ├── ui_extension_example.py       # UI extension example
 └── tasks/                        # Task implementations
     └── manager_based/            # Manager-based environment tasks
@@ -305,7 +305,7 @@ CostNav extends Isaac Lab's `ManagerBasedRLEnv`:
 
 ## :chart_with_upwards_trend: Cost Model Integration
 
-The `rl_games_helpers.py` module provides cost model integration:
+The `env_helpers.py` module provides cost model integration:
 
 ```mermaid
 graph LR
