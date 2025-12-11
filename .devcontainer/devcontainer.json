@@ -1,10 +1,23 @@
 {
-  "name": "CostNav - Isaac Lab",
+  // =============================================================================
+  // CostNav Dev Container Configuration
+  // =============================================================================
+  // To select a different service, set environment variables before opening:
+  //
+  //   export DEVCONTAINER_SERVICE=isaac-lab
+  //
+  // Or add to your .env file (copy from .env.example)
+  //
+  // Available services: isaac-sim (default), isaac-lab, dev, ros2
+  // See docker-compose.yml for full service definitions.
+  // =============================================================================
+  "name": "CostNav",
   "dockerComposeFile": "../docker-compose.yml",
-  "service": "isaac-lab",
+  "service": "${localEnv:DEVCONTAINER_SERVICE:isaac-sim}",
   "runServices": [
-    "isaac-lab"
+    "${localEnv:DEVCONTAINER_SERVICE:isaac-sim}"
   ],
+  "overrideCommand": true,
   "workspaceFolder": "/workspace",
   "remoteUser": "root",
   "customizations": {
@@ -13,7 +26,8 @@
         "ms-python.python",
         "ms-python.vscode-pylance",
         "charliermarsh.ruff",
-        "Augment.vscode-augment"
+        "Augment.vscode-augment",
+        "ms-vscode.cpptools"
       ],
       "settings": {
         "python.defaultInterpreterPath": "/isaac-sim/kit/python/bin/python3",

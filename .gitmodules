@@ -4,3 +4,6 @@
 [submodule "third_party/urban-sim"]
 	path = third_party/urban-sim
 	url = https://github.com/metadriverse/urban-sim.git
+[submodule "third_party/IsaacSim-ros_workspaces"]
+	path = third_party/IsaacSim-ros_workspaces
+	url = https://github.com/isaac-sim/IsaacSim-ros_workspaces.git
