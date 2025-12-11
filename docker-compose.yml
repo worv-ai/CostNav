@@ -1,3 +1,30 @@
+# Define a reusable block for ROS2 service configuration
+# Mounts the pre-built Isaac Sim ROS workspace from the host
+# The workspace should be built using: ./third_party/IsaacSim-ros_workspaces/build_ros.sh -d jazzy
+x-ros2-service: &ros2-service
+  build:
+    context: .
+    dockerfile: Dockerfile.ros
+  image: costnav-ros2-jazzy:${COSTNAV_VERSION:-0.1.0}
+  environment:
+    - ROS_DISTRO=jazzy
+    - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+    - DISPLAY=${DISPLAY:-:0}
+    - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
+  volumes:
+    - ./third_party/IsaacSim-ros_workspaces/build_ws/jazzy/isaac_sim_ros_ws:/workspace/build_ws:rw
+    - ./costnav_isaacsim/nav2_params:/workspace/nav2_params:ro
+    - /tmp/.X11-unix:/tmp/.X11-unix:rw
+  working_dir: /workspace
+  command: >
+    bash -c "source /opt/ros/jazzy/setup.bash &&
+             source /workspace/build_ws/install/local_setup.sh &&
+             ros2 launch carter_navigation carter_navigation.launch.py map:=/workspace/nav2_params/carter_sidewalk.yaml params_file:=/workspace/nav2_params/carter_navigation_params.yaml"
+  network_mode: host
+  stdin_open: true
+  tty: true
+
 services:
   # Isaac Sim environment
   isaac-sim:
@@ -125,63 +152,16 @@ services:
     command: sleep infinity
 
   # ROS2 Jazzy Runtime Container
-  # Mounts the pre-built Isaac Sim ROS workspace from the host
-  # The workspace should be built using: ./third_party/IsaacSim-ros_workspaces/build_ros.sh -d jazzy
   ros2:
+    <<: *ros2-service
     profiles: ["ros2"]
-    build:
-      context: .
-      dockerfile: Dockerfile.ros
-    image: costnav-ros2-jazzy:${COSTNAV_VERSION:-0.1.0}
     container_name: costnav-ros2
-    environment:
-      - ROS_DISTRO=jazzy
-      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
-      - DISPLAY=${DISPLAY:-:0}
-      - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
-    volumes:
-      # Mount the pre-built Isaac Sim ROS workspace (already compiled with colcon build)
-      - ./third_party/IsaacSim-ros_workspaces/build_ws/jazzy/isaac_sim_ros_ws:/workspace/build_ws:rw
-      # Mount nav2 parameters and map files for Carter navigation
-      - ./costnav_isaacsim/nav2_params:/workspace/nav2_params:ro
-      # X11 display forwarding for GUI applications like rviz2
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
-    working_dir: /workspace
-    command: >
-      bash -c "source /opt/ros/jazzy/setup.bash &&
-               source /workspace/build_ws/install/local_setup.sh &&
-               ros2 launch carter_navigation carter_navigation.launch.py map:=/workspace/nav2_params/carter_sidewalk.yaml params_file:=/workspace/nav2_params/carter_navigation_params.yaml"
-    network_mode: host
-    stdin_open: true
-    tty: true
 
   # ROS2 with Nav2 - waits for Isaac Sim to be healthy before starting
   ros2-nav2:
+    <<: *ros2-service
     profiles: ["nav2"]
-    build:
-      context: .
-      dockerfile: Dockerfile.ros
-    image: costnav-ros2-jazzy:${COSTNAV_VERSION:-0.1.0}
     container_name: costnav-ros2-nav2
     depends_on:
       isaac-sim:
         condition: service_healthy
-    environment:
-      - ROS_DISTRO=jazzy
-      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
-      - DISPLAY=${DISPLAY:-:0}
-      - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
-    volumes:
-      - ./third_party/IsaacSim-ros_workspaces/build_ws/jazzy/isaac_sim_ros_ws:/workspace/build_ws:rw
-      - ./costnav_isaacsim/nav2_params:/workspace/nav2_params:ro
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
-    working_dir: /workspace
-    command: >
-      bash -c "source /opt/ros/jazzy/setup.bash &&
-               source /workspace/build_ws/install/local_setup.sh &&
-               ros2 launch carter_navigation carter_navigation.launch.py map:=/workspace/nav2_params/carter_sidewalk.yaml params_file:=/workspace/nav2_params/carter_navigation_params.yaml"
-    network_mode: host
-    stdin_open: true
-    tty: true

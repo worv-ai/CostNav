@@ -137,20 +137,20 @@ docking_server:
       projection_time: 5.0
       simulation_step: 0.1
       dock_collision_threshold: 0.3
-      
-velocity_smoother: 
-  ros__parameters: 
+
+velocity_smoother:
+  ros__parameters:
     use_sim_time: True
-    smoothing_frequency: 20.0 
-    scale_velocities: false 
-    feedback: "OPEN_LOOP" 
-    max_velocity: [0.8, 0.0, 0.7] 
-    min_velocity: [-0.8, 0.0, -0.7] 
-    # deadband_velocity: [0.0, 0.0, 0.0] 
-    velocity_timeout: 1.0 
-    # max_accel: [1.0, 0.0, 1.25] 
-    # max_decel: [-1.0, 0.0, -1.25] 
-    odom_topic: "chassis/odom" 
+    smoothing_frequency: 20.0
+    scale_velocities: false
+    feedback: "OPEN_LOOP"
+    max_velocity: [0.8, 0.0, 0.7]
+    min_velocity: [-0.8, 0.0, -0.7]
+    # deadband_velocity: [0.0, 0.0, 0.0]
+    velocity_timeout: 1.0
+    # max_accel: [1.0, 0.0, 1.25]
+    # max_decel: [-1.0, 0.0, -1.25]
+    odom_topic: "chassis/odom"
     odom_duration: 0.1
 
 controller_server:
@@ -223,7 +223,7 @@ controller_server:
       RotateToGoal.scale: 32.0
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
-        
+
 
 local_costmap:
   local_costmap:
@@ -252,7 +252,7 @@ local_costmap:
         enabled: True
         cost_scaling_factor: 3.0
         inflation_radius: 0.8
-        
+
       front_2d_lidar_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -397,7 +397,6 @@ collision_monitor:
 map_server:
   ros__parameters:
     use_sim_time: True
-    yaml_filename: "carter_warehouse_navigation.yaml"
 
 map_saver:
   ros__parameters:
@@ -469,4 +468,3 @@ waypoint_follower:
       plugin: "nav2_waypoint_follower::WaitAtWaypoint"
       enabled: True
       waypoint_pause_duration: 200
-
