@@ -12,12 +12,14 @@
   // See docker-compose.yml for full service definitions.
   // =============================================================================
   "name": "CostNav",
-  "dockerComposeFile": "../docker-compose.yml",
+  "dockerComposeFile": [
+    "../docker-compose.yml",
+    "docker-compose.override.yml"
+  ],
   "service": "${localEnv:DEVCONTAINER_SERVICE:isaac-sim}",
   "runServices": [
     "${localEnv:DEVCONTAINER_SERVICE:isaac-sim}"
   ],
-  "overrideCommand": true,
   "workspaceFolder": "/workspace",
   "remoteUser": "root",
   "customizations": {
