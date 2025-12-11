@@ -203,7 +203,93 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, expe
     experiment_cfg["trainer"]["close_environment_at_exit"] = False
     experiment_cfg["agent"]["experiment"]["write_interval"] = 0  # don't log to TensorBoard
     experiment_cfg["agent"]["experiment"]["checkpoint_interval"] = 0  # don't generate checkpoints
-    runner = Runner(env, experiment_cfg)
+
+    # Check if custom models are enabled
+    custom_model_cfg = experiment_cfg.get("custom_model", {})
+    use_custom_models = custom_model_cfg.get("enabled", False)
+
+    if use_custom_models:
+        # Import and instantiate custom models
+        import importlib
+
+        module_path = custom_model_cfg["module"]
+        factory_name = custom_model_cfg["factory"]
+        model_params = custom_model_cfg.get("params", {})
+
+        print(f"[INFO] Using custom models from {module_path}.{factory_name}")
+
+        # Import the factory function
+        module = importlib.import_module(module_path)
+        factory_fn = getattr(module, factory_name)
+
+        # Create custom models
+        models = factory_fn(
+            observation_space=env.observation_space,
+            action_space=env.action_space,
+            device=env.device,
+            **model_params,
+        )
+
+        # Create agent manually with custom models
+        from skrl.agents.torch.ppo import PPO
+        from skrl.memories.torch import RandomMemory
+
+        # Configure memory
+        memory_cfg = experiment_cfg.get("memory", {})
+        memory_size = memory_cfg.get("memory_size", -1)
+        if memory_size == -1:
+            memory_size = experiment_cfg["agent"]["rollouts"]
+        memory = RandomMemory(memory_size=memory_size, num_envs=env.num_envs, device=env.device)
+
+        # Configure PPO agent
+        ppo_cfg = experiment_cfg["agent"].copy()
+        ppo_cfg.pop("class", None)  # Remove class key
+
+        # Handle learning rate scheduler
+        lr_scheduler = ppo_cfg.pop("learning_rate_scheduler", None)
+        lr_scheduler_kwargs = ppo_cfg.pop("learning_rate_scheduler_kwargs", {})
+        if lr_scheduler == "KLAdaptiveLR":
+            from skrl.resources.schedulers.torch import KLAdaptiveLR
+
+            ppo_cfg["learning_rate_scheduler"] = KLAdaptiveLR
+            ppo_cfg["learning_rate_scheduler_kwargs"] = lr_scheduler_kwargs or {}
+
+        # Handle state/value preprocessors
+        state_preprocessor = ppo_cfg.pop("state_preprocessor", None)
+        ppo_cfg.pop("state_preprocessor_kwargs", None)  # Remove from config, we'll set our own
+        if state_preprocessor == "RunningStandardScaler":
+            from skrl.resources.preprocessors.torch import RunningStandardScaler
+
+            ppo_cfg["state_preprocessor"] = RunningStandardScaler
+            ppo_cfg["state_preprocessor_kwargs"] = {"size": env.observation_space, "device": env.device}
+
+        value_preprocessor = ppo_cfg.pop("value_preprocessor", None)
+        ppo_cfg.pop("value_preprocessor_kwargs", None)  # Remove from config, we'll set our own
+        if value_preprocessor == "RunningStandardScaler":
+            from skrl.resources.preprocessors.torch import RunningStandardScaler
+
+            ppo_cfg["value_preprocessor"] = RunningStandardScaler
+            ppo_cfg["value_preprocessor_kwargs"] = {"size": 1, "device": env.device}
+
+        # Create PPO agent
+        agent = PPO(
+            models=models,
+            memory=memory,
+            observation_space=env.observation_space,
+            action_space=env.action_space,
+            device=env.device,
+            cfg=ppo_cfg,
+        )
+
+        # Create a simple runner-like object for compatibility
+        class CustomRunner:
+            def __init__(self, agent):
+                self.agent = agent
+
+        runner = CustomRunner(agent)
+    else:
+        # Use standard Runner with model instantiators
+        runner = Runner(env, experiment_cfg)
 
     print(f"[INFO] Loading model checkpoint from: {resume_path}")
     runner.agent.load(resume_path)
