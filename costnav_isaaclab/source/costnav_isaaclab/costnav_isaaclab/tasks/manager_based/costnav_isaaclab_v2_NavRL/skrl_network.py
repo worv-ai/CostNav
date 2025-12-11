@@ -17,10 +17,6 @@ import torch
 import torch.nn as nn
 from skrl.models.torch import DeterministicMixin, GaussianMixin, Model
 
-# =============================================================================
-# CNN Building Blocks (matching rl_games_network.py)
-# =============================================================================
-
 
 class Conv2dAuto(nn.Conv2d):
     """Conv2d layer with automatic padding based on kernel size."""
@@ -138,17 +134,22 @@ def _build_mlp(input_size: int, units: list, activation: type = nn.ELU) -> nn.Se
 
 
 # =============================================================================
-# skrl Model Classes
+# skrl Shared Model Class
 # =============================================================================
 
 
-class MixInputPolicy(GaussianMixin, Model):
-    """Policy network for mixed input (CNN + MLP) observations.
+class MixInputSharedModel(GaussianMixin, DeterministicMixin, Model):
+    """Shared model for mixed input (CNN + MLP) observations.
 
-    This model processes:
-    - Vector observations (goal commands, robot state) through an MLP
-    - Visual observations (RGB-D images) through an IMPALA CNN
-    - Fuses both branches and outputs action mean and log_std for Gaussian policy
+    This model implements a shared backbone architecture matching rl_games_network.py:
+    - Shared CNN branch for processing visual observations (RGB-D images)
+    - Shared MLP branch for processing vector observations (goal commands, robot state)
+    - Shared fusion MLP that combines both branches
+    - Separate policy head (mu, sigma) for action distribution
+    - Separate value head for state value estimation
+
+    The CNN and MLP backbone are shared between policy and value, reducing parameters
+    and enabling efficient single forward-pass computation.
     """
 
     def __init__(
@@ -165,8 +166,15 @@ class MixInputPolicy(GaussianMixin, Model):
         cnn_input_shape: tuple = DEFAULT_CNN_INPUT_SHAPE,
         conv_depths: list = None,
         mlp_units: list = None,
+        fixed_sigma: bool = True,
+        mu_activation: str = "None",
+        sigma_activation: str = "None",
+        value_activation: str = "None",
     ):
+        # Initialize base Model class first (required by skrl)
         Model.__init__(self, observation_space, action_space, device)
+
+        # Initialize both mixins with their respective roles
         GaussianMixin.__init__(
             self,
             clip_actions=clip_actions,
@@ -175,62 +183,119 @@ class MixInputPolicy(GaussianMixin, Model):
             max_log_std=max_log_std,
             role="policy",
         )
+        DeterministicMixin.__init__(self, clip_actions=False, role="value")
 
+        # Store configuration
         self.vector_obs_size = vector_obs_size
         self.cnn_input_shape = cnn_input_shape
         self.conv_depths = conv_depths if conv_depths is not None else DEFAULT_CONV_DEPTHS
         self.mlp_units = mlp_units if mlp_units is not None else DEFAULT_MLP_UNITS
         self.image_flat_size = cnn_input_shape[0] * cnn_input_shape[1] * cnn_input_shape[2]
+        self.fixed_sigma = fixed_sigma
 
-        # Build CNN branch for visual observations
+        # =================================================================
+        # SHARED BACKBONE (matching rl_games_network.py shared architecture)
+        # =================================================================
+
+        # Shared CNN branch for visual observations
         self.cnn = build_impala_cnn(cnn_input_shape[0], self.conv_depths)
         cnn_out_size = calc_cnn_output_size(self.cnn, cnn_input_shape)
 
-        # Build pre-MLP for vector observations
+        # Shared pre-MLP for vector observations
         self.pre_mlp = _build_mlp(vector_obs_size, self.mlp_units)
         pre_mlp_out_size = self.mlp_units[-1] if self.mlp_units else vector_obs_size
 
-        # Build main MLP for fused features
+        # Shared main MLP for fused features
         fused_size = cnn_out_size + pre_mlp_out_size
         self.main_mlp = _build_mlp(fused_size, self.mlp_units)
         main_mlp_out_size = self.mlp_units[-1] if self.mlp_units else fused_size
 
-        # Activation for CNN output
+        # Shared activation for CNN output (matching rl_games)
         self.flatten_act = nn.ReLU()
 
-        # Policy head: outputs action mean
-        self.action_head = nn.Linear(main_mlp_out_size, self.num_actions)
+        # =================================================================
+        # POLICY HEAD (mu and sigma for Gaussian policy)
+        # =================================================================
 
-        # Learnable log_std parameter
-        self.log_std_parameter = nn.Parameter(torch.full((self.num_actions,), initial_log_std))
+        self.mu = nn.Linear(main_mlp_out_size, self.num_actions)
+        self.mu_act = self._get_activation(mu_activation)
 
-        # Initialize weights
-        self._init_weights()
+        self.sigma_act = self._get_activation(sigma_activation)
+        if fixed_sigma:
+            # Learnable parameter (not state-dependent), matching rl_games
+            self.sigma = nn.Parameter(
+                torch.zeros(self.num_actions, requires_grad=True, dtype=torch.float32),
+                requires_grad=True,
+            )
+        else:
+            # State-dependent sigma
+            self.sigma = nn.Linear(main_mlp_out_size, self.num_actions)
 
-    def _init_weights(self):
-        """Initialize network weights using orthogonal initialization."""
+        # =================================================================
+        # VALUE HEAD (scalar value estimate)
+        # =================================================================
+
+        self.value = nn.Linear(main_mlp_out_size, 1)
+        self.value_act = self._get_activation(value_activation)
+
+        # Cache for shared output (enables single forward-pass optimization)
+        self._shared_output = None
+
+        # Initialize weights (matching rl_games initialization)
+        self._init_weights(initial_log_std)
+
+    def _get_activation(self, name: str) -> nn.Module:
+        """Get activation function by name (matching rl_games activations_factory)."""
+        activations = {
+            "None": nn.Identity(),
+            "none": nn.Identity(),
+            "relu": nn.ReLU(),
+            "tanh": nn.Tanh(),
+            "sigmoid": nn.Sigmoid(),
+            "elu": nn.ELU(),
+            "selu": nn.SELU(),
+            "swish": nn.SiLU(),
+            "gelu": nn.GELU(),
+            "softplus": nn.Softplus(),
+        }
+        return activations.get(name, nn.Identity())
+
+    def _init_weights(self, initial_log_std: float = 0.0):
+        """Initialize network weights matching rl_games initialization.
+
+        rl_games uses "default" initializer which means no explicit initialization,
+        keeping PyTorch's default (Kaiming uniform for nn.Linear).
+
+        - CNN layers: Kaiming normal initialization (explicitly set in rl_games)
+        - MLP layers: Default (PyTorch Kaiming uniform) - no explicit init
+        - mu layer: Default (PyTorch Kaiming uniform) - no explicit init
+        - sigma: Constant initialization with initial_log_std (const_initializer with val: 0)
+        - value layer: Default (PyTorch Kaiming uniform) - no explicit init
+        """
+        # Initialize CNN layers with Kaiming normal
         for module in self.modules():
-            if isinstance(module, nn.Linear):
-                nn.init.orthogonal_(module.weight, gain=1.0)
-                if module.bias is not None:
-                    nn.init.zeros_(module.bias)
-            elif isinstance(module, nn.Conv2d):
-                nn.init.orthogonal_(module.weight, gain=1.0)
+            if isinstance(module, nn.Conv2d):
+                nn.init.kaiming_normal_(module.weight, mode="fan_out", nonlinearity="relu")
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
 
-    def compute(self, inputs, role):
-        """Compute action mean and log_std from observations.
+        # Initialize sigma (const_initializer with val: 0)
+        if self.fixed_sigma:
+            nn.init.constant_(self.sigma, initial_log_std)
+        else:
+            nn.init.constant_(self.sigma.weight, initial_log_std)
+            if self.sigma.bias is not None:
+                nn.init.zeros_(self.sigma.bias)
+
+    def _forward_shared(self, states: torch.Tensor) -> torch.Tensor:
+        """Forward pass through shared backbone (CNN + pre_mlp + main_mlp).
 
         Args:
-            inputs: Dictionary containing "states" with concatenated observations
-            role: Role of the model (e.g., "policy")
+            states: Concatenated observations [vector_obs, flattened_image]
 
         Returns:
-            Tuple of (action_mean, log_std_parameter, {})
+            Features from shared backbone
         """
-        states = inputs["states"]
-
         # Split observations: [vector_obs, flattened_image]
         vector_obs = states[:, : self.vector_obs_size]
         image_flat = states[:, self.vector_obs_size :]
@@ -238,126 +303,79 @@ class MixInputPolicy(GaussianMixin, Model):
         # Reshape image to [batch, channels, height, width]
         image = image_flat.view(-1, *self.cnn_input_shape)
 
-        # Process through CNN branch
+        # Process through shared CNN branch
         cnn_out = self.cnn(image)
         cnn_out = cnn_out.flatten(1)
         cnn_out = self.flatten_act(cnn_out)
 
-        # Process through pre-MLP branch
+        # Process through shared pre-MLP branch
         mlp_out = self.pre_mlp(vector_obs)
 
         # Fuse features
         fused = torch.cat([cnn_out, mlp_out], dim=1)
 
-        # Process through main MLP
+        # Process through shared main MLP
         features = self.main_mlp(fused)
 
-        # Output action mean
-        action_mean = self.action_head(features)
+        return features
 
-        return action_mean, self.log_std_parameter, {}
+    def act(self, inputs, role):
+        """Override act to disambiguate between policy and value roles.
 
-
-class MixInputValue(DeterministicMixin, Model):
-    """Value network for mixed input (CNN + MLP) observations.
-
-    This model processes:
-    - Vector observations (goal commands, robot state) through an MLP
-    - Visual observations (RGB-D images) through an IMPALA CNN
-    - Fuses both branches and outputs a scalar value estimate
-    """
-
-    def __init__(
-        self,
-        observation_space,
-        action_space,
-        device,
-        clip_actions: bool = False,
-        vector_obs_size: int = DEFAULT_VECTOR_OBS_SIZE,
-        cnn_input_shape: tuple = DEFAULT_CNN_INPUT_SHAPE,
-        conv_depths: list = None,
-        mlp_units: list = None,
-    ):
-        Model.__init__(self, observation_space, action_space, device)
-        DeterministicMixin.__init__(self, clip_actions=clip_actions, role="value")
-
-        self.vector_obs_size = vector_obs_size
-        self.cnn_input_shape = cnn_input_shape
-        self.conv_depths = conv_depths if conv_depths is not None else DEFAULT_CONV_DEPTHS
-        self.mlp_units = mlp_units if mlp_units is not None else DEFAULT_MLP_UNITS
-        self.image_flat_size = cnn_input_shape[0] * cnn_input_shape[1] * cnn_input_shape[2]
-
-        # Build CNN branch for visual observations
-        self.cnn = build_impala_cnn(cnn_input_shape[0], self.conv_depths)
-        cnn_out_size = calc_cnn_output_size(self.cnn, cnn_input_shape)
-
-        # Build pre-MLP for vector observations
-        self.pre_mlp = _build_mlp(vector_obs_size, self.mlp_units)
-        pre_mlp_out_size = self.mlp_units[-1] if self.mlp_units else vector_obs_size
-
-        # Build main MLP for fused features
-        fused_size = cnn_out_size + pre_mlp_out_size
-        self.main_mlp = _build_mlp(fused_size, self.mlp_units)
-        main_mlp_out_size = self.mlp_units[-1] if self.mlp_units else fused_size
-
-        # Activation for CNN output
-        self.flatten_act = nn.ReLU()
-
-        # Value head: outputs scalar value
-        self.value_head = nn.Linear(main_mlp_out_size, 1)
-
-        # Initialize weights
-        self._init_weights()
-
-    def _init_weights(self):
-        """Initialize network weights using orthogonal initialization."""
-        for module in self.modules():
-            if isinstance(module, nn.Linear):
-                nn.init.orthogonal_(module.weight, gain=1.0)
-                if module.bias is not None:
-                    nn.init.zeros_(module.bias)
-            elif isinstance(module, nn.Conv2d):
-                nn.init.orthogonal_(module.weight, gain=1.0)
-                if module.bias is not None:
-                    nn.init.zeros_(module.bias)
+        This is required for shared models in skrl.
+        """
+        if role == "policy":
+            return GaussianMixin.act(self, inputs, role)
+        elif role == "value":
+            return DeterministicMixin.act(self, inputs, role)
+        else:
+            raise ValueError(f"Unknown role: {role}")
 
     def compute(self, inputs, role):
-        """Compute value estimate from observations.
+        """Compute output based on role (policy or value).
+
+        For efficiency, the policy pass caches the shared backbone output,
+        which is reused by the subsequent value pass (single forward-pass).
 
         Args:
             inputs: Dictionary containing "states" with concatenated observations
-            role: Role of the model (e.g., "value")
+            role: Role of the model ("policy" or "value")
 
         Returns:
-            Tuple of (value, {})
+            For policy: Tuple of (action_mean, log_std, {})
+            For value: Tuple of (value, {})
         """
-        states = inputs["states"]
+        if role == "policy":
+            # Compute and cache shared backbone output
+            self._shared_output = self._forward_shared(inputs["states"])
 
-        # Split observations: [vector_obs, flattened_image]
-        vector_obs = states[:, : self.vector_obs_size]
-        image_flat = states[:, self.vector_obs_size :]
+            # Compute mu (action mean) with activation
+            mu = self.mu_act(self.mu(self._shared_output))
 
-        # Reshape image to [batch, channels, height, width]
-        image = image_flat.view(-1, *self.cnn_input_shape)
+            # Compute sigma with activation
+            if self.fixed_sigma:
+                sigma = self.sigma_act(self.sigma)
+            else:
+                sigma = self.sigma_act(self.sigma(self._shared_output))
 
-        # Process through CNN branch
-        cnn_out = self.cnn(image)
-        cnn_out = cnn_out.flatten(1)
-        cnn_out = self.flatten_act(cnn_out)
+            return mu, sigma, {}
 
-        # Process through pre-MLP branch
-        mlp_out = self.pre_mlp(vector_obs)
+        elif role == "value":
+            # Use cached shared output if available (single forward-pass optimization)
+            if self._shared_output is not None:
+                features = self._shared_output
+                self._shared_output = None  # Reset to prevent stale data
+            else:
+                # Fallback: compute shared backbone (needed for standalone value calls)
+                features = self._forward_shared(inputs["states"])
 
-        # Fuse features
-        fused = torch.cat([cnn_out, mlp_out], dim=1)
+            # Compute value with activation
+            value = self.value_act(self.value(features))
 
-        # Process through main MLP
-        features = self.main_mlp(fused)
+            return value, {}
 
-        # Output value
-        value = self.value_head(features)
-
-        return value, {}
+        else:
+            raise ValueError(f"Unknown role: {role}")
 
 
 # =============================================================================
@@ -378,8 +396,16 @@ def get_mix_input_models(
     min_log_std: float = -20.0,
     max_log_std: float = 2.0,
     initial_log_std: float = 0.0,
+    fixed_sigma: bool = True,
+    mu_activation: str = "None",
+    sigma_activation: str = "None",
+    value_activation: str = "None",
 ):
-    """Create policy and value models for mixed input observations.
+    """Create shared policy and value model for mixed input observations.
+
+    This function creates a single shared model (MixInputSharedModel) that is
+    used for both policy and value, matching the rl_games_network.py architecture
+    where CNN and MLP backbone are shared between policy and value heads.
 
     Args:
         observation_space: Observation space from the environment
@@ -394,11 +420,16 @@ def get_mix_input_models(
         min_log_std: Minimum log_std value
         max_log_std: Maximum log_std value
         initial_log_std: Initial log_std value
+        fixed_sigma: Whether sigma is fixed (state-independent) or learned per-state
+        mu_activation: Activation function for mu (action mean) output
+        sigma_activation: Activation function for sigma output
+        value_activation: Activation function for value output
 
     Returns:
-        Dictionary with "policy" and "value" models
+        Dictionary with "policy" and "value" pointing to the same shared model
     """
-    policy = MixInputPolicy(
+    # Create single shared model for both policy and value
+    shared_model = MixInputSharedModel(
         observation_space=observation_space,
         action_space=action_space,
         device=device,
@@ -411,17 +442,11 @@ def get_mix_input_models(
         cnn_input_shape=cnn_input_shape,
         conv_depths=conv_depths,
         mlp_units=mlp_units,
+        fixed_sigma=fixed_sigma,
+        mu_activation=mu_activation,
+        sigma_activation=sigma_activation,
+        value_activation=value_activation,
     )
 
-    value = MixInputValue(
-        observation_space=observation_space,
-        action_space=action_space,
-        device=device,
-        clip_actions=False,
-        vector_obs_size=vector_obs_size,
-        cnn_input_shape=cnn_input_shape,
-        conv_depths=conv_depths,
-        mlp_units=mlp_units,
-    )
-
-    return {"policy": policy, "value": value}
+    # Return same model instance for both keys (shared model pattern in skrl)
+    return {"policy": shared_model, "value": shared_model}
