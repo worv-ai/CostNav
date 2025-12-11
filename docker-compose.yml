@@ -163,7 +163,7 @@ services:
       context: .
       dockerfile: Dockerfile.ros
     image: costnav-ros2-jazzy:${COSTNAV_VERSION:-0.1.0}
-    container_name: costnav-ros2
+    container_name: costnav-ros2-nav2
     depends_on:
       isaac-sim:
         condition: service_healthy

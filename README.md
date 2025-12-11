@@ -1,4 +1,5 @@
 # CostNav
+
 <img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/ee4db2b1-ec4e-41c9-88b5-e6c58c78facd" />
 
 <div align="center">
@@ -11,7 +12,6 @@
   <img alt="Isaac Lab" src="https://img.shields.io/badge/Isaac%20Lab-2.3.0-4CAF50?style=flat&logo=nvidia">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white">
   <a href="https://worv-ai.github.io/CostNav"><img alt="Documentation" src="https://img.shields.io/badge/docs-material-blue?style=flat&logo=materialformkdocs&logoColor=white"></a>
-
 
   <h3>CostNav is a cost-driven navigation benchmark for sidewalk robots, built on Isaac Sim.</h3>
 </div>
@@ -28,24 +28,24 @@ You can find more details in our [CostNav docs](https://worv-ai.github.io/CostNa
 ## Highlights
 
 - **Business-first benchmark:**
-Policies are evaluated not only on navigation success but also on their operational impact, including robot safety, SLA compliance, profitability, and break-even time—metrics directly tied to real-world deployment.
+  Policies are evaluated not only on navigation success but also on their operational impact, including robot safety, SLA compliance, profitability, and break-even time—metrics directly tied to real-world deployment.
 - **Diverse environment suite:**
-CostNav provides a set of tasks that span urban, suburban, rural, wild, port, and orchard-style maps, all using the COCO delivery robot with mixed observation (vector + RGB-D) pipelines for consistent evaluation.
+  CostNav provides a set of tasks that span urban, suburban, rural, wild, port, and orchard-style maps, all using the COCO delivery robot with mixed observation (vector + RGB-D) pipelines for consistent evaluation.
 - **Roadmap-ready:**
-Hooks are in place to compare learning vs. rule-based stacks, switch between on-device and cloud inference, and study cost-aware reward shaping.
+  Hooks are in place to compare learning vs. rule-based stacks, switch between on-device and cloud inference, and study cost-aware reward shaping.
 
 ## Simulation Overview
 
 ### Simulation Environment
 
-| Scenario | Description |
-| --- | --- |
+| Scenario | Description                                                                                                                                             |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Sidewalk | City-scale sidewalk map featuring crosswalks, curbs, planters, and other street furniture, delivered via Omniverse USD assets for reproducible layouts. |
 
 ### Simulation Agents
 
-| Agent | Description |
-| --- | --- |
+| Agent               | Description                                                                                                                                                |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | COCO delivery robot | Four-wheeled sidewalk courier platform from `coco_robot_cfg.py` with configurable drive models, cameras, and LiDAR for learning or rule-based controllers. |
 
 ## Getting Started
@@ -83,6 +83,7 @@ docker compose --profile dev up -d         # light dev image without simulator
 # Tear down when finished
 docker compose down
 ```
+
 To rebuild the images locally, use the provided `Makefile`:
 
 ```bash
@@ -122,6 +123,24 @@ sbatch train.sbatch
 ```
 
 `train.sbatch` derives the container name from `SLURM_JOB_ID`, pins GPUs via `NVIDIA_VISIBLE_DEVICES`, launches the `isaac-lab` compose profile, runs RL-Games training headlessly, and tears the container down when finished.
+
+## Running Nav2 (Rule-Based Navigation)
+
+For rule-based navigation using ROS2 Nav2 stack with Isaac Sim, see the [costnav_isaacsim README](costnav_isaacsim/README.md) for detailed setup and usage.
+
+### Quick Start
+
+```bash
+# Build required images
+make build-isaac-sim
+make build-ros-ws
+make build-ros2
+
+# Run Nav2 navigation (Isaac Sim + ROS2 Nav2)
+make run-nav2
+```
+
+This starts Isaac Sim with the Street Sidewalk environment and Nova Carter robot, along with the ROS2 Nav2 stack for classical navigation.
 
 ## Running Experiments
 
@@ -205,7 +224,6 @@ Issues and pull requests are welcome! Open a discussion or issue with
 
 Please run formatters (`black`, `ruff`) and targeted validation scripts before submitting a PR.
 
-
 ## What's next?
 
 - [ ] Paper release
@@ -213,7 +231,7 @@ Please run formatters (`black`, `ruff`) and targeted validation scripts before s
 - [ ] sensor + robot + battery + compute specsheet and cost
 - [ ] Repo Packaging
 - [x] mkdocs
-- [ ] isaac sim & nav2 support for rule-based navigation
+- [ ] isaac sim & nav2 support for rule-based navigation ([launch.py](costnav_isaacsim/launch.py))
 - [ ] revenue references for delivery
 
 ## Acknowledgements
@@ -227,14 +245,15 @@ Maintained by the worv.ai robotics research team. For research collaborations or
 ## Citation
 
 To Cite CostNav, please use the following bibtex citation
+
 ```
 @misc{seong2025costnavnavigationbenchmarkcostaware,
-      title={CostNav: A Navigation Benchmark for Cost-Aware Evaluation of Embodied Agents}, 
+      title={CostNav: A Navigation Benchmark for Cost-Aware Evaluation of Embodied Agents},
       author={Haebin Seong and Sungmin Kim and Minchan Kim and Yongjun Cho and Myunchul Joe and Suhwan Choi and Jaeyoon Jung and Jiyong Youn and Yoonshik Kim and Samwoo Seong and Yubeen Park and Youngjae Yu and Yunsung Lee},
       year={2025},
       eprint={2511.20216},
       archivePrefix={arXiv},
       primaryClass={cs.AI},
-      url={https://arxiv.org/abs/2511.20216}, 
+      url={https://arxiv.org/abs/2511.20216},
 }
 ```
