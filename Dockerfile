@@ -74,7 +74,14 @@ RUN ln -sf /isaac-sim/kit/python/bin/python3 /isaac-sim/kit/python/bin/python
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python="${PYTHON_BIN}" --system -e ".[isaac-sim,dev]"
 
+# Switch to root for bashrc modifications
+USER root
+
+# Source entrypoint in .bashrc for VS Code and interactive shells
+RUN echo 'source /isaac-sim/setup_ros_env.sh' >> /root/.bashrc
+
 # Keep container idle
+
 ENTRYPOINT ["/bin/bash"]
 CMD ["-c", "sleep infinity"]
 

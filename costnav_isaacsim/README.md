@@ -1,134 +1,90 @@
 # CostNav Isaac Sim
 
-This directory contains Isaac Sim integration for the CostNav project, including scripts for loading USD environments and Nav2 navigation parameters.
-
-## Current Status
-
-### ✅ Operational
-- **Nav2 Integration**: Fully functional with Nova Carter robot
-- **Physics Simulation**: Complete physics support
-- **Multi-robot Support**: Nova Carter (primary), Franka, UR10
-
-### ⏳ In Progress
-- **Parameter Tuning**: Optimizing Nova Carter navigation performance
-- **Start/Goal Sampling**: Mission planning system development
-
-### 📋 Future Work
-- **COCO Robot Integration**: Adapt Nav2 for COCO delivery robot
-- **Cost Model Integration**: Track economic metrics for Nav2 navigation
+Isaac Sim integration for the CostNav project with Nav2 navigation support.
 
 ## Quick Start
 
-### Launch Isaac Sim with Street Sidewalk Environment
+### 1. Build Docker Images
 
 ```bash
-# Simple load (view only)
-python launch.py
+# Build Isaac Sim image
+make build-isaac-sim
 
-# With physics simulation
-python launch.py --simulate
+# Build ROS2 workspace (required for Nav2)
+# clean up build_ws if error
+# sudo rm -rf third_party/IsaacSim-ros_workspaces/build_ws
+make build-ros-ws
 
-# With Nova Carter robot for navigation (recommended for Nav2)
-python launch.py --simulate --robot carter
+# Build ROS2 runtime image
+make build-ros2
+```
+
+### 2. Run Nav2 Navigation
+
+```bash
+# Run both Isaac Sim and ROS2 Nav2 together (recommended)
+make run-nav2
+```
+
+This starts:
+
+- **Isaac Sim**: Street Sidewalk environment with Nova Carter robot
+- **ROS2 Nav2**: Carter navigation with pre-configured parameters
+
+### 3. Alternative: Run Services Separately
+
+```bash
+# Terminal 1: Isaac Sim only
+make run-isaac-sim
+
+# Terminal 2: ROS2 Nav2 only
+make run-ros2
+```
+
+## Docker Compose Profiles
+
+The project uses Docker Compose profiles to manage different service combinations:
+
+| Profile     | Services              | Command              |
+| ----------- | --------------------- | -------------------- |
+| `nav2`      | Isaac Sim + ROS2 Nav2 | `make run-nav2`      |
+| `isaac-sim` | Isaac Sim only        | `make run-isaac-sim` |
+| `ros2`      | ROS2 Nav2 only        | `make run-ros2`      |
+
+### Using Profiles Directly
+
+```bash
+# Run both services with nav2 profile
+docker compose --profile nav2 up
+
+# Run individual services
+docker compose --profile isaac-sim up isaac-sim
+docker compose --profile ros2 up ros2
 ```
 
 ## Files
 
-### `launch.py`
-Main entry point for loading USD environments in Isaac Sim. Supports:
-- Simple USD file viewing
-- Physics simulation
-- Robot integration (Nova Carter, Franka, UR10)
-- Headless mode for server deployments
+| File           | Description                                                         |
+| -------------- | ------------------------------------------------------------------- |
+| `launch.py`    | Isaac Sim launcher with SimulationContext and proper physics timing |
+| `nav2_params/` | Nav2 configuration files for Nova Carter navigation                 |
 
-**Documentation**: See [/workspace/docs/nav2/isaac_sim_launch.md](../docs/nav2/isaac_sim_launch.md) for detailed usage and API reference.
+## Configuration
 
-### `nav2_params/`
-Navigation parameters for Nav2 stack with Nova Carter:
-- `carter_navigation_params.yaml` - Nav2 configuration for Nova Carter robot
-- `carter_sidewalk.yaml` - Map configuration for sidewalk environment
-- `carter_sidewalk.png` - Map image file
+### Default Environment
 
-**Note**: These configuration files should be mounted to the ROS2 Docker container for Nav2 navigation.
-
-## Usage Examples
-
-### Basic Environment Loading
-
-```bash
-# Load default Street_sidewalk.usd
-python launch.py --simulate
-```
-
-### Load Custom USD File
-
-```bash
-# From local path
-python launch.py --usd_path /path/to/your/scene.usd --simulate
-
-# From Omniverse server
-python launch.py --usd_path omniverse://server/path/scene.usd --simulate
-```
-
-### Navigation with Nova Carter Robot and Nav2
-
-**Step 1: Launch Isaac Sim with Nova Carter**
-```bash
-cd /workspace/costnav_isaacsim
-python launch.py --simulate --robot carter
-```
-
-**Step 2: In ROS2 Docker Container, Launch Nav2**
-```bash
-# Source ROS2 environment
-source /opt/ros/jazzy/setup.bash
-source /workspace/build_ws/install/local_setup.sh
-
-# Launch Nav2 with Nova Carter
-ros2 launch carter_navigation carter_navigation.launch.py \
-    map:=/workspace/costnav_isaacsim/nav2_params/carter_sidewalk.yaml \
-    params_file:/workspace/costnav_isaacsim/nav2_params/carter_navigation_params.yaml
-```
-
-**Docker Volume Mounting:**
-
-Ensure your `docker-compose.yml` includes:
-```yaml
-volumes:
-  - /workspace/costnav_isaacsim/nav2_params:/workspace/costnav_isaacsim/nav2_params:ro
-```
-
-### Headless Mode (for servers)
-
-```bash
-python launch.py --simulate --robot carter --headless
-```
-
-## Default Environment
-
-The default USD environment is:
 ```
 omniverse://10.50.2.21/Users/worv/costnav/Street_sidewalk.usd
 ```
 
-This represents a street sidewalk scene designed for navigation testing.
+### Nav2 Parameters
 
-## Documentation
-
-For detailed documentation, see:
-- **Launch Script**: [/workspace/docs/nav2/isaac_sim_launch.md](../docs/nav2/isaac_sim_launch.md) - Detailed usage guide
-- **Nav2 Implementation**: [/workspace/docs/nav2/nav2_implementation_plan.md](../docs/nav2/nav2_implementation_plan.md) - Complete Nav2 integration plan
-- **Physics Fixes**: [/workspace/docs/nav2/physics_fix.md](../docs/nav2/physics_fix.md) - Physics properties documentation
+- `nav2_params/carter_navigation_params.yaml` - Nav2 configuration
+- `nav2_params/carter_sidewalk.yaml` - Map configuration
+- `nav2_params/carter_sidewalk.png` - Map image
 
 ## Requirements
 
-- Isaac Sim (properly installed and configured)
-- Access to Omniverse server at `10.50.2.21` (for default environment)
-- Python 3.x with Isaac Sim Python environment
-
-## Reference
-
-Based on Isaac Sim official documentation:
-- [Robot Simulation Snippets](https://docs.isaacsim.omniverse.nvidia.com/latest/python_scripting/robots_simulation.html)
-- [Python Scripting](https://docs.isaacsim.omniverse.nvidia.com/latest/python_scripting/python_scripting_concepts.html)
-
+- Docker with NVIDIA Container Toolkit
+- NVIDIA GPU with driver 525.60.11+
+- Access to Omniverse server at `10.50.2.21`

@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 run-ros2 run-isaac-sim run-navigation
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 run-ros2 run-isaac-sim run-nav2
 
 DOCKERFILE ?= Dockerfile
 DOCKER_BUILD ?= docker build
@@ -18,10 +18,15 @@ COSTNAV_DEV_IMAGE ?= costnav-dev:$(COSTNAV_VERSION)
 COSTNAV_ROS2_IMAGE ?= costnav-ros2-jazzy:$(COSTNAV_VERSION)
 
 build-isaac-sim:
-	$(DOCKER_BUILD) -f $(DOCKERFILE) --target isaac-sim -t $(ISAAC_SIM_IMAGE) .
+	$(DOCKER_BUILD) -f $(DOCKERFILE) --target isaac-sim \
+		--build-arg ISAAC_SIM_VERSION=$(ISAAC_SIM_VERSION) \
+		-t $(ISAAC_SIM_IMAGE) .
 
 build-isaac-lab:
-	$(DOCKER_BUILD) -f $(DOCKERFILE) --target isaac-lab -t $(ISAAC_LAB_IMAGE) .
+	$(DOCKER_BUILD) -f $(DOCKERFILE) --target isaac-lab \
+		--build-arg ISAAC_SIM_VERSION=$(ISAAC_SIM_VERSION) \
+		--build-arg ISAAC_LAB_VERSION=$(ISAAC_LAB_VERSION) \
+		-t $(ISAAC_LAB_IMAGE) .
 
 build-dev:
 	$(DOCKER_BUILD) -f $(DOCKERFILE) --target dev -t $(COSTNAV_DEV_IMAGE) .
@@ -54,7 +59,7 @@ run-isaac-sim:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile isaac-sim up isaac-sim
 
-# Run both Isaac Sim and ROS2 navigation together
-run-navigation:
+# Run both Isaac Sim and ROS2 Nav2 navigation together (using combined 'nav2' profile)
+run-nav2:
 	xhost +local:docker 2>/dev/null || true
-	$(DOCKER_COMPOSE) --profile isaac-sim --profile ros2 up isaac-sim ros2
+	$(DOCKER_COMPOSE) --profile nav2 up
