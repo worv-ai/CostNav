@@ -297,23 +297,22 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 
 ---
 
-### Week 3: Nav2 Stack Configuration & Basic Navigation -(⏳ Parameter Tuning In Progress)
+### Week 3: Nav2 Stack Configuration & Basic Navigation - ⏳ IN PROGRESS
 
-**Objective:** Configure Nav2 components and achieve basic navigation
+**Objective:** Configure Nav2 components, achieve basic navigation, and implement goal sampling with visualization
 
-**Reference:** [Running Nav2](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#running-nav2)
+**Reference:** [Running Nav2](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#running-nav2) | [Sending Goals Programmatically](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#sending-goals-programmatically) | [Omniverse Navigation Mesh Extension](https://docs.omniverse.nvidia.com/extensions/latest/ext_navigation-mesh.html) | [ROS2 Marker Display Types](https://docs.ros.org/en/humble/Tutorials/Intermediate/RViz/Marker-Display-types/Marker-Display-types.html)
 
 **Tasks:**
 
 - [x] Configure Nav2 parameters for Nova Carter
-  - Costmap configuration (global + local)
-  - AMCL localization parameters
-  - Planner server (NavFn or Smac)
-  - Controller server (DWB or RPP)
-  - Behavior server (recovery behaviors)
 - [x] Create ROS2 launch file for Nav2 stack
 - [x] Test navigation with RViz2 "Nav2 Goal" button
-- [ ] ⏳ **Tune parameters for Nova Carter kinematics** (In Progress)
+- [ ] ⏳ Tune parameters for Nova Carter kinematics
+- [ ] Implement position sampling using NavMesh
+- [ ] Ensure minimum distance threshold between start and goal
+- [ ] Implement robot teleportation and mission initiation
+- [ ] Configure RViz markers for start position, goal position, current robot position
 
 **Deliverables:**
 
@@ -321,6 +320,8 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 - ✅ Nav2 launch file (`carter_navigation.launch.py`)
 - ✅ RViz2 configuration
 - ⏳ Optimized parameters (in progress)
+- 📋 Goal sampling script using NavMesh API
+- 📋 RViz marker publisher node
 
 **Success Criteria:**
 
@@ -328,42 +329,160 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 - ✅ Avoids obstacles
 - ✅ Recovery behaviors work
 - ⏳ Parameters optimized for performance (in progress)
+- 📋 Start/goal positions sampled from NavMesh with minimum distance threshold
+- 📋 Robot teleports to start and navigates to goal automatically
+- 📋 RViz displays distinct markers for start (green), goal (red), and robot (blue) positions
+
+#### Implementation Details: Goal Sampling
+
+**1. Position Sampling using NavMesh**
+
+- Use `omni.anim.navigation.core` extension for NavMesh queries
+- Sample valid walkable positions using `query_shortest_path()` API
+- Ensure sampled positions are on navigable surfaces
+- Reference: `check_navmesh.py` for NavMesh query examples
+
+**2. Minimum Distance Threshold**
+
+- Configure minimum separation distance (e.g., 5-10 meters)
+- Implement validation loop similar to `mdp/commands.py` goal sampling
+- Reject position pairs that don't meet distance requirements
+- Track sampling attempts and handle edge cases
+
+**3. Robot Teleportation and Mission Initiation**
+
+- When start and goal positions are successfully sampled:
+  - Teleport robot to start position using Isaac Sim API
+  - Set initial pose via `/initialpose` topic for AMCL localization
+  - Initiate navigation mission by publishing to `/goal_pose` topic
+
+#### Implementation Details: RViz Marker Visualization
+
+**1. Start Position Marker**
+
+- Use `visualization_msgs/Marker` with type `SPHERE` or `ARROW`
+- Color: Green (RGB: 0, 1, 0)
+- Scale: 0.5m diameter
+- Frame: `map`
+
+**2. Goal Position Marker**
+
+- Use `visualization_msgs/Marker` with type `SPHERE` or `ARROW`
+- Color: Red (RGB: 1, 0, 0)
+- Include orientation indicator if heading is specified
+- Publish to `/goal_marker` topic
+
+**3. Current Robot Position Marker**
+
+- Use `visualization_msgs/Marker` with type `ARROW` or `MESH_RESOURCE`
+- Color: Blue (RGB: 0, 0, 1)
+- Update in real-time from `/odom` or `/tf` data
+- Publish to `/robot_marker` topic
+
+**4. Marker Configuration**
+
+- Use distinct colors: Green (Start), Red (Goal), Blue (Robot)
+- Add text labels using `TEXT_VIEW_FACING` marker type
+- Update RViz2 configuration file to include marker displays
 
 ---
 
 ### Week 4: Cost Model Integration & Testing
 
-**Objective:** Integrate cost tracking and validate against RL baseline
+**Objective:** Integrate cost tracking, run benchmark scenarios, and validate Nav2 against RL baseline
 
-**Reference:** [Sending Goals Programmatically](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#sending-goals-programmatically)
+**Reference:** [Sending Goals Programmatically](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#sending-goals-programmatically) | [CostNav Cost Model](cost_model.md)
 
 **Tasks:**
 
 - [x] Basic Nav2 integration complete
 - [x] Create programmatic goal sender (Python script)
 - [x] Document usage and API
-- [ ] Implement cost model tracker for Nav2 navigation (⏳ Future work)
-  - Track energy consumption
-  - Track time to goal
-  - Track SLA compliance
-  - Track collision/recovery events
-- [ ] Run benchmark scenarios (same as RL evaluation) (⏳ Future work)
-- [ ] Compare Nav2 vs RL performance (⏳ Future work)
+- [ ] Create `nav2_cost_tracker.py` ROS2 node
+- [ ] Implement energy consumption model
+- [ ] Implement SLA compliance tracking
+- [ ] Implement collision and recovery event tracking
+- [ ] Create benchmark scenario runner
+- [ ] Generate comparison report: Nav2 vs RL
 
 **Deliverables:**
 
 - ✅ Python launch script (`launch.py`)
 - ✅ Nav2 configuration files
 - ✅ Documentation
-- 📋 `nav2_cost_tracker.py` (future)
-- 📋 Benchmark comparison report (future)
+- 📋 `nav2_cost_tracker.py` - ROS2 node for real-time cost tracking
+- 📋 `nav2_benchmark_runner.py` - Automated benchmark scenario executor
+- 📋 `nav2_metrics_report.py` - Report generator with comparison analysis
+- 📋 Benchmark results CSV/JSON files
+- 📋 Nav2 vs RL comparison report (Markdown + visualizations)
 
 **Success Criteria:**
 
 - ✅ Nav2 runs successfully with Nova Carter
 - ✅ Documentation published
-- ⏳ Cost metrics collection (future)
-- ⏳ Comparison with RL baseline (future)
+- 📋 Cost tracker node publishes real-time metrics to `/nav2/metrics` topic
+- 📋 Energy consumption tracked with <5% error vs ground truth
+- 📋 SLA compliance calculated for each navigation mission
+- 📋 Benchmark scenarios complete with >95% automation
+- 📋 Comparison report shows Nav2 vs RL performance delta
+- 📋 Operating margin, break-even time, and SLA metrics comparable to RL baseline targets
+
+#### Implementation Details: Cost Tracker Node
+
+**1. `nav2_cost_tracker.py` ROS2 Node**
+
+- Subscribe to `/cmd_vel` to compute energy consumption from velocity commands
+- Subscribe to `/odom` to track distance traveled and path efficiency
+- Subscribe to Nav2 action server feedback for navigation status
+- Subscribe to `/local_costmap/costmap` to detect near-collision events
+- Implement timer-based tracking for time-to-goal metrics
+
+**2. Energy Consumption Model**
+
+- Calculate power draw: `P = k1*v + k2*ω + P_idle`
+- Integrate power over time to get total energy (Wh)
+- Use Nova Carter specifications for motor constants
+- Log instantaneous and cumulative energy consumption
+
+**3. SLA Compliance Tracking**
+
+- Define delivery time thresholds based on distance (e.g., 0.5 m/s average speed)
+- Track mission start time, goal reach time, and total duration
+- Compare against SLA deadline to determine compliance
+- Calculate SLA compliance rate across multiple missions
+
+**4. Collision and Recovery Event Tracking**
+
+- Monitor Nav2 behavior server for recovery triggers (spin, backup, wait)
+- Count recovery events per mission
+- Detect collision events from costmap proximity or contact sensors
+- Log recovery success/failure rates
+
+#### Implementation Details: Benchmark Runner
+
+**1. Standard Test Scenarios**
+
+- Short-range navigation (5-15m)
+- Medium-range navigation (15-50m)
+- Long-range navigation (50-100m)
+- Obstacle-dense environments
+
+**2. Benchmark Execution**
+
+- Run N trials per scenario (e.g., N=100)
+- Collect statistics: success rate, avg time, avg energy, SLA compliance
+- Export metrics to CSV/JSON for analysis
+
+**3. Comparison Report: Nav2 vs RL**
+
+- Calculate key performance indicators:
+  - Navigation success rate
+  - Average time-to-goal
+  - Energy efficiency (Wh/m)
+  - SLA compliance rate
+  - Recovery event frequency
+- Compare against existing RL baseline metrics from CostNav
+- Generate summary table and visualizations
 
 ---
 
