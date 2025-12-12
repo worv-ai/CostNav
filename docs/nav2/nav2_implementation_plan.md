@@ -2,9 +2,9 @@
 
 **Issue Reference:** [#5 - Support rule-based navigation with nav2](https://github.com/worv-ai/CostNav/issues/5)
 
-**Status:** ✅ Nav2 Integration Complete | ⏳ Parameter Tuning In Progress
+**Status:** ✅ Nav2 Integration Complete | ✅ Mission Orchestration Complete | ⏳ Parameter Tuning In Progress
 **Target Version:** CostNav v0.2.0
-**Last Updated:** 2025-12-10
+**Last Updated:** 2025-12-12
 
 ---
 
@@ -17,16 +17,18 @@
 - **ROS2 Bridge**: Communication between Isaac Sim and Nav2 established
 - **Occupancy Map**: Generated and configured for Street_sidewalk environment
 - **Basic Navigation**: Nova Carter successfully navigates to goals
+- **Mission Orchestration**: Automated start/goal sampling, robot teleportation, and RViz visualization
+- **NavMesh Position Sampling**: Valid start/goal positions sampled from Isaac Sim's NavMesh
+- **RViz Marker Visualization**: Start (green), goal (red), and robot (blue) markers
 
 ### ⏳ In Progress
 
-1. **Start and Goal Sampling**: Mission planning system for autonomous goal generation
-2. **Parameter Tuning**: Optimizing Nav2 parameters for Nova Carter performance
+1. **Parameter Tuning**: Optimizing Nav2 parameters for Nova Carter performance
+2. **Cost Model Integration**: Track economic metrics for Nav2 navigation
 
 ### 📋 Future Work
 
 - **COCO Robot Integration**: Adapt Nav2 for COCO delivery robot (lower priority)
-- **Cost Model Integration**: Track economic metrics for Nav2 navigation
 - **Hybrid RL+Nav2**: Combine learning-based and rule-based approaches
 
 ---
@@ -84,7 +86,7 @@ CostNav currently supports:
 
 ### Remaining Tasks
 
-1. **Start and Goal Sampling** - Implement mission planning system for autonomous goal generation
+1. ~~**Start and Goal Sampling**~~ - ✅ Complete (nav2_mission module)
 2. **Parameter Tuning** - Optimize Nav2 parameters for Nova Carter navigation performance
 3. **Cost Model Integration** - Track economic metrics for Nav2 navigation
 4. **COCO Robot Adaptation** - Extend Nav2 support to COCO delivery robot (future work)
@@ -182,6 +184,29 @@ This implementation follows NVIDIA's official tutorial which covers:
 
 ### Quick Start
 
+**Option 1: Run with Mission Orchestration (Recommended)**
+
+```bash
+# From repository root, start both containers with Nav2 profile
+make run-nav2
+
+# Isaac Sim will launch with mission orchestration enabled
+# Missions will run automatically after Nav2 stack is ready
+```
+
+To customize mission parameters, modify the docker-compose command or use:
+
+```bash
+# Inside Isaac Sim container
+python /workspace/costnav_isaacsim/launch.py --mission \
+    --mission-count 5 \
+    --mission-delay 60 \
+    --min-distance 10.0 \
+    --max-distance 30.0
+```
+
+**Option 2: Manual Launch (Step by Step)**
+
 **1. Launch Isaac Sim with Nova Carter:**
 
 ```bash
@@ -202,11 +227,19 @@ ros2 launch carter_navigation carter_navigation.launch.py \
     params_file:=/workspace/costnav_isaacsim/nav2_params/carter_navigation_params.yaml
 ```
 
+**3. (Optional) Run Mission Orchestrator Separately:**
+
+```bash
+docker exec -it costnav-isaac-sim /isaac-sim/python.sh \
+    /workspace/costnav_isaacsim/launch_mission.py --mission-count 5
+```
+
 **Configuration Files:**
 
 - **Map:** `/workspace/costnav_isaacsim/nav2_params/carter_sidewalk.yaml`
 - **Parameters:** `/workspace/costnav_isaacsim/nav2_params/carter_navigation_params.yaml`
 - **Map Image:** `/workspace/costnav_isaacsim/nav2_params/carter_sidewalk.png`
+- **Mission Module:** `/workspace/costnav_isaacsim/nav2_mission/`
 
 ### Docker Volume Mounting
 
@@ -219,7 +252,7 @@ volumes:
 
 ---
 
-## Implementation Plan (4 Weeks) - ⏳ IN PROGRESS
+## Implementation Plan (4 Weeks) - ✅ WEEKS 1-3 COMPLETE
 
 Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html), we are implementing Nav2 integration.
 
@@ -227,14 +260,13 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 
 - ✅ Week 1: Docker Setup & ROS2 Bridge - Complete
 - ✅ Week 2: Nova Carter Setup & Occupancy Map - Complete
-- ⏳ Week 3: Nav2 Stack Configuration & Basic Navigation - Parameter tuning in progress
-- ⏳ Week 4: Cost Model Integration & Testing - In progress
+- ✅ Week 3: Nav2 Stack Configuration & Mission Orchestration - Complete
+- ⏳ Week 4: Cost Model Integration & Parameter Tuning - In progress
 
 **Remaining Work:**
 
 - Parameter tuning for optimal Nova Carter performance
-- Start and goal sampling system implementation
-- Cost model integration (future)
+- Cost model integration for economic metrics tracking
 
 ---
 
@@ -297,7 +329,7 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 
 ---
 
-### Week 3: Nav2 Stack Configuration & Basic Navigation - ⏳ IN PROGRESS
+### Week 3: Nav2 Stack Configuration & Basic Navigation - ✅ COMPLETE
 
 **Objective:** Configure Nav2 components, achieve basic navigation, and implement goal sampling with visualization
 
@@ -308,82 +340,131 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 - [x] Configure Nav2 parameters for Nova Carter
 - [x] Create ROS2 launch file for Nav2 stack
 - [x] Test navigation with RViz2 "Nav2 Goal" button
-- [ ] ⏳ Tune parameters for Nova Carter kinematics
-- [ ] Implement position sampling using NavMesh
-- [ ] Ensure minimum distance threshold between start and goal
-- [ ] Implement robot teleportation and mission initiation
-- [ ] Configure RViz markers for start position, goal position, current robot position
+- [ ] ⏳ Tune parameters for Nova Carter kinematics (moved to Week 4)
+- [x] Implement position sampling using NavMesh
+- [x] Ensure minimum distance threshold between start and goal
+- [x] Implement robot teleportation and mission initiation
+- [x] Configure RViz markers for start position, goal position, current robot position
 
 **Deliverables:**
 
 - ✅ Nav2 configuration files at `/workspace/costnav_isaacsim/nav2_params/carter_navigation_params.yaml`
 - ✅ Nav2 launch file (`carter_navigation.launch.py`)
 - ✅ RViz2 configuration
-- ⏳ Optimized parameters (in progress)
-- 📋 Goal sampling script using NavMesh API
-- 📋 RViz marker publisher node
+- ✅ Mission orchestration module at `/workspace/costnav_isaacsim/nav2_mission/`
+- ✅ Configuration module at `/workspace/costnav_isaacsim/config/` with YAML-based settings
+- ✅ Integrated launch with `--mission` and `--config` flags in `launch.py`
+- ⏳ Optimized parameters (moved to Week 4)
 
 **Success Criteria:**
 
 - ✅ Robot navigates to goals successfully
 - ✅ Avoids obstacles
 - ✅ Recovery behaviors work
-- ⏳ Parameters optimized for performance (in progress)
-- 📋 Start/goal positions sampled from NavMesh with minimum distance threshold
-- 📋 Robot teleports to start and navigates to goal automatically
-- 📋 RViz displays distinct markers for start (green), goal (red), and robot (blue) positions
+- ✅ Start/goal positions sampled from NavMesh with minimum distance threshold (5-50m configurable)
+- ✅ Robot teleports to start and navigates to goal automatically
+- ✅ RViz displays distinct markers for start (green), goal (red), and robot (blue) positions
+- ⏳ Parameters optimized for performance (moved to Week 4)
 
-#### Implementation Details: Goal Sampling
+#### Implementation: Nav2 Mission Module
 
-**1. Position Sampling using NavMesh**
+The following components have been implemented in `/workspace/costnav_isaacsim/nav2_mission/`:
 
-- Use `omni.anim.navigation.core` extension for NavMesh queries
-- Sample valid walkable positions using `query_shortest_path()` API
-- Ensure sampled positions are on navigable surfaces
-- Reference: `check_navmesh.py` for NavMesh query examples
+**1. NavMesh Sampler (`navmesh_sampler.py`)**
 
-**2. Minimum Distance Threshold**
+- Uses `omni.anim.navigation.core` extension for NavMesh queries
+- `NavMeshSampler` class with methods:
+  - `sample_random_position()` - Sample random point on NavMesh
+  - `sample_start_goal_pair()` - Sample valid start/goal with distance constraints
+  - `validate_position()` - Check if position is on NavMesh
+  - `check_path_exists()` - Verify navigable path exists
+- Configurable min/max distance thresholds (default: 5-50 meters)
 
-- Configure minimum separation distance (e.g., 5-10 meters)
-- Implement validation loop similar to `mdp/commands.py` goal sampling
-- Reject position pairs that don't meet distance requirements
-- Track sampling attempts and handle edge cases
+**2. Marker Publisher (`marker_publisher.py`)**
 
-**3. Robot Teleportation and Mission Initiation**
+- `MarkerPublisher` ROS2 node publishing to:
+  - `/start_marker` - Green arrow for start position
+  - `/goal_marker` - Red arrow for goal position
+  - `/robot_marker` - Blue arrow for current robot position (real-time from `/odom`)
+- Uses `visualization_msgs/Marker` with ARROW type
+- TRANSIENT_LOCAL QoS for persistent marker visibility
 
-- When start and goal positions are successfully sampled:
-  - Teleport robot to start position using Isaac Sim API
-  - Set initial pose via `/initialpose` topic for AMCL localization
-  - Initiate navigation mission by publishing to `/goal_pose` topic
+**3. Mission Orchestrator (`mission_orchestrator.py`)**
 
-#### Implementation Details: RViz Marker Visualization
+- `MissionOrchestrator` ROS2 node that coordinates:
+  - NavMesh-based position sampling
+  - Robot teleportation via Isaac Sim API
+  - Initial pose publication to `/initialpose`
+  - Goal pose publication to `/goal_pose`
+  - RViz marker updates
+- `MissionConfig` dataclass for configuration
+- `create_isaac_sim_teleport_callback()` helper for Isaac Sim integration
 
-**1. Start Position Marker**
+**4. Mission Runner (`mission_runner.py`)**
 
-- Use `visualization_msgs/Marker` with type `SPHERE` or `ARROW`
-- Color: Green (RGB: 0, 1, 0)
-- Scale: 0.5m diameter
-- Frame: `map`
+- `MissionRunner` class for background thread execution
+- Manages mission lifecycle alongside simulation loop
+- Graceful stop/cleanup with `_stop_event`
+- Interruptible sleep between missions
 
-**2. Goal Position Marker**
+**5. Configuration (`config/`)**
 
-- Use `visualization_msgs/Marker` with type `SPHERE` or `ARROW`
-- Color: Red (RGB: 1, 0, 0)
-- Include orientation indicator if heading is specified
-- Publish to `/goal_marker` topic
+Mission parameters are configured via YAML file at `config/mission_config.yaml`:
 
-**3. Current Robot Position Marker**
+```yaml
+mission:
+  count: 1          # Number of missions
+  delay: 30.0       # Delay between missions (seconds)
 
-- Use `visualization_msgs/Marker` with type `ARROW` or `MESH_RESOURCE`
-- Color: Blue (RGB: 0, 0, 1)
-- Update in real-time from `/odom` or `/tf` data
-- Publish to `/robot_marker` topic
+distance:
+  min: 5.0          # Minimum start-goal distance (meters)
+  max: 50.0         # Maximum start-goal distance (meters)
 
-**4. Marker Configuration**
+nav2:
+  wait_time: 10.0   # Wait for Nav2 stack to initialize
 
-- Use distinct colors: Green (Start), Red (Goal), Blue (Robot)
-- Add text labels using `TEXT_VIEW_FACING` marker type
-- Update RViz2 configuration file to include marker displays
+teleport:
+  robot_prim: "/World/Nova_Carter_ROS"
+  height_offset: 0.5
+
+markers:
+  enabled: true
+  topics:
+    start: "/start_marker"
+    goal: "/goal_marker"
+    robot: "/robot_marker"
+```
+
+**6. Integrated Launch (`launch.py`)**
+
+The mission module uses config file with CLI overrides:
+
+```bash
+# Use default config (config/mission_config.yaml)
+python launch.py --mission
+
+# Use custom config file
+python launch.py --mission --config /path/to/custom.yaml
+
+# Override config values via CLI
+python launch.py --mission --mission-count 5 --min-distance 10
+
+# Available CLI overrides:
+#   --config PATH       Path to config YAML file
+#   --mission-count N   Override: Number of missions
+#   --mission-delay S   Override: Delay between missions
+#   --min-distance M    Override: Minimum start-goal distance
+#   --max-distance M    Override: Maximum start-goal distance
+#   --nav2-wait S       Override: Nav2 wait time
+```
+
+#### RViz Marker Topics
+
+| Topic          | Color | Description                    |
+| -------------- | ----- | ------------------------------ |
+| `/start_marker`| Green | Start position (ARROW marker)  |
+| `/goal_marker` | Red   | Goal position (ARROW marker)   |
+| `/robot_marker`| Blue  | Current robot position (10 Hz) |
 
 ---
 
@@ -685,6 +766,8 @@ nav2_metrics = {
 | 0.1     | 2025-11-21 | CostNav Team | Initial draft                                                                                              |
 | 0.2     | 2025-11-21 | CostNav Team | Updated with multi-container architecture and official Isaac Sim Nav2 tutorial references                  |
 | 1.0     | 2025-12-10 | CostNav Team | Updated to reflect completed Nav2 integration with Nova Carter, removed network config, updated priorities |
+| 1.1     | 2025-12-12 | CostNav Team | Week 3 complete: Added nav2_mission module with NavMesh sampling, RViz markers, mission orchestration, integrated launch |
+| 1.2     | 2025-12-12 | CostNav Team | Refactored to use YAML config file (config/mission_config.yaml), added MissionRunner, separated config module |
 
 ---
 

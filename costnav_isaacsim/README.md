@@ -61,11 +61,26 @@ The `costnav_isaacsim` module serves as:
 ```
 costnav_isaacsim/
 ├── README.md                              # This file
-├── launch.py                              # Isaac Sim launcher script
-└── nav2_params/                           # Nav2 configuration files
-    ├── carter_navigation_params.yaml      # Full Nav2 stack parameters
-    ├── carter_sidewalk.yaml               # Map metadata (origin, resolution)
-    └── carter_sidewalk.png                # Occupancy grid image
+├── launch.py                              # Isaac Sim launcher script (main simulation)
+├── launch_mission.py                      # Nav2 mission launcher (run after launch.py)
+├── config/                                # Configuration files
+│   ├── __init__.py                        # Config module exports
+│   ├── config_loader.py                   # YAML config loader with MissionConfig dataclass
+│   └── mission_config.yaml                # Default mission parameters
+├── nav2_params/                           # Nav2 navigation stack configuration
+│   ├── carter_navigation_params.yaml      # Full Nav2 stack parameters
+│   ├── carter_sidewalk.yaml               # Map metadata (origin, resolution)
+│   └── carter_sidewalk.png                # Occupancy grid image
+└── nav2_mission/                          # Nav2 mission orchestration module
+    ├── __init__.py                        # Package exports (conditional ROS2 imports)
+    ├── navmesh_sampler.py                 # NavMesh-based position sampling
+    ├── marker_publisher.py                # RViz marker visualization
+    ├── mission_orchestrator.py            # Mission coordination
+    ├── mission_runner.py                  # Background thread mission runner
+    └── tests/                             # Unit tests
+        ├── test_navmesh_sampler.py
+        ├── test_marker_publisher.py
+        └── test_mission_orchestrator.py
 ```
 
 ---
@@ -295,6 +310,230 @@ goal_pose.pose.orientation.w = 1.0
 
 navigator.goToPose(goal_pose)
 navigator.waitUntilTaskComplete()
+```
+
+---
+
+## Nav2 Mission Module
+
+The `nav2_mission` module provides automated navigation mission orchestration with NavMesh-based position sampling and RViz visualization. It is **integrated directly into `launch.py`** for seamless operation.
+
+### Container Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                Docker Network (host mode)                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────────────────────┐  ┌─────────────────────────┐  │
+│  │    Isaac Sim Container      │  │   ROS2 Nav2 Container   │  │
+│  │    (costnav-isaac-sim)      │  │   (costnav-ros2-nav2)   │  │
+│  │                             │  │                         │  │
+│  │  launch.py --mission        │  │   Nav2 Stack            │  │
+│  │  ├─ Simulation loop         │  │   ├─ AMCL localization  │  │
+│  │  ├─ NavMesh sampling        │  │   ├─ Path planning      │  │
+│  │  ├─ Robot teleportation     │  │   └─ Navigation control │  │
+│  │  ├─ /initialpose publish ───┼──┼─►                       │  │
+│  │  ├─ /goal_pose publish ─────┼──┼─►                       │  │
+│  │  └─ /markers publish ───────┼──┼─► RViz2 visualization   │  │
+│  └─────────────────────────────┘  └─────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Important**: The `nav2_mission` module runs **inside the Isaac Sim container** because it:
+1. Uses Isaac Sim's NavMesh API (`omni.anim.navigation.core`)
+2. Teleports the robot using Isaac Sim's physics engine
+3. Shares ROS2 topics with Nav2 via host networking
+
+### Quick Start: Running Missions
+
+#### Option 1: Integrated Launch (Recommended)
+
+Run Isaac Sim with mission orchestration in a single command:
+
+```bash
+# From repository root
+make run-nav2
+```
+
+Then modify the docker-compose command or use:
+
+```bash
+# Inside Isaac Sim container, uses config/mission_config.yaml by default
+python /workspace/costnav_isaacsim/launch.py --mission
+
+# Use custom config file
+python /workspace/costnav_isaacsim/launch.py --mission --config /path/to/custom.yaml
+
+# Override config values via CLI
+python /workspace/costnav_isaacsim/launch.py --mission --mission-count 5 --min-distance 10
+```
+
+#### Option 2: Two-Step Launch
+
+**Step 1: Start the Nav2 Stack**
+
+```bash
+# From repository root, start both Isaac Sim and ROS2 Nav2 containers
+make run-nav2
+```
+
+**Step 2: Run Missions Separately**
+
+```bash
+# Open a new terminal and exec into the Isaac Sim container
+docker exec -it costnav-isaac-sim /isaac-sim/python.sh \
+    /workspace/costnav_isaacsim/launch_mission.py
+```
+
+### Configuration
+
+Mission parameters are configured via YAML file at `config/mission_config.yaml`:
+
+```yaml
+# Mission execution settings
+mission:
+  count: 1          # Number of missions (0 = infinite)
+  delay: 30.0       # Delay between missions (seconds)
+
+# Distance constraints (meters)
+distance:
+  min: 5.0          # Minimum start-goal distance
+  max: 50.0         # Maximum start-goal distance
+
+# Nav2 integration
+nav2:
+  wait_time: 10.0   # Wait for Nav2 stack to initialize
+
+# Robot teleportation
+teleport:
+  height_offset: 0.5
+  robot_prim: "/World/Nova_Carter_ROS"
+
+# RViz markers
+markers:
+  enabled: true
+  topics:
+    start: "/start_marker"
+    goal: "/goal_marker"
+    robot: "/robot_marker"
+```
+
+### Command Line Options
+
+The integrated `launch.py` uses config file by default with CLI overrides:
+
+```bash
+# Use default config (config/mission_config.yaml)
+python launch.py --mission
+
+# Use custom config file
+python launch.py --mission --config /path/to/custom.yaml
+
+# Override specific config values
+python launch.py --mission --mission-count 5 --min-distance 10.0
+
+# Headless mode with missions
+python launch.py --headless --mission
+```
+
+#### Simulation Options
+
+| Option | Default | Description |
+| ------ | ------- | ----------- |
+| `--usd_path` | (internal) | Path to USD scene file |
+| `--headless` | false | Run without GUI |
+| `--physics_dt` | 1/60 | Physics time step |
+| `--rendering_dt` | 1/30 | Rendering time step |
+| `--debug` | false | Enable debug logging |
+
+#### Mission Options
+
+| Option | Default | Description |
+| ------ | ------- | ----------- |
+| `--mission` | false | Enable Nav2 mission orchestration |
+| `--config` | config/mission_config.yaml | Path to mission config file |
+| `--mission-count` | (from config) | Override: Number of missions |
+| `--mission-delay` | (from config) | Override: Delay between missions |
+| `--min-distance` | (from config) | Override: Minimum start-goal distance |
+| `--max-distance` | (from config) | Override: Maximum start-goal distance |
+| `--nav2-wait` | (from config) | Override: Nav2 wait time |
+
+### Interactive Python Usage
+
+For interactive testing inside the Isaac Sim container:
+
+```bash
+# Start Python shell inside Isaac Sim container
+docker exec -it costnav-isaac-sim /isaac-sim/python.sh
+```
+
+```python
+import rclpy
+from nav2_mission import MissionOrchestrator, MissionConfig
+
+rclpy.init()
+
+# Configure mission
+config = MissionConfig(min_distance=5.0, max_distance=50.0)
+orchestrator = MissionOrchestrator(config=config)
+
+# Run a navigation mission
+success = orchestrator.run_mission()
+print(f"Mission success: {success}")
+
+orchestrator.destroy_node()
+rclpy.shutdown()
+```
+
+### Features
+
+- **NavMesh Position Sampling**: Sample valid start/goal positions from Isaac Sim's NavMesh
+- **Distance Constraints**: Enforce minimum (5m) and maximum (100m) distance between positions
+- **Path Validation**: Verify navigable paths exist between sampled positions
+- **Robot Teleportation**: Teleport robot to start position in Isaac Sim
+- **AMCL Initialization**: Publish initial pose for localization
+- **RViz Markers**: Visualize start (green), goal (red), and robot (blue) positions
+- **Integrated Launch**: Run missions alongside simulation with `--mission` flag
+
+### RViz Marker Topics
+
+| Topic          | Color | Description                    |
+| -------------- | ----- | ------------------------------ |
+| `/start_marker`| Green | Start position (ARROW marker)  |
+| `/goal_marker` | Red   | Goal position (ARROW marker)   |
+| `/robot_marker`| Blue  | Current robot position (10 Hz) |
+
+### Viewing Markers in RViz2
+
+1. Open RViz2 in the ROS2 container or host
+2. Add "Marker" displays for each topic:
+   - `/start_marker`
+   - `/goal_marker`
+   - `/robot_marker`
+3. Set "Fixed Frame" to `map`
+
+### Running Tests
+
+Tests can be run on the host without ROS2/Isaac Sim (NavMesh-independent tests):
+
+```bash
+cd /path/to/CostNav
+python3 -c "
+from costnav_isaacsim.nav2_mission.navmesh_sampler import SampledPosition
+
+# Test distance calculation
+pos1 = SampledPosition(x=0, y=0, z=0)
+pos2 = SampledPosition(x=3, y=4, z=0)
+print(f'Distance: {pos1.distance_to(pos2)}')  # Should print 5.0
+"
+```
+
+For full tests inside Isaac Sim container:
+
+```bash
+docker exec -it costnav-isaac-sim /isaac-sim/python.sh -m pytest \
+    /workspace/costnav_isaacsim/nav2_mission/tests/ -v
 ```
 
 ---
