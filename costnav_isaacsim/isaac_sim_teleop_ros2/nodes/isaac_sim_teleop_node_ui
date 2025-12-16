@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# Wrapper script to run the teleop node with UI in an interactive terminal
+
+# Check if running in an interactive terminal
+if [ ! -t 0 ]; then
+    echo "Not running in an interactive terminal. Launching in new terminal..."
+    
+    # Try different terminal emulators
+    if command -v gnome-terminal &> /dev/null; then
+        gnome-terminal -- bash -c "export SIM_ROBOT=${SIM_ROBOT}; source /opt/ros/${ROS_DISTRO}/setup.bash; source install/setup.bash 2>/dev/null || true; $(dirname $0)/isaac_sim_teleop_node; exec bash"
+    elif command -v xterm &> /dev/null; then
+        xterm -e "export SIM_ROBOT=${SIM_ROBOT}; source /opt/ros/${ROS_DISTRO}/setup.bash; source install/setup.bash 2>/dev/null || true; $(dirname $0)/isaac_sim_teleop_node; exec bash"
+    elif command -v konsole &> /dev/null; then
+        konsole -e bash -c "export SIM_ROBOT=${SIM_ROBOT}; source /opt/ros/${ROS_DISTRO}/setup.bash; source install/setup.bash 2>/dev/null || true; $(dirname $0)/isaac_sim_teleop_node; exec bash"
+    else
+        echo "Error: No terminal emulator found. Please run directly in a terminal:"
+        echo "  export SIM_ROBOT=nova_carter"
+        echo "  ros2 run isaac_sim_teleop_ros2 isaac_sim_teleop_node"
+        exit 1
+    fi
+else
+    # Running in interactive terminal, just execute the node
+    exec $(dirname $0)/isaac_sim_teleop_node "$@"
+fi
+
