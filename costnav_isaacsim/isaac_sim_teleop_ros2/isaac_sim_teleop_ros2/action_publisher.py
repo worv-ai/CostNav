@@ -139,4 +139,3 @@ class IntActionPublisher:
                         self.pub.publish(msg)
                 break
         return self.topic_name, self.topic_state
-

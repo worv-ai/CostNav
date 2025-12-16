@@ -56,4 +56,3 @@ class ControlState:
     control_report_status = ""  # Empty until first report received
     last_control_report_time = 0.0
     control_report_timeout_detected = False
-

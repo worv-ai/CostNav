@@ -46,7 +46,7 @@ class Monitoring:
             curses.init_pair(4, curses.COLOR_GREEN, curses.COLOR_BLACK)
             curses.init_pair(5, curses.COLOR_YELLOW, curses.COLOR_BLACK)
             curses.init_pair(6, curses.COLOR_MAGENTA, curses.COLOR_BLACK)
-        except: # noqa: E722
+        except:  # noqa: E722
             pass  # Colors not supported, continue without them
 
         stdscr.clear()
@@ -105,7 +105,7 @@ class Monitoring:
         if self.enabled:
             try:
                 curses.endwin()
-            except: # noqa: E722
+            except:  # noqa: E722
                 pass
 
     def log(self, control_state: ControlState):
@@ -203,4 +203,3 @@ class Monitoring:
             bar.addstr(1, 1, " " * val, curses.color_pair(color))
             bar.addstr(1, 1 + val, " " * (bar_width - val))
             bar.refresh()
-

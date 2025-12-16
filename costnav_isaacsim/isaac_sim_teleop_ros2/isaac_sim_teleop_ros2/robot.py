@@ -509,4 +509,3 @@ left/right button : increase/decrease max linear velocity
 CTRL-C to quit
 """
         return msg
-
