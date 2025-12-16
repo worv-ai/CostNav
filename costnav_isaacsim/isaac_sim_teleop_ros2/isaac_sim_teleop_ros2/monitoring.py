@@ -1,6 +1,6 @@
 import curses
 import sys
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 from .robot import Robot
 from .state import ControlState
@@ -46,7 +46,7 @@ class Monitoring:
             curses.init_pair(4, curses.COLOR_GREEN, curses.COLOR_BLACK)
             curses.init_pair(5, curses.COLOR_YELLOW, curses.COLOR_BLACK)
             curses.init_pair(6, curses.COLOR_MAGENTA, curses.COLOR_BLACK)
-        except:
+        except: # noqa: E722
             pass  # Colors not supported, continue without them
 
         stdscr.clear()
@@ -105,7 +105,7 @@ class Monitoring:
         if self.enabled:
             try:
                 curses.endwin()
-            except:
+            except: # noqa: E722
                 pass
 
     def log(self, control_state: ControlState):
@@ -114,7 +114,7 @@ class Monitoring:
 
         try:
             self._log_internal(control_state)
-        except curses.error as e:
+        except curses.error:
             # Silently ignore curses errors during logging
             pass
 
