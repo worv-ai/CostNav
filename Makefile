@@ -39,7 +39,12 @@ build-all: build-isaac-sim build-isaac-lab build-dev
 
 # Build the Isaac Sim ROS workspace using build_ros.sh
 build-ros-ws:
+	@echo "==> Cleaning previous build_ws/$(ROS_DISTRO)..."
+	cd third_party/IsaacSim-ros_workspaces && \
+		docker run --rm -v $$(pwd)/build_ws:/build_ws ubuntu:22.04 rm -rf /build_ws/$(ROS_DISTRO)
+	@echo "==> Building ROS workspace for $(ROS_DISTRO) on Ubuntu $(UBUNTU_VERSION)..."
 	cd third_party/IsaacSim-ros_workspaces && ./build_ros.sh -d $(ROS_DISTRO) -v $(UBUNTU_VERSION)
+	@echo "==> Build complete!"
 
 # Build the ROS2 runtime Docker image
 build-ros2:

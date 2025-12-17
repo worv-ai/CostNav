@@ -176,11 +176,14 @@ class CostNavSimLauncher:
 
         active_viewport = get_active_viewport_window()
         if active_viewport:
-            active_viewport.visible = True
+            active_viewport.visible = False
 
     def _enable_extensions(self):
         """Enable required Isaac Sim extensions."""
         from isaacsim.core.utils.extensions import enable_extension
+
+        # Navigation extension (must be enabled before using navmesh)
+        enable_extension("omni.anim.navigation.core")
 
         # Core extensions
         enable_extension("omni.isaac.sensor")

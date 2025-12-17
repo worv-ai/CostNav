@@ -2,11 +2,17 @@
 # This file overrides the command to keep containers running for development
 services:
   isaac-sim:
-    # Matches ENTRYPOINT ["/bin/bash"] with args
-    command: ["-c", "sleep infinity"]
+    # Override command to keep container running (matches ENTRYPOINT ["/bin/bash"])
+    command:
+      - "-c"
+      - "sleep infinity"
 
   isaac-lab:
-    command: ["-c", "sleep infinity"]
+    command:
+      - "-c"
+      - "sleep infinity"
 
   ros2:
-    command: ["-c", "sleep infinity"]
+    command:
+      - "-c"
+      - "sleep infinity"

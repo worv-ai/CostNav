@@ -20,7 +20,7 @@ x-ros2-service: &ros2-service
   command: >
     bash -c "source /opt/ros/jazzy/setup.bash &&
              source /workspace/build_ws/install/local_setup.sh &&
-             ros2 launch carter_navigation carter_navigation.launch.py map:=/workspace/nav2_params/carter_sidewalk.yaml params_file:=/workspace/nav2_params/carter_navigation_params.yaml"
+             ros2 launch /workspace/nav2_params/carter_navigation.launch.py map:=/workspace/nav2_params/carter_sidewalk.yaml params_file:=/workspace/nav2_params/carter_navigation_params.yaml rviz_config:=/workspace/nav2_params/carter_navigation.rviz"
   network_mode: host
   stdin_open: true
   tty: true
@@ -71,7 +71,7 @@ services:
     working_dir: /workspace
     command:
       - "-ic"
-      - "/workspace/costnav_isaacsim/launch.py"
+      - "/workspace/costnav_isaacsim/launch.py --mission"
     healthcheck:
       test:
         [
@@ -165,7 +165,7 @@ services:
     depends_on:
       isaac-sim:
         condition: service_healthy
-  
+
   # ROS2 with teleop - waits for Isaac Sim to be healthy before starting
   ros2-teleop:
     <<: *ros2-service
@@ -195,4 +195,3 @@ services:
                colcon build --packages-select isaac_sim_teleop_ros2 &&
                source install/local_setup.sh &&
                ros2 launch isaac_sim_teleop_ros2 teleop_isaac_sim.launch.py"
-
