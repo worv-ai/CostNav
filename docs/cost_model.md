@@ -356,7 +356,7 @@ pie title Operating Cost per Delivery ($3.00 total)
 
 ### :pencil: Logging Cost Metrics
 
-Cost metrics are logged during training via `rl_games_helpers.py`:
+Cost metrics are logged during training via `env_helpers.py`:
 
 ```python
 def on_episode_end(episode_info):

@@ -1,8 +1,35 @@
 seed: 42
 
 
+# Custom model configuration for mixed input (CNN + MLP) architecture
+# When custom_model.enabled is True, the models section below is ignored
+# and custom models from costnav_isaaclab.tasks are used instead
+custom_model:
+  enabled: True
+  # Module path to the custom model factory function
+  module: "costnav_isaaclab.tasks.manager_based.costnav_isaaclab_v2_NavRL.skrl_network"
+  # Factory function name that returns {"policy": policy_model, "value": value_model}
+  factory: "get_mix_input_models"
+  # Parameters passed to the factory function
+  params:
+    vector_obs_size: 8  # pose_command (2) + base_lin_vel (3) + base_ang_vel (3)
+    cnn_input_shape: [4, 135, 240]  # [channels, height, width] for RGB-D
+    conv_depths: [32, 64, 128, 256]  # IMPALA channel depths
+    mlp_units: [256, 256, 256]  # MLP hidden layer sizes
+    clip_actions: True
+    clip_log_std: True
+    min_log_std: -20.0
+    max_log_std: 2.0
+    initial_log_std: -15.0
+    fixed_sigma: True  # Use learnable parameter (not state-dependent)
+    mu_activation: "None"  # No activation on action mean
+    sigma_activation: "None"  # No activation on sigma
+    value_activation: "None"  # No activation on value output
+
+
 # Models are instantiated using skrl's model instantiator utility
 # https://skrl.readthedocs.io/en/latest/api/utils/model_instantiators.html
+# NOTE: This section is ignored when custom_model.enabled is True
 models:
   separate: False
   policy:  # see gaussian_model parameters
@@ -48,7 +75,7 @@ agent:
   learning_rate: 5.0e-04
   learning_rate_scheduler: KLAdaptiveLR
   learning_rate_scheduler_kwargs:
-    kl_threshold: 0.008
+    kl_threshold: 0.016
   state_preprocessor: RunningStandardScaler
   state_preprocessor_kwargs: null
   value_preprocessor: RunningStandardScaler
@@ -61,7 +88,7 @@ agent:
   clip_predicted_values: True
   entropy_loss_scale: 0.0
   value_loss_scale: 2.0
-  kl_threshold: 0.0
+  kl_threshold: 0.016
   rewards_shaper_scale: 0.1
   time_limit_bootstrap: False
   # logging and checkpoint
@@ -76,5 +103,5 @@ agent:
 # https://skrl.readthedocs.io/en/latest/api/trainers/sequential.html
 trainer:
   class: SequentialTrainer
-  timesteps: 4800
+  timesteps: 50000
   environment_info: log

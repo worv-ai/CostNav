@@ -34,6 +34,11 @@ parser.add_argument(
     help="Use the pre-trained checkpoint from Nucleus.",
 )
 parser.add_argument(
+    "--use_last_checkpoint",
+    action="store_true",
+    help="When no checkpoint provided, use the last saved model. Otherwise use the best saved model.",
+)
+parser.add_argument(
     "--ml_framework",
     type=str,
     default="torch",
@@ -65,13 +70,13 @@ simulation_app = app_launcher.app
 
 """Rest everything follows."""
 
-import gymnasium as gym
 import os
 import random
 import time
-import torch
 
+import gymnasium as gym
 import skrl
+import torch
 from packaging import version
 
 # check for minimum supported skrl version
@@ -88,6 +93,9 @@ if args_cli.ml_framework.startswith("torch"):
 elif args_cli.ml_framework.startswith("jax"):
     from skrl.utils.runner.jax import Runner
 
+import costnav_isaaclab.tasks  # noqa: F401
+import isaaclab_tasks  # noqa: F401
+from costnav_isaaclab.env_helpers import compute_contact_impulse_metrics, get_env_with_scene
 from isaaclab.envs import (
     DirectMARLEnv,
     DirectMARLEnvCfg,
@@ -97,14 +105,9 @@ from isaaclab.envs import (
 )
 from isaaclab.utils.dict import print_dict
 from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
-
 from isaaclab_rl.skrl import SkrlVecEnvWrapper
-
-import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
-
-import costnav_isaaclab.tasks  # noqa: F401
 
 # config shortcuts
 algorithm = args_cli.algorithm.lower()
@@ -148,8 +151,17 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, expe
     elif args_cli.checkpoint:
         resume_path = os.path.abspath(args_cli.checkpoint)
     else:
+        # specify name of checkpoint
+        if args_cli.use_last_checkpoint:
+            checkpoint_file = ".*"
+        else:
+            # this loads the best checkpoint (default behavior)
+            checkpoint_file = "best_agent.pt"
         resume_path = get_checkpoint_path(
-            log_root_path, run_dir=f".*_{algorithm}_{args_cli.ml_framework}", other_dirs=["checkpoints"]
+            log_root_path,
+            run_dir=f".*_{algorithm}_{args_cli.ml_framework}",
+            checkpoint=checkpoint_file,
+            other_dirs=["checkpoints"],
         )
     log_dir = os.path.dirname(os.path.dirname(resume_path))
 
@@ -159,6 +171,13 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, expe
     # convert to single-agent instance if required by the RL algorithm
     if isinstance(env.unwrapped, DirectMARLEnv) and algorithm in ["ppo"]:
         env = multi_agent_to_single_agent(env)
+
+    # find the underlying Isaac Lab env that exposes the scene and contact sensor
+    base_env = get_env_with_scene(env)
+    if base_env is None:
+        print(
+            "[INFO] Could not locate underlying Isaac Lab env with 'scene'; contact impulse metrics will be disabled."
+        )
 
     # get environment (step) dt for real-time evaluation
     try:
@@ -212,6 +231,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, expe
                 actions = outputs[-1].get("mean_actions", outputs[0])
             # env stepping
             obs, _, _, _, _ = env.step(actions)
+
+            # compute and print contact impulse metrics (if available)
+            if base_env is not None:
+                metrics = compute_contact_impulse_metrics(base_env)
+                if metrics is not None and metrics["max_impulse_dt"] is not None:
+                    max_force = metrics["max_force"].max().item()
+                    max_impulse = metrics["max_impulse_dt"].max().item()
+                    print(f"[IMPULSE METRIC] max_force={max_force:.4f} N  max_impulse_dt={max_impulse:.4f} N*s")
+
         if args_cli.video:
             timestep += 1
             # exit the play loop after recording one video

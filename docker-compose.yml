@@ -28,7 +28,7 @@ x-ros2-service: &ros2-service
 services:
   # Isaac Sim environment
   isaac-sim:
-    profiles: ["isaac-sim", "nav2"]
+    profiles: ["isaac-sim", "nav2", "teleop"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -165,3 +165,34 @@ services:
     depends_on:
       isaac-sim:
         condition: service_healthy
+  
+  # ROS2 with teleop - waits for Isaac Sim to be healthy before starting
+  ros2-teleop:
+    <<: *ros2-service
+    profiles: ["teleop"]
+    container_name: costnav-ros2-teleop
+    depends_on:
+      isaac-sim:
+        condition: service_healthy
+    environment:
+      - ROS_DISTRO=jazzy
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - DISPLAY=${DISPLAY:-:0}
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
+      - SIM_ROBOT=nova_carter # NOTE: isaac_sim_teleop_ros2 Package requires SIM_ROBOT
+    volumes:
+      - ./third_party/IsaacSim-ros_workspaces/build_ws/jazzy/isaac_sim_ros_ws:/workspace/build_ws:rw
+      - ./costnav_isaacsim/isaac_sim_teleop_ros2:/workspace/isaac_sim_teleop_ros2:rw
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    devices:
+      - /dev/input/by-id/usb-Microsoft_Controller_${XBOX_ID:-0}-event-joystick:/dev/input/event0
+      - /dev/input/by-id/usb-Microsoft_Controller_${XBOX_ID:-0}-joystick:/dev/input/js0
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+               source /workspace/build_ws/install/local_setup.sh &&
+               cd /workspace/isaac_sim_teleop_ros2 &&
+               colcon build --packages-select isaac_sim_teleop_ros2 &&
+               source install/local_setup.sh &&
+               ros2 launch isaac_sim_teleop_ros2 teleop_isaac_sim.launch.py"
+

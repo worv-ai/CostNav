@@ -73,8 +73,24 @@ python scripts/sb3/train.py --task=Template-Costnav-Isaaclab-v2-NavRL
 
 **Usage**:
 ```bash
-python scripts/skrl/train.py --task=Template-Costnav-Isaaclab-v2-NavRL
+python scripts/skrl/train.py \
+    --task=Template-Costnav-Isaaclab-v2-NavRL \
+    --enable_cameras \
+    --headless \
+    --num_envs=64
 ```
+
+**Arguments**:
+- `--task`: Environment name (required)
+- `--enable_cameras`: Enable RGB-D camera observations
+- `--headless`: Run without GUI (faster)
+- `--num_envs`: Number of parallel environments
+- `--checkpoint`: Path to specific checkpoint to resume from
+- `--seed`: Random seed for reproducibility
+- `--track`: Enable wandb tracking
+- `--wandb-project-name`: Wandb project name
+- `--wandb-entity`: Wandb entity (username or team)
+- `--wandb-name`: Wandb run name
 
 **Advantages**:
 - Modular design
@@ -119,11 +135,76 @@ python scripts/rl_games/play.py \
     --checkpoint=path/to/checkpoint.pth
 ```
 
+**Arguments**:
+- `--task`: Environment name (required)
+- `--enable_cameras`: Enable RGB-D camera observations
+- `--checkpoint`: Path to specific checkpoint
+- `--use_last_checkpoint`: Use the last saved model instead of best (when no checkpoint provided)
+
 **Features**:
 - Real-time visualization
 - Camera views
 - Debug overlays
 - Manual control (optional)
+- Contact impulse metrics
+
+### SKRL Evaluation
+
+**Location**: `costnav_isaaclab/scripts/skrl/evaluate.py`
+
+**Purpose**: Evaluate trained SKRL policy on test scenarios
+
+**Usage**:
+```bash
+python scripts/skrl/evaluate.py \
+    --task=Template-Costnav-Isaaclab-v2-NavRL \
+    --enable_cameras \
+    --checkpoint=path/to/checkpoint.pt \
+    --num_envs=64 \
+    --num_episodes=100
+```
+
+**Arguments**:
+- `--task`: Environment name (required)
+- `--enable_cameras`: Enable RGB-D camera observations
+- `--checkpoint`: Path to specific checkpoint
+- `--use_last_checkpoint`: Use the last saved model instead of best (when no checkpoint provided)
+- `--num_envs`: Number of parallel environments
+- `--num_episodes`: Number of episodes to evaluate
+
+**Output**:
+- Success rate
+- Average episode length
+- Average reward
+- Collision metrics
+- Navigation energy metrics
+- CSV export with per-episode data
+
+### SKRL Play
+
+**Location**: `costnav_isaaclab/scripts/skrl/play.py`
+
+**Purpose**: Visualize trained SKRL policy in simulation
+
+**Usage**:
+```bash
+python scripts/skrl/play.py \
+    --task=Template-Costnav-Isaaclab-v2-NavRL \
+    --enable_cameras \
+    --checkpoint=path/to/checkpoint.pt
+```
+
+**Arguments**:
+- `--task`: Environment name (required)
+- `--enable_cameras`: Enable RGB-D camera observations
+- `--checkpoint`: Path to specific checkpoint
+- `--use_last_checkpoint`: Use the last saved model instead of best (when no checkpoint provided)
+
+**Features**:
+- Real-time visualization
+- Camera views
+- Debug overlays
+- Contact impulse metrics
 
 ## Testing Scripts
 

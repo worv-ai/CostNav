@@ -12,6 +12,14 @@ from .rl_games_network import register_mix_input_network
 
 register_mix_input_network()
 
+# Import custom skrl network classes for mixed input (CNN + MLP) architectures
+from .skrl_network import (  # noqa: F401
+    MixInputSharedModel,
+    get_mix_input_models,
+)
+
+__all__ = ["MixInputSharedModel", "get_mix_input_models", "agents"]
+
 ##
 # Register Gym environments.
 ##

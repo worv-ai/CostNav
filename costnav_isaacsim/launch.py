@@ -176,7 +176,7 @@ class CostNavSimLauncher:
 
         active_viewport = get_active_viewport_window()
         if active_viewport:
-            active_viewport.visible = False
+            active_viewport.visible = True
 
     def _enable_extensions(self):
         """Enable required Isaac Sim extensions."""

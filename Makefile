@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 run-ros2 run-isaac-sim run-nav2
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 run-ros2 run-isaac-sim run-nav2 run-teleop
 
 DOCKERFILE ?= Dockerfile
 DOCKER_BUILD ?= docker build
@@ -63,3 +63,8 @@ run-isaac-sim:
 run-nav2:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile nav2 up
+
+# Run both Isaac Sim and ROS2 teleop together (using combined 'teleop' profile)
+run-teleop:
+	xhost +local:docker 2>/dev/null || true
+	$(DOCKER_COMPOSE) --profile teleop up
