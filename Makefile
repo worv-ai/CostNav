@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 run-ros2 run-isaac-sim run-nav2 run-teleop
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 run-ros2 run-isaac-sim run-nav2 run-teleop run-rosbag stop-rosbag
 
 DOCKERFILE ?= Dockerfile
 DOCKER_BUILD ?= docker build
@@ -68,3 +68,20 @@ run-nav2:
 run-teleop:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile teleop up
+
+# =============================================================================
+# ROS Bag Recording Targets
+# =============================================================================
+
+# Start ROS bag recording in the background (run before run-teleop)
+# Records all ROS messages to ./rosbags/ directory
+# Stop with: make stop-rosbag
+run-rosbag:
+	$(DOCKER_COMPOSE) --profile rosbag up -d ros2-bag-recorder
+	@echo "ROS bag recording started. Bags will be saved to ./rosbags/"
+	@echo "Run 'make stop-rosbag' to stop recording and save the bag file."
+
+# Stop ROS bag recording gracefully (SIGINT triggers bag file save)
+stop-rosbag:
+	$(DOCKER_COMPOSE) --profile rosbag down
+	@echo "ROS bag recording stopped. Check ./rosbags/ for recorded bag files."
