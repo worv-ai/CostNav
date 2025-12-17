@@ -9,7 +9,7 @@ x-ros2-service: &ros2-service
   environment:
     - ROS_DISTRO=jazzy
     - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-    - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+    - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
     - DISPLAY=${DISPLAY:-:0}
     - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
   volumes:
@@ -177,7 +177,7 @@ services:
     environment:
       - ROS_DISTRO=jazzy
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
       - DISPLAY=${DISPLAY:-:0}
       - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
       - SIM_ROBOT=nova_carter # NOTE: isaac_sim_teleop_ros2 Package requires SIM_ROBOT
@@ -204,7 +204,7 @@ services:
     environment:
       - ROS_DISTRO=jazzy
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
       - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
     volumes:
       - ./third_party/IsaacSim-ros_workspaces/build_ws/jazzy/isaac_sim_ros_ws:/workspace/build_ws:rw
