@@ -7,8 +7,8 @@
 Python module serving as a project/extension template.
 """
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 # Ensure the shared `src` directory is importable so that we can reuse
 # refactored configs without duplicating code under this extension.
@@ -23,6 +23,13 @@ from .compat import ensure_gymnasium_compat, ensure_isaaclab_imports
 
 ensure_gymnasium_compat()
 ensure_isaaclab_imports()
+
+# Export helper utilities (framework-agnostic)
+from .env_helpers import (  # noqa: F401
+    compute_contact_impulse_metrics,
+    compute_navigation_energy_step,
+    get_env_with_scene,
+)
 
 # Register Gym environments.
 from .tasks import *  # noqa: F403

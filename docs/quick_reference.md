@@ -47,6 +47,8 @@ This page provides quick commands and code snippets for common tasks in CostNav.
 
 ### :sparkles: Quick Start
 
+=== "RL-Games"
+
 ```bash
 cd costnav_isaaclab
 
@@ -62,16 +64,36 @@ python scripts/rl_games/train.py \
     --headless
 ```
 
+=== "SKRL"
+
+```bash
+cd costnav_isaaclab
+
+# Train with default settings (vector observations only)
+python scripts/skrl/train.py \
+    --task=Template-Costnav-Isaaclab-v2-NavRL \
+    --headless
+
+# Train with cameras (RGB-D observations)
+python scripts/skrl/train.py \
+    --task=Template-Costnav-Isaaclab-v2-NavRL \
+    --enable_cameras \
+    --headless
+```
+
 ### :keyboard: Common Training Commands
 
-| Use Case | Command |
-|:---------|:--------|
-| Resume from checkpoint | `--resume` |
-| More environments (faster) | `--num_envs=128` |
-| With visualization | Remove `--headless` |
-| SLURM cluster | `sbatch train.sbatch` |
+| Use Case | RL-Games | SKRL |
+|:---------|:---------|:-----|
+| Resume from checkpoint | `--resume` | `--checkpoint=PATH` |
+| More environments (faster) | `--num_envs=128` | `--num_envs=128` |
+| With visualization | Remove `--headless` | Remove `--headless` |
+| Wandb tracking | `--track` | `--track` |
+| SLURM cluster | `sbatch train.sbatch` | `sbatch train.sbatch` |
 
 ??? example "Full Command Examples"
+
+=== "RL-Games"
 
     ```bash
     # Resume from checkpoint
@@ -91,11 +113,40 @@ python scripts/rl_games/train.py \
         --enable_cameras
     ```
 
+=== "SKRL"
+
+    ```bash
+    # Resume from checkpoint
+    python scripts/skrl/train.py \
+        --task=Template-Costnav-Isaaclab-v2-NavRL \
+        --checkpoint=logs/skrl/.../checkpoints/best_agent.pt
+
+    # Train with more environments (faster)
+    python scripts/skrl/train.py \
+        --task=Template-Costnav-Isaaclab-v2-NavRL \
+        --num_envs=128 \
+        --headless
+
+    # Train with visualization (slower, for debugging)
+    python scripts/skrl/train.py \
+        --task=Template-Costnav-Isaaclab-v2-NavRL \
+        --enable_cameras
+
+    # Train with wandb tracking
+    python scripts/skrl/train.py \
+        --task=Template-Costnav-Isaaclab-v2-NavRL \
+        --headless \
+        --track \
+        --wandb-project-name=costnav
+    ```
+
 ---
 
 ## :bar_chart: Evaluation
 
 ### :clipboard: Evaluate Trained Policy
+
+=== "RL-Games"
 
 ```bash
 # Evaluate with metrics
@@ -109,6 +160,28 @@ python scripts/rl_games/play.py \
     --task=Template-Costnav-Isaaclab-v2-NavRL \
     --enable_cameras \
     --checkpoint=logs/rl_games/Template-Costnav-Isaaclab-v2-NavRL/nn/last_checkpoint.pth
+```
+
+=== "SKRL"
+
+```bash
+# Evaluate with metrics
+python scripts/skrl/evaluate.py \
+    --task=Template-Costnav-Isaaclab-v2-NavRL \
+    --enable_cameras \
+    --checkpoint=logs/skrl/Template-Costnav-Isaaclab-v2-NavRL/checkpoints/best_agent.pt
+
+# Visualize policy
+python scripts/skrl/play.py \
+    --task=Template-Costnav-Isaaclab-v2-NavRL \
+    --enable_cameras \
+    --checkpoint=logs/skrl/Template-Costnav-Isaaclab-v2-NavRL/checkpoints/best_agent.pt
+
+# Use last checkpoint (instead of best)
+python scripts/skrl/evaluate.py \
+    --task=Template-Costnav-Isaaclab-v2-NavRL \
+    --enable_cameras \
+    --use_last_checkpoint
 ```
 
 ### :balance_scale: Baseline Comparisons
@@ -125,9 +198,20 @@ python scripts/rl_games/play.py \
 
 ### :chart_with_upwards_trend: TensorBoard
 
+=== "RL-Games"
+
 ```bash
 # Start TensorBoard
 tensorboard --logdir costnav_isaaclab/logs/rl_games --port 6006
+
+# Open in browser: http://localhost:6006
+```
+
+=== "SKRL"
+
+```bash
+# Start TensorBoard
+tensorboard --logdir costnav_isaaclab/logs/skrl --port 6006
 
 # Open in browser: http://localhost:6006
 ```

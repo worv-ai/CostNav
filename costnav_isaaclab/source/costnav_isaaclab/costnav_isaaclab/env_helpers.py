@@ -1,4 +1,5 @@
-# Helper utilities shared between RL-Games play/evaluate scripts.
+# Helper utilities shared between RL framework play/evaluate scripts.
+# These functions are framework-agnostic and can be used with RL-Games, skrl, or any other RL framework.
 
 from __future__ import annotations
 
