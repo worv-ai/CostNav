@@ -22,6 +22,7 @@ x-ros2-service: &ros2-service
              source /workspace/build_ws/install/local_setup.sh &&
              ros2 launch carter_navigation carter_navigation.launch.py map:=/workspace/nav2_params/carter_sidewalk.yaml params_file:=/workspace/nav2_params/carter_navigation_params.yaml"
   network_mode: host
+  ipc: host
   stdin_open: true
   tty: true
 
@@ -51,6 +52,7 @@ services:
       - ACCEPT_EULA=Y
       - PRIVACY_CONSENT=Y
       - OMNI_KIT_ACCEPT_EULA=YES
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
       - DISPLAY=${DISPLAY:-:0}
@@ -85,6 +87,7 @@ services:
       retries: 60
       start_period: 5s
     network_mode: host
+    ipc: host
     stdin_open: true
     tty: true
 
@@ -113,6 +116,7 @@ services:
     environment:
       - ACCEPT_EULA=Y
       - PRIVACY_CONSENT=Y
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
       - DISPLAY=${DISPLAY:-:0}
@@ -131,6 +135,7 @@ services:
       - ${HOME}/docker/isaac-sim/data:/isaac-sim/.local/share/ov/data:rw
       - ${HOME}/docker/isaac-sim/pkg:/isaac-sim/.local/share/ov/pkg:rw
     network_mode: host
+    ipc: host
     stdin_open: true
     tty: true
     # Development environment (minimal dependencies)

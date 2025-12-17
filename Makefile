@@ -83,6 +83,5 @@ run-rosbag:
 
 # Stop ROS bag recording gracefully (SIGINT triggers bag file save)
 stop-rosbag:
-	$(DOCKER_COMPOSE) --profile rosbag stop ros2-bag-recorder
 	$(DOCKER_COMPOSE) --profile rosbag down
 	@echo "ROS bag recording stopped. Check ./rosbags/ for recorded bag files."
