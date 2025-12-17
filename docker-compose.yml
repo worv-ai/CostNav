@@ -212,11 +212,9 @@ services:
       - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
       - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
     volumes:
-      - ./third_party/IsaacSim-ros_workspaces/build_ws/jazzy/isaac_sim_ros_ws:/workspace/build_ws:rw
       - ./rosbags:/workspace/rosbags:rw
     command: >
       bash -c "source /opt/ros/jazzy/setup.bash &&
-               source /workspace/build_ws/install/local_setup.sh &&
                mkdir -p /workspace/rosbags &&
                ros2 bag record -a -o /workspace/rosbags/recording_$$(date +%Y%m%d_%H%M%S)"
 
