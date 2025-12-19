@@ -37,7 +37,7 @@ teleport:
   # Height offset when teleporting robot (meters)
   height_offset: 0.5
 
-  # Robot prim path in USD stage
+  # Robot prim path in USD stage (use parent Xform, not articulation root)
   robot_prim: "/World/Nova_Carter_ROS"
 
 # RViz marker visualization settings

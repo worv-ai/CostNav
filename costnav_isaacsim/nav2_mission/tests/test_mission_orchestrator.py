@@ -6,10 +6,10 @@
 """Unit tests for mission orchestrator module."""
 
 import math
-from unittest.mock import MagicMock
 
 # Mock ROS2 and other dependencies
 import sys
+from unittest.mock import MagicMock
 
 sys.modules["rclpy"] = MagicMock()
 sys.modules["rclpy.node"] = MagicMock()
@@ -23,36 +23,39 @@ sys.modules["visualization_msgs.msg"] = MagicMock()
 sys.modules["std_msgs"] = MagicMock()
 sys.modules["std_msgs.msg"] = MagicMock()
 
+from costnav_isaacsim.nav2_mission.mission_orchestrator import OrchestratorConfig
 from costnav_isaacsim.nav2_mission.navmesh_sampler import SampledPosition
-from costnav_isaacsim.nav2_mission.mission_orchestrator import MissionConfig
 
 
-class TestMissionConfig:
-    """Tests for MissionConfig dataclass."""
+class TestOrchestratorConfig:
+    """Tests for OrchestratorConfig dataclass."""
 
     def test_default_values(self):
-        """Test default mission configuration values."""
-        config = MissionConfig()
+        """Test default orchestrator configuration values."""
+        config = OrchestratorConfig()
         assert config.min_distance == 5.0
         assert config.max_distance == 100.0
         assert config.initial_pose_delay == 1.0
         assert config.goal_delay == 0.5
         assert config.teleport_height == 0.1
+        assert config.robot_prim_path is None
 
     def test_custom_values(self):
-        """Test custom mission configuration."""
-        config = MissionConfig(
+        """Test custom orchestrator configuration."""
+        config = OrchestratorConfig(
             min_distance=10.0,
             max_distance=50.0,
             initial_pose_delay=2.0,
             goal_delay=1.0,
             teleport_height=0.2,
+            robot_prim_path="/World/Nova_Carter_ROS",
         )
         assert config.min_distance == 10.0
         assert config.max_distance == 50.0
         assert config.initial_pose_delay == 2.0
         assert config.goal_delay == 1.0
         assert config.teleport_height == 0.2
+        assert config.robot_prim_path == "/World/Nova_Carter_ROS"
 
 
 class TestYawToQuaternion:

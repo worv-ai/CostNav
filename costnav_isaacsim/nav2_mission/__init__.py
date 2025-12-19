@@ -9,21 +9,32 @@ This package provides tools for:
 - NavMesh-based position sampling for navigation goals
 - Robot teleportation and mission initiation
 - RViz marker visualization for start, goal, and robot positions
-- Background mission execution via MissionRunner
+- Mission execution via MissionManager (main loop) or MissionRunner (background thread)
 
-Usage:
-    from costnav_isaacsim.nav2_mission import NavMeshSampler, MissionRunner
+Usage (Recommended - Main Loop Integration):
+    from costnav_isaacsim.nav2_mission import MissionManager
     from costnav_isaacsim.config import load_mission_config
 
     # Load configuration
     config = load_mission_config()
 
-    # Run missions in background
+    # Create mission manager (runs in main simulation loop)
+    manager = MissionManager(config, simulation_context)
+
+    # Main simulation loop
+    while running:
+        simulation_context.step(render=True)
+        manager.step()  # Step mission manager after physics step
+
+Usage (Legacy - Background Thread):
+    from costnav_isaacsim.nav2_mission import MissionRunner
+
+    # Run missions in background (may have timing issues with teleportation)
     runner = MissionRunner(config)
     runner.start()
 
 Note:
-    MarkerPublisher, MissionOrchestrator, and MissionRunner require ROS2 (rclpy).
+    MarkerPublisher, MissionOrchestrator, MissionRunner, and MissionManager require ROS2 (rclpy).
     NavMeshSampler and SampledPosition can be used without ROS2.
 """
 
@@ -41,10 +52,10 @@ except ImportError:
 
 if ROS2_AVAILABLE:
     from .marker_publisher import MarkerPublisher
+    from .mission_manager import MissionManager
     from .mission_orchestrator import (
         MissionOrchestrator,
-        MissionConfig,
-        create_isaac_sim_teleport_callback,
+        OrchestratorConfig,
     )
     from .mission_runner import MissionRunner
 
@@ -53,18 +64,18 @@ if ROS2_AVAILABLE:
         "SampledPosition",
         "MarkerPublisher",
         "MissionOrchestrator",
-        "MissionConfig",
+        "OrchestratorConfig",
         "MissionRunner",
-        "create_isaac_sim_teleport_callback",
+        "MissionManager",
         "ROS2_AVAILABLE",
     ]
 else:
     # Provide stub classes for documentation/type hints
     MarkerPublisher = None
     MissionOrchestrator = None
-    MissionConfig = None
+    OrchestratorConfig = None
     MissionRunner = None
-    create_isaac_sim_teleport_callback = None
+    MissionManager = None
 
     __all__ = [
         "NavMeshSampler",

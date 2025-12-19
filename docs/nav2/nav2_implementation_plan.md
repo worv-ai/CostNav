@@ -227,11 +227,18 @@ ros2 launch carter_navigation carter_navigation.launch.py \
     params_file:=/workspace/costnav_isaacsim/nav2_params/carter_navigation_params.yaml
 ```
 
-**3. (Optional) Run Mission Orchestrator Separately:**
+**3. Mission Orchestration:**
+
+Missions are integrated into `launch.py`. Use the `--mission` flag with optional overrides:
 
 ```bash
+# Run with default mission config
 docker exec -it costnav-isaac-sim /isaac-sim/python.sh \
-    /workspace/costnav_isaacsim/launch_mission.py --mission-count 5
+    /workspace/costnav_isaacsim/launch.py --mission
+
+# Override mission parameters
+docker exec -it costnav-isaac-sim /isaac-sim/python.sh \
+    /workspace/costnav_isaacsim/launch.py --mission --mission-count 5 --min-distance 10
 ```
 
 **Configuration Files:**

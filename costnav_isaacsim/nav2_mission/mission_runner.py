@@ -71,8 +71,8 @@ class MissionRunner:
     def _run_missions(self):
         """Run missions in background thread."""
         import rclpy
-        from .mission_orchestrator import MissionOrchestrator
-        from .mission_orchestrator import MissionConfig as OrchestratorConfig
+
+        from .mission_orchestrator import MissionOrchestrator, OrchestratorConfig
 
         try:
             # Initialize ROS2 in this thread
@@ -87,9 +87,11 @@ class MissionRunner:
             orch_config = OrchestratorConfig(
                 min_distance=self.config.min_distance,
                 max_distance=self.config.max_distance,
+                teleport_height=self.config.teleport.height_offset,
+                robot_prim_path=self.config.teleport.robot_prim,
             )
 
-            # Create orchestrator
+            # Create orchestrator (will auto-setup teleport callback if robot_prim_path is set)
             self._orchestrator = MissionOrchestrator(config=orch_config)
 
             mission_count = self.config.count
@@ -103,9 +105,9 @@ class MissionRunner:
                     logger.info("Mission runner stopped by request")
                     break
 
-                logger.info(f"\n{'='*50}")
+                logger.info(f"\n{'=' * 50}")
                 logger.info(f"Mission {i + 1}/{mission_count}")
-                logger.info(f"{'='*50}")
+                logger.info(f"{'=' * 50}")
 
                 success = self._orchestrator.run_mission()
 

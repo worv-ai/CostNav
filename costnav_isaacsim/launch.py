@@ -227,10 +227,19 @@ class CostNavSimLauncher:
         )
         return simulation_context
 
-    def _step_simulation(self, throttle: bool = False):
-        """Advance simulation one tick with optional throttling."""
+    def _step_simulation(self, mission_manager=None, throttle: bool = False):
+        """Advance simulation one tick with optional throttling.
+
+        Args:
+            mission_manager: Optional mission manager to step after simulation step.
+            throttle: Whether to throttle to maintain rendering_dt timing.
+        """
         tick_start = time.perf_counter()
         self.simulation_context.step(render=True)
+
+        # Step mission manager after simulation step (similar to ros_manager.step() pattern)
+        if mission_manager is not None:
+            mission_manager.step()
 
         if throttle:
             elapsed = time.perf_counter() - tick_start
@@ -268,31 +277,40 @@ class CostNavSimLauncher:
         self._check_healthy()
         logger.info("Simulation started")
 
-        # Start mission runner if configured
+        # Setup mission manager if configured (instead of background thread)
+        mission_manager = None
         if self.mission_config:
-            self._start_mission_runner()
+            mission_manager = self._setup_mission_manager()
 
         # Main simulation loop
         while self.simulation_app.is_running():
-            self._step_simulation(throttle=True)
+            self._step_simulation(mission_manager=mission_manager, throttle=True)
 
-    def _start_mission_runner(self):
-        """Start the mission runner in a background thread."""
+    def _setup_mission_manager(self):
+        """Setup mission manager to run in main simulation loop (not background thread).
+
+        This follows the Isaac Sim pattern where mission management is integrated
+        into the main simulation loop via step() calls, ensuring proper synchronization
+        between teleportation and physics simulation steps.
+
+        Returns:
+            MissionManager instance that will be stepped in the main loop.
+        """
         if not self.mission_config:
-            return
+            return None
 
         # Import here to avoid circular imports and only when needed
-        from nav2_mission import MissionRunner
+        from nav2_mission import MissionManager
 
-        self._mission_runner = MissionRunner(self.mission_config)
-        self._mission_runner.start()
+        mission_manager = MissionManager(
+            config=self.mission_config,
+            simulation_context=self.simulation_context,
+        )
+        logger.info("Mission manager initialized (will run in main simulation loop)")
+        return mission_manager
 
     def close(self):
         """Cleanup and close simulation."""
-        # Stop mission runner if running
-        if self._mission_runner:
-            self._mission_runner.stop()
-
         # Remove health check file
         if os.path.exists("/tmp/.isaac_sim_running"):
             os.remove("/tmp/.isaac_sim_running")

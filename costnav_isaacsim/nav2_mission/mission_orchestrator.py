@@ -26,15 +26,15 @@ import logging
 import math
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional, Callable
+from typing import TYPE_CHECKING, Callable, Optional
 
 import rclpy
-from rclpy.node import Node
-from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
+from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
-from .navmesh_sampler import NavMeshSampler, SampledPosition
 from .marker_publisher import MarkerPublisher
+from .navmesh_sampler import NavMeshSampler, SampledPosition
 
 if TYPE_CHECKING:
     pass
@@ -43,14 +43,16 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class MissionConfig:
-    """Configuration for a navigation mission."""
+class OrchestratorConfig:
+    """Configuration for MissionOrchestrator runtime settings."""
 
     min_distance: float = 5.0  # Minimum distance between start and goal (meters)
     max_distance: float = 100.0  # Maximum distance between start and goal (meters)
     initial_pose_delay: float = 1.0  # Delay after setting initial pose (seconds)
     goal_delay: float = 0.5  # Delay after publishing goal (seconds)
     teleport_height: float = 0.1  # Height offset for teleportation (meters)
+    robot_prim_path: Optional[str] = None  # Robot prim path in Isaac Sim USD stage
+    teleport_settle_steps: int = 5  # Number of simulation steps after teleportation for physics to settle
 
 
 class MissionOrchestrator(Node):
@@ -58,19 +60,26 @@ class MissionOrchestrator(Node):
 
     This class coordinates the full mission workflow:
     1. NavMesh position sampling with distance constraints
-    2. Robot teleportation in Isaac Sim
+    2. Robot teleportation in Isaac Sim (auto-setup if robot_prim_path provided)
     3. AMCL initial pose publication
     4. Nav2 goal publication
     5. RViz marker visualization
 
     Example usage:
+        import rclpy
+        from nav2_mission import MissionOrchestrator, OrchestratorConfig
+
         rclpy.init()
-        orchestrator = MissionOrchestrator()
 
-        # Run a single mission
-        success = orchestrator.run_mission()
+        # Auto-setup Isaac Sim teleportation by providing robot_prim_path
+        config = OrchestratorConfig(
+            min_distance=5.0,
+            max_distance=50.0,
+            robot_prim_path="/World/Nova_Carter_ROS"
+        )
+        orchestrator = MissionOrchestrator(config=config)
 
-        # Run multiple missions
+        # Run missions
         for i in range(10):
             orchestrator.run_mission()
             time.sleep(30)  # Wait for navigation to complete
@@ -82,8 +91,9 @@ class MissionOrchestrator(Node):
     def __init__(
         self,
         node_name: str = "nav2_mission_orchestrator",
-        config: Optional[MissionConfig] = None,
+        config: Optional[OrchestratorConfig] = None,
         teleport_callback: Optional[Callable[[SampledPosition], bool]] = None,
+        simulation_context: Optional[object] = None,
     ):
         """Initialize the mission orchestrator.
 
@@ -92,12 +102,17 @@ class MissionOrchestrator(Node):
             config: Mission configuration parameters.
             teleport_callback: Optional callback for robot teleportation.
                               Signature: (position: SampledPosition) -> bool
-                              If not provided, teleportation is skipped.
+                              If not provided and config.robot_prim_path is set,
+                              will attempt to auto-setup Isaac Sim teleportation.
+            simulation_context: Optional Isaac Sim SimulationContext for stepping
+                              physics after teleportation. Required for proper
+                              physics settling after teleportation.
         """
         super().__init__(node_name)
 
-        self.config = config or MissionConfig()
+        self.config = config or OrchestratorConfig()
         self._teleport_callback = teleport_callback
+        self._simulation_context = simulation_context
 
         # Initialize NavMesh sampler
         self.sampler = NavMeshSampler(
@@ -107,6 +122,10 @@ class MissionOrchestrator(Node):
 
         # Initialize marker publisher (as a separate node)
         self.marker_publisher = MarkerPublisher(node_name=f"{node_name}_markers")
+
+        # Auto-setup Isaac Sim teleport callback if robot_prim_path is provided
+        if self._teleport_callback is None and self.config.robot_prim_path:
+            self._setup_isaac_sim_teleport()
 
         # QoS for pose topics
         pose_qos = QoSProfile(
@@ -141,6 +160,87 @@ class MissionOrchestrator(Node):
         """
         self._teleport_callback = callback
         self.get_logger().info("Teleport callback registered.")
+
+    def _setup_isaac_sim_teleport(self) -> None:
+        """Setup Isaac Sim teleportation using XFormPrim.
+
+        This method uses XFormPrim for teleportation which provides:
+        - Physics-aware positioning for articulated robots
+        - Proper integration with Isaac Sim physics simulation
+
+        If any step fails, logs a warning and continues without teleportation.
+        """
+        if not self.config.robot_prim_path:
+            return
+
+        robot_prim_path = self.config.robot_prim_path
+        self.get_logger().info(f"Setting up Isaac Sim teleport for robot at: {robot_prim_path}")
+
+        try:
+            # Import Isaac Sim modules
+            from isaacsim.core.prims import XFormPrim
+
+            # Store robot prim path
+            self._robot_prim_path = robot_prim_path
+
+            # Initialize XFormPrim for the robot
+            self._xform_prim = XFormPrim(robot_prim_path)
+            self._xform_prim.initialize()
+
+            # Create teleport callback using XFormPrim approach
+            teleport_callback = self._create_xform_prim_teleport_callback()
+            self._teleport_callback = teleport_callback
+
+            self.get_logger().info("Isaac Sim teleport callback successfully registered")
+
+        except ImportError as e:
+            self.get_logger().warning(f"Isaac Sim modules not available: {e}")
+            self.get_logger().warning("Teleportation will be skipped for missions")
+        except Exception as e:
+            self.get_logger().error(f"Failed to setup Isaac Sim teleport callback: {e}")
+            import traceback
+
+            self.get_logger().error(traceback.format_exc())
+            self.get_logger().warning("Teleportation will be skipped for missions")
+
+    def _create_xform_prim_teleport_callback(self):
+        """Create teleport callback using XFormPrim (works for articulations and rigid bodies).
+
+        This uses XFormPrim for physics-aware teleportation.
+        This method works for both articulated robots and simple rigid bodies.
+
+        Returns:
+            Callable that teleports the robot to a given position.
+        """
+        import numpy as np
+
+        def teleport_callback(position: SampledPosition) -> bool:
+            try:
+                # Position array
+                pos = np.array([position.x, position.y, position.z], dtype=np.float64)
+
+                # Quaternion (w, x, y, z) format for Isaac Sim XFormPrim
+                qx, qy, qz, qw = self._yaw_to_quaternion(position.heading)
+                # XFormPrim expects (w, x, y, z) order
+                orientation = np.array([qw, qx, qy, qz], dtype=np.float64)
+
+                # Set pose using XFormPrim
+                self._xform_prim.set_world_pose(position=pos, orientation=orientation)
+
+                self.get_logger().info(
+                    f"Teleported robot to ({position.x:.2f}, {position.y:.2f}, {position.z:.2f}), "
+                    f"heading={position.heading:.2f}"
+                )
+                return True
+
+            except Exception as e:
+                self.get_logger().error(f"XFormPrim teleportation failed: {e}")
+                import traceback
+
+                self.get_logger().error(traceback.format_exc())
+                return False
+
+        return teleport_callback
 
     def _yaw_to_quaternion(self, yaw: float) -> tuple:
         """Convert yaw angle to quaternion (x, y, z, w)."""
@@ -205,8 +305,7 @@ class MissionOrchestrator(Node):
 
         self.goal_pose_pub.publish(msg)
         self.get_logger().info(
-            f"Published goal pose: ({position.x:.2f}, {position.y:.2f}), "
-            f"heading={math.degrees(position.heading):.1f}°"
+            f"Published goal pose: ({position.x:.2f}, {position.y:.2f}), heading={math.degrees(position.heading):.1f}°"
         )
 
     def teleport_robot(self, position: SampledPosition) -> bool:
@@ -290,8 +389,15 @@ class MissionOrchestrator(Node):
             self.get_logger().error("Mission aborted: teleportation failed.")
             return False
 
-        # Small delay after teleportation
-        time.sleep(0.5)
+        # Step physics to settle after teleportation
+        # This is critical for proper physics state updates
+        if self._simulation_context is not None:
+            for _ in range(self.config.teleport_settle_steps):
+                self._simulation_context.step(render=True)
+            self.get_logger().info(f"Physics settled after {self.config.teleport_settle_steps} simulation steps")
+        else:
+            # Fallback to time-based delay if no simulation context
+            time.sleep(0.5)
 
         # Step 3: Publish initial pose for AMCL
         self.publish_initial_pose(start)
@@ -322,53 +428,6 @@ class MissionOrchestrator(Node):
         super().destroy_node()
 
 
-def create_isaac_sim_teleport_callback(robot):
-    """Create a teleport callback for Isaac Sim robots.
-
-    This function creates a callback that can be used with MissionOrchestrator
-    to teleport robots in Isaac Sim.
-
-    Args:
-        robot: Isaac Sim robot object with write_root_pose_to_sim method.
-
-    Returns:
-        Callable that teleports the robot to a given position.
-
-    Example:
-        from omni.isaac.lab.assets import Articulation
-        robot = Articulation(...)
-
-        orchestrator = MissionOrchestrator()
-        orchestrator.set_teleport_callback(
-            create_isaac_sim_teleport_callback(robot)
-        )
-    """
-    import torch
-
-    def teleport_callback(position: SampledPosition) -> bool:
-        try:
-            # Create pose tensor: [x, y, z, qw, qx, qy, qz]
-            qx, qy, qz, qw = (
-                0.0,
-                0.0,
-                math.sin(position.heading / 2.0),
-                math.cos(position.heading / 2.0),
-            )
-
-            pose = torch.tensor(
-                [[position.x, position.y, position.z, qw, qx, qy, qz]],
-                device=robot.device,
-            )
-
-            robot.write_root_pose_to_sim(pose)
-            return True
-        except Exception as e:
-            logger.error(f"Isaac Sim teleportation failed: {e}")
-            return False
-
-    return teleport_callback
-
-
 def main(args=None):
     """Main entry point for standalone mission orchestrator.
 
@@ -376,7 +435,7 @@ def main(args=None):
     """
     rclpy.init(args=args)
 
-    config = MissionConfig(
+    config = OrchestratorConfig(
         min_distance=5.0,
         max_distance=50.0,
     )

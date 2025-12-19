@@ -61,8 +61,7 @@ The `costnav_isaacsim` module serves as:
 ```
 costnav_isaacsim/
 ├── README.md                              # This file
-├── launch.py                              # Isaac Sim launcher script (main simulation)
-├── launch_mission.py                      # Nav2 mission launcher (run after launch.py)
+├── launch.py                              # Isaac Sim launcher script (main simulation + missions)
 ├── config/                                # Configuration files
 │   ├── __init__.py                        # Config module exports
 │   ├── config_loader.py                   # YAML config loader with MissionConfig dataclass
@@ -369,21 +368,17 @@ python /workspace/costnav_isaacsim/launch.py --mission --config /path/to/custom.
 python /workspace/costnav_isaacsim/launch.py --mission --mission-count 5 --min-distance 10
 ```
 
-#### Option 2: Two-Step Launch
+#### Alternative: Manual Mission Control
 
-**Step 1: Start the Nav2 Stack**
-
-```bash
-# From repository root, start both Isaac Sim and ROS2 Nav2 containers
-make run-nav2
-```
-
-**Step 2: Run Missions Separately**
+You can also run missions interactively by starting the simulation without the `--mission` flag, then manually triggering missions:
 
 ```bash
-# Open a new terminal and exec into the Isaac Sim container
+# Start simulation without automatic missions
 docker exec -it costnav-isaac-sim /isaac-sim/python.sh \
-    /workspace/costnav_isaacsim/launch_mission.py
+    /workspace/costnav_isaacsim/launch.py
+
+# In another terminal, you can interact with the running simulation
+# or manually publish Nav2 goals via ROS2 CLI tools
 ```
 
 ### Configuration
