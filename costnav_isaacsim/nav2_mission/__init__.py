@@ -9,9 +9,9 @@ This package provides tools for:
 - NavMesh-based position sampling for navigation goals
 - Robot teleportation and mission initiation
 - RViz marker visualization for start, goal, and robot positions
-- Mission execution via MissionManager (main loop) or MissionRunner (background thread)
+- Mission execution via MissionManager (main loop integration)
 
-Usage (Recommended - Main Loop Integration):
+Usage:
     from costnav_isaacsim.nav2_mission import MissionManager
     from costnav_isaacsim.config import load_mission_config
 
@@ -26,15 +26,8 @@ Usage (Recommended - Main Loop Integration):
         simulation_context.step(render=True)
         manager.step()  # Step mission manager after physics step
 
-Usage (Legacy - Background Thread):
-    from costnav_isaacsim.nav2_mission import MissionRunner
-
-    # Run missions in background (may have timing issues with teleportation)
-    runner = MissionRunner(config)
-    runner.start()
-
 Note:
-    MarkerPublisher, MissionOrchestrator, MissionRunner, and MissionManager require ROS2 (rclpy).
+    MarkerPublisher and MissionManager require ROS2 (rclpy).
     NavMeshSampler and SampledPosition can be used without ROS2.
 """
 
@@ -52,30 +45,21 @@ except ImportError:
 
 if ROS2_AVAILABLE:
     from .marker_publisher import MarkerPublisher
-    from .mission_manager import MissionManager
-    from .mission_orchestrator import (
-        MissionOrchestrator,
-        OrchestratorConfig,
-    )
-    from .mission_runner import MissionRunner
+    from .mission_manager import MissionManager, MissionManagerConfig
 
     __all__ = [
         "NavMeshSampler",
         "SampledPosition",
         "MarkerPublisher",
-        "MissionOrchestrator",
-        "OrchestratorConfig",
-        "MissionRunner",
         "MissionManager",
+        "MissionManagerConfig",
         "ROS2_AVAILABLE",
     ]
 else:
     # Provide stub classes for documentation/type hints
     MarkerPublisher = None
-    MissionOrchestrator = None
-    OrchestratorConfig = None
-    MissionRunner = None
     MissionManager = None
+    MissionManagerConfig = None
 
     __all__ = [
         "NavMeshSampler",

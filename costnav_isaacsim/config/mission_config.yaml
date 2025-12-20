@@ -8,7 +8,7 @@
 # Mission execution settings
 mission:
   # Number of missions to run (0 = infinite)
-  count: 1
+  count: 10
 
   # Delay between missions in seconds
   delay: 30.0

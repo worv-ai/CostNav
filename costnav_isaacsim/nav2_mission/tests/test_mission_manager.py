@@ -3,7 +3,17 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Unit tests for mission orchestrator module."""
+"""Unit tests for MissionManager configuration and workflow logic.
+
+This test suite validates:
+1. MissionManagerConfig dataclass defaults and customization
+2. Mission workflow logic (sampling, teleporting, publishing)
+3. Utility functions (yaw to quaternion conversion, covariance matrix)
+
+Note:
+    These tests do NOT require ROS2 or Isaac Sim to be running.
+    They test the configuration and logic, not the actual ROS2 communication.
+"""
 
 import math
 
@@ -23,16 +33,16 @@ sys.modules["visualization_msgs.msg"] = MagicMock()
 sys.modules["std_msgs"] = MagicMock()
 sys.modules["std_msgs.msg"] = MagicMock()
 
-from costnav_isaacsim.nav2_mission.mission_orchestrator import OrchestratorConfig
+from costnav_isaacsim.nav2_mission.mission_manager import MissionManagerConfig
 from costnav_isaacsim.nav2_mission.navmesh_sampler import SampledPosition
 
 
-class TestOrchestratorConfig:
-    """Tests for OrchestratorConfig dataclass."""
+class TestMissionManagerConfig:
+    """Tests for MissionManagerConfig dataclass."""
 
     def test_default_values(self):
-        """Test default orchestrator configuration values."""
-        config = OrchestratorConfig()
+        """Test default mission manager configuration values."""
+        config = MissionManagerConfig()
         assert config.min_distance == 5.0
         assert config.max_distance == 100.0
         assert config.initial_pose_delay == 1.0
@@ -41,8 +51,8 @@ class TestOrchestratorConfig:
         assert config.robot_prim_path is None
 
     def test_custom_values(self):
-        """Test custom orchestrator configuration."""
-        config = OrchestratorConfig(
+        """Test custom mission manager configuration."""
+        config = MissionManagerConfig(
             min_distance=10.0,
             max_distance=50.0,
             initial_pose_delay=2.0,

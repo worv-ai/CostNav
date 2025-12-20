@@ -30,7 +30,6 @@ from isaacsim import SimulationApp
 
 if TYPE_CHECKING:
     from config import MissionConfig
-    from nav2_mission import MissionRunner
 
 logger = logging.getLogger("costnav_launch")
 
@@ -138,9 +137,6 @@ class CostNavSimLauncher:
         self.physics_dt = physics_dt
         self.rendering_dt = rendering_dt
         self.mission_config = mission_config
-
-        # Mission runner (initialized later if needed)
-        self._mission_runner: "Optional[MissionRunner]" = None
 
         # Setup simulation app
         self.simulation_app = self._setup_simulation_app(headless)
@@ -303,7 +299,7 @@ class CostNavSimLauncher:
         from nav2_mission import MissionManager
 
         mission_manager = MissionManager(
-            config=self.mission_config,
+            mission_config=self.mission_config,
             simulation_context=self.simulation_context,
         )
         logger.info("Mission manager initialized (will run in main simulation loop)")
