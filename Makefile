@@ -60,6 +60,8 @@ run-ros2:
 # =============================================================================
 
 # Run the Isaac Sim container with launch.py (includes RViz)
+# TODO: down and up every time takes a long time. Can we avoid it?
+# However, healthcheck does not work if we don't do this...
 run-isaac-sim:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile isaac-sim down
