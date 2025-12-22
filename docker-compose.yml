@@ -20,7 +20,7 @@ x-ros2-service: &ros2-service
   command: >
     bash -c "source /opt/ros/jazzy/setup.bash &&
              source /workspace/build_ws/install/local_setup.sh &&
-             ros2 launch /workspace/nav2_params/carter_navigation.launch.py map:=/workspace/nav2_params/carter_sidewalk.yaml params_file:=/workspace/nav2_params/carter_navigation_params.yaml rviz_config:=/workspace/nav2_params/carter_navigation.rviz"
+             ros2 launch /workspace/nav2_params/carter_navigation.launch.py map:=/workspace/nav2_params/carter_sidewalk.yaml params_file:=/workspace/nav2_params/carter_navigation_params.yaml"
   network_mode: host
   stdin_open: true
   tty: true
@@ -165,6 +165,23 @@ services:
     depends_on:
       isaac-sim:
         condition: service_healthy
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+               source /workspace/build_ws/install/local_setup.sh &&
+               ros2 launch /workspace/nav2_params/nav2.launch.py"
+
+  # ROS2 with RViz - standalone visualization service that runs alongside Isaac Sim
+  ros2-rviz:
+    <<: *ros2-service
+    profiles: ["isaac-sim", "nav2", "teleop"]
+    container_name: costnav-ros2-rviz
+    depends_on:
+      isaac-sim:
+        condition: service_healthy
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+               source /workspace/build_ws/install/local_setup.sh &&
+               ros2 launch /workspace/nav2_params/rviz.launch.py"
 
   # ROS2 with teleop - waits for Isaac Sim to be healthy before starting
   ros2-teleop:

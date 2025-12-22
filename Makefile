@@ -59,17 +59,20 @@ run-ros2:
 # Isaac Sim and Navigation Targets
 # =============================================================================
 
-# Run the Isaac Sim container with launch.py
+# Run the Isaac Sim container with launch.py (includes RViz)
 run-isaac-sim:
 	xhost +local:docker 2>/dev/null || true
-	$(DOCKER_COMPOSE) --profile isaac-sim up isaac-sim
+	$(DOCKER_COMPOSE) --profile isaac-sim down
+	$(DOCKER_COMPOSE) --profile isaac-sim up
 
 # Run both Isaac Sim and ROS2 Nav2 navigation together (using combined 'nav2' profile)
 run-nav2:
 	xhost +local:docker 2>/dev/null || true
+	$(DOCKER_COMPOSE) --profile nav2 down
 	$(DOCKER_COMPOSE) --profile nav2 up
 
 # Run both Isaac Sim and ROS2 teleop together (using combined 'teleop' profile)
 run-teleop:
 	xhost +local:docker 2>/dev/null || true
+	$(DOCKER_COMPOSE) --profile teleop down
 	$(DOCKER_COMPOSE) --profile teleop up
