@@ -194,19 +194,26 @@ class MissionManager:
             # Create ROS2 node
             self._node = Node(self.node_name)
 
-            # Initialize NavMesh sampler
+            # Initialize NavMesh sampler with config values
             self._sampler = NavMeshSampler(
                 min_distance=self.config.min_distance,
                 max_distance=self.config.max_distance,
                 edge_margin=self.config.edge_margin,
+                max_sampling_attempts=self.mission_config.sampling.max_attempts,
+                validate_path=self.mission_config.sampling.validate_path,
             )
 
-            # Initialize marker publisher (as a separate node) with marker scale from config
+            # Initialize marker publisher (as a separate node) with config values
             self._marker_publisher = MarkerPublisher(
                 node_name=f"{self.node_name}_markers",
                 arrow_length=self.mission_config.markers.arrow_length,
                 arrow_width=self.mission_config.markers.arrow_width,
                 arrow_height=self.mission_config.markers.arrow_height,
+                start_topic=self.mission_config.markers.start_topic,
+                goal_topic=self.mission_config.markers.goal_topic,
+                robot_topic=self.mission_config.markers.robot_topic,
+                odom_topic=self.mission_config.nav2.odom_topic,
+                enabled=self.mission_config.markers.enabled,
             )
 
             # Auto-setup Isaac Sim teleport callback if robot_prim_path is provided
@@ -220,9 +227,13 @@ class MissionManager:
                 reliability=ReliabilityPolicy.RELIABLE,
             )
 
-            # Publishers
-            self._initial_pose_pub = self._node.create_publisher(PoseWithCovarianceStamped, "/initialpose", pose_qos)
-            self._goal_pose_pub = self._node.create_publisher(PoseStamped, "/goal_pose", pose_qos)
+            # Publishers (using topic names from config)
+            self._initial_pose_pub = self._node.create_publisher(
+                PoseWithCovarianceStamped, self.mission_config.nav2.initial_pose_topic, pose_qos
+            )
+            self._goal_pose_pub = self._node.create_publisher(
+                PoseStamped, self.mission_config.nav2.goal_pose_topic, pose_qos
+            )
 
             self._initialized = True
             self._state = MissionState.WAITING_FOR_NAV2

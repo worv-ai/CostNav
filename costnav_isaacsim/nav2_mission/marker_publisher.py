@@ -72,6 +72,11 @@ class MarkerPublisher(Node):
         arrow_length: float = 0.8,
         arrow_width: float = 0.15,
         arrow_height: float = 0.15,
+        start_topic: str = "/start_marker",
+        goal_topic: str = "/goal_marker",
+        robot_topic: str = "/robot_marker",
+        odom_topic: str = "/odom",
+        enabled: bool = True,
     ):
         """Initialize the marker publisher node.
 
@@ -80,10 +85,16 @@ class MarkerPublisher(Node):
             arrow_length: Length of arrow markers (scale_x).
             arrow_width: Width of arrow markers (scale_y).
             arrow_height: Height of arrow markers (scale_z).
+            start_topic: Topic name for start position marker.
+            goal_topic: Topic name for goal position marker.
+            robot_topic: Topic name for robot position marker.
+            odom_topic: Topic name for odometry subscription.
+            enabled: Whether to enable marker publishing.
         """
         super().__init__(node_name)
 
-        # Store marker scale configuration
+        # Store marker configuration
+        self._enabled = enabled
         self._arrow_length = arrow_length
         self._arrow_width = arrow_width
         self._arrow_height = arrow_height
@@ -95,13 +106,13 @@ class MarkerPublisher(Node):
             reliability=ReliabilityPolicy.RELIABLE,
         )
 
-        # Publishers
-        self.start_marker_pub = self.create_publisher(Marker, "/start_marker", marker_qos)
-        self.goal_marker_pub = self.create_publisher(Marker, "/goal_marker", marker_qos)
-        self.robot_marker_pub = self.create_publisher(Marker, "/robot_marker", 10)
+        # Publishers (using topic names from config)
+        self.start_marker_pub = self.create_publisher(Marker, start_topic, marker_qos)
+        self.goal_marker_pub = self.create_publisher(Marker, goal_topic, marker_qos)
+        self.robot_marker_pub = self.create_publisher(Marker, robot_topic, 10)
 
-        # Subscriber for robot odometry
-        self.odom_sub = self.create_subscription(Odometry, "/odom", self._odom_callback, 10)
+        # Subscriber for robot odometry (using topic name from config)
+        self.odom_sub = self.create_subscription(Odometry, odom_topic, self._odom_callback, 10)
 
         # Timer for robot marker updates (10 Hz)
         self._robot_pose: Optional[tuple] = None
@@ -180,10 +191,10 @@ class MarkerPublisher(Node):
         marker.type = config.marker_type
         marker.action = Marker.ADD
 
-        # Position
-        marker.pose.position.x = x
-        marker.pose.position.y = y
-        marker.pose.position.z = z
+        # Position (ensure float type for ROS2 compatibility)
+        marker.pose.position.x = float(x)
+        marker.pose.position.y = float(y)
+        marker.pose.position.z = float(z)
 
         # Orientation (quaternion from yaw)
         marker.pose.orientation.x = 0.0
@@ -191,13 +202,13 @@ class MarkerPublisher(Node):
         marker.pose.orientation.z = math.sin(heading / 2.0)
         marker.pose.orientation.w = math.cos(heading / 2.0)
 
-        # Scale
-        marker.scale.x = config.scale_x
-        marker.scale.y = config.scale_y
-        marker.scale.z = config.scale_z
+        # Scale (ensure float type for ROS2 compatibility)
+        marker.scale.x = float(config.scale_x)
+        marker.scale.y = float(config.scale_y)
+        marker.scale.z = float(config.scale_z)
 
-        # Color
-        marker.color = ColorRGBA(r=config.r, g=config.g, b=config.b, a=config.a)
+        # Color (ensure float type for ROS2 compatibility)
+        marker.color = ColorRGBA(r=float(config.r), g=float(config.g), b=float(config.b), a=float(config.a))
 
         # Lifetime (0 = forever for start/goal, short for robot)
         marker.lifetime.sec = 0
@@ -218,6 +229,9 @@ class MarkerPublisher(Node):
             x, y, z: Start position coordinates.
             heading: Start orientation in radians.
         """
+        if not self._enabled:
+            return
+
         marker = self._create_marker(
             marker_id=self._start_marker_id,
             x=x,
@@ -243,6 +257,9 @@ class MarkerPublisher(Node):
             x, y, z: Goal position coordinates.
             heading: Goal orientation in radians.
         """
+        if not self._enabled:
+            return
+
         marker = self._create_marker(
             marker_id=self._goal_marker_id,
             x=x,
@@ -283,7 +300,7 @@ class MarkerPublisher(Node):
 
     def _publish_robot_marker(self) -> None:
         """Publish robot position marker (called by timer)."""
-        if self._robot_pose is None:
+        if not self._enabled or self._robot_pose is None:
             return
 
         x, y, z, heading = self._robot_pose

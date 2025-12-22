@@ -56,9 +56,9 @@ markers:
 
   # Marker sizes (meters)
   scale:
-    arrow_length: 20.0
-    arrow_width: 5
-    arrow_height: 0.5
+    arrow_length: 10.0
+    arrow_width: 3.0
+    arrow_height: 3.0
 
 # Sampling settings
 sampling:

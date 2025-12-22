@@ -90,6 +90,7 @@ class NavMeshSampler:
         default_z: float = 0.0,
         max_sampling_attempts: int = 100,
         edge_margin: float = 0.5,
+        validate_path: bool = True,
     ):
         """Initialize the NavMesh sampler.
 
@@ -101,6 +102,7 @@ class NavMeshSampler:
             default_z: Default Z coordinate for sampled positions.
             max_sampling_attempts: Maximum attempts to find valid position pairs.
             edge_margin: Minimum distance from navmesh edges for sampled positions (meters).
+            validate_path: Whether to validate that a path exists between start and goal.
         """
         self.min_distance = min_distance
         self.max_distance = max_distance
@@ -109,6 +111,7 @@ class NavMeshSampler:
         self.default_z = default_z
         self.max_sampling_attempts = max_sampling_attempts
         self.edge_margin = edge_margin
+        self.validate_path = validate_path
 
         # NavMesh interface (will be acquired on first use)
         self._navmesh_interface: Optional[object] = None
@@ -519,14 +522,15 @@ class NavMeshSampler:
                             )
                         continue
 
-                # Verify path exists between start and goal
-                if not self.check_path_exists(start, goal):
-                    failure_stats["no_path"] += 1
-                    if (attempt + 1) % 20 == 0:
-                        logger.debug(
-                            f"Progress: {attempt + 1}/{self.max_sampling_attempts} attempts. Last: no valid path found"
-                        )
-                    continue
+                # Verify path exists between start and goal (if enabled)
+                if self.validate_path:
+                    if not self.check_path_exists(start, goal):
+                        failure_stats["no_path"] += 1
+                        if (attempt + 1) % 20 == 0:
+                            logger.debug(
+                                f"Progress: {attempt + 1}/{self.max_sampling_attempts} attempts. Last: no valid path found"
+                            )
+                        continue
 
                 # Set goal heading to point from start to goal
                 goal.heading = math.atan2(goal.y - start.y, goal.x - start.x)
