@@ -31,6 +31,7 @@ class Nav2Config:
     """Nav2 integration configuration."""
 
     wait_time: float = 10.0
+    initial_pose_delay: float = 1.0
     initial_pose_topic: str = "/initialpose"
     goal_pose_topic: str = "/goal_pose"
     odom_topic: str = "/odom"
@@ -41,7 +42,7 @@ class TeleportConfig:
     """Robot teleportation configuration."""
 
     height_offset: float = 0.5
-    robot_prim: str = "/World/Nova_Carter_ROS"
+    robot_prim: str = "/World/Nova_Carter_ROS/chassis_link"
 
 
 @dataclass
@@ -50,6 +51,7 @@ class SamplingConfig:
 
     max_attempts: int = 100
     validate_path: bool = True
+    edge_margin: float = 0.5  # Minimum distance from navmesh edges (meters)
 
 
 @dataclass
@@ -84,6 +86,7 @@ class MissionConfig:
         nav2_topics = nav2_data.get("topics", {})
         nav2_config = Nav2Config(
             wait_time=nav2_data.get("wait_time", 10.0),
+            initial_pose_delay=nav2_data.get("initial_pose_delay", 1.0),
             initial_pose_topic=nav2_topics.get("initial_pose", "/initialpose"),
             goal_pose_topic=nav2_topics.get("goal_pose", "/goal_pose"),
             odom_topic=nav2_topics.get("odom", "/odom"),
@@ -92,7 +95,7 @@ class MissionConfig:
         # Parse teleport config
         teleport_config = TeleportConfig(
             height_offset=teleport_data.get("height_offset", 0.5),
-            robot_prim=teleport_data.get("robot_prim", "/World/Nova_Carter_ROS"),
+            robot_prim=teleport_data.get("robot_prim", "/World/Nova_Carter_ROS/chassis_link"),
         )
 
         # Parse markers config
@@ -112,6 +115,7 @@ class MissionConfig:
         sampling_config = SamplingConfig(
             max_attempts=sampling_data.get("max_attempts", 100),
             validate_path=sampling_data.get("validate_path", True),
+            edge_margin=sampling_data.get("edge_margin", 0.5),
         )
 
         return cls(

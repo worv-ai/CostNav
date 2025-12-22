@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import logging
 import math
-import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Callable, Optional
@@ -35,6 +34,7 @@ class MissionManagerConfig:
 
     min_distance: float = 5.0  # Minimum distance between start and goal (meters)
     max_distance: float = 100.0  # Maximum distance between start and goal (meters)
+    edge_margin: float = 0.5  # Minimum distance from navmesh edges (meters)
     initial_pose_delay: float = 1.0  # Delay after setting initial pose (seconds)
     goal_delay: float = 0.5  # Delay after publishing goal (seconds)
     teleport_height: float = 0.1  # Height offset for teleportation (meters)
@@ -112,6 +112,8 @@ class MissionManager:
             manager_config = MissionManagerConfig(
                 min_distance=mission_config.min_distance,
                 max_distance=mission_config.max_distance,
+                edge_margin=mission_config.sampling.edge_margin,
+                initial_pose_delay=mission_config.nav2.initial_pose_delay,
                 teleport_height=mission_config.teleport.height_offset,
                 robot_prim_path=mission_config.teleport.robot_prim,
                 # Use default value of 5 for teleport_settle_steps (not in TeleportConfig)
@@ -141,6 +143,16 @@ class MissionManager:
         # Current mission positions
         self._current_start = None
         self._current_goal = None
+
+    def _get_current_time_seconds(self) -> float:
+        """Get current time in seconds from ROS clock.
+
+        Returns:
+            Current time in seconds.
+        """
+        if self._node is None:
+            return 0.0
+        return self._node.get_clock().now().nanoseconds / 1e9
 
     def step(self):
         """Step the mission manager (called from main simulation loop)."""
@@ -186,10 +198,16 @@ class MissionManager:
             self._sampler = NavMeshSampler(
                 min_distance=self.config.min_distance,
                 max_distance=self.config.max_distance,
+                edge_margin=self.config.edge_margin,
             )
 
-            # Initialize marker publisher (as a separate node)
-            self._marker_publisher = MarkerPublisher(node_name=f"{self.node_name}_markers")
+            # Initialize marker publisher (as a separate node) with marker scale from config
+            self._marker_publisher = MarkerPublisher(
+                node_name=f"{self.node_name}_markers",
+                arrow_length=self.mission_config.markers.arrow_length,
+                arrow_width=self.mission_config.markers.arrow_width,
+                arrow_height=self.mission_config.markers.arrow_height,
+            )
 
             # Auto-setup Isaac Sim teleport callback if robot_prim_path is provided
             if self._teleport_callback is None and self.config.robot_prim_path:
@@ -208,7 +226,7 @@ class MissionManager:
 
             self._initialized = True
             self._state = MissionState.WAITING_FOR_NAV2
-            self._wait_start_time = time.time()
+            self._wait_start_time = self._get_current_time_seconds()
 
             logger.info(f"[{self._state.name}] Mission manager initialized")
             logger.info(f"[{self._state.name}] Will run {self.mission_config.count} mission(s)")
@@ -272,7 +290,8 @@ class MissionManager:
         """Create teleport callback using UsdGeom.Xformable.
 
         This uses USD xform operations for teleportation.
-        This method works for all prim types including articulated robots.
+        The teleport operation simply translates and orients the target prim
+        to the specified position without modifying any articulation states.
 
         Returns:
             Callable that teleports the robot to a given position.
@@ -432,7 +451,7 @@ class MissionManager:
 
     def _step_waiting_for_nav2(self):
         """Wait for Nav2 stack to be ready."""
-        elapsed = time.time() - self._wait_start_time
+        elapsed = self._get_current_time_seconds() - self._wait_start_time
         if elapsed >= self.mission_config.nav2.wait_time:
             logger.info(f"[{self._state.name}] Nav2 wait time complete, ready to start missions")
             self._state = MissionState.READY
@@ -496,12 +515,12 @@ class MissionManager:
     def _step_publishing_initial_pose(self):
         """Publish initial pose for AMCL."""
         self._publish_initial_pose(self._current_start)
-        self._wait_start_time = time.time()
+        self._wait_start_time = self._get_current_time_seconds()
         self._state = MissionState.PUBLISHING_GOAL
 
     def _step_publishing_goal(self):
         """Publish goal pose to Nav2 after initial pose delay."""
-        elapsed = time.time() - self._wait_start_time
+        elapsed = self._get_current_time_seconds() - self._wait_start_time
         if elapsed >= self.config.initial_pose_delay:
             self._publish_goal_pose(self._current_goal)
 
@@ -509,12 +528,12 @@ class MissionManager:
             self._marker_publisher.publish_start_goal_from_sampled(self._current_start, self._current_goal)
 
             logger.info(f"[{self._state.name}] Mission {self._current_mission} initiated successfully")
-            self._mission_start_time = time.time()
+            self._mission_start_time = self._get_current_time_seconds()
             self._state = MissionState.WAITING_FOR_COMPLETION
 
     def _step_waiting_for_completion(self):
         """Wait for mission delay before starting next mission."""
-        elapsed = time.time() - self._mission_start_time
+        elapsed = self._get_current_time_seconds() - self._mission_start_time
         if elapsed >= self.mission_config.delay:
             self._state = MissionState.READY
 

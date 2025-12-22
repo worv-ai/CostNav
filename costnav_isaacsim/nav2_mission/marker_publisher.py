@@ -23,11 +23,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 import rclpy
-from rclpy.node import Node
-from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 from nav_msgs.msg import Odometry
-from visualization_msgs.msg import Marker
+from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import ColorRGBA
+from visualization_msgs.msg import Marker
 
 if TYPE_CHECKING:
     from .navmesh_sampler import SampledPosition
@@ -48,18 +48,6 @@ class MarkerConfig:
     frame_id: str = "map"
 
 
-# Predefined marker configurations
-START_MARKER_CONFIG = MarkerConfig(
-    r=0.0, g=1.0, b=0.0, marker_type=Marker.ARROW, scale_x=0.8, scale_y=0.15, scale_z=0.15
-)
-GOAL_MARKER_CONFIG = MarkerConfig(
-    r=1.0, g=0.0, b=0.0, marker_type=Marker.ARROW, scale_x=0.8, scale_y=0.15, scale_z=0.15
-)
-ROBOT_MARKER_CONFIG = MarkerConfig(
-    r=0.0, g=0.0, b=1.0, marker_type=Marker.ARROW, scale_x=0.6, scale_y=0.1, scale_z=0.1
-)
-
-
 class MarkerPublisher(Node):
     """ROS2 Node for publishing Nav2 mission visualization markers.
 
@@ -78,13 +66,27 @@ class MarkerPublisher(Node):
         rclpy.spin(marker_pub)
     """
 
-    def __init__(self, node_name: str = "nav2_marker_publisher"):
+    def __init__(
+        self,
+        node_name: str = "nav2_marker_publisher",
+        arrow_length: float = 0.8,
+        arrow_width: float = 0.15,
+        arrow_height: float = 0.15,
+    ):
         """Initialize the marker publisher node.
 
         Args:
             node_name: Name of the ROS2 node.
+            arrow_length: Length of arrow markers (scale_x).
+            arrow_width: Width of arrow markers (scale_y).
+            arrow_height: Height of arrow markers (scale_z).
         """
         super().__init__(node_name)
+
+        # Store marker scale configuration
+        self._arrow_length = arrow_length
+        self._arrow_width = arrow_width
+        self._arrow_height = arrow_height
 
         # QoS profile for markers (latched/transient local for persistence)
         marker_qos = QoSProfile(
@@ -111,6 +113,42 @@ class MarkerPublisher(Node):
         self._robot_marker_id = 2
 
         self.get_logger().info("MarkerPublisher initialized.")
+
+    def _get_start_marker_config(self) -> MarkerConfig:
+        """Get marker configuration for start position."""
+        return MarkerConfig(
+            r=0.0,
+            g=1.0,
+            b=0.0,
+            marker_type=Marker.ARROW,
+            scale_x=self._arrow_length,
+            scale_y=self._arrow_width,
+            scale_z=self._arrow_height,
+        )
+
+    def _get_goal_marker_config(self) -> MarkerConfig:
+        """Get marker configuration for goal position."""
+        return MarkerConfig(
+            r=1.0,
+            g=0.0,
+            b=0.0,
+            marker_type=Marker.ARROW,
+            scale_x=self._arrow_length,
+            scale_y=self._arrow_width,
+            scale_z=self._arrow_height,
+        )
+
+    def _get_robot_marker_config(self) -> MarkerConfig:
+        """Get marker configuration for robot position."""
+        return MarkerConfig(
+            r=0.0,
+            g=0.0,
+            b=1.0,
+            marker_type=Marker.ARROW,
+            scale_x=self._arrow_length * 0.75,  # Slightly smaller than start/goal
+            scale_y=self._arrow_width * 0.67,
+            scale_z=self._arrow_height * 0.67,
+        )
 
     def _create_marker(
         self,
@@ -186,7 +224,7 @@ class MarkerPublisher(Node):
             y=y,
             z=z,
             heading=heading,
-            config=START_MARKER_CONFIG,
+            config=self._get_start_marker_config(),
             label="Start",
         )
         self.start_marker_pub.publish(marker)
@@ -211,7 +249,7 @@ class MarkerPublisher(Node):
             y=y,
             z=z,
             heading=heading,
-            config=GOAL_MARKER_CONFIG,
+            config=self._get_goal_marker_config(),
             label="Goal",
         )
         self.goal_marker_pub.publish(marker)
@@ -255,7 +293,7 @@ class MarkerPublisher(Node):
             y=y,
             z=z,
             heading=heading,
-            config=ROBOT_MARKER_CONFIG,
+            config=self._get_robot_marker_config(),
             label="Robot",
         )
         # Short lifetime for robot marker (updates frequently)

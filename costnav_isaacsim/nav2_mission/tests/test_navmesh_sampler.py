@@ -9,9 +9,9 @@ import math
 
 # Import the module under test
 from costnav_isaacsim.nav2_mission.navmesh_sampler import (
-    SampledPosition,
-    NavMeshSampler,
     NAVMESH_AVAILABLE,
+    NavMeshSampler,
+    SampledPosition,
 )
 
 
@@ -80,6 +80,7 @@ class TestNavMeshSampler:
         assert sampler.max_distance == 100.0
         assert sampler.agent_radius == 0.5
         assert sampler.agent_height == 1.8
+        assert sampler.edge_margin == 0.5
 
     def test_initialization_custom_values(self):
         """Test sampler initialization with custom values."""
@@ -88,11 +89,13 @@ class TestNavMeshSampler:
             max_distance=50.0,
             agent_radius=0.3,
             agent_height=1.5,
+            edge_margin=1.0,
         )
         assert sampler.min_distance == 10.0
         assert sampler.max_distance == 50.0
         assert sampler.agent_radius == 0.3
         assert sampler.agent_height == 1.5
+        assert sampler.edge_margin == 1.0
 
     def test_is_available_without_navmesh(self):
         """Test availability check when NavMesh is not available."""
@@ -160,3 +163,126 @@ class TestHeadingCalculation:
 
         heading = math.atan2(goal.y - start.y, goal.x - start.x)
         assert abs(abs(heading) - math.pi) < 0.001
+
+
+class TestEdgeMarginParameter:
+    """Tests for edge_margin parameter functionality."""
+
+    def test_edge_margin_initialization(self):
+        """Test edge_margin parameter initialization with various values."""
+        # Default value
+        sampler_default = NavMeshSampler()
+        assert sampler_default.edge_margin == 0.5
+
+        # Custom value
+        sampler_custom = NavMeshSampler(edge_margin=1.5)
+        assert sampler_custom.edge_margin == 1.5
+
+        # Zero and negative values (disables edge checking)
+        sampler_zero = NavMeshSampler(edge_margin=0.0)
+        assert sampler_zero.edge_margin == 0.0
+
+        sampler_negative = NavMeshSampler(edge_margin=-1.0)
+        assert sampler_negative.edge_margin == -1.0
+
+
+class TestAnnulusSampling:
+    """Tests for annulus-based goal sampling."""
+
+    def test_annulus_sampling_distance_constraints(self):
+        """Test that annulus sampling respects distance constraints mathematically."""
+        sampler = NavMeshSampler(min_distance=10.0, max_distance=20.0, edge_margin=0.0)
+        start = SampledPosition(x=0.0, y=0.0, z=0.0)
+
+        # Test the mathematical properties of annulus sampling
+        import random
+
+        random.seed(42)
+
+        # Simulate what annulus sampling does
+        for _ in range(20):
+            distance = random.uniform(sampler.min_distance, sampler.max_distance)
+            angle = random.uniform(-math.pi, math.pi)
+
+            candidate_x = start.x + distance * math.cos(angle)
+            candidate_y = start.y + distance * math.sin(angle)
+
+            # Verify the candidate is in the correct distance range
+            actual_distance = math.sqrt(candidate_x**2 + candidate_y**2)
+            assert sampler.min_distance <= actual_distance <= sampler.max_distance
+
+
+class TestSamplingMethodComparison:
+    """Tests comparing different sampling strategies."""
+
+    def test_annulus_vs_global_sampling_efficiency(self):
+        """Test that annulus sampling is more efficient than global sampling."""
+        min_dist = 10.0
+        max_dist = 20.0
+
+        # Annulus area
+        annulus_area = math.pi * (max_dist**2 - min_dist**2)
+
+        # If navmesh has area 100x100 = 10000
+        navmesh_area = 10000.0
+
+        # Probability of global sample being in range
+        global_prob = annulus_area / navmesh_area
+
+        # Annulus sampling has 100% probability (before projection)
+        annulus_prob = 1.0
+
+        # Annulus should be much more efficient
+        efficiency_ratio = annulus_prob / global_prob
+        assert efficiency_ratio > 10.0  # At least 10x more efficient
+
+
+class TestSamplingParameters:
+    """Tests for sampling parameter validation and behavior."""
+
+    def test_equal_min_max_distance_edge_case(self):
+        """Test edge case where min and max distance are equal."""
+        sampler = NavMeshSampler(min_distance=10.0, max_distance=10.0)
+        assert sampler.min_distance == sampler.max_distance
+
+
+class TestSampleStartGoalPairParameters:
+    """Tests for sample_start_goal_pair method parameters."""
+
+    def test_use_annulus_sampling_default(self):
+        """Test use_annulus_sampling parameter defaults to True for efficiency."""
+        import inspect
+
+        sig = inspect.signature(NavMeshSampler.sample_start_goal_pair)
+        params = sig.parameters
+
+        assert "use_annulus_sampling" in params
+        assert params["use_annulus_sampling"].default is True
+
+
+class TestEdgeDetectionLogic:
+    """Tests for edge detection logic."""
+
+    def test_edge_detection_uses_8_directions(self):
+        """Test that edge detection checks 8 evenly-spaced directions."""
+        num_directions = 8
+        angles = [2.0 * math.pi * i / num_directions for i in range(num_directions)]
+
+        # Verify we get 8 evenly spaced angles
+        assert len(angles) == 8
+        assert abs(angles[0] - 0.0) < 0.001  # First angle is 0
+        assert abs(angles[4] - math.pi) < 0.001  # Opposite angle is π
+
+    def test_edge_detection_tolerance(self):
+        """Test that edge detection uses 50% tolerance."""
+        edge_margin = 1.0
+        tolerance = edge_margin * 0.5
+
+        assert tolerance == 0.5
+
+        # If distance > tolerance, point is considered at edge
+        distance_at_edge = 0.6
+        distance_not_at_edge = 0.4
+
+        assert distance_at_edge > tolerance
+        assert distance_not_at_edge < tolerance

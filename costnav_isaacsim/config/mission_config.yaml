@@ -16,15 +16,18 @@ mission:
 # Distance constraints for start/goal sampling (in meters)
 distance:
   # Minimum distance between start and goal positions
-  min: 5.0
+  min: 20.0
 
   # Maximum distance between start and goal positions
-  max: 50.0
+  max: 100.0
 
 # Nav2 integration settings
 nav2:
   # Time to wait for Nav2 stack to initialize (seconds)
   wait_time: 10.0
+
+  # Delay after setting initial pose before publishing goal (seconds)
+  initial_pose_delay: 2.0
 
   # Topic names for Nav2 communication
   topics:
@@ -37,8 +40,8 @@ teleport:
   # Height offset when teleporting robot (meters)
   height_offset: 0.5
 
-  # Robot prim path in USD stage (use parent Xform, not articulation root)
-  robot_prim: "/World/Nova_Carter_ROS"
+  # Robot prim path in USD stage (chassis_link prim for direct teleportation)
+  robot_prim: "/World/Nova_Carter_ROS/chassis_link"
 
 # RViz marker visualization settings
 markers:
@@ -53,9 +56,9 @@ markers:
 
   # Marker sizes (meters)
   scale:
-    arrow_length: 1.0
-    arrow_width: 0.2
-    arrow_height: 0.2
+    arrow_length: 20.0
+    arrow_width: 5
+    arrow_height: 0.5
 
 # Sampling settings
 sampling:
@@ -64,3 +67,7 @@ sampling:
 
   # Require valid path between start and goal
   validate_path: true
+
+  # Minimum distance from navmesh edges for sampled positions (meters)
+  # Prevents sampling positions too close to boundaries
+  edge_margin: 1.0

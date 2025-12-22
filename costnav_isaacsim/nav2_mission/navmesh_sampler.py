@@ -89,6 +89,7 @@ class NavMeshSampler:
         agent_height: float = 1.8,
         default_z: float = 0.0,
         max_sampling_attempts: int = 100,
+        edge_margin: float = 0.5,
     ):
         """Initialize the NavMesh sampler.
 
@@ -99,6 +100,7 @@ class NavMeshSampler:
             agent_height: Navigation agent height (meters).
             default_z: Default Z coordinate for sampled positions.
             max_sampling_attempts: Maximum attempts to find valid position pairs.
+            edge_margin: Minimum distance from navmesh edges for sampled positions (meters).
         """
         self.min_distance = min_distance
         self.max_distance = max_distance
@@ -106,6 +108,7 @@ class NavMeshSampler:
         self.agent_height = agent_height
         self.default_z = default_z
         self.max_sampling_attempts = max_sampling_attempts
+        self.edge_margin = edge_margin
 
         # NavMesh interface (will be acquired on first use)
         self._navmesh_interface: Optional[object] = None
@@ -116,7 +119,8 @@ class NavMeshSampler:
 
         logger.info(
             f"NavMeshSampler initialized: min_distance={min_distance}m, "
-            f"max_distance={max_distance}m, agent_radius={agent_radius}m"
+            f"max_distance={max_distance}m, agent_radius={agent_radius}m, "
+            f"edge_margin={edge_margin}m"
         )
 
     @property
@@ -214,6 +218,10 @@ class NavMeshSampler:
     def sample_random_position(self, max_retries: int = 10) -> Optional[SampledPosition]:
         """Sample a random valid position from the NavMesh.
 
+        This method samples positions that are:
+        1. On valid navigable navmesh
+        2. At least edge_margin distance away from navmesh boundaries
+
         Args:
             max_retries: Maximum number of retry attempts for sampling.
 
@@ -234,12 +242,18 @@ class NavMeshSampler:
 
                 if point is not None:
                     # Successfully sampled a point
-                    return SampledPosition(
+                    position = SampledPosition(
                         x=float(point[0]),
                         y=float(point[1]),
                         z=float(point[2]) if len(point) > 2 else self.default_z,
                         heading=random.uniform(-math.pi, math.pi),
                     )
+
+                    # Check if position is too close to edge
+                    if self._is_too_close_to_edge(position):
+                        continue  # Reject this position and try again
+
+                    return position
 
             # All retries failed - only log once instead of per retry
             logger.warning(f"NavMesh random query failed after {max_retries} retries.")
@@ -248,6 +262,58 @@ class NavMeshSampler:
         except Exception as e:
             logger.error(f"Failed to sample random position: {e}")
             return None
+
+    def _is_too_close_to_edge(self, position: SampledPosition, num_directions: int = 8) -> bool:
+        """Check if a position is too close to the navmesh edge.
+
+        This method samples points in multiple directions around the given position
+        at the edge_margin distance. If any of these offset points are not on valid
+        navmesh, the position is considered too close to an edge.
+
+        Args:
+            position: Position to check.
+            num_directions: Number of directions to check around the position.
+
+        Returns:
+            True if position is too close to edge, False otherwise.
+        """
+        if self.edge_margin <= 0:
+            return False  # Edge checking disabled
+
+        try:
+            navmesh = self._get_navmesh()
+
+            # Check points in a circle around the position at edge_margin distance
+            for i in range(num_directions):
+                angle = 2.0 * math.pi * i / num_directions
+                offset_x = position.x + self.edge_margin * math.cos(angle)
+                offset_y = position.y + self.edge_margin * math.sin(angle)
+
+                # Query if this offset point is on valid navmesh
+                query_point = carb.Float3(offset_x, offset_y, position.z)
+                closest_result = navmesh.query_closest_point(query_point, agent_radius=self.agent_radius)
+
+                if closest_result is None:
+                    # No valid navmesh point found nearby - we're at an edge
+                    return True
+
+                closest_point = closest_result[0]
+
+                # Check if the closest point is far from our query point
+                # If it's far, it means the offset point is not on navmesh
+                tolerance = self.edge_margin * 0.5  # Allow 50% deviation
+                dx = abs(offset_x - closest_point[0])
+                dy = abs(offset_y - closest_point[1])
+                distance = math.sqrt(dx * dx + dy * dy)
+
+                if distance > tolerance:
+                    # The offset point is not on valid navmesh - we're at an edge
+                    return True
+
+            return False  # All directions checked out - not at edge
+        except Exception as e:
+            logger.error(f"Edge check failed: {e}")
+            return True  # Assume at edge if check fails (conservative)
 
     def validate_position(self, position: SampledPosition) -> bool:
         """Validate if a position is on the navigable NavMesh.
@@ -315,14 +381,86 @@ class NavMeshSampler:
             logger.error(f"Path check failed: {e}")
             return False
 
+    def sample_goal_in_annulus(
+        self,
+        start: SampledPosition,
+        max_retries: int = 10,
+    ) -> Optional[SampledPosition]:
+        """Sample a goal position in an annulus around the start position.
+
+        This is more efficient than global rejection sampling because it samples
+        the goal in a ring around the start at distance [min_distance, max_distance].
+
+        Args:
+            start: Start position to sample around.
+            max_retries: Maximum number of retry attempts.
+
+        Returns:
+            SampledPosition if successful, None if sampling fails.
+        """
+        try:
+            navmesh = self._get_navmesh()
+
+            for _ in range(max_retries):
+                # Sample random distance in [min_distance, max_distance]
+                distance = random.uniform(self.min_distance, self.max_distance)
+                # Sample random angle
+                angle = random.uniform(-math.pi, math.pi)
+
+                # Calculate candidate position in annulus
+                candidate_x = start.x + distance * math.cos(angle)
+                candidate_y = start.y + distance * math.sin(angle)
+                candidate_z = start.z
+
+                # Project candidate onto navmesh
+                query_point = carb.Float3(candidate_x, candidate_y, candidate_z)
+                closest_result = navmesh.query_closest_point(query_point, agent_radius=self.agent_radius)
+
+                if closest_result is None:
+                    continue
+
+                closest_point = closest_result[0]
+                goal = SampledPosition(
+                    x=float(closest_point[0]),
+                    y=float(closest_point[1]),
+                    z=float(closest_point[2]) if len(closest_point) > 2 else self.default_z,
+                    heading=random.uniform(-math.pi, math.pi),
+                )
+
+                # Verify the projected point still satisfies distance constraints
+                actual_distance = math.sqrt((goal.x - start.x) ** 2 + (goal.y - start.y) ** 2)
+                if actual_distance < self.min_distance or actual_distance > self.max_distance:
+                    continue
+
+                # Check if goal is too close to edge
+                if self._is_too_close_to_edge(goal):
+                    continue
+
+                return goal
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Failed to sample goal in annulus: {e}")
+            return None
+
     def sample_start_goal_pair(
         self,
         fixed_start: Optional[SampledPosition] = None,
+        use_annulus_sampling: bool = True,
     ) -> Tuple[Optional[SampledPosition], Optional[SampledPosition]]:
         """Sample a valid start/goal pair with minimum distance constraint.
 
+        This method samples start and goal positions that are:
+        1. On valid navigable navmesh
+        2. At least edge_margin distance away from navmesh boundaries
+        3. Between min_distance and max_distance apart
+        4. Connected by a valid path
+
         Args:
             fixed_start: If provided, use this as the start position and only sample goal.
+            use_annulus_sampling: If True, use efficient annulus sampling for goal.
+                                 If False, use global rejection sampling (slower).
 
         Returns:
             Tuple of (start, goal) positions, or (None, None) if sampling fails.
@@ -346,31 +484,40 @@ class NavMeshSampler:
                         failure_stats["sampling_failed"] += 1
                         continue
 
-                # Sample goal position
-                goal = self.sample_random_position()
-                if goal is None:
-                    failure_stats["sampling_failed"] += 1
-                    continue
+                # Sample goal position using annulus sampling (more efficient)
+                if use_annulus_sampling:
+                    goal = self.sample_goal_in_annulus(start, max_retries=5)
+                    if goal is None:
+                        failure_stats["sampling_failed"] += 1
+                        continue
+                    # Distance constraints already satisfied by annulus sampling
+                    distance = start.distance_to(goal)
+                else:
+                    # Fallback to global rejection sampling
+                    goal = self.sample_random_position()
+                    if goal is None:
+                        failure_stats["sampling_failed"] += 1
+                        continue
 
-                # Check distance constraints
-                distance = start.distance_to(goal)
-                if distance < self.min_distance:
-                    failure_stats["too_close"] += 1
-                    # Only log every 20 attempts to reduce spam
-                    if (attempt + 1) % 20 == 0:
-                        logger.debug(
-                            f"Progress: {attempt + 1}/{self.max_sampling_attempts} attempts. "
-                            f"Last: distance {distance:.2f}m < min {self.min_distance}m"
-                        )
-                    continue
-                if distance > self.max_distance:
-                    failure_stats["too_far"] += 1
-                    if (attempt + 1) % 20 == 0:
-                        logger.debug(
-                            f"Progress: {attempt + 1}/{self.max_sampling_attempts} attempts. "
-                            f"Last: distance {distance:.2f}m > max {self.max_distance}m"
-                        )
-                    continue
+                    # Check distance constraints
+                    distance = start.distance_to(goal)
+                    if distance < self.min_distance:
+                        failure_stats["too_close"] += 1
+                        # Only log every 20 attempts to reduce spam
+                        if (attempt + 1) % 20 == 0:
+                            logger.debug(
+                                f"Progress: {attempt + 1}/{self.max_sampling_attempts} attempts. "
+                                f"Last: distance {distance:.2f}m < min {self.min_distance}m"
+                            )
+                        continue
+                    if distance > self.max_distance:
+                        failure_stats["too_far"] += 1
+                        if (attempt + 1) % 20 == 0:
+                            logger.debug(
+                                f"Progress: {attempt + 1}/{self.max_sampling_attempts} attempts. "
+                                f"Last: distance {distance:.2f}m > max {self.max_distance}m"
+                            )
+                        continue
 
                 # Verify path exists between start and goal
                 if not self.check_path_exists(start, goal):
