@@ -221,6 +221,7 @@ __marimo__/
 # Outputs
 logs/
 outputs/
+rosbags/
 
 # Training outputs with timestamps
 costnav_isaaclab/source/costnav_isaaclab/20*/

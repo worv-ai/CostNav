@@ -69,6 +69,15 @@ cd CostNav
 2. Set `DISPLAY`, `NVIDIA_VISIBLE_DEVICES`, Isaac Sim search paths, and any Omniverse auth tokens your setup requires.
 3. The same `.env` is used by Docker Compose, the devcontainer, and SLURM jobs.
 
+### 3.5. IDE helpers
+
+```bash
+python tools/generate_vscode_settings.py --isaac-sim /path/to/isaac-sim
+```
+
+The script creates `.vscode/.python.env` with search paths so Pylance can index Isaac modules without indexing the entire Omniverse cache.
+
+
 ### 4. Build/run with Docker Compose
 
 ```bash
@@ -96,34 +105,6 @@ make build-isaac-lab COSTNAV_VERSION=0.2.0
 
 Inside the container the project is mounted at `/workspace`. Isaac Sim is prevented from auto-starting so you control when to launch training scripts.
 
-### 5. Manual / bare-metal install
-
-If you already installed Isaac Lab into your Python environment:
-
-```bash
-python -m pip install -e costnav_isaaclab/source/costnav_isaaclab
-python -m pip install -e ".[dev]"
-python costnav_isaaclab/scripts/list_envs.py
-```
-
-### 6. IDE helpers
-
-```bash
-python tools/generate_vscode_settings.py --isaac-sim /path/to/isaac-sim
-```
-
-The script creates `.vscode/.python.env` with search paths so Pylance can index Isaac modules without indexing the entire Omniverse cache.
-
-### 7. SLURM / cluster runs
-
-Use the provided batch file to spin up per-job containers:
-
-```bash
-sbatch train.sbatch
-```
-
-`train.sbatch` derives the container name from `SLURM_JOB_ID`, pins GPUs via `NVIDIA_VISIBLE_DEVICES`, launches the `isaac-lab` compose profile, runs RL-Games training headlessly, and tears the container down when finished.
-
 ## Running Nav2 (Rule-Based Navigation)
 
 For rule-based navigation using ROS2 Nav2 stack with Isaac Sim, see the [costnav_isaacsim README](costnav_isaacsim/README.md) for detailed setup and usage.
@@ -142,7 +123,30 @@ make run-nav2
 
 This starts Isaac Sim with the Street Sidewalk environment and Nova Carter robot, along with the ROS2 Nav2 stack for classical navigation.
 
-## Running Experiments
+
+## Running Teleop (For Imitation Learning)
+
+```bash
+make run-teleop
+make run-rosbag (start record)
+make stop-rosbag (stop record)
+```
+
+
+## Running RL
+
+### (Optional) Manual / bare-metal install
+
+If you already installed Isaac Lab into your Python environment:
+
+```bash
+python -m pip install -e costnav_isaaclab/source/costnav_isaaclab
+python -m pip install -e ".[dev]"
+python costnav_isaaclab/scripts/list_envs.py
+```
+
+
+### Training RL
 
 All commands assume `cd costnav_isaaclab` (which mirrors `/workspace/costnav_isaaclab` inside containers).
 
@@ -183,13 +187,25 @@ python check_impulse.py                     # contact impulse sweeps
 
 Generated safe poses will be written back to `safe_positions_auto_generated.py`, which is consumed by both the command generator and environment reset hooks.
 
-### Monitoring training
+### Monitoring RL training
 
 ```bash
 python -m tensorboard.main --logdir costnav_isaaclab/logs/rl_games/<experiment>/summaries --port 6006
 ```
 
 TensorBoard logs include both standard RL metrics (success, distance, reward components) and cost-model summaries emitted as custom scalars.
+
+
+### SLURM / cluster runs
+
+Use the provided batch file to spin up per-job containers:
+
+```bash
+sbatch train.sbatch
+```
+
+`train.sbatch` derives the container name from `SLURM_JOB_ID`, pins GPUs via `NVIDIA_VISIBLE_DEVICES`, launches the `isaac-lab` compose profile, runs RL-Games training headlessly, and tears the container down when finished.
+
 
 ## Cost & Revenue Model
 
@@ -227,12 +243,12 @@ Please run formatters (`black`, `ruff`) and targeted validation scripts before s
 
 ## What's next?
 
-- [ ] Paper release
+- [x] Paper release
 - [ ] camera specsheet and cost
 - [ ] sensor + robot + battery + compute specsheet and cost
 - [ ] Repo Packaging
 - [x] mkdocs
-- [ ] isaac sim & nav2 support for rule-based navigation ([launch.py](costnav_isaacsim/launch.py))
+- [x] isaac sim & nav2 support for rule-based navigation ([launch.py](costnav_isaacsim/launch.py))
 - [ ] revenue references for delivery
 
 ## Acknowledgements
