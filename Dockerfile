@@ -75,6 +75,10 @@ RUN ln -sf /isaac-sim/kit/python/bin/python3 /isaac-sim/kit/python/bin/python
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python="${PYTHON_BIN}" --system -e ".[isaac-sim,dev]"
 
+# Install pre-commit for git hooks
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python="${PYTHON_BIN}" --system pre-commit
+
 # Switch to root for bashrc modifications
 USER root
 
@@ -153,6 +157,10 @@ COPY costnav_isaaclab/ ./costnav_isaaclab/
 # CostNav Isaac Lab deps
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python="${PYTHON_BIN}" --system -e ".[isaac-lab,dev]"
+
+# Install pre-commit for git hooks
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python="${PYTHON_BIN}" --system pre-commit
 
 # Template project install
 RUN --mount=type=cache,target=/root/.cache/uv \
