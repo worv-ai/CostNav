@@ -202,6 +202,7 @@ TensorBoard logs include both standard RL metrics (success, distance, reward com
 ## Development Notes
 
 - **Coding standards:** Python 3.10, `black` (100 char lines), `ruff`, and `mypy` settings live in `pyproject.toml`. Run `uv pip install --system -e ".[dev]"` or `pip install -e ".[dev]"` to install formatters and tests.
+- **Pre-commit hooks:** After cloning the repository, run `./scripts/setup-pre-commit.sh` to install Git hooks that automatically check code quality before commits. This works in both devcontainer and local environments.
 - **Testing:** Unit tests live under `tests/` (populate as features mature). Use `pytest` or targeted scripts like `scripts/test_v2_rewards.py` to validate reward shaping before launching long training jobs.
 - **Submodules:** Refer to `third_party/README.md` for guidance on keeping IsaacLab and Urban-Sim references in sync without polluting CostNav source directories.
 - **IDE & linting:** `tools/generate_vscode_settings.py` ensures VS Code/Pylance knows where Omniverse packages live. For PyCharm or other IDEs, mirror the generated `.python.env` paths.
