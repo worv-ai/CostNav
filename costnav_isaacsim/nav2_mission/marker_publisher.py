@@ -93,7 +93,7 @@ class MarkerPublisher(Node):
         start_topic: str = "/start_marker",
         goal_topic: str = "/goal_marker",
         robot_topic: str = "/robot_marker",
-        odom_topic: str = "/odom",
+        odom_topic: str = "/chassis/odom",
         enabled: bool = True,
     ):
         """Initialize the marker publisher node.

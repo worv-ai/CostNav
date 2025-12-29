@@ -33,7 +33,7 @@ nav2:
   topics:
     initial_pose: "/initialpose"
     goal_pose: "/goal_pose"
-    odom: "/odom"
+    odom: "/chassis/odom"
 
 # Robot teleportation settings
 teleport:
