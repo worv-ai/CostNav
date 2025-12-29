@@ -35,7 +35,22 @@ if TYPE_CHECKING:
 
 @dataclass
 class MarkerConfig:
-    """Configuration for a visualization marker."""
+    """Configuration for a visualization marker.
+
+    Attributes:
+        r: Red channel (0.0-1.0).
+        g: Green channel (0.0-1.0).
+        b: Blue channel (0.0-1.0).
+        a: Alpha channel (0.0-1.0).
+        scale_x: Length of the marker.
+        scale_y: Width of the marker.
+        scale_z: Height of the marker.
+        marker_type: visualization_msgs/Marker type.
+        frame_id: Frame for the marker.
+        heading_offset: Extra yaw offset (radians).
+        fixed_heading: Fixed yaw override (radians) when set.
+        head_on_pose: Place arrow head at the pose.
+    """
 
     r: float
     g: float
@@ -46,6 +61,9 @@ class MarkerConfig:
     scale_z: float = 0.5
     marker_type: int = Marker.SPHERE
     frame_id: str = "map"
+    heading_offset: float = 0.0
+    fixed_heading: Optional[float] = None
+    head_on_pose: bool = False
 
 
 class MarkerPublisher(Node):
@@ -131,10 +149,13 @@ class MarkerPublisher(Node):
             r=0.0,
             g=1.0,
             b=0.0,
+            a=0.5,
             marker_type=Marker.ARROW,
             scale_x=self._arrow_length,
             scale_y=self._arrow_width,
             scale_z=self._arrow_height,
+            fixed_heading=math.pi,
+            head_on_pose=True,
         )
 
     def _get_goal_marker_config(self) -> MarkerConfig:
@@ -143,10 +164,13 @@ class MarkerPublisher(Node):
             r=1.0,
             g=0.0,
             b=0.0,
+            a=0.5,
             marker_type=Marker.ARROW,
             scale_x=self._arrow_length,
             scale_y=self._arrow_width,
             scale_z=self._arrow_height,
+            fixed_heading=math.pi,
+            head_on_pose=True,
         )
 
     def _get_robot_marker_config(self) -> MarkerConfig:
@@ -155,10 +179,13 @@ class MarkerPublisher(Node):
             r=0.0,
             g=0.0,
             b=1.0,
+            a=0.5,
             marker_type=Marker.ARROW,
             scale_x=self._arrow_length * 0.75,  # Slightly smaller than start/goal
             scale_y=self._arrow_width * 0.67,
             scale_z=self._arrow_height * 0.67,
+            heading_offset=math.pi,
+            head_on_pose=True,
         )
 
     def _create_marker(
@@ -191,16 +218,25 @@ class MarkerPublisher(Node):
         marker.type = config.marker_type
         marker.action = Marker.ADD
 
+        base_heading = config.fixed_heading if config.fixed_heading is not None else heading
+        arrow_heading = base_heading + config.heading_offset
+
         # Position (ensure float type for ROS2 compatibility)
-        marker.pose.position.x = float(x)
-        marker.pose.position.y = float(y)
-        marker.pose.position.z = float(z)
+        if config.marker_type == Marker.ARROW and config.head_on_pose:
+            offset = float(config.scale_x)
+            marker.pose.position.x = float(x) - math.cos(arrow_heading) * offset
+            marker.pose.position.y = float(y) - math.sin(arrow_heading) * offset
+            marker.pose.position.z = float(z)
+        else:
+            marker.pose.position.x = float(x)
+            marker.pose.position.y = float(y)
+            marker.pose.position.z = float(z)
 
         # Orientation (quaternion from yaw)
         marker.pose.orientation.x = 0.0
         marker.pose.orientation.y = 0.0
-        marker.pose.orientation.z = math.sin(heading / 2.0)
-        marker.pose.orientation.w = math.cos(heading / 2.0)
+        marker.pose.orientation.z = math.sin(arrow_heading / 2.0)
+        marker.pose.orientation.w = math.cos(arrow_heading / 2.0)
 
         # Scale (ensure float type for ROS2 compatibility)
         marker.scale.x = float(config.scale_x)
@@ -215,6 +251,7 @@ class MarkerPublisher(Node):
         marker.lifetime.nanosec = 0
 
         return marker
+
 
     def publish_start_marker(
         self,
