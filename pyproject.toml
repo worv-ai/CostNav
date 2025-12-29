@@ -17,6 +17,8 @@ dependencies = [
 isaac-sim = [
     # Add any additional packages needed for Isaac Sim workflows
     # Most dependencies come from the Isaac Sim container itself
+    "empy",
+    "lark",
 ]
 
 # Isaac Lab specific dependencies
