@@ -8,12 +8,12 @@
 This module provides a ROS2 node that publishes visualization markers for:
 - Start position (green sphere/arrow)
 - Goal position (red sphere/arrow)
-- Current robot position (blue arrow, real-time updates)
+    - Current robot position (blue arrow + dot, real-time updates)
 
 Topics:
     /start_marker (visualization_msgs/Marker): Start position marker
     /goal_marker (visualization_msgs/Marker): Goal position marker
-    /robot_marker (visualization_msgs/Marker): Current robot position marker
+    /robot_marker (visualization_msgs/Marker): Current robot position markers
 """
 
 from __future__ import annotations
@@ -50,6 +50,7 @@ class MarkerConfig:
         heading_offset: Extra yaw offset (radians).
         fixed_heading: Fixed yaw override (radians) when set.
         head_on_pose: Place arrow head at the pose.
+        pose_offset_factor: Scale factor for arrow offset (scale_x * factor).
     """
 
     r: float
@@ -64,6 +65,7 @@ class MarkerConfig:
     heading_offset: float = 0.0
     fixed_heading: Optional[float] = None
     head_on_pose: bool = False
+    pose_offset_factor: Optional[float] = None
 
 
 class MarkerPublisher(Node):
@@ -90,6 +92,9 @@ class MarkerPublisher(Node):
         arrow_length: float = 0.8,
         arrow_width: float = 0.15,
         arrow_height: float = 0.15,
+        robot_length: float = 0.9,
+        robot_width: float = 0.5,
+        robot_height: float = 0.2,
         start_topic: str = "/start_marker",
         goal_topic: str = "/goal_marker",
         robot_topic: str = "/robot_marker",
@@ -103,6 +108,9 @@ class MarkerPublisher(Node):
             arrow_length: Length of arrow markers (scale_x).
             arrow_width: Width of arrow markers (scale_y).
             arrow_height: Height of arrow markers (scale_z).
+            robot_length: Length of robot marker arrow (scale_x).
+            robot_width: Width of robot marker arrow (scale_y).
+            robot_height: Height of robot marker arrow (scale_z).
             start_topic: Topic name for start position marker.
             goal_topic: Topic name for goal position marker.
             robot_topic: Topic name for robot position marker.
@@ -116,6 +124,9 @@ class MarkerPublisher(Node):
         self._arrow_length = arrow_length
         self._arrow_width = arrow_width
         self._arrow_height = arrow_height
+        self._robot_length = robot_length
+        self._robot_width = robot_width
+        self._robot_height = robot_height
 
         # QoS profile for markers (latched/transient local for persistence)
         marker_qos = QoSProfile(
@@ -140,6 +151,7 @@ class MarkerPublisher(Node):
         self._start_marker_id = 0
         self._goal_marker_id = 1
         self._robot_marker_id = 2
+        self._robot_dot_marker_id = 3
 
         self.get_logger().info("MarkerPublisher initialized.")
 
@@ -181,11 +193,26 @@ class MarkerPublisher(Node):
             b=1.0,
             a=0.5,
             marker_type=Marker.ARROW,
-            scale_x=self._arrow_length * 0.75,  # Slightly smaller than start/goal
-            scale_y=self._arrow_width * 0.67,
-            scale_z=self._arrow_height * 0.67,
-            heading_offset=math.pi,
+            scale_x=self._robot_length,
+            scale_y=self._robot_width,
+            scale_z=self._robot_height,
+            heading_offset=0.0,
             head_on_pose=True,
+            pose_offset_factor=0.5,
+        )
+
+    def _get_robot_dot_config(self) -> MarkerConfig:
+        """Get marker configuration for robot position dot."""
+        dot_scale = max(0.05, min(self._robot_width, self._robot_height) * 2.0)
+        return MarkerConfig(
+            r=0.0,
+            g=0.0,
+            b=1.0,
+            a=1.0,
+            marker_type=Marker.SPHERE,
+            scale_x=dot_scale,
+            scale_y=dot_scale,
+            scale_z=dot_scale,
         )
 
     def _create_marker(
@@ -224,6 +251,8 @@ class MarkerPublisher(Node):
         # Position (ensure float type for ROS2 compatibility)
         if config.marker_type == Marker.ARROW and config.head_on_pose:
             offset = float(config.scale_x)
+            if config.pose_offset_factor is not None:
+                offset *= float(config.pose_offset_factor)
             marker.pose.position.x = float(x) - math.cos(arrow_heading) * offset
             marker.pose.position.y = float(y) - math.sin(arrow_heading) * offset
             marker.pose.position.z = float(z)
@@ -251,7 +280,6 @@ class MarkerPublisher(Node):
         marker.lifetime.nanosec = 0
 
         return marker
-
 
     def publish_start_marker(
         self,
@@ -356,12 +384,27 @@ class MarkerPublisher(Node):
 
         self.robot_marker_pub.publish(marker)
 
+        dot_marker = self._create_marker(
+            marker_id=self._robot_dot_marker_id,
+            x=x,
+            y=y,
+            z=z,
+            heading=heading,
+            config=self._get_robot_dot_config(),
+            label="RobotDot",
+        )
+        dot_marker.lifetime.sec = 0
+        dot_marker.lifetime.nanosec = 200_000_000  # 200ms
+
+        self.robot_marker_pub.publish(dot_marker)
+
     def clear_markers(self) -> None:
         """Clear all published markers."""
         for marker_id, publisher in [
             (self._start_marker_id, self.start_marker_pub),
             (self._goal_marker_id, self.goal_marker_pub),
             (self._robot_marker_id, self.robot_marker_pub),
+            (self._robot_dot_marker_id, self.robot_marker_pub),
         ]:
             marker = Marker()
             marker.header.frame_id = "map"

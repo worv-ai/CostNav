@@ -57,6 +57,10 @@ markers:
     arrow_length: 10.0
     arrow_width: 3.0
     arrow_height: 3.0
+  robot_scale:
+    length: 1.1
+    width: 0.5
+    height: 0.2
 
 # Sampling settings
 sampling:

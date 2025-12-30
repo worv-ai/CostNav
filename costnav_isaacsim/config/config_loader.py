@@ -24,6 +24,9 @@ class MarkerConfig:
     arrow_length: float = 1.0
     arrow_width: float = 0.2
     arrow_height: float = 0.2
+    robot_length: float = 0.9
+    robot_width: float = 0.5
+    robot_height: float = 0.2
 
 
 @dataclass
@@ -100,6 +103,7 @@ class MissionConfig:
         # Parse markers config
         marker_topics = markers_data.get("topics", {})
         marker_scale = markers_data.get("scale", {})
+        robot_scale = markers_data.get("robot_scale", {})
         markers_config = MarkerConfig(
             enabled=markers_data.get("enabled", True),
             start_topic=marker_topics.get("start", "/start_marker"),
@@ -108,6 +112,9 @@ class MissionConfig:
             arrow_length=marker_scale.get("arrow_length", 1.0),
             arrow_width=marker_scale.get("arrow_width", 0.2),
             arrow_height=marker_scale.get("arrow_height", 0.2),
+            robot_length=robot_scale.get("length", 0.9),
+            robot_width=robot_scale.get("width", 0.5),
+            robot_height=robot_scale.get("height", 0.2),
         )
 
         # Parse sampling config

@@ -430,6 +430,10 @@ markers:
     arrow_length: 1.0
     arrow_width: 0.2
     arrow_height: 0.2
+  robot_scale:
+    length: 0.9
+    width: 0.5
+    height: 0.2
 ```
 
 **Key Configuration Parameters:**

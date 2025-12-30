@@ -228,6 +228,9 @@ class MissionManager:
                 arrow_length=self.mission_config.markers.arrow_length,
                 arrow_width=self.mission_config.markers.arrow_width,
                 arrow_height=self.mission_config.markers.arrow_height,
+                robot_length=self.mission_config.markers.robot_length,
+                robot_width=self.mission_config.markers.robot_width,
+                robot_height=self.mission_config.markers.robot_height,
                 start_topic=self.mission_config.markers.start_topic,
                 goal_topic=self.mission_config.markers.goal_topic,
                 robot_topic=self.mission_config.markers.robot_topic,
@@ -624,7 +627,9 @@ class MissionManager:
         elapsed = self._get_current_time_seconds() - self._mission_start_time
         if elapsed >= self.mission_config.timeout:
             self._state = MissionState.WAITING_FOR_START
-            logger.info(f"[{self._state.name}] Mission {self._current_mission} timed out {self.mission_config.timeout=}, waiting for start signal")
+            logger.info(
+                f"[{self._state.name}] Mission {self._current_mission} timed out {self.mission_config.timeout=}, waiting for start signal"
+            )
 
     def _cleanup(self):
         """Clean up ROS2 resources."""

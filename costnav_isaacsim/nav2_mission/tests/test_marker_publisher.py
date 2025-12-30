@@ -70,6 +70,9 @@ class TestMarkerPublisherConfig:
         custom_length = 5.0
         custom_width = 2.0
         custom_height = 1.5
+        custom_robot_length = 1.25
+        custom_robot_width = 0.6
+        custom_robot_height = 0.3
 
         # Note: This will fail without ROS2 initialized, but tests the interface
         # In a real test environment with ROS2, this would work
@@ -79,12 +82,18 @@ class TestMarkerPublisherConfig:
                 arrow_length=custom_length,
                 arrow_width=custom_width,
                 arrow_height=custom_height,
+                robot_length=custom_robot_length,
+                robot_width=custom_robot_width,
+                robot_height=custom_robot_height,
             )
 
             # Verify the configuration is stored
             assert publisher._arrow_length == custom_length
             assert publisher._arrow_width == custom_width
             assert publisher._arrow_height == custom_height
+            assert publisher._robot_length == custom_robot_length
+            assert publisher._robot_width == custom_robot_width
+            assert publisher._robot_height == custom_robot_height
 
             # Test marker config generation
             start_config = publisher._get_start_marker_config()
@@ -100,9 +109,11 @@ class TestMarkerPublisherConfig:
             assert (goal_config.r, goal_config.g, goal_config.b) == (1.0, 0.0, 0.0)  # Red
 
             robot_config = publisher._get_robot_marker_config()
-            assert robot_config.scale_x == custom_length * 0.75  # Slightly smaller
-            assert robot_config.scale_y == custom_width * 0.67
-            assert robot_config.scale_z == custom_height * 0.67
+            assert robot_config.scale_x == custom_robot_length
+            assert robot_config.scale_y == custom_robot_width
+            assert robot_config.scale_z == custom_robot_height
+            assert robot_config.head_on_pose is True
+            assert robot_config.pose_offset_factor == 0.5
             assert (robot_config.r, robot_config.g, robot_config.b) == (0.0, 0.0, 1.0)  # Blue
         except Exception:
             # Expected to fail without ROS2, but we're testing the interface
