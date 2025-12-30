@@ -178,7 +178,7 @@ services:
   # ROS2 with RViz - standalone visualization service that runs alongside Isaac Sim
   ros2-rviz:
     <<: *ros2-service
-    profiles: ["isaac-sim", "nav2", "teleop"]
+    profiles: ["isaac-sim", "nav2"]
     container_name: costnav-ros2-rviz
     depends_on:
       isaac-sim:
@@ -187,6 +187,19 @@ services:
       bash -c "source /opt/ros/jazzy/setup.bash &&
                source /workspace/build_ws/install/local_setup.sh &&
                ros2 launch /workspace/nav2_params/rviz.launch.py"
+
+  # ROS2 with RViz (teleop profile) - hides TF/point clouds by default
+  ros2-rviz-teleop:
+    <<: *ros2-service
+    profiles: ["teleop"]
+    container_name: costnav-ros2-rviz-teleop
+    depends_on:
+      isaac-sim:
+        condition: service_healthy
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+               source /workspace/build_ws/install/local_setup.sh &&
+               ros2 launch /workspace/nav2_params/rviz.launch.py rviz_config:=/workspace/nav2_params/carter_navigation_teleop.rviz"
 
   # ROS2 with teleop - waits for Isaac Sim to be healthy before starting
   ros2-teleop:
