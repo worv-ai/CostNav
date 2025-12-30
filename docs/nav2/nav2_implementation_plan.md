@@ -184,23 +184,22 @@ This implementation follows NVIDIA's official tutorial which covers:
 
 ### Quick Start
 
-**Option 1: Run with Mission Orchestration (Recommended)**
+**Option 1: Run Stack (Manual Missions)**
 
 ```bash
 # From repository root, start both containers with Nav2 profile
 make run-nav2
 
-# Isaac Sim will launch with mission orchestration enabled
-# Missions will run automatically after Nav2 stack is ready
+# Trigger a mission manually
+make start-mission
 ```
 
-To customize mission parameters, modify the docker-compose command or use:
+To customize mission parameters, edit `config/mission_config.yaml` or use:
 
 ```bash
 # Inside Isaac Sim container
-python /workspace/costnav_isaacsim/launch.py --mission \
-    --mission-count 5 \
-    --mission-delay 60 \
+python /workspace/costnav_isaacsim/launch.py \
+    --mission-timeout 600 \
     --min-distance 10.0 \
     --max-distance 30.0
 ```
@@ -227,18 +226,16 @@ ros2 launch carter_navigation carter_navigation.launch.py \
     params_file:=/workspace/costnav_isaacsim/nav2_params/carter_navigation_params.yaml
 ```
 
-**3. Mission Orchestration:**
+**3. Mission Orchestration (Manual Trigger):**
 
-Missions are integrated into `launch.py`. Use the `--mission` flag with optional overrides:
+Missions are triggered manually via `/start_mission`:
 
 ```bash
-# Run with default mission config
-docker exec -it costnav-isaac-sim /isaac-sim/python.sh \
-    /workspace/costnav_isaacsim/launch.py --mission
+# Trigger a mission via Makefile
+make start-mission
 
-# Override mission parameters
-docker exec -it costnav-isaac-sim /isaac-sim/python.sh \
-    /workspace/costnav_isaacsim/launch.py --mission --mission-count 5 --min-distance 10
+# Or call the service directly
+ros2 service call /start_mission std_srvs/srv/Trigger {}
 ```
 
 **Configuration Files:**
@@ -360,7 +357,7 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 - ✅ RViz2 configuration
 - ✅ Mission orchestration module at `/workspace/costnav_isaacsim/nav2_mission/`
 - ✅ Configuration module at `/workspace/costnav_isaacsim/config/` with YAML-based settings
-- ✅ Integrated launch with `--mission` and `--config` flags in `launch.py`
+- ✅ Manual mission trigger via `/start_mission` with config loaded at startup
 - ⏳ Optimized parameters (moved to Week 4)
 
 **Success Criteria:**
@@ -420,8 +417,7 @@ Mission parameters are configured via YAML file at `config/mission_config.yaml`:
 
 ```yaml
 mission:
-  count: 1          # Number of missions
-  delay: 30.0       # Delay between missions (seconds)
+  timeout: 3600.0   # Mission timeout (seconds)
 
 distance:
   min: 5.0          # Minimum start-goal distance (meters)
@@ -444,22 +440,21 @@ markers:
 
 **6. Integrated Launch (`launch.py`)**
 
-The mission module uses config file with CLI overrides:
+The mission module loads config at startup with CLI overrides:
 
 ```bash
 # Use default config (config/mission_config.yaml)
-python launch.py --mission
+python launch.py
 
 # Use custom config file
-python launch.py --mission --config /path/to/custom.yaml
+python launch.py --config /path/to/custom.yaml
 
 # Override config values via CLI
-python launch.py --mission --mission-count 5 --min-distance 10
+python launch.py --mission-timeout 600 --min-distance 10
 
 # Available CLI overrides:
 #   --config PATH       Path to config YAML file
-#   --mission-count N   Override: Number of missions
-#   --mission-delay S   Override: Delay between missions
+#   --mission-timeout S Override: Mission timeout
 #   --min-distance M    Override: Minimum start-goal distance
 #   --max-distance M    Override: Maximum start-goal distance
 #   --nav2-wait S       Override: Nav2 wait time

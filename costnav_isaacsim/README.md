@@ -122,7 +122,26 @@ This starts:
 - **Isaac Sim**: Street Sidewalk environment with Nova Carter robot
 - **ROS2 Nav2**: Carter navigation with pre-configured parameters
 
-### 3. Alternative: Run Services Separately
+You can also trigger missions while nav2 is running:
+
+```bash
+make start-mission
+```
+
+### 3. Run Teleop (Joystick Control)
+
+```bash
+# Run Isaac Sim + teleop node
+make run-teleop
+```
+
+You can also trigger missions while teleop is running:
+
+```bash
+make start-mission
+```
+
+### 4. Alternative: Run Services Separately
 
 ```bash
 # Terminal 1: Isaac Sim only
@@ -141,6 +160,7 @@ make run-ros2
 | `nav2`      | Isaac Sim + ROS2 Nav2 | `make run-nav2`      | Full navigation stack              |
 | `isaac-sim` | Isaac Sim only        | `make run-isaac-sim` | Simulation development             |
 | `ros2`      | ROS2 Nav2 only        | `make run-ros2`      | Nav2 tuning (requires running sim) |
+| `teleop`    | Isaac Sim + Teleop    | `make run-teleop`    | Manual driving (joystick)          |
 
 ### Using Profiles Directly
 
@@ -327,7 +347,7 @@ The `nav2_mission` module provides automated navigation mission orchestration wi
 │  │    Isaac Sim Container      │  │   ROS2 Nav2 Container   │  │
 │  │    (costnav-isaac-sim)      │  │   (costnav-ros2-nav2)   │  │
 │  │                             │  │                         │  │
-│  │  launch.py --mission        │  │   Nav2 Stack            │  │
+│  │  launch.py                  │  │   Nav2 Stack            │  │
 │  │  ├─ Simulation loop         │  │   ├─ AMCL localization  │  │
 │  │  ├─ MissionManager.step()   │  │   ├─ Path planning      │  │
 │  │  │  ├─ NavMesh sampling     │  │   └─ Navigation control │  │
@@ -349,39 +369,22 @@ The `nav2_mission` module provides automated navigation mission orchestration wi
 
 ### Quick Start: Running Missions
 
-#### Option 1: Integrated Launch (Recommended)
-
-Run Isaac Sim with mission orchestration in a single command:
+Missions are triggered manually. Start the stack, then call `/start_mission`:
 
 ```bash
 # From repository root
 make run-nav2
+
+# In another terminal
+make start-mission
 ```
 
-Then modify the docker-compose command or use:
+Each `make start-mission` runs a single mission. If you call it while a mission is running, the current mission is stopped and a new one starts.
+
+You can also trigger the service directly:
 
 ```bash
-# Inside Isaac Sim container, uses config/mission_config.yaml by default
-python /workspace/costnav_isaacsim/launch.py --mission
-
-# Use custom config file
-python /workspace/costnav_isaacsim/launch.py --mission --config /path/to/custom.yaml
-
-# Override config values via CLI
-python /workspace/costnav_isaacsim/launch.py --mission --mission-count 5 --min-distance 10
-```
-
-#### Alternative: Manual Mission Control
-
-You can also run missions interactively by starting the simulation without the `--mission` flag, then manually triggering missions:
-
-```bash
-# Start simulation without automatic missions
-docker exec -it costnav-isaac-sim /isaac-sim/python.sh \
-    /workspace/costnav_isaacsim/launch.py
-
-# In another terminal, you can interact with the running simulation
-# or manually publish Nav2 goals via ROS2 CLI tools
+ros2 service call /start_mission std_srvs/srv/Trigger {}
 ```
 
 ### Configuration
@@ -391,8 +394,7 @@ Mission parameters are configured via YAML file at `config/mission_config.yaml`:
 ```yaml
 # Mission execution settings
 mission:
-  count: 1          # Number of missions (0 = infinite)
-  delay: 30.0       # Delay between missions (seconds)
+  timeout: 3600.0   # Mission timeout (seconds)
 
 # Distance constraints (meters)
 distance:
@@ -434,8 +436,7 @@ markers:
 
 | Section | Parameter | Default | Description |
 |---------|-----------|---------|-------------|
-| `mission` | `count` | 1 | Number of missions to run (0 = infinite) |
-| `mission` | `delay` | 30.0 | Delay between missions (seconds) |
+| `mission` | `timeout` | 3600.0 | Mission timeout (seconds) |
 | `distance` | `min` | 5.0 | Minimum start-goal distance (meters) |
 | `distance` | `max` | 50.0 | Maximum start-goal distance (meters) |
 | `sampling` | `max_attempts` | 100 | Max attempts to sample valid positions |
@@ -446,20 +447,20 @@ markers:
 
 ### Command Line Options
 
-The integrated `launch.py` uses config file by default with CLI overrides:
+`launch.py` always loads the mission config and waits for `/start_mission`:
 
 ```bash
 # Use default config (config/mission_config.yaml)
-python launch.py --mission
+python launch.py
 
 # Use custom config file
-python launch.py --mission --config /path/to/custom.yaml
+python launch.py --config /path/to/custom.yaml
 
 # Override specific config values
-python launch.py --mission --mission-count 5 --min-distance 10.0
+python launch.py --mission-timeout 600 --min-distance 10.0
 
-# Headless mode with missions
-python launch.py --headless --mission
+# Headless mode
+python launch.py --headless
 ```
 
 #### Simulation Options
@@ -476,10 +477,8 @@ python launch.py --headless --mission
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
-| `--mission` | false | Enable Nav2 mission orchestration |
 | `--config` | config/mission_config.yaml | Path to mission config file |
-| `--mission-count` | (from config) | Override: Number of missions |
-| `--mission-delay` | (from config) | Override: Delay between missions |
+| `--mission-timeout` | (from config) | Override: Mission timeout |
 | `--min-distance` | (from config) | Override: Minimum start-goal distance |
 | `--max-distance` | (from config) | Override: Maximum start-goal distance |
 | `--nav2-wait` | (from config) | Override: Nav2 wait time |
@@ -500,7 +499,7 @@ from costnav_isaacsim.nav2_mission import MissionManager
 from costnav_isaacsim.config import MissionConfig
 
 # Load mission configuration
-mission_config = MissionConfig(count=5, delay=30.0)
+mission_config = MissionConfig(timeout=3600.0)
 
 # Create mission manager (runs in main simulation loop)
 manager = MissionManager(mission_config, simulation_context)
@@ -518,7 +517,7 @@ from costnav_isaacsim.nav2_mission import MissionManager, MissionManagerConfig
 from costnav_isaacsim.config import MissionConfig
 
 # Load mission configuration
-mission_config = MissionConfig(count=5, delay=30.0)
+mission_config = MissionConfig(timeout=3600.0)
 
 # Fine-tune runtime behavior with MissionManagerConfig
 manager_config = MissionManagerConfig(
@@ -551,13 +550,14 @@ The MissionManager uses a state machine to ensure proper synchronization between
 **Mission States:**
 1. **INIT**: Initialize ROS2 node, NavMesh sampler, and marker publisher
 2. **WAITING_FOR_NAV2**: Wait for Nav2 stack to become ready
-3. **READY**: Sample new start/goal positions from NavMesh
-4. **TELEPORTING**: Teleport robot to start position in Isaac Sim
-5. **SETTLING**: Wait for physics to settle after teleportation (5 steps)
-6. **PUBLISHING_INITIAL_POSE**: Publish initial pose to `/initialpose` for AMCL
-7. **PUBLISHING_GOAL**: Publish goal pose to `/goal_pose` for Nav2
-8. **WAITING_FOR_COMPLETION**: Monitor navigation progress
-9. **COMPLETED**: All missions finished
+3. **WAITING_FOR_START**: Wait for `/start_mission` trigger
+4. **READY**: Sample new start/goal positions from NavMesh
+5. **TELEPORTING**: Teleport robot to start position in Isaac Sim
+6. **SETTLING**: Wait for physics to settle after teleportation (5 steps)
+7. **PUBLISHING_INITIAL_POSE**: Publish initial pose to `/initialpose` for AMCL
+8. **PUBLISHING_GOAL**: Publish goal pose to `/goal_pose` for Nav2
+9. **WAITING_FOR_COMPLETION**: Monitor navigation progress
+10. **COMPLETED**: All missions finished
 
 This state machine approach ensures:
 - Physics simulation steps occur between teleportation and pose publishing
@@ -573,7 +573,7 @@ This state machine approach ensures:
 - **Robot Teleportation**: Teleport robot to start position in Isaac Sim with physics settling
 - **AMCL Initialization**: Publish initial pose for localization
 - **RViz Markers**: Visualize start (green), goal (red), and robot (blue) positions
-- **Integrated Launch**: Run missions alongside simulation with `--mission` flag
+- **Manual Trigger**: Start missions via `/start_mission` (e.g. `make start-mission`)
 - **Auto-Setup**: Automatically configures Isaac Sim teleportation if robot_prim_path is provided
 
 ### RViz Marker Topics
