@@ -4,20 +4,19 @@ Isaac Sim launcher for CostNav project.
 Runs Street_sidewalk.usd with Nova Carter robot and Nav2 navigation.
 
 Usage:
-    # Basic simulation (no missions)
+    # Basic simulation
     python launch.py
 
-    # Run with Nav2 mission orchestration (uses config file)
-    python launch.py --mission
+    # Use custom mission config file
+    python launch.py --config /path/to/config.yaml
 
-    # Use custom config file
-    python launch.py --mission --config /path/to/config.yaml
+    # Override mission config values via CLI
+    python launch.py --mission-timeout 600 --min-distance 10
 
-    # Override config values via CLI
-    python launch.py --mission --mission-count 5 --min-distance 10
+    # Headless mode
+    python launch.py --headless
 
-    # Headless mode with missions
-    python launch.py --headless --mission
+Missions are triggered manually via /start_mission (e.g. `make start-mission`).
 """
 
 import argparse
@@ -77,11 +76,6 @@ def parse_args():
     # Mission arguments
     mission_group = parser.add_argument_group("Nav2 Mission")
     mission_group.add_argument(
-        "--mission",
-        action="store_true",
-        help="Enable Nav2 mission orchestration",
-    )
-    mission_group.add_argument(
         "--config",
         type=str,
         default=None,
@@ -89,16 +83,10 @@ def parse_args():
     )
     # CLI overrides for config values
     mission_group.add_argument(
-        "--mission-count",
-        type=int,
-        default=None,
-        help="Override: Number of missions to run",
-    )
-    mission_group.add_argument(
-        "--mission-delay",
+        "--mission-timeout",
         type=float,
         default=None,
-        help="Override: Delay between missions in seconds",
+        help="Override: Mission timeout in seconds",
     )
     mission_group.add_argument(
         "--min-distance",
@@ -315,28 +303,23 @@ class CostNavSimLauncher:
         self.simulation_app.close()
 
 
-def load_and_override_config(args) -> "Optional[MissionConfig]":
+def load_and_override_config(args) -> "MissionConfig":
     """Load mission config from file and apply CLI overrides.
 
     Args:
         args: Parsed command line arguments.
 
     Returns:
-        MissionConfig if mission mode is enabled, None otherwise.
+        MissionConfig instance with loaded settings.
     """
-    if not args.mission:
-        return None
-
     from config import load_mission_config
 
     # Load from config file (or default)
     config = load_mission_config(args.config)
 
     # Apply CLI overrides (only if explicitly provided)
-    if args.mission_count is not None:
-        config.count = args.mission_count
-    if args.mission_delay is not None:
-        config.delay = args.mission_delay
+    if args.mission_timeout is not None:
+        config.timeout = args.mission_timeout
     if args.min_distance is not None:
         config.min_distance = args.min_distance
     if args.max_distance is not None:
@@ -354,16 +337,14 @@ def main():
     log_level = logging.DEBUG if args.debug else logging.INFO
     logging.basicConfig(level=log_level, format="%(levelname)s: %(message)s")
 
-    # Load mission config if mission mode is enabled
+    # Load mission config (missions are triggered manually)
     mission_config = load_and_override_config(args)
 
-    if mission_config:
-        logger.info("Mission mode enabled")
-        logger.info(f"  Config: {args.config or 'default'}")
-        logger.info(f"  Count: {mission_config.count}")
-        logger.info(f"  Delay: {mission_config.delay}s")
-        logger.info(f"  Distance: {mission_config.min_distance}m - {mission_config.max_distance}m")
-        logger.info(f"  Nav2 wait: {mission_config.nav2.wait_time}s")
+    logger.info("Mission manager armed (manual start via /start_mission)")
+    logger.info(f"  Config: {args.config or 'default'}")
+    logger.info(f"  Timeout: {mission_config.timeout}s")
+    logger.info(f"  Distance: {mission_config.min_distance}m - {mission_config.max_distance}m")
+    logger.info(f"  Nav2 wait: {mission_config.nav2.wait_time}s")
 
     launcher = CostNavSimLauncher(
         usd_path=args.usd_path,

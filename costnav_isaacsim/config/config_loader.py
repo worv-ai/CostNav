@@ -59,8 +59,7 @@ class MissionConfig:
     """Complete mission configuration."""
 
     # Mission execution
-    count: int = 1
-    delay: float = 30.0
+    timeout: float = 3600.0  # 1 hour
 
     # Distance constraints
     min_distance: float = 5.0
@@ -119,8 +118,7 @@ class MissionConfig:
         )
 
         return cls(
-            count=mission_data.get("count", 1),
-            delay=mission_data.get("delay", 30.0),
+            timeout=mission_data.get("timeout", 3600.0),
             min_distance=distance_data.get("min", 5.0),
             max_distance=distance_data.get("max", 50.0),
             nav2=nav2_config,
@@ -132,8 +130,7 @@ class MissionConfig:
     def to_dict(self) -> dict:
         """Convert to dictionary for legacy compatibility."""
         return {
-            "mission_count": self.count,
-            "mission_delay": self.delay,
+            "mission_timeout": self.timeout,
             "min_distance": self.min_distance,
             "max_distance": self.max_distance,
             "nav2_wait": self.nav2.wait_time,

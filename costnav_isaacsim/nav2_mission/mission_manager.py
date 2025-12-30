@@ -47,6 +47,7 @@ class MissionState(Enum):
 
     INIT = "init"
     WAITING_FOR_NAV2 = "waiting_for_nav2"
+    WAITING_FOR_START = "waiting_for_start"
     READY = "ready"
     TELEPORTING = "teleporting"
     SETTLING = "settling"  # Waiting for physics to settle after teleport
@@ -73,7 +74,7 @@ class MissionManager:
         from costnav_isaacsim.config import MissionConfig
         from costnav_isaacsim.nav2_mission import MissionManager
 
-        config = MissionConfig(count=5, delay=30.0)
+        config = MissionConfig(timeout=3600.0)
         manager = MissionManager(config, simulation_context)
 
         # In main simulation loop:
@@ -93,7 +94,7 @@ class MissionManager:
         """Initialize mission manager.
 
         Args:
-            mission_config: Mission configuration object (count, delay, distances, etc.).
+            mission_config: Mission configuration object (timeout, distances, etc.).
             simulation_context: Isaac Sim SimulationContext for stepping physics.
             node_name: Name of the ROS2 node.
             manager_config: Optional MissionManagerConfig for fine-tuning. If not provided,
@@ -132,6 +133,7 @@ class MissionManager:
         self._stage = None
         self._robot_prim_path = None
         self._executor = None
+        self._start_service = None
 
         # State machine
         self._state = MissionState.INIT
@@ -140,6 +142,8 @@ class MissionManager:
         self._wait_start_time = None
         self._settle_steps_remaining = 0
         self._initialized = False
+        self._start_requested = False
+        self._restart_requested = False
 
         # Current mission positions
         self._current_start = None
@@ -163,8 +167,15 @@ class MissionManager:
 
         self._spin_ros_once()
 
+        if self._restart_requested and self._is_mission_active():
+            self._reset_mission_state()
+            self._restart_requested = False
+            self._state = MissionState.READY
+
         if self._state == MissionState.WAITING_FOR_NAV2:
             self._step_waiting_for_nav2()
+        elif self._state == MissionState.WAITING_FOR_START:
+            self._step_waiting_for_start()
         elif self._state == MissionState.READY:
             self._step_ready()
         elif self._state == MissionState.TELEPORTING:
@@ -187,6 +198,7 @@ class MissionManager:
         from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
         from rclpy.node import Node
         from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+        from std_srvs.srv import Trigger
 
         from .marker_publisher import MarkerPublisher
         from .navmesh_sampler import NavMeshSampler
@@ -197,6 +209,9 @@ class MissionManager:
 
             # Create ROS2 node
             self._node = Node(self.node_name)
+
+            # Start mission service (manual trigger)
+            self._start_service = self._node.create_service(Trigger, "/start_mission", self._handle_start_mission)
 
             # Initialize NavMesh sampler with config values
             self._sampler = NavMeshSampler(
@@ -249,7 +264,6 @@ class MissionManager:
             self._wait_start_time = self._get_current_time_seconds()
 
             logger.info(f"[{self._state.name}] Mission manager initialized")
-            logger.info(f"[{self._state.name}] Will run {self.mission_config.count} mission(s)")
             logger.info(
                 f"[{self._state.name}] Distance range: {self.config.min_distance}m - {self.config.max_distance}m"
             )
@@ -260,6 +274,44 @@ class MissionManager:
 
             logger.error(f"[{self._state.name}] {traceback.format_exc()}")
             self._state = MissionState.COMPLETED
+
+    def _is_mission_active(self) -> bool:
+        """Return True if a mission is in progress or about to start."""
+        return self._state in {
+            MissionState.TELEPORTING,
+            MissionState.SETTLING,
+            MissionState.PUBLISHING_INITIAL_POSE,
+            MissionState.PUBLISHING_GOAL,
+            MissionState.WAITING_FOR_COMPLETION,
+        }
+
+    def _reset_mission_state(self) -> None:
+        """Reset mission state so a new mission can start cleanly."""
+        self._current_start = None
+        self._current_goal = None
+        self._mission_start_time = None
+        self._settle_steps_remaining = 0
+
+    def _handle_start_mission(self, request, response):
+        """Handle external mission start trigger."""
+        if self._state == MissionState.COMPLETED:
+            response.success = False
+            response.message = "Missions already completed."
+            return response
+
+        self._start_requested = True
+        if self._is_mission_active():
+            self._restart_requested = True
+            logger.info(f"[{self._state.name}] Start signal received. Restarting mission.")
+        elif self._state == MissionState.WAITING_FOR_START:
+            self._state = MissionState.READY
+            logger.info("[WAITING_FOR_START] Start signal received. Beginning mission.")
+        else:
+            logger.info(f"[{self._state.name}] Start signal received. Will begin when ready.")
+
+        response.success = True
+        response.message = "Mission start requested."
+        return response
 
     def _spin_ros_once(self) -> None:
         """Service ROS2 callbacks and timers without blocking the sim loop."""
@@ -483,20 +535,26 @@ class MissionManager:
         """Wait for Nav2 stack to be ready."""
         elapsed = self._get_current_time_seconds() - self._wait_start_time
         if elapsed >= self.mission_config.nav2.wait_time:
-            logger.info(f"[{self._state.name}] Nav2 wait time complete, ready to start missions")
+            if self._start_requested:
+                logger.info(f"[{self._state.name}] Nav2 wait time complete, starting missions")
+                self._state = MissionState.READY
+            else:
+                logger.info(f"[{self._state.name}] Nav2 ready. Waiting for /start_mission.")
+                self._state = MissionState.WAITING_FOR_START
+
+    def _step_waiting_for_start(self):
+        """Wait for an external mission start trigger."""
+        if self._start_requested:
+            self._start_requested = False
             self._state = MissionState.READY
 
     def _step_ready(self):
         """Start next mission or complete if all done."""
-        if self._current_mission >= self.mission_config.count:
-            logger.info(f"[{self._state.name}] All missions completed!")
-            self._state = MissionState.COMPLETED
-            self._cleanup()
-            return
-
         self._current_mission += 1
+        self._start_requested = False
+        self._restart_requested = False
         logger.info(f"[{self._state.name}] \n{'=' * 50}")
-        logger.info(f"[{self._state.name}] Mission {self._current_mission}/{self.mission_config.count}")
+        logger.info(f"[{self._state.name}] Mission {self._current_mission}")
         logger.info(f"[{self._state.name}] {'=' * 50}")
 
         # Step 1: Sample positions using sampler
@@ -562,10 +620,11 @@ class MissionManager:
             self._state = MissionState.WAITING_FOR_COMPLETION
 
     def _step_waiting_for_completion(self):
-        """Wait for mission delay before starting next mission."""
+        """Wait for mission timeout before returning to wait-for-start."""
         elapsed = self._get_current_time_seconds() - self._mission_start_time
-        if elapsed >= self.mission_config.delay:
-            self._state = MissionState.READY
+        if elapsed >= self.mission_config.timeout:
+            self._state = MissionState.WAITING_FOR_START
+            logger.info(f"[{self._state.name}] Mission {self._current_mission} timed out {self.mission_config.timeout=}, waiting for start signal")
 
     def _cleanup(self):
         """Clean up ROS2 resources."""

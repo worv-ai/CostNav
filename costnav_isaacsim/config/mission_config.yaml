@@ -7,11 +7,9 @@
 
 # Mission execution settings
 mission:
-  # Number of missions to run (0 = infinite)
-  count: 10
 
-  # Delay between missions in seconds
-  delay: 30.0
+  # Mission timeout (seconds)
+  timeout: 3600.0  # 1 hour
 
 # Distance constraints for start/goal sampling (in meters)
 distance:
@@ -19,7 +17,7 @@ distance:
   min: 20.0
 
   # Maximum distance between start and goal positions
-  max: 100.0
+  max: 250.0
 
 # Nav2 integration settings
 nav2:

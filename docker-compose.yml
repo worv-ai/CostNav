@@ -73,7 +73,7 @@ services:
     working_dir: /workspace
     command:
       - "-ic"
-      - "/workspace/costnav_isaacsim/launch.py --mission"
+      - "/workspace/costnav_isaacsim/launch.py"
     healthcheck:
       test:
         [
