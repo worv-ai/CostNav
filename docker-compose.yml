@@ -20,7 +20,7 @@ x-ros2-service: &ros2-service
   command: >
     bash -c "source /opt/ros/jazzy/setup.bash &&
              source /workspace/build_ws/install/local_setup.sh &&
-             ros2 launch carter_navigation carter_navigation.launch.py map:=/workspace/nav2_params/carter_sidewalk.yaml params_file:=/workspace/nav2_params/carter_navigation_params.yaml"
+             ros2 launch /workspace/nav2_params/carter_navigation.launch.py map:=/workspace/nav2_params/carter_sidewalk.yaml params_file:=/workspace/nav2_params/carter_navigation_params.yaml"
   network_mode: host
   ipc: host
   stdin_open: true
@@ -170,7 +170,37 @@ services:
     depends_on:
       isaac-sim:
         condition: service_healthy
-  
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+               source /workspace/build_ws/install/local_setup.sh &&
+               ros2 launch /workspace/nav2_params/nav2.launch.py"
+
+  # ROS2 with RViz - standalone visualization service that runs alongside Isaac Sim
+  ros2-rviz:
+    <<: *ros2-service
+    profiles: ["isaac-sim", "nav2"]
+    container_name: costnav-ros2-rviz
+    depends_on:
+      isaac-sim:
+        condition: service_healthy
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+               source /workspace/build_ws/install/local_setup.sh &&
+               ros2 launch /workspace/nav2_params/rviz.launch.py"
+
+  # ROS2 with RViz (teleop profile) - hides TF/point clouds by default
+  ros2-rviz-teleop:
+    <<: *ros2-service
+    profiles: ["teleop"]
+    container_name: costnav-ros2-rviz-teleop
+    depends_on:
+      isaac-sim:
+        condition: service_healthy
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+               source /workspace/build_ws/install/local_setup.sh &&
+               ros2 launch /workspace/nav2_params/rviz.launch.py rviz_config:=/workspace/nav2_params/carter_navigation_teleop.rviz"
+
   # ROS2 with teleop - waits for Isaac Sim to be healthy before starting
   ros2-teleop:
     <<: *ros2-service
@@ -217,4 +247,3 @@ services:
       bash -c "source /opt/ros/jazzy/setup.bash &&
                mkdir -p /workspace/rosbags &&
                ros2 bag record -a -o /workspace/rosbags/recording_$$(date +%Y%m%d_%H%M%S)"
-

@@ -2,9 +2,9 @@
 
 **Issue Reference:** [#5 - Support rule-based navigation with nav2](https://github.com/worv-ai/CostNav/issues/5)
 
-**Status:** ✅ Nav2 Integration Complete | ⏳ Parameter Tuning In Progress
+**Status:** ✅ Nav2 Integration Complete | ✅ Mission Orchestration Complete | ⏳ Parameter Tuning In Progress
 **Target Version:** CostNav v0.2.0
-**Last Updated:** 2025-12-10
+**Last Updated:** 2025-12-12
 
 ---
 
@@ -17,16 +17,18 @@
 - **ROS2 Bridge**: Communication between Isaac Sim and Nav2 established
 - **Occupancy Map**: Generated and configured for Street_sidewalk environment
 - **Basic Navigation**: Nova Carter successfully navigates to goals
+- **Mission Orchestration**: Automated start/goal sampling, robot teleportation, and RViz visualization
+- **NavMesh Position Sampling**: Valid start/goal positions sampled from Isaac Sim's NavMesh
+- **RViz Marker Visualization**: Start (green), goal (red), and robot (blue) markers
 
 ### ⏳ In Progress
 
-1. **Start and Goal Sampling**: Mission planning system for autonomous goal generation
-2. **Parameter Tuning**: Optimizing Nav2 parameters for Nova Carter performance
+1. **Parameter Tuning**: Optimizing Nav2 parameters for Nova Carter performance
+2. **Cost Model Integration**: Track economic metrics for Nav2 navigation
 
 ### 📋 Future Work
 
 - **COCO Robot Integration**: Adapt Nav2 for COCO delivery robot (lower priority)
-- **Cost Model Integration**: Track economic metrics for Nav2 navigation
 - **Hybrid RL+Nav2**: Combine learning-based and rule-based approaches
 
 ---
@@ -84,7 +86,7 @@ CostNav currently supports:
 
 ### Remaining Tasks
 
-1. **Start and Goal Sampling** - Implement mission planning system for autonomous goal generation
+1. ~~**Start and Goal Sampling**~~ - ✅ Complete (nav2_mission module)
 2. **Parameter Tuning** - Optimize Nav2 parameters for Nova Carter navigation performance
 3. **Cost Model Integration** - Track economic metrics for Nav2 navigation
 4. **COCO Robot Adaptation** - Extend Nav2 support to COCO delivery robot (future work)
@@ -182,6 +184,28 @@ This implementation follows NVIDIA's official tutorial which covers:
 
 ### Quick Start
 
+**Option 1: Run Stack (Manual Missions)**
+
+```bash
+# From repository root, start both containers with Nav2 profile
+make run-nav2
+
+# Trigger a mission manually
+make start-mission
+```
+
+To customize mission parameters, edit `config/mission_config.yaml` or use:
+
+```bash
+# Inside Isaac Sim container
+python /workspace/costnav_isaacsim/launch.py \
+    --mission-timeout 600 \
+    --min-distance 10.0 \
+    --max-distance 30.0
+```
+
+**Option 2: Manual Launch (Step by Step)**
+
 **1. Launch Isaac Sim with Nova Carter:**
 
 ```bash
@@ -202,11 +226,24 @@ ros2 launch carter_navigation carter_navigation.launch.py \
     params_file:=/workspace/costnav_isaacsim/nav2_params/carter_navigation_params.yaml
 ```
 
+**3. Mission Orchestration (Manual Trigger):**
+
+Missions are triggered manually via `/start_mission`:
+
+```bash
+# Trigger a mission via Makefile
+make start-mission
+
+# Or call the service directly
+ros2 service call /start_mission std_srvs/srv/Trigger {}
+```
+
 **Configuration Files:**
 
 - **Map:** `/workspace/costnav_isaacsim/nav2_params/carter_sidewalk.yaml`
 - **Parameters:** `/workspace/costnav_isaacsim/nav2_params/carter_navigation_params.yaml`
 - **Map Image:** `/workspace/costnav_isaacsim/nav2_params/carter_sidewalk.png`
+- **Mission Module:** `/workspace/costnav_isaacsim/nav2_mission/`
 
 ### Docker Volume Mounting
 
@@ -219,7 +256,7 @@ volumes:
 
 ---
 
-## Implementation Plan (4 Weeks) - ⏳ IN PROGRESS
+## Implementation Plan (4 Weeks) - ✅ WEEKS 1-3 COMPLETE
 
 Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html), we are implementing Nav2 integration.
 
@@ -227,14 +264,13 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 
 - ✅ Week 1: Docker Setup & ROS2 Bridge - Complete
 - ✅ Week 2: Nova Carter Setup & Occupancy Map - Complete
-- ⏳ Week 3: Nav2 Stack Configuration & Basic Navigation - Parameter tuning in progress
-- ⏳ Week 4: Cost Model Integration & Testing - In progress
+- ✅ Week 3: Nav2 Stack Configuration & Mission Orchestration - Complete
+- ⏳ Week 4: Cost Model Integration & Parameter Tuning - In progress
 
 **Remaining Work:**
 
 - Parameter tuning for optimal Nova Carter performance
-- Start and goal sampling system implementation
-- Cost model integration (future)
+- Cost model integration for economic metrics tracking
 
 ---
 
@@ -297,73 +333,239 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 
 ---
 
-### Week 3: Nav2 Stack Configuration & Basic Navigation -(⏳ Parameter Tuning In Progress)
+### Week 3: Nav2 Stack Configuration & Basic Navigation - ✅ COMPLETE
 
-**Objective:** Configure Nav2 components and achieve basic navigation
+**Objective:** Configure Nav2 components, achieve basic navigation, and implement goal sampling with visualization
 
-**Reference:** [Running Nav2](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#running-nav2)
+**Reference:** [Running Nav2](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#running-nav2) | [Sending Goals Programmatically](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#sending-goals-programmatically) | [Omniverse Navigation Mesh Extension](https://docs.omniverse.nvidia.com/extensions/latest/ext_navigation-mesh.html) | [ROS2 Marker Display Types](https://docs.ros.org/en/humble/Tutorials/Intermediate/RViz/Marker-Display-types/Marker-Display-types.html)
 
 **Tasks:**
 
 - [x] Configure Nav2 parameters for Nova Carter
-  - Costmap configuration (global + local)
-  - AMCL localization parameters
-  - Planner server (NavFn or Smac)
-  - Controller server (DWB or RPP)
-  - Behavior server (recovery behaviors)
 - [x] Create ROS2 launch file for Nav2 stack
 - [x] Test navigation with RViz2 "Nav2 Goal" button
-- [ ] ⏳ **Tune parameters for Nova Carter kinematics** (In Progress)
+- [ ] ⏳ Tune parameters for Nova Carter kinematics (moved to Week 4)
+- [x] Implement position sampling using NavMesh
+- [x] Ensure minimum distance threshold between start and goal
+- [x] Implement robot teleportation and mission initiation
+- [x] Configure RViz markers for start position, goal position, current robot position
 
 **Deliverables:**
 
 - ✅ Nav2 configuration files at `/workspace/costnav_isaacsim/nav2_params/carter_navigation_params.yaml`
 - ✅ Nav2 launch file (`carter_navigation.launch.py`)
 - ✅ RViz2 configuration
-- ⏳ Optimized parameters (in progress)
+- ✅ Mission orchestration module at `/workspace/costnav_isaacsim/nav2_mission/`
+- ✅ Configuration module at `/workspace/costnav_isaacsim/config/` with YAML-based settings
+- ✅ Manual mission trigger via `/start_mission` with config loaded at startup
+- ⏳ Optimized parameters (moved to Week 4)
 
 **Success Criteria:**
 
 - ✅ Robot navigates to goals successfully
 - ✅ Avoids obstacles
 - ✅ Recovery behaviors work
-- ⏳ Parameters optimized for performance (in progress)
+- ✅ Start/goal positions sampled from NavMesh with minimum distance threshold (5-50m configurable)
+- ✅ Robot teleports to start and navigates to goal automatically
+- ✅ RViz displays distinct markers for start (green), goal (red), and robot (blue) positions
+- ⏳ Parameters optimized for performance (moved to Week 4)
+
+#### Implementation: Nav2 Mission Module
+
+The following components have been implemented in `/workspace/costnav_isaacsim/nav2_mission/`:
+
+**1. NavMesh Sampler (`navmesh_sampler.py`)**
+
+- Uses `omni.anim.navigation.core` extension for NavMesh queries
+- `NavMeshSampler` class with methods:
+  - `sample_random_position()` - Sample random point on NavMesh
+  - `sample_start_goal_pair()` - Sample valid start/goal with distance constraints
+  - `validate_position()` - Check if position is on NavMesh
+  - `check_path_exists()` - Verify navigable path exists
+- Configurable min/max distance thresholds (default: 5-50 meters)
+
+**2. Marker Publisher (`marker_publisher.py`)**
+
+- `MarkerPublisher` ROS2 node publishing to:
+  - `/start_marker` - Green arrow for start position
+  - `/goal_marker` - Red arrow for goal position
+  - `/robot_marker` - Blue arrow for current robot position (real-time from `/odom`)
+- Uses `visualization_msgs/Marker` with ARROW type
+- TRANSIENT_LOCAL QoS for persistent marker visibility
+
+**3. Mission Orchestrator (`mission_orchestrator.py`)**
+
+- `MissionOrchestrator` ROS2 node that coordinates:
+  - NavMesh-based position sampling
+  - Robot teleportation via Isaac Sim API
+  - Initial pose publication to `/initialpose`
+  - Goal pose publication to `/goal_pose`
+  - RViz marker updates
+- `MissionConfig` dataclass for configuration
+- `create_isaac_sim_teleport_callback()` helper for Isaac Sim integration
+
+**4. Mission Runner (`mission_runner.py`)**
+
+- `MissionRunner` class for background thread execution
+- Manages mission lifecycle alongside simulation loop
+- Graceful stop/cleanup with `_stop_event`
+- Interruptible sleep between missions
+
+**5. Configuration (`config/`)**
+
+Mission parameters are configured via YAML file at `config/mission_config.yaml`:
+
+```yaml
+mission:
+  timeout: 3600.0   # Mission timeout (seconds)
+
+distance:
+  min: 5.0          # Minimum start-goal distance (meters)
+  max: 50.0         # Maximum start-goal distance (meters)
+
+nav2:
+  wait_time: 10.0   # Wait for Nav2 stack to initialize
+
+teleport:
+  robot_prim: "/World/Nova_Carter_ROS"
+  height_offset: 0.5
+
+markers:
+  enabled: true
+  topics:
+    start: "/start_marker"
+    goal: "/goal_marker"
+    robot: "/robot_marker"
+```
+
+**6. Integrated Launch (`launch.py`)**
+
+The mission module loads config at startup with CLI overrides:
+
+```bash
+# Use default config (config/mission_config.yaml)
+python launch.py
+
+# Use custom config file
+python launch.py --config /path/to/custom.yaml
+
+# Override config values via CLI
+python launch.py --mission-timeout 600 --min-distance 10
+
+# Available CLI overrides:
+#   --config PATH       Path to config YAML file
+#   --mission-timeout S Override: Mission timeout
+#   --min-distance M    Override: Minimum start-goal distance
+#   --max-distance M    Override: Maximum start-goal distance
+#   --nav2-wait S       Override: Nav2 wait time
+```
+
+#### RViz Marker Topics
+
+| Topic          | Color | Description                    |
+| -------------- | ----- | ------------------------------ |
+| `/start_marker`| Green | Start position (ARROW marker)  |
+| `/goal_marker` | Red   | Goal position (ARROW marker)   |
+| `/robot_marker`| Blue  | Current robot position (10 Hz) |
 
 ---
 
 ### Week 4: Cost Model Integration & Testing
 
-**Objective:** Integrate cost tracking and validate against RL baseline
+**Objective:** Integrate cost tracking, run benchmark scenarios, and validate Nav2 against RL baseline
 
-**Reference:** [Sending Goals Programmatically](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#sending-goals-programmatically)
+**Reference:** [Sending Goals Programmatically](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html#sending-goals-programmatically) | [CostNav Cost Model](cost_model.md)
 
 **Tasks:**
 
 - [x] Basic Nav2 integration complete
 - [x] Create programmatic goal sender (Python script)
 - [x] Document usage and API
-- [ ] Implement cost model tracker for Nav2 navigation (⏳ Future work)
-  - Track energy consumption
-  - Track time to goal
-  - Track SLA compliance
-  - Track collision/recovery events
-- [ ] Run benchmark scenarios (same as RL evaluation) (⏳ Future work)
-- [ ] Compare Nav2 vs RL performance (⏳ Future work)
+- [ ] Create `nav2_cost_tracker.py` ROS2 node
+- [ ] Implement energy consumption model
+- [ ] Implement SLA compliance tracking
+- [ ] Implement collision and recovery event tracking
+- [ ] Create benchmark scenario runner
+- [ ] Generate comparison report: Nav2 vs RL
 
 **Deliverables:**
 
 - ✅ Python launch script (`launch.py`)
 - ✅ Nav2 configuration files
 - ✅ Documentation
-- 📋 `nav2_cost_tracker.py` (future)
-- 📋 Benchmark comparison report (future)
+- 📋 `nav2_cost_tracker.py` - ROS2 node for real-time cost tracking
+- 📋 `nav2_benchmark_runner.py` - Automated benchmark scenario executor
+- 📋 `nav2_metrics_report.py` - Report generator with comparison analysis
+- 📋 Benchmark results CSV/JSON files
+- 📋 Nav2 vs RL comparison report (Markdown + visualizations)
 
 **Success Criteria:**
 
 - ✅ Nav2 runs successfully with Nova Carter
 - ✅ Documentation published
-- ⏳ Cost metrics collection (future)
-- ⏳ Comparison with RL baseline (future)
+- 📋 Cost tracker node publishes real-time metrics to `/nav2/metrics` topic
+- 📋 Energy consumption tracked with <5% error vs ground truth
+- 📋 SLA compliance calculated for each navigation mission
+- 📋 Benchmark scenarios complete with >95% automation
+- 📋 Comparison report shows Nav2 vs RL performance delta
+- 📋 Operating margin, break-even time, and SLA metrics comparable to RL baseline targets
+
+#### Implementation Details: Cost Tracker Node
+
+**1. `nav2_cost_tracker.py` ROS2 Node**
+
+- Subscribe to `/cmd_vel` to compute energy consumption from velocity commands
+- Subscribe to `/odom` to track distance traveled and path efficiency
+- Subscribe to Nav2 action server feedback for navigation status
+- Subscribe to `/local_costmap/costmap` to detect near-collision events
+- Implement timer-based tracking for time-to-goal metrics
+
+**2. Energy Consumption Model**
+
+- Calculate power draw: `P = k1*v + k2*ω + P_idle`
+- Integrate power over time to get total energy (Wh)
+- Use Nova Carter specifications for motor constants
+- Log instantaneous and cumulative energy consumption
+
+**3. SLA Compliance Tracking**
+
+- Define delivery time thresholds based on distance (e.g., 0.5 m/s average speed)
+- Track mission start time, goal reach time, and total duration
+- Compare against SLA deadline to determine compliance
+- Calculate SLA compliance rate across multiple missions
+
+**4. Collision and Recovery Event Tracking**
+
+- Monitor Nav2 behavior server for recovery triggers (spin, backup, wait)
+- Count recovery events per mission
+- Detect collision events from costmap proximity or contact sensors
+- Log recovery success/failure rates
+
+#### Implementation Details: Benchmark Runner
+
+**1. Standard Test Scenarios**
+
+- Short-range navigation (5-15m)
+- Medium-range navigation (15-50m)
+- Long-range navigation (50-100m)
+- Obstacle-dense environments
+
+**2. Benchmark Execution**
+
+- Run N trials per scenario (e.g., N=100)
+- Collect statistics: success rate, avg time, avg energy, SLA compliance
+- Export metrics to CSV/JSON for analysis
+
+**3. Comparison Report: Nav2 vs RL**
+
+- Calculate key performance indicators:
+  - Navigation success rate
+  - Average time-to-goal
+  - Energy efficiency (Wh/m)
+  - SLA compliance rate
+  - Recovery event frequency
+- Compare against existing RL baseline metrics from CostNav
+- Generate summary table and visualizations
 
 ---
 
@@ -566,6 +768,8 @@ nav2_metrics = {
 | 0.1     | 2025-11-21 | CostNav Team | Initial draft                                                                                              |
 | 0.2     | 2025-11-21 | CostNav Team | Updated with multi-container architecture and official Isaac Sim Nav2 tutorial references                  |
 | 1.0     | 2025-12-10 | CostNav Team | Updated to reflect completed Nav2 integration with Nova Carter, removed network config, updated priorities |
+| 1.1     | 2025-12-12 | CostNav Team | Week 3 complete: Added nav2_mission module with NavMesh sampling, RViz markers, mission orchestration, integrated launch |
+| 1.2     | 2025-12-12 | CostNav Team | Refactored to use YAML config file (config/mission_config.yaml), added MissionRunner, separated config module |
 
 ---
 

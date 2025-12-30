@@ -33,6 +33,10 @@ FROM nvcr.io/nvidia/isaac-sim:${ISAAC_SIM_VERSION} AS isaac-sim
 # Reuse uv binary
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
+# Install git for version control
+USER root
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /workspace
 
 ENV ACCEPT_EULA=Y
@@ -70,6 +74,10 @@ RUN ln -sf /isaac-sim/kit/python/bin/python3 /isaac-sim/kit/python/bin/python
 # Isaac Sim extras
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python="${PYTHON_BIN}" --system -e ".[isaac-sim,dev]"
+
+# Install pre-commit for git hooks
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python="${PYTHON_BIN}" --system pre-commit
 
 # Switch to root for bashrc modifications
 USER root
@@ -149,6 +157,10 @@ COPY costnav_isaaclab/ ./costnav_isaaclab/
 # CostNav Isaac Lab deps
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python="${PYTHON_BIN}" --system -e ".[isaac-lab,dev]"
+
+# Install pre-commit for git hooks
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python="${PYTHON_BIN}" --system pre-commit
 
 # Template project install
 RUN --mount=type=cache,target=/root/.cache/uv \

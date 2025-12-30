@@ -11,8 +11,22 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "python": "/isaac-sim/kit/python/bin/python3",
-            "envFile": "${workspaceFolder}/.vscode/.python.env",
+            "envFile": "${workspaceFolder}/.vscode/.standalone_examples.env",
             "preLaunchTask": "setup_python_env"
+        },
+        {
+            "name": "Python: Launch Mission",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/costnav_isaacsim/launch.py",
+            "args": [
+                "--mission"
+            ],
+            "console": "integratedTerminal",
+            "python": "/isaac-sim/kit/python/bin/python3",
+            "envFile": "${workspaceFolder}/.vscode/.standalone_examples.env",
+            "preLaunchTask": "setup_python_env",
+            "cwd": "${workspaceFolder}/costnav_isaacsim"
         },
         {
             "name": "Python: Attach (windows-x86_64/linux-x86_64)",
