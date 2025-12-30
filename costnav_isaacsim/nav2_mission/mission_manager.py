@@ -131,6 +131,7 @@ class MissionManager:
         self._sampler = None
         self._stage = None
         self._robot_prim_path = None
+        self._executor = None
 
         # State machine
         self._state = MissionState.INIT
@@ -160,6 +161,8 @@ class MissionManager:
             self._initialize()
             return
 
+        self._spin_ros_once()
+
         if self._state == MissionState.WAITING_FOR_NAV2:
             self._step_waiting_for_nav2()
         elif self._state == MissionState.READY:
@@ -180,6 +183,7 @@ class MissionManager:
     def _initialize(self):
         """Initialize ROS2 node and all components (called once on first step)."""
         import rclpy
+        from rclpy.executors import SingleThreadedExecutor
         from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
         from rclpy.node import Node
         from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
@@ -216,6 +220,11 @@ class MissionManager:
                 enabled=self.mission_config.markers.enabled,
             )
 
+            # ROS2 executor to service timers/subscriptions without blocking the sim loop.
+            self._executor = SingleThreadedExecutor()
+            self._executor.add_node(self._node)
+            self._executor.add_node(self._marker_publisher)
+
             # Auto-setup Isaac Sim teleport callback if robot_prim_path is provided
             if self._teleport_callback is None and self.config.robot_prim_path:
                 self._setup_isaac_sim_teleport()
@@ -251,6 +260,16 @@ class MissionManager:
 
             logger.error(f"[{self._state.name}] {traceback.format_exc()}")
             self._state = MissionState.COMPLETED
+
+    def _spin_ros_once(self) -> None:
+        """Service ROS2 callbacks and timers without blocking the sim loop."""
+        if self._executor is None:
+            return
+
+        try:
+            self._executor.spin_once(timeout_sec=0.0)
+        except Exception as exc:
+            logger.warning(f"[{self._state.name}] ROS2 spin_once failed: {exc}")
 
     def _setup_isaac_sim_teleport(self) -> None:
         """Setup Isaac Sim teleportation using UsdGeom.Xformable.
@@ -550,6 +569,15 @@ class MissionManager:
 
     def _cleanup(self):
         """Clean up ROS2 resources."""
+        try:
+            if self._executor:
+                if self._node:
+                    self._executor.remove_node(self._node)
+                if self._marker_publisher:
+                    self._executor.remove_node(self._marker_publisher)
+                self._executor.shutdown()
+        except Exception:
+            pass
         try:
             if self._node:
                 self._node.destroy_node()
