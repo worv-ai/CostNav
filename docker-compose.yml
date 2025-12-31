@@ -196,6 +196,13 @@ services:
     depends_on:
       isaac-sim:
         condition: service_healthy
+    environment:
+      - ROS_DISTRO=jazzy
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+      - DISPLAY=${DISPLAY:-:0}
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
+      - LIBGL_ALWAYS_SOFTWARE=1
     command: >
       bash -c "source /opt/ros/jazzy/setup.bash &&
                source /workspace/build_ws/install/local_setup.sh &&
@@ -246,4 +253,5 @@ services:
     command: >
       bash -c "source /opt/ros/jazzy/setup.bash &&
                mkdir -p /workspace/rosbags &&
-               ros2 bag record -a -o /workspace/rosbags/recording_$$(date +%Y%m%d_%H%M%S)"
+               ros2 run image_transport republish --ros-args -p in_transport:=raw -p out_transport:=compressed --remap in:=/front_stereo_camera/left/image_raw --remap out/compressed:=/front_stereo_camera/left/image_raw/compressed &
+               ros2 bag record -a -o /workspace/rosbags/recording_$$(date +%Y%m%d_%H%M%S) --exclude-topics /front_stereo_camera/left/image_raw"
