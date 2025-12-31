@@ -19,7 +19,8 @@ RUN apt-get update && \
     rosdep install --from-paths /ros2_ws/src --ignore-src -r -y && \
     apt-get install -y \
         ros-jazzy-joy \
-        ros-jazzy-teleop-twist-joy && \
+        ros-jazzy-teleop-twist-joy \
+        ros-jazzy-image-transport-plugins && \
     rm -rf /var/lib/apt/lists/*
 
 # Set the default workspace directory
