@@ -113,9 +113,7 @@ def print_table(rows, total_size, bag_size_bytes):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Compute per-topic serialized size and percentage for ROS 2 bags."
-    )
+    parser = argparse.ArgumentParser(description="Compute per-topic serialized size and percentage for ROS 2 bags.")
     parser.add_argument("bag_path", help="Path to ROS 2 bag directory or .mcap/.db3 file")
     parser.add_argument(
         "--storage",
