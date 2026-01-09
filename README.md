@@ -69,15 +69,6 @@ cd CostNav
 2. Set `DISPLAY`, `NVIDIA_VISIBLE_DEVICES`, Isaac Sim search paths, and any Omniverse auth tokens your setup requires.
 3. The same `.env` is used by Docker Compose, the devcontainer, and SLURM jobs.
 
-### 3.5. IDE helpers
-
-```bash
-python tools/generate_vscode_settings.py --isaac-sim /path/to/isaac-sim
-```
-
-The script creates `.vscode/.python.env` with search paths so Pylance can index Isaac modules without indexing the entire Omniverse cache.
-
-
 ### 4. Build/run with Docker Compose
 
 ```bash
@@ -221,7 +212,6 @@ sbatch train.sbatch
 - **Pre-commit hooks:** After cloning the repository, run `./scripts/setup-pre-commit.sh` to install Git hooks that automatically check code quality before commits. This works in both devcontainer and local environments.
 - **Testing:** Unit tests live under `tests/` (populate as features mature). Use `pytest` or targeted scripts like `scripts/test_v2_rewards.py` to validate reward shaping before launching long training jobs.
 - **Submodules:** Refer to `third_party/README.md` for guidance on keeping IsaacLab and Urban-Sim references in sync without polluting CostNav source directories.
-- **IDE & linting:** `tools/generate_vscode_settings.py` ensures VS Code/Pylance knows where Omniverse packages live. For PyCharm or other IDEs, mirror the generated `.python.env` paths.
 - **Omniverse assets:** Update `CostnavIsaaclabSceneCfg` if your Nucleus path differs. Keep URLs in sync via the `.env` file so Docker and local runs agree on map locations.
 
 ## Roadmap

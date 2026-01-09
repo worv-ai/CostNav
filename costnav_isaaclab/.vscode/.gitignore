@@ -5,6 +5,5 @@
 !extensions.json
 !tasks.json
 
-# Ignore all other files
-.python.env
+# Ignore generated JSON files
 *.json

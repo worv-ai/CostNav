@@ -298,31 +298,6 @@ python scripts/random_agent.py \
 - Verify action space is correct
 - Check environment stability
 
-## Utility Scripts
-
-### Generate VS Code Settings
-
-**Location**: `tools/generate_vscode_settings.py`
-
-**Purpose**: Generate VS Code settings for Isaac Sim development
-
-**Usage**:
-```bash
-python tools/generate_vscode_settings.py --isaac-sim /path/to/isaac-sim
-```
-
-**What it does**:
-- Creates `.vscode/.python.env`
-- Adds Isaac Sim paths to Python path
-- Enables Pylance autocomplete
-- Improves IDE experience
-
-**Output**:
-```
-# .vscode/.python.env
-PYTHONPATH=/path/to/isaac-sim/exts/omni.isaac.core:/path/to/isaac-sim/exts/omni.isaac.kit:...
-```
-
 ## Safe Position Scripts
 
 ### Find Safe Positions
@@ -504,4 +479,3 @@ make build-isaac-lab COSTNAV_VERSION=0.2.0
 3. Use `--headless=False` to visualize behavior
 4. Check logs for NaN/Inf values
 5. Reduce `num_envs` to simplify debugging
-
