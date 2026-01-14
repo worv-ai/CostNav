@@ -1,0 +1,28 @@
+# ViNT Data Processing Configuration
+# Configuration for converting MediaRef bags to ViNT training format
+
+# CostNav dataset configuration
+costnav:
+  # Topic names in MediaRef bags
+  image_topic: "/front_stereo_camera/left/image_raw"  # MediaRef string topic
+  odom_topic: "/chassis/odom"                         # nav_msgs/Odometry topic
+
+  # Angle offset (radians) to apply to yaw values
+  # Set to 0 for CostNav data (robot forward is +x direction)
+  ang_offset: 0.0
+
+# Processing settings
+processing:
+  # Sampling rate (Hz) for trajectory extraction
+  sample_rate: 4.0
+
+  # Image output size (width, height)
+  image_size: [160, 120]
+
+  # Target aspect ratio for center cropping
+  image_aspect_ratio: 1.333333  # 4/3
+
+# Default topic mappings (used when no config is provided)
+image_topic: "/front_stereo_camera/left/image_raw"
+odom_topic: "/chassis/odom"
+ang_offset: 0.0
