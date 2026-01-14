@@ -29,7 +29,15 @@ from typing import Optional
 
 import ray
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
+    MofNCompleteColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 from rich.table import Table
 
 try:
@@ -175,7 +183,10 @@ def main():
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
-        TaskProgressColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        TextColumn("ETA:"),
+        TimeRemainingColumn(),
         console=console,
     ) as progress:
         task = progress.add_task("Processing bags...", total=len(futures))
