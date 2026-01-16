@@ -8,22 +8,35 @@ This module implements imitation learning baselines for CostNav sidewalk robot n
 il_baselines/
 ├── README.md                     # This file
 ├── __init__.py
+├── environment.yml               # Conda environment specification
 ├── data_processing/              # Data conversion pipeline
 │   ├── __init__.py
+│   ├── configs/
+│   │   ├── processing_config.yaml
+│   │   └── vint_processing_config.yaml
 │   ├── converters/               # Format conversion scripts
 │   │   ├── __init__.py
-│   │   └── rosbag_to_mediaref.py # ROS2 mcaps → MediaRef
-│   └── configs/
-│       └── processing_config.yaml
+│   │   ├── rosbag_to_mediaref.py     # ROS2 mcaps → MediaRef
+│   │   └── ray_batch_convert.py      # Batch conversion with Ray
+│   ├── process_data/             # Data processing scripts
+│   │   ├── __init__.py
+│   │   └── process_mediaref_bags.py  # MediaRef → ViNT format
+│   └── tests/
+│       ├── __init__.py
+│       ├── test_rosbag_to_mediaref.py
+│       ├── test_ray_batch_convert.py
+│       └── test_process_mediaref_bags.py
 ├── training/                     # Training framework
 │   ├── __init__.py
+│   ├── train_vint.py             # Main training script
 │   └── visualnav_transformer/    # ViNT/NoMaD/GNM
-│       ├── Dockerfile
-│       ├── docker-compose.yml
+│       ├── checkpoints/          # Pretrained model weights (download manually)
+│       │   ├── vint.pth
+│       │   ├── nomad.pth
+│       │   └── gnm.pth
 │       └── configs/
-│           ├── vint_costnav.yaml
-│           ├── nomad_costnav.yaml
-│           └── gnm_costnav.yaml
+│           ├── defaults.yaml     # Default training config
+│           └── vint_costnav.yaml # CostNav fine-tuning config
 └── evaluation/                   # Evaluation & deployment
     └── __init__.py
 ```
@@ -84,7 +97,29 @@ python costnav_isaacsim/il_baselines/data_processing/process_data/process_mediar
     --sample-rate 4.0
 ```
 
-`process_mediaref_bags.py` reads MediaRef bags (video + MCAP), synchronizes images with odometry at a specified rate, filters out backward-moving segments, and outputs ViNT-format trajectory folders with numbered images (`0.jpg`, `1.jpg`, ...) and `traj_data.pkl` (position/yaw arrays).
+`process_mediaref_bags.py` reads MediaRef bags (video + MCAP), synchronizes images with odometry at a specified rate, filters out backward-moving segments, and outputs ViNT-format trajectory folders.
+
+**Output Format:**
+
+```
+data/outputs/
+├── recording_20260102_014822_0/    # Trajectory folder
+│   ├── 0.jpg                       # Frame at t=0
+│   ├── 1.jpg                       # Frame at t=0.25s (at 4Hz)
+│   ├── 2.jpg                       # Frame at t=0.5s
+│   ├── ...
+│   └── traj_data.pkl               # Trajectory metadata
+├── recording_20260102_015826_0/
+│   ├── 0.jpg
+│   ├── ...
+│   └── traj_data.pkl
+└── ...
+```
+
+The `traj_data.pkl` file contains:
+
+- `position`: `np.array` of shape `(N, 2)` - x, y positions in meters
+- `yaw`: `np.array` of shape `(N,)` - yaw angles in radians
 
 **Single bag conversion (alternative):**
 
@@ -94,12 +129,64 @@ python costnav_isaacsim/il_baselines/data_processing/converters/rosbag_to_mediar
     --output data/processed/
 ```
 
-### Training (Docker)
+### Training
+
+#### Environment Setup
+
+Before running training, you must configure the `.env` file at the project root with `PROJECT_ROOT`:
 
 ```bash
-cd costnav_isaacsim/il_baselines/training/visualnav_transformer/
-docker-compose up vint-train
+# In CostNav/.env, ensure PROJECT_ROOT is set:
+PROJECT_ROOT=/path/to/CostNav
 ```
+
+The training script loads environment variables from `.env` automatically using `python-dotenv`.
+
+#### Download Pretrained Checkpoints
+
+Download pretrained model checkpoints from the [visualnav-transformer checkpoints](https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHetz263--4_2FFggg?usp=sharing) and place them in the `checkpoints/` directory:
+
+The expected checkpoints directory structure:
+
+```
+costnav_isaacsim/il_baselines/training/visualnav_transformer/checkpoints/
+├── vint.pth      # ViNT pretrained weights
+├── nomad.pth     # NoMaD pretrained weights (optional)
+└── gnm.pth       # GNM pretrained weights (optional)
+```
+
+#### Fine-tuning ViNT on CostNav Data
+
+**Using the standalone training script (recommended)**
+
+```bash
+# Run fine-tuning from CostNav root directory
+python costnav_isaacsim/il_baselines/training/train_vint.py \
+    --config costnav_isaacsim/il_baselines/training/visualnav_transformer/configs/vint_costnav.yaml
+```
+
+#### Configuration Options
+
+The config file `vint_costnav.yaml` supports the following key options:
+
+| Parameter               | Default                | Description                           |
+| ----------------------- | ---------------------- | ------------------------------------- |
+| `pretrained_checkpoint` | `checkpoints/vint.pth` | Path to pretrained weights            |
+| `batch_size`            | 64                     | Training batch size                   |
+| `epochs`                | 50                     | Number of training epochs             |
+| `lr`                    | 1e-4                   | Learning rate (lower for fine-tuning) |
+| `use_wandb`             | True                   | Enable Weights & Biases logging       |
+| `wandb_entity`          | maumai                 | W&B team/entity name                  |
+| `context_size`          | 5                      | Number of context frames              |
+| `len_traj_pred`         | 5                      | Trajectory prediction length          |
+
+To disable W&B logging, set `use_wandb: False` in the config or set:
+
+```bash
+export WANDB_MODE=disabled
+```
+
+Checkpoints are saved to `logs/vint-costnav/`.
 
 ## Installation
 

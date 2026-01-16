@@ -43,6 +43,7 @@ dependencies:
       - wandb
       - prettytable
       - lmdb
+      - python-dotenv
 
       # Vision/Transformer dependencies
       - efficientnet-pytorch
@@ -59,6 +60,7 @@ dependencies:
       - transformers
       - accelerate
       - safetensors
+      - git+https://github.com/real-stanford/diffusion_policy.git
 
       # ROS Bag Processing (ROS2 MCAP format)
       - rosbags

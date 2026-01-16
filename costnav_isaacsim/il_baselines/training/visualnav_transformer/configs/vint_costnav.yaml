@@ -1,0 +1,81 @@
+# =============================================================================
+# ViNT Fine-tuning Config for CostNav Sidewalk Navigation
+# =============================================================================
+
+project_name: vint-costnav
+run_name: vint-costnav-finetune
+
+# Training setup
+use_wandb: True  # Set to True if you want to log to wandb
+wandb_entity: maumai  # Your wandb entity/team name
+train: True
+pretrained_checkpoint: ${COSTNAV_ROOT}/costnav_isaacsim/il_baselines/training/visualnav_transformer/checkpoints/vint.pth
+batch_size: 64  # Reduced for small dataset
+epochs: 50
+gpu_ids: [0]
+num_workers: 4
+lr: 1e-4  # Lower LR for fine-tuning
+optimizer: adamw
+clipping: False
+max_norm: 1.0
+scheduler: "cosine"
+warmup: True
+warmup_epochs: 2
+seed: 42
+
+# Model params (ViNT architecture)
+model_type: vint
+obs_encoder: "efficientnet-b0"
+obs_encoding_size: 512
+mha_num_attention_heads: 4
+mha_num_attention_layers: 4
+mha_ff_dim_factor: 4
+late_fusion: False
+
+# Normalization for the action space
+normalize: True
+
+# Context
+context_type: temporal
+context_size: 5
+
+# Trade-off between action and distance prediction loss
+alpha: 0.5
+
+# Distance bounds for distance and action predictions
+distance:
+  min_dist_cat: 0
+  max_dist_cat: 20
+action:
+  min_dist_cat: 0
+  max_dist_cat: 10
+close_far_threshold: 10
+
+# Action output params
+len_traj_pred: 5
+learn_angle: True
+
+# Dataset specific parameters
+image_size: [85, 64]  # width, height (ViNT default)
+goal_type: "image"
+
+# CostNav dataset configuration
+# Paths relative to this config file
+datasets:
+  costnav:
+    data_folder: ${COSTNAV_ROOT}/data/outputs
+    train: ${COSTNAV_ROOT}/data/data_splits/costnav/train/
+    test: ${COSTNAV_ROOT}/data/data_splits/costnav/test/
+    end_slack: 3
+    goals_per_obs: 2
+    negative_mining: True
+    waypoint_spacing: 1
+
+# Logging
+print_log_freq: 100
+image_log_freq: 1000
+num_images_log: 8
+pairwise_test_freq: 0
+eval_fraction: 0.25
+wandb_log_freq: 10
+eval_freq: 1
