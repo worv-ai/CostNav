@@ -60,16 +60,17 @@ image_size: [85, 64]  # width, height (ViNT default)
 goal_type: "image"
 
 # CostNav dataset configuration
-# Paths relative to this config file
+# Paths to the nova_carter_vint dataset
 datasets:
-  costnav:
-    data_folder: ${COSTNAV_ROOT}/data/outputs
-    train: ${COSTNAV_ROOT}/data/data_splits/costnav/train/
-    test: ${COSTNAV_ROOT}/data/data_splits/costnav/test/
+  nova_carter_vint:
+    data_folder: /raid/datasets/CostNav/nova_carter_vint
+    train: /raid/datasets/CostNav/nova_carter_vint_splits/train/
+    test: /raid/datasets/CostNav/nova_carter_vint_splits/test/
     end_slack: 3
     goals_per_obs: 2
     negative_mining: True
     waypoint_spacing: 1
+    metric_waypoint_spacing: 0.25  # average spacing between waypoints (meters) - automatically updates data_config.yaml
 
 # Logging
 print_log_freq: 100
