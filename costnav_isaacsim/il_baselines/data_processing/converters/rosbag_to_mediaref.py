@@ -359,8 +359,8 @@ def convert_bag(
 
         # Move metadata.yaml up one level
         src_metadata = output_path / "metadata.yaml"
+        dst_metadata = parent_dir / "metadata.yaml"
         if src_metadata.exists():
-            dst_metadata = parent_dir / "metadata.yaml"
             shutil.move(str(src_metadata), str(dst_metadata))
 
         # Move the actual MCAP file up and rename it
@@ -379,6 +379,28 @@ def convert_bag(
 
             # Rename temp file to final name
             shutil.move(str(temp_mcap), str(dst_mcap))
+
+            # Update metadata.yaml to reference the correct filename
+            if dst_metadata.exists():
+                import yaml
+                with open(dst_metadata, 'r') as f:
+                    metadata = yaml.safe_load(f)
+
+                # Update file paths in metadata
+                if 'rosbag2_bagfile_information' in metadata:
+                    info = metadata['rosbag2_bagfile_information']
+                    # Update files list
+                    if 'files' in info:
+                        for file_info in info['files']:
+                            if 'path' in file_info:
+                                file_info['path'] = f"{bag_name}.mcap"
+                    # Update relative_file_paths
+                    if 'relative_file_paths' in info:
+                        info['relative_file_paths'] = [f"{bag_name}.mcap"]
+
+                # Write updated metadata
+                with open(dst_metadata, 'w') as f:
+                    yaml.dump(metadata, f, default_flow_style=False)
         else:
             # No MCAP files, just remove the directory
             output_path.rmdir()
