@@ -7,6 +7,9 @@
 [submodule "third_party/IsaacSim-ros_workspaces"]
 	path = third_party/IsaacSim-ros_workspaces
 	url = https://github.com/isaac-sim/IsaacSim-ros_workspaces.git
+[submodule "InternNav"]
+	path = InternNav
+	url = https://github.com/InternRobotics/InternNav.git
 [submodule "third_party/visualnav-transformer"]
 	path = third_party/visualnav-transformer
 	url = https://github.com/robodhruv/visualnav-transformer
