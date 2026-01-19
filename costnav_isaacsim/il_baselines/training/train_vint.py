@@ -552,6 +552,7 @@ if __name__ == "__main__":
         wandb.login()
         wandb.init(
             project=config["project_name"],
+            dir=str(log_dir),  # Set wandb directory to log_dir
             settings=wandb.Settings(start_method="fork"),
             entity=config.get("wandb_entity", os.environ.get("WANDB_ENTITY", "gnmv2")),
         )
