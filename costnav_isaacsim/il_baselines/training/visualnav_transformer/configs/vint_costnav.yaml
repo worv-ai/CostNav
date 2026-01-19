@@ -73,6 +73,7 @@ datasets:
     metric_waypoint_spacing: 0.25  # average spacing between waypoints (meters) - automatically updates data_config.yaml
 
 # Logging
+log_dir: /mnt/harbor/users/${USERNAME}/checkpoint/costnav  # Output directory for logs and checkpoints
 print_log_freq: 100
 image_log_freq: 1000
 num_images_log: 8

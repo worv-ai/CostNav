@@ -92,6 +92,9 @@ def resolve_env_variables(config: dict, project_root: str) -> dict:
                 var_name = match.group(1)
                 if var_name == "COSTNAV_ROOT":
                     return project_root
+                elif var_name == "USERNAME":
+                    # Get USERNAME from environment, fallback to USER if not set
+                    return os.environ.get("USERNAME", os.environ.get("USER", ""))
                 return os.environ.get(var_name, "")
 
             return env_pattern.sub(replace_match, value)
@@ -238,7 +241,7 @@ def main(config):
         shuffle=True,
         num_workers=config["num_workers"],
         drop_last=False,
-        persistent_workers=True,
+        persistent_workers=config["num_workers"] > 0,
     )
 
     if "eval_batch_size" not in config:
@@ -534,8 +537,13 @@ if __name__ == "__main__":
 
     config["run_name"] += "_" + time.strftime("%Y_%m_%d_%H_%M_%S")
 
-    # Create project folder in the project root
-    config["project_folder"] = str(PROJECT_ROOT / "logs" / config["project_name"] / config["run_name"])
+    # Create project folder using configurable log_dir
+    # If log_dir is relative, make it relative to PROJECT_ROOT
+    log_dir = Path(config.get("log_dir", "logs"))
+    if not log_dir.is_absolute():
+        log_dir = PROJECT_ROOT / log_dir
+
+    config["project_folder"] = str(log_dir / config["project_name"] / config["run_name"])
     os.makedirs(
         config["project_folder"],  # should error if dir already exists to avoid overwriting and old project
     )

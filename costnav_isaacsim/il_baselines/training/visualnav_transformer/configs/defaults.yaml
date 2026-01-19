@@ -56,6 +56,7 @@ image_size: [85, 64] # width, height
 
 # logging stuff
 ## =0 turns off
+log_dir: logs  # base directory for training logs and checkpoints (relative to PROJECT_ROOT or absolute path)
 print_log_freq: 100 # in iterations
 image_log_freq: 1000 # in iterations
 num_images_log: 8 # number of images to log in a logging iteration
