@@ -7,3 +7,9 @@
 [submodule "third_party/IsaacSim-ros_workspaces"]
 	path = third_party/IsaacSim-ros_workspaces
 	url = https://github.com/isaac-sim/IsaacSim-ros_workspaces.git
+# this is for quick development
+# automatically update to the Omniverse extension community
+# but it needs some times to sync
+[submodule "third_party/PeopleAPI"]
+	path = third_party/PeopleAPI
+	url = https://github.com/worv-ai/PeopleAPI

@@ -70,6 +70,7 @@ services:
       - ${HOME}/docker/isaac-sim/config:/isaac-sim/.nvidia-omniverse/config:rw
       - ${HOME}/docker/isaac-sim/data:/isaac-sim/.local/share/ov/data:rw
       - ${HOME}/docker/isaac-sim/pkg:/isaac-sim/.local/share/ov/pkg:rw
+      - ./third_party/PeopleAPI/exts:/isaac-sim/extsUser:rw
     working_dir: /workspace
     command:
       - "-ic"
