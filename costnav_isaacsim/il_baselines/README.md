@@ -144,7 +144,31 @@ The training script loads environment variables from `.env` automatically using 
 
 #### Download Pretrained Checkpoints
 
-Download pretrained model checkpoints from the [visualnav-transformer checkpoints](https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHetz263--4_2FFggg?usp=sharing) and place them in the `checkpoints/` directory:
+Download pretrained model checkpoints from the [visualnav-transformer checkpoints](https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHetz263--4_2FFggg?usp=sharing) and place them in the `checkpoints/` directory.
+
+**Option 1: Manual Download**
+
+1. Visit the [Google Drive folder](https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHetz263--4_2FFggg?usp=sharing)
+2. Download the desired checkpoint files (e.g., `vint.pth`)
+3. Place them in `costnav_isaacsim/il_baselines/training/visualnav_transformer/checkpoints/`
+
+**Option 2: Using gdown (Recommended)**
+
+```bash
+# Install gdown
+pip install gdown
+
+# Create checkpoints directory
+mkdir -p costnav_isaacsim/il_baselines/training/visualnav_transformer/checkpoints
+cd costnav_isaacsim/il_baselines/training/visualnav_transformer/checkpoints
+
+# Download ViNT checkpoint (replace FILE_ID with actual Google Drive file ID)
+# You can get the file ID from the Google Drive share link
+gdown <FILE_ID>
+
+# Or download the entire folder
+gdown --folder https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHetz263--4_2FFggg
+```
 
 The expected checkpoints directory structure:
 
@@ -196,13 +220,31 @@ cd CostNav
 conda env create -f costnav_isaacsim/il_baselines/environment.yml
 conda activate costnav_il
 
+# Initialize only the required submodules for IL baselines
+git submodule update --init third_party/visualnav-transformer
+git submodule update --init third_party/diffusion_policy
+
 # Install visualnav-transformer (ViNT/NoMaD/GNM training)
 pip install -e third_party/visualnav-transformer/train/
 
-# Clone and install diffusion_policy (for NoMaD)
-git clone https://github.com/real-stanford/diffusion_policy.git third_party/diffusion_policy
-pip install -e third_party/diffusion_policy/
+# Install diffusion_policy (with workaround for upstream bug)
+# Note: The official diffusion_policy repository is missing __init__.py
+# We need to add it manually to make the package importable
+echo '# Diffusion Policy Package' > third_party/diffusion_policy/diffusion_policy/__init__.py
+cd third_party/diffusion_policy && pip install -e . && cd ../..
+
+# Configure environment variables
+# Create a .env file at the project root with:
+echo "PROJECT_ROOT=$(pwd)" > .env
 ```
+
+### Known Issues
+
+**diffusion_policy Missing `__init__.py`**
+
+The official [diffusion_policy repository](https://github.com/real-stanford/diffusion_policy) is missing the `__init__.py` file in the `diffusion_policy/` directory, which prevents Python from recognizing it as a package. This causes `find_packages()` in `setup.py` to return an empty list.
+
+**Workaround:** We add a minimal `__init__.py` file before installation (see installation steps above). This is a necessary fix for a broken upstream dependency. Consider reporting this issue to the upstream repository.
 
 ## Dependencies
 

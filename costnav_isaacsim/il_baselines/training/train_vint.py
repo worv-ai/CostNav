@@ -24,43 +24,40 @@ SOFTWARE.
 This code is adapted from https://github.com/robodhruv/visualnav-transformer
 """
 
+import argparse
 import os
 import re
-import wandb
-import argparse
-import numpy as np
-import yaml
 import time
 from pathlib import Path
 
-from dotenv import load_dotenv
-
+import numpy as np
 import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader, ConcatDataset
-from torch.optim import Adam, AdamW
-from torchvision import transforms
 import torch.backends.cudnn as cudnn
+import torch.nn as nn
+import yaml
+from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
+from dotenv import load_dotenv
+from torch.optim import Adam, AdamW
+from torch.utils.data import ConcatDataset, DataLoader
+from torchvision import transforms
 from warmup_scheduler import GradualWarmupScheduler
 
-from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
+import wandb
 
 """
 IMPORT YOUR MODEL HERE
 """
+from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
+from vint_train.data.vint_dataset import ViNT_Dataset
 from vint_train.models.gnm.gnm import GNM
+from vint_train.models.nomad.nomad import DenseNetwork, NoMaD
+from vint_train.models.nomad.nomad_vint import NoMaD_ViNT, replace_bn_with_gn
 from vint_train.models.vint.vint import ViNT
 from vint_train.models.vint.vit import ViT
-from vint_train.models.nomad.nomad import NoMaD, DenseNetwork
-from vint_train.models.nomad.nomad_vint import NoMaD_ViNT, replace_bn_with_gn
-from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
-
-
-from vint_train.data.vint_dataset import ViNT_Dataset
 from vint_train.training.train_eval_loop import (
+    load_model,
     train_eval_loop,
     train_eval_loop_nomad,
-    load_model,
 )
 
 # Load .env file - required for PROJECT_ROOT
@@ -95,6 +92,9 @@ def resolve_env_variables(config: dict, project_root: str) -> dict:
                 var_name = match.group(1)
                 if var_name == "COSTNAV_ROOT":
                     return project_root
+                elif var_name == "USERNAME":
+                    # Get USERNAME from environment, fallback to USER if not set
+                    return os.environ.get("USERNAME", os.environ.get("USER", ""))
                 return os.environ.get(var_name, "")
 
             return env_pattern.sub(replace_match, value)
@@ -108,9 +108,53 @@ def resolve_env_variables(config: dict, project_root: str) -> dict:
     return resolve_value(config)
 
 
+def update_data_config_yaml(config):
+    """Update the data_config.yaml file with dataset-specific parameters.
+
+    This function updates the third_party/visualnav-transformer/train/vint_train/data/data_config.yaml
+    file with metric_waypoint_spacing and other parameters for each dataset specified in the config.
+
+    Args:
+        config: Training configuration dictionary containing dataset parameters.
+    """
+    data_config_path = (
+        PROJECT_ROOT / "third_party" / "visualnav-transformer" / "train" / "vint_train" / "data" / "data_config.yaml"
+    )
+
+    # Load existing data_config.yaml
+    with open(data_config_path, "r") as f:
+        data_config = yaml.safe_load(f)
+
+    # Update data_config with parameters from training config
+    updated = False
+    for dataset_name in config["datasets"]:
+        dataset_config = config["datasets"][dataset_name]
+
+        # Check if metric_waypoint_spacing is specified in the training config
+        if "metric_waypoint_spacing" in dataset_config:
+            # Create or update the dataset entry in data_config.yaml
+            if dataset_name not in data_config:
+                data_config[dataset_name] = {}
+
+            data_config[dataset_name]["metric_waypoint_spacing"] = dataset_config["metric_waypoint_spacing"]
+            updated = True
+            print(
+                f"Updated data_config.yaml: {dataset_name}.metric_waypoint_spacing = {dataset_config['metric_waypoint_spacing']}"
+            )
+
+    # Write back to data_config.yaml if any updates were made
+    if updated:
+        with open(data_config_path, "w") as f:
+            yaml.dump(data_config, f, default_flow_style=False, sort_keys=False)
+        print(f"Successfully updated {data_config_path}")
+
+
 def main(config):
     assert config["distance"]["min_dist_cat"] < config["distance"]["max_dist_cat"]
     assert config["action"]["min_dist_cat"] < config["action"]["max_dist_cat"]
+
+    # Update data_config.yaml with dataset parameters from training config
+    update_data_config_yaml(config)
 
     if torch.cuda.is_available():
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -197,7 +241,7 @@ def main(config):
         shuffle=True,
         num_workers=config["num_workers"],
         drop_last=False,
-        persistent_workers=True,
+        persistent_workers=config["num_workers"] > 0,
     )
 
     if "eval_batch_size" not in config:
@@ -493,8 +537,13 @@ if __name__ == "__main__":
 
     config["run_name"] += "_" + time.strftime("%Y_%m_%d_%H_%M_%S")
 
-    # Create project folder in the project root
-    config["project_folder"] = str(PROJECT_ROOT / "logs" / config["project_name"] / config["run_name"])
+    # Create project folder using configurable log_dir
+    # If log_dir is relative, make it relative to PROJECT_ROOT
+    log_dir = Path(config.get("log_dir", "logs"))
+    if not log_dir.is_absolute():
+        log_dir = PROJECT_ROOT / log_dir
+
+    config["project_folder"] = str(log_dir / config["project_name"] / config["run_name"])
     os.makedirs(
         config["project_folder"],  # should error if dir already exists to avoid overwriting and old project
     )
@@ -503,6 +552,7 @@ if __name__ == "__main__":
         wandb.login()
         wandb.init(
             project=config["project_name"],
+            dir=str(log_dir),  # Set wandb directory to log_dir
             settings=wandb.Settings(start_method="fork"),
             entity=config.get("wandb_entity", os.environ.get("WANDB_ENTITY", "gnmv2")),
         )

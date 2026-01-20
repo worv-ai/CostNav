@@ -11,10 +11,6 @@
 #
 #   # Install visualnav-transformer
 #   pip install -e third_party/visualnav-transformer/train/
-#
-#   # Install diffusion_policy
-#   git clone https://github.com/real-stanford/diffusion_policy.git third_party/diffusion_policy
-#   pip install -e third_party/diffusion_policy/
 # =============================================================================
 
 name: costnav_il
@@ -54,13 +50,6 @@ dependencies:
 
       # Warmup scheduler
       - git+https://github.com/ildoonet/pytorch-gradual-warmup-lr.git
-
-      # Diffusion dependencies
-      - diffusers
-      - transformers
-      - accelerate
-      - safetensors
-      - git+https://github.com/real-stanford/diffusion_policy.git
 
       # ROS Bag Processing (ROS2 MCAP format)
       - rosbags

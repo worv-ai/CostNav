@@ -13,3 +13,9 @@
 [submodule "third_party/NavDP"]
 	path = third_party/NavDP
 	url = https://github.com/InternRobotics/NavDP
+[submodule "third_party/visualnav-transformer"]
+	path = third_party/visualnav-transformer
+	url = https://github.com/robodhruv/visualnav-transformer
+[submodule "third_party/diffusion_policy"]
+	path = third_party/diffusion_policy
+	url = https://github.com/real-stanford/diffusion_policy.git
