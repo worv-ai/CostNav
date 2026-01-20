@@ -60,6 +60,7 @@ services:
       - ISAAC_PATH=${ISAAC_PATH:-/isaac-sim}
       - CARB_APP_PATH=${CARB_APP_PATH:-/isaac-sim/kit}
       - EXP_PATH=${EXP_PATH:-/isaac-sim/apps}
+      - NUM_PEOPLE=${NUM_PEOPLE:-0}
     volumes:
       - .:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -74,7 +75,7 @@ services:
     working_dir: /workspace
     command:
       - "-ic"
-      - "/workspace/costnav_isaacsim/launch.py"
+      - "/workspace/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-0}"
     healthcheck:
       test:
         [

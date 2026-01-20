@@ -68,10 +68,11 @@ run-isaac-sim:
 	$(DOCKER_COMPOSE) --profile isaac-sim up
 
 # Run both Isaac Sim and ROS2 Nav2 navigation together (using combined 'nav2' profile)
+# Usage: make run-nav2 NUM_PEOPLE=5
 run-nav2:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile nav2 down
-	$(DOCKER_COMPOSE) --profile nav2 up
+	NUM_PEOPLE=$(NUM_PEOPLE) $(DOCKER_COMPOSE) --profile nav2 up
 
 # Trigger mission start (manual)
 start-mission:
@@ -102,10 +103,11 @@ start-mission-record:
 	$(MAKE) start-mission
 
 # Run both Isaac Sim and ROS2 teleop together (using combined 'teleop' profile)
+# Usage: make run-teleop NUM_PEOPLE=5
 run-teleop:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile teleop down
-	$(DOCKER_COMPOSE) --profile teleop up
+	NUM_PEOPLE=$(NUM_PEOPLE) $(DOCKER_COMPOSE) --profile teleop up
 
 # =============================================================================
 # ROS Bag Recording Targets
