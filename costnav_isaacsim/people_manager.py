@@ -123,16 +123,21 @@ class PeopleManager:
                 for _ in range(10):
                     simulation_app.update()
 
-            # Create character setup
+            # Create character setup with warmup to prevent animation system crashes
             # Note: CharacterSetup uses starting_point only for distance validation when spawning
             # The actual spawn positions are random NavMesh points throughout the map
-            logger.info(f"Creating CharacterSetup with {self.num_people} people...")
+            logger.info(f"Creating CharacterSetup with warmup enabled...")
             self.character_setup = CharacterSetup(
                 self.robot_prim_path,
                 num_characters=0,  # We'll load them manually
                 starting_point=(0.0, 0.0, 0.0),  # Not used for spawn positions, only for validation
-                is_warmup=False,
+                is_warmup=True,  # Enable warmup to initialize animation system properly
             )
+
+            # Additional warmup steps for animation system
+            logger.info("Running additional warmup steps for animation system...")
+            for _ in range(50):
+                simulation_app.update()
             
             # Wait for animation graph
             stage = omni.usd.get_context().get_stage()
@@ -149,19 +154,36 @@ class PeopleManager:
             positions = self._generate_random_positions(self.num_people)
             logger.info(f"Generated {len(positions)} positions: {positions[:5]}{'...' if len(positions) > 5 else ''}")
 
-            # Load characters at the generated positions
-            logger.info(f"Loading {len(positions)} characters at generated positions...")
-            self.character_names = self.character_setup.load_characters(
-                positions,
-                CharacterBehavior.RANDOM_GOTO
-            )
+            # Load characters in batches to prevent animation system crashes
+            # Loading too many characters at once can overwhelm the BezierSpline motion matching system
+            batch_size = 3  # Load 3 characters at a time
+            self.character_names = []
 
-            # Wait for character assets to load
-            logger.info("Waiting for character assets to load...")
-            for _ in range(120):
-                if not is_stage_loading():
-                    break
-                simulation_app.update()
+            for batch_start in range(0, len(positions), batch_size):
+                batch_end = min(batch_start + batch_size, len(positions))
+                batch_positions = positions[batch_start:batch_end]
+
+                logger.info(f"Loading batch {batch_start//batch_size + 1}/{(len(positions) + batch_size - 1)//batch_size}: "
+                           f"{len(batch_positions)} characters (total: {batch_start + len(batch_positions)}/{len(positions)})")
+
+                batch_names = self.character_setup.load_characters(
+                    batch_positions,
+                    CharacterBehavior.RANDOM_GOTO
+                )
+                self.character_names.extend(batch_names)
+
+                # Wait for batch assets to load before loading next batch
+                logger.info(f"Waiting for batch {batch_start//batch_size + 1} assets to load...")
+                for _ in range(60):
+                    if not is_stage_loading():
+                        break
+                    simulation_app.update()
+
+                # Additional stabilization time between batches
+                for _ in range(30):
+                    simulation_app.update()
+
+            logger.info(f"All {len(self.character_names)} characters loaded successfully")
 
             # Apply animation graph and behavior scripts to each character
             logger.info("Applying animation graphs and behavior scripts...")
