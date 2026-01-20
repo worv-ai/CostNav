@@ -8,5 +8,8 @@
 	path = third_party/IsaacSim-ros_workspaces
 	url = https://github.com/isaac-sim/IsaacSim-ros_workspaces.git
 [submodule "InternNav"]
-	path = InternNav
+	path = third_party/InternNav
 	url = https://github.com/InternRobotics/InternNav.git
+[submodule "third_party/NavDP"]
+	path = third_party/NavDP
+	url = https://github.com/InternRobotics/NavDP
