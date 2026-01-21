@@ -17,7 +17,7 @@ logger = logging.getLogger("people_manager")
 
 class PeopleManager:
     """Manages animated people in the simulation using PeopleAPI.
-    
+
     This class handles:
     - Waiting for PeopleAPI to be ready
     - Ensuring NavMesh is baked
@@ -53,9 +53,9 @@ class PeopleManager:
 
     def initialize(self, simulation_app, simulation_context):
         """Initialize people spawning after simulation is ready.
-        
+
         This should be called after the stage is loaded and simulation context is created.
-        
+
         Args:
             simulation_app: SimulationApp instance
             simulation_context: SimulationContext instance
@@ -63,7 +63,7 @@ class PeopleManager:
         if self.num_people <= 0:
             logger.info("People spawning disabled (num_people=0)")
             return
-            
+
         logger.info("Initializing PeopleManager...")
 
         try:
@@ -78,6 +78,7 @@ class PeopleManager:
                 from omni.anim.people_api.scripts.character_setup import CharacterSetup, CharacterBehavior
                 from omni.anim.people_api.scripts.custom_command.command_manager import CustomCommandManager
                 from omni.anim.people_api.scripts.utils import Utils
+
                 logger.info("PeopleAPI modules imported successfully")
             except ImportError as e:
                 logger.error(f"Failed to import PeopleAPI modules: {e}")
@@ -100,17 +101,17 @@ class PeopleManager:
 
             if self.performance_mode:
                 logger.info("Performance mode ENABLED: dynamic avoidance disabled for better FPS")
-            
+
             logger.info("Waiting for PeopleAPI to be ready...")
             if not self._wait_for_people_api(simulation_app, max_updates=300):
                 logger.error("PeopleAPI not ready; CustomCommandManager not initialized.")
                 return
-            
+
             # Ensure robot prim exists
             if not prims.is_prim_path_valid(self.robot_prim_path):
                 logger.warning(f"Robot prim not found at {self.robot_prim_path}, creating placeholder")
                 prims.create_prim(self.robot_prim_path, "Xform")
-            
+
             # Check if NavMesh is already baked, if not, bake it
             logger.info("Checking NavMesh status...")
             if not self._check_navmesh_baked():
@@ -121,7 +122,6 @@ class PeopleManager:
                 logger.info("NavMesh baked successfully")
             else:
                 logger.info("NavMesh is already baked")
-
 
             # Create character setup with warmup to prevent animation system crashes
             # Note: CharacterSetup uses starting_point only for distance validation when spawning
@@ -138,17 +138,17 @@ class PeopleManager:
             logger.info("Running additional warmup steps for animation system...")
             for _ in range(50):
                 simulation_app.update()
-            
+
             # Wait for animation graph
             stage = omni.usd.get_context().get_stage()
             anim_graph = self._wait_for_animation_graph(simulation_app, stage, max_updates=600)
             if anim_graph is None:
                 logger.error("AnimationGraph prim not found; cannot animate characters.")
                 return
-            
+
             self.character_setup.anim_graph_prim = anim_graph
             logger.info(f"Animation graph found: {anim_graph.GetPrimPath()}")
-            
+
             # Generate random positions using NavMesh sampling
             logger.info(f"Generating {self.num_people} random positions from NavMesh...")
             positions = self._generate_random_positions(self.num_people)
@@ -163,18 +163,17 @@ class PeopleManager:
                 batch_end = min(batch_start + batch_size, len(positions))
                 batch_positions = positions[batch_start:batch_end]
 
-                logger.info(f"Loading batch {batch_start//batch_size + 1}/{(len(positions) + batch_size - 1)//batch_size}: "
-                           f"{len(batch_positions)} characters (total: {batch_start + len(batch_positions)}/{len(positions)})")
-
-                batch_names = self.character_setup.load_characters(
-                    batch_positions,
-                    CharacterBehavior.RANDOM_GOTO
+                logger.info(
+                    f"Loading batch {batch_start // batch_size + 1}/{(len(positions) + batch_size - 1) // batch_size}: "
+                    f"{len(batch_positions)} characters (total: {batch_start + len(batch_positions)}/{len(positions)})"
                 )
+
+                batch_names = self.character_setup.load_characters(batch_positions, CharacterBehavior.RANDOM_GOTO)
                 self.character_names.extend(batch_names)
 
                 # Wait for batch assets to load before loading next batch
                 # OPTIMIZED: Reduced from 60 to 30 max wait cycles
-                logger.info(f"Waiting for batch {batch_start//batch_size + 1} assets to load...")
+                logger.info(f"Waiting for batch {batch_start // batch_size + 1} assets to load...")
                 for _ in range(30):
                     if not is_stage_loading():
                         break
@@ -279,7 +278,7 @@ class PeopleManager:
                         # Get actual positions in this cell and check distance
                         for px, py in positions:
                             if get_cell(px, py) == neighbor:
-                                if (x - px)**2 + (y - py)**2 < min_distance**2:
+                                if (x - px) ** 2 + (y - py) ** 2 < min_distance**2:
                                     return False
             return True
 
@@ -322,6 +321,7 @@ class PeopleManager:
         """Check if NavMesh is already baked in the scene."""
         try:
             import omni.anim.navigation.core as nav
+
             inav = nav.acquire_interface()
             navmesh = inav.get_navmesh()
             return navmesh is not None
@@ -450,10 +450,7 @@ class PeopleManager:
             paths=[Sdf.Path(skelroot_prim.GetPrimPath())],
             animation_graph_path=Sdf.Path(anim_graph_prim.GetPrimPath()),
         )
-        omni.kit.commands.execute(
-            "ApplyScriptingAPICommand",
-            paths=[Sdf.Path(skelroot_prim.GetPrimPath())]
-        )
+        omni.kit.commands.execute("ApplyScriptingAPICommand", paths=[Sdf.Path(skelroot_prim.GetPrimPath())])
         attr = skelroot_prim.GetAttribute("omni:scripting:scripts")
         attr.Set([r"{}".format(script_path)])
         Utils.add_colliders(skelroot_prim)
@@ -471,5 +468,3 @@ class PeopleManager:
         self.character_names = []
         self.initialized = False
         logger.info("PeopleManager shutdown complete")
-
-

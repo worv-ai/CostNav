@@ -155,6 +155,7 @@ class CostNavSimLauncher:
         self.people_manager = None
         if self.num_people > 0:
             from people_manager import PeopleManager
+
             self.people_manager = PeopleManager(
                 num_people=self.num_people,
                 robot_prim_path="/World/Nova_Carter_ROS",
