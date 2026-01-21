@@ -11,6 +11,7 @@ COSTNAV_VERSION ?= 0.1.0
 # ROS configuration
 ROS_DISTRO ?= jazzy
 UBUNTU_VERSION ?= 24.04
+SIM_ROBOT ?= nova_carter
 
 ISAAC_SIM_IMAGE ?= costnav-isaacsim-$(ISAAC_SIM_VERSION):$(COSTNAV_VERSION)
 ISAAC_LAB_IMAGE ?= costnav-isaaclab-$(ISAAC_SIM_VERSION)-$(ISAAC_LAB_VERSION):$(COSTNAV_VERSION)
@@ -101,11 +102,29 @@ start-mission-record:
 	$(MAKE) run-rosbag
 	$(MAKE) start-mission
 
+ifeq (run-teleop,$(firstword $(MAKECMDGOALS)))
+ifneq ($(word 2,$(MAKECMDGOALS)),)
+SIM_ROBOT := $(word 2,$(MAKECMDGOALS))
+$(eval $(word 2,$(MAKECMDGOALS)):;@:)
+endif
+SIM_ROBOT := $(subst -,_,$(SIM_ROBOT))
+ifeq ($(SIM_ROBOT),segwaye1)
+SIM_ROBOT := segway_e1
+endif
+ifeq ($(SIM_ROBOT),segway)
+SIM_ROBOT := segway_e1
+endif
+endif
+
 # Run both Isaac Sim and ROS2 teleop together (using combined 'teleop' profile)
 run-teleop:
+	@if [ "$(SIM_ROBOT)" != "nova_carter" ] && [ "$(SIM_ROBOT)" != "segway_e1" ]; then \
+		echo "Unsupported robot: $(SIM_ROBOT). Use nova_carter or segway_e1."; \
+		exit 1; \
+	fi
 	xhost +local:docker 2>/dev/null || true
-	$(DOCKER_COMPOSE) --profile teleop down
-	$(DOCKER_COMPOSE) --profile teleop up
+	SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile teleop down
+	SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile teleop up
 
 # =============================================================================
 # ROS Bag Recording Targets

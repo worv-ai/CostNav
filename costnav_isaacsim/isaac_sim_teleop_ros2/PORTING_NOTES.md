@@ -10,7 +10,7 @@ This document describes the minimal port of `isaac_sim_ros_integration/src/isaac
 
 1. **robot.py** - Robot abstraction classes
    - No changes needed (pure Python logic)
-   - All robot types preserved: NovaCarter, Aiden, GintSS, GintATT, TestToro, IsaacHoundbot, COCO
+   - Robot types preserved: NovaCarter, SegwayE1
 
 2. **state.py** - Control state management
    - No changes needed (dataclass with message types)
@@ -124,7 +124,7 @@ stamp = self.get_clock().now().to_msg()
 
 ## Testing Recommendations
 
-1. Test with each robot type by setting `SIM_ROBOT` environment variable
+1. Test with each robot type (nova_carter, segway_e1) by setting `SIM_ROBOT`
 2. Verify joystick controls work correctly
 3. Test teleport functionality (if enabled)
 4. Verify `/cmd_vel` publishing

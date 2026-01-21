@@ -40,12 +40,7 @@ ros2 launch isaac_sim_teleop_ros2 teleop_isaac_sim.launch.py
 ### Available Robot Types
 
 - `nova_carter` - Nova Carter differential drive robot
-- `aiden` - Aiden robot
-- `gint_ss` - Gint SS robot with spray actions
-- `gint_att` - Gint ATT all-terrain robot
-- `test_toro` - Test Toro mowing robot
-- `coco` - COCO small differential drive robot
-- `Isaac_Houndbot` - Isaac Houndbot quadruped
+- `segway_e1` - Segway E1 robot
 
 ### Launch with Custom Parameters
 

@@ -29,7 +29,7 @@ x-ros2-service: &ros2-service
 services:
   # Isaac Sim environment
   isaac-sim:
-    profiles: ["isaac-sim", "nav2", "teleop"]
+    profiles: [ "isaac-sim", "nav2", "teleop" ]
     build:
       context: .
       dockerfile: Dockerfile
@@ -44,8 +44,8 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: ["${GPU_DEVICE_IDS:-0}"]
-              capabilities: [gpu]
+              device_ids: [ "${GPU_DEVICE_IDS:-0}" ]
+              capabilities: [ gpu ]
     env_file:
       - .env
     environment:
@@ -57,6 +57,8 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
       - DISPLAY=${DISPLAY:-:0}
       - XAUTHORITY=${XAUTHORITY:-/tmp/.X11-unix}
+      - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
+      - ROBOT_PRIM_PATH=${ROBOT_PRIM_PATH:-}
       - ISAAC_PATH=${ISAAC_PATH:-/isaac-sim}
       - CARB_APP_PATH=${CARB_APP_PATH:-/isaac-sim/kit}
       - EXP_PATH=${EXP_PATH:-/isaac-sim/apps}
@@ -70,19 +72,14 @@ services:
       - ${HOME}/docker/isaac-sim/config:/isaac-sim/.nvidia-omniverse/config:rw
       - ${HOME}/docker/isaac-sim/data:/isaac-sim/.local/share/ov/data:rw
       - ${HOME}/docker/isaac-sim/pkg:/isaac-sim/.local/share/ov/pkg:rw
-      - ./third_party/PeopleAPI/exts:/isaac-sim/extsUser:rw
+      - ./third_party/PeopleAPI/exts/omni.anim.people_api:/isaac-sim/extsUser/omni.anim.people_api:rw
+      - ./third_party/FoodAssets/exts/worvai.assets.food:/isaac-sim/extsUser/worvai.assets.food:rw
     working_dir: /workspace
     command:
       - "-ic"
       - "/workspace/costnav_isaacsim/launch.py"
     healthcheck:
-      test:
-        [
-          "CMD",
-          "bash",
-          "-c",
-          "[ -e /tmp/.isaac_sim_running ] || exit 1 && exit 0",
-        ]
+      test: [ "CMD", "bash", "-c", "[ -e /tmp/.isaac_sim_running ] || exit 1 && exit 0" ]
       interval: 10s
       timeout: 5s
       retries: 60
@@ -94,7 +91,7 @@ services:
 
   # Isaac Lab environment
   isaac-lab:
-    profiles: ["isaac-lab"]
+    profiles: [ "isaac-lab" ]
     build:
       context: .
       dockerfile: Dockerfile
@@ -110,8 +107,8 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: ["${GPU_DEVICE_IDS:-0}"]
-              capabilities: [gpu]
+              device_ids: [ "${GPU_DEVICE_IDS:-0}" ]
+              capabilities: [ gpu ]
     env_file:
       - .env
     environment:
@@ -141,7 +138,7 @@ services:
     tty: true
     # Development environment (minimal dependencies)
   dev:
-    profiles: ["dev"]
+    profiles: [ "dev" ]
     build:
       context: .
       dockerfile: Dockerfile
@@ -160,13 +157,13 @@ services:
   # ROS2 Jazzy Runtime Container
   ros2:
     <<: *ros2-service
-    profiles: ["ros2"]
+    profiles: [ "ros2" ]
     container_name: costnav-ros2
 
   # ROS2 with Nav2 - waits for Isaac Sim to be healthy before starting
   ros2-nav2:
     <<: *ros2-service
-    profiles: ["nav2"]
+    profiles: [ "nav2" ]
     container_name: costnav-ros2-nav2
     depends_on:
       isaac-sim:
@@ -179,7 +176,7 @@ services:
   # ROS2 with RViz - standalone visualization service that runs alongside Isaac Sim
   ros2-rviz:
     <<: *ros2-service
-    profiles: ["isaac-sim", "nav2"]
+    profiles: [ "isaac-sim", "nav2" ]
     container_name: costnav-ros2-rviz
     depends_on:
       isaac-sim:
@@ -192,7 +189,7 @@ services:
   # ROS2 with RViz (teleop profile) - hides TF/point clouds by default
   ros2-rviz-teleop:
     <<: *ros2-service
-    profiles: ["teleop"]
+    profiles: [ "teleop" ]
     container_name: costnav-ros2-rviz-teleop
     depends_on:
       isaac-sim:
@@ -212,7 +209,7 @@ services:
   # ROS2 with teleop - waits for Isaac Sim to be healthy before starting
   ros2-teleop:
     <<: *ros2-service
-    profiles: ["teleop"]
+    profiles: [ "teleop" ]
     container_name: costnav-ros2-teleop
     depends_on:
       isaac-sim:
@@ -223,7 +220,7 @@ services:
       - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
       - DISPLAY=${DISPLAY:-:0}
       - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
-      - SIM_ROBOT=nova_carter # NOTE: isaac_sim_teleop_ros2 Package requires SIM_ROBOT
+      - SIM_ROBOT=${SIM_ROBOT:-nova_carter} # NOTE: isaac_sim_teleop_ros2 Package requires SIM_ROBOT
     volumes:
       - ./third_party/IsaacSim-ros_workspaces/build_ws/jazzy/isaac_sim_ros_ws:/workspace/build_ws:rw
       - ./costnav_isaacsim/isaac_sim_teleop_ros2:/workspace/isaac_sim_teleop_ros2:rw
@@ -242,7 +239,7 @@ services:
   # ROS2 bag recorder - records all ROS messages to a bag file
   ros2-bag-recorder:
     <<: *ros2-service
-    profiles: ["rosbag"]
+    profiles: [ "rosbag" ]
     container_name: costnav-ros2-bag-recorder
     environment:
       - ROS_DISTRO=jazzy

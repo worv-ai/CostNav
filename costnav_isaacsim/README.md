@@ -131,8 +131,12 @@ make start-mission
 ### 3. Run Teleop (Joystick Control)
 
 ```bash
-# Run Isaac Sim + teleop node
+# Run Isaac Sim + teleop node (defaults to nova_carter)
 make run-teleop
+
+# Or select robot explicitly
+make run-teleop nova_carter
+make run-teleop segway_e1
 ```
 
 You can also trigger missions while teleop is running:
@@ -189,6 +193,7 @@ Main entry point for Isaac Sim simulation with Nav2 support.
 ```bash
 python launch.py                                    # Default: GUI mode
 python launch.py --headless                         # Headless mode (no GUI)
+python launch.py --robot segway_e1                  # Select robot preset
 python launch.py --usd_path omniverse://path/to.usd # Custom USD scene
 python launch.py --debug                            # Enable debug logging
 ```
@@ -197,11 +202,15 @@ python launch.py --debug                            # Enable debug logging
 
 | Argument         | Default                                                         | Description          |
 | ---------------- | --------------------------------------------------------------- | -------------------- |
-| `--usd_path`     | `omniverse://10.50.2.21/Users/worv/costnav/Street_sidewalk.usd` | USD scene path       |
+| `--usd_path`     | `None` (derived from `--robot`)                                 | USD scene path       |
+| `--robot`        | `nova_carter`                                                   | Robot preset (`nova_carter`, `segway_e1`) |
 | `--headless`     | `false`                                                         | Run without GUI      |
 | `--physics_dt`   | `1/60` (0.0167s)                                                | Physics timestep     |
 | `--rendering_dt` | `1/30` (0.0333s)                                                | Rendering timestep   |
 | `--debug`        | `false`                                                         | Enable debug logging |
+
+`--robot` defaults to `SIM_ROBOT` when set, otherwise `nova_carter`.
+If the Segway prim is not detected automatically, set `ROBOT_PRIM_PATH` to the robot base prim.
 
 **Key Features:**
 
