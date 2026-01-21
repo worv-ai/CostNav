@@ -107,6 +107,15 @@ def parse_args():
         help="Override: Seconds to wait for Nav2 stack",
     )
 
+    # People arguments
+    people_group = parser.add_argument_group("People")
+    people_group.add_argument(
+        "--people",
+        type=int,
+        default=0,
+        help="Number of people to spawn in the scene (default: 0, disabled)",
+    )
+
     return parser.parse_args()
 
 
@@ -120,11 +129,13 @@ class CostNavSimLauncher:
         physics_dt: float,
         rendering_dt: float,
         mission_config: "Optional[MissionConfig]" = None,
+        num_people: int = 0,
     ):
         self.usd_path = usd_path
         self.physics_dt = physics_dt
         self.rendering_dt = rendering_dt
         self.mission_config = mission_config
+        self.num_people = num_people
 
         # Setup simulation app
         self.simulation_app = self._setup_simulation_app(headless)
@@ -139,6 +150,17 @@ class CostNavSimLauncher:
 
         # Setup simulation context
         self.simulation_context = self._setup_simulation_context()
+
+        # Initialize people manager (will be setup after warmup)
+        self.people_manager = None
+        if self.num_people > 0:
+            from people_manager import PeopleManager
+
+            self.people_manager = PeopleManager(
+                num_people=self.num_people,
+                robot_prim_path="/World/Nova_Carter_ROS",
+                character_root="/World/Characters",
+            )
 
         # Final app update
         self.simulation_app.update()
@@ -165,6 +187,7 @@ class CostNavSimLauncher:
     def _enable_extensions(self):
         """Enable required Isaac Sim extensions."""
         from isaacsim.core.utils.extensions import enable_extension
+        import omni.kit.app
 
         # Navigation extension (must be enabled before using navmesh)
         enable_extension("omni.anim.navigation.core")
@@ -175,6 +198,47 @@ class CostNavSimLauncher:
 
         # ROS2 bridge for Nav2 communication
         enable_extension("isaacsim.ros2.bridge")
+
+        # People API extension (if people spawning is enabled)
+        if self.num_people > 0:
+            logger.info("Enabling PeopleAPI extension...")
+
+            # Add extension search path for PeopleAPI
+            ext_manager = omni.kit.app.get_app().get_extension_manager()
+            ext_path = "/isaac-sim/extsUser"
+            logger.info(f"Adding extension search path: {ext_path}")
+            ext_manager.add_path(ext_path)
+
+            # Verify the extension can be found
+            if not ext_manager.is_extension_enabled("omni.anim.people_api"):
+                logger.info("PeopleAPI extension not yet enabled, enabling dependencies...")
+
+            # Enable required dependencies for PeopleAPI (in order)
+            try:
+                enable_extension("omni.anim.graph.core")
+                self.simulation_app.update()
+                enable_extension("omni.anim.graph.schema")
+                self.simulation_app.update()
+                enable_extension("omni.anim.retarget.core")
+                self.simulation_app.update()
+                enable_extension("omni.kit.scripting")
+                self.simulation_app.update()
+                enable_extension("omni.metropolis.utils")
+                self.simulation_app.update()
+
+                # Finally enable PeopleAPI
+                enable_extension("omni.anim.people_api")
+                self.simulation_app.update()
+                logger.info("PeopleAPI extension enabled successfully")
+
+                # Give extensions time to fully initialize
+                for _ in range(10):
+                    self.simulation_app.update()
+
+            except Exception as e:
+                logger.error(f"Failed to enable PeopleAPI extension: {e}")
+                logger.warning("People spawning will be disabled")
+                self.num_people = 0
 
         self.simulation_app.update()
 
@@ -257,6 +321,11 @@ class CostNavSimLauncher:
             self.simulation_context.step(render=True)
         logger.info("Warm-up complete")
 
+        # Initialize people manager after warmup (if enabled)
+        if self.people_manager is not None:
+            logger.info("Initializing people manager...")
+            self.people_manager.initialize(self.simulation_app, self.simulation_context)
+
         # Mark as healthy - triggers Docker Compose to start ROS2 container
         self._check_healthy()
         logger.info("Simulation started")
@@ -295,6 +364,13 @@ class CostNavSimLauncher:
 
     def close(self):
         """Cleanup and close simulation."""
+        # Cleanup people manager
+        if self.people_manager is not None:
+            try:
+                self.people_manager.shutdown()
+            except Exception as e:
+                logger.warning(f"Error shutting down people manager: {e}")
+
         # Remove health check file
         if os.path.exists("/tmp/.isaac_sim_running"):
             os.remove("/tmp/.isaac_sim_running")
@@ -346,12 +422,18 @@ def main():
     logger.info(f"  Distance: {mission_config.min_distance}m - {mission_config.max_distance}m")
     logger.info(f"  Nav2 wait: {mission_config.nav2.wait_time}s")
 
+    if args.people > 0:
+        logger.info(f"People spawning enabled: {args.people} people")
+    else:
+        logger.info("People spawning disabled")
+
     launcher = CostNavSimLauncher(
         usd_path=args.usd_path,
         headless=args.headless,
         physics_dt=args.physics_dt,
         rendering_dt=args.rendering_dt,
         mission_config=mission_config,
+        num_people=args.people,
     )
 
     try:
