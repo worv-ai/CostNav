@@ -356,6 +356,11 @@ class MissionManager:
             response.message = "Missions already completed."
             return response
 
+        # Reset mission result immediately to prevent race condition
+        # where the eval script sees the previous mission's SUCCESS result
+        self._last_mission_result = MissionResult.PENDING
+        self._last_mission_distance = None
+
         self._start_requested = True
         if self._is_mission_active():
             self._restart_requested = True
