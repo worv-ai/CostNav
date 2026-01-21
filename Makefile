@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 run-ros2 run-isaac-sim run-nav2 run-teleop start-mission start-mission-record run-rosbag stop-rosbag
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 build-vint run-ros2 run-isaac-sim run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag
 
 DOCKERFILE ?= Dockerfile
 DOCKER_BUILD ?= docker build
@@ -106,6 +106,22 @@ run-teleop:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile teleop down
 	$(DOCKER_COMPOSE) --profile teleop up
+
+# =============================================================================
+# IL Baselines (ViNT) Targets
+# =============================================================================
+
+# Build the ViNT Docker image
+build-vint:
+	$(DOCKER_COMPOSE) --profile vint build ros2-vint
+
+# Run Isaac Sim with ViNT policy node for IL baseline evaluation
+# Set MODEL_CHECKPOINT environment variable to specify model weights
+# Example: MODEL_CHECKPOINT=/path/to/model.pth make run-vint
+run-vint:
+	xhost +local:docker 2>/dev/null || true
+	$(DOCKER_COMPOSE) --profile vint down
+	$(DOCKER_COMPOSE) --profile vint up
 
 # =============================================================================
 # ROS Bag Recording Targets

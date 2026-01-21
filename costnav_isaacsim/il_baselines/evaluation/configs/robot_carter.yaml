@@ -1,0 +1,17 @@
+# Robot Configuration for Nova Carter in Isaac Sim
+# Used by IL baseline agents for velocity limits and timing
+
+# Velocity limits
+max_v: 1.0        # Maximum linear velocity (m/s)
+max_w: 1.0        # Maximum angular velocity (rad/s)
+
+# Timing
+frame_rate: 10    # Observation rate (Hz) - matches inference rate
+
+# Topic names (for reference - actual topics used in ROS2 node)
+# These are not directly used by the agent but documented for reference
+topics:
+  cmd_vel: /cmd_vel              # Main velocity command topic
+  cmd_vel_model: /cmd_vel_model  # Model output velocity topic
+  odom: /odom                    # Odometry topic
+  image: /front_stereo_camera/left/image_raw  # Camera image topic

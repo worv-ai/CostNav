@@ -1,0 +1,60 @@
+# ViNT ROS2 Container for IL Baseline Evaluation
+# Extends ROS2 Jazzy with PyTorch and ML dependencies for ViNT inference
+# Based on: third_party/visualnav-transformer/deployment/deployment_environment.yaml
+FROM osrf/ros:jazzy-desktop
+
+# Set environment variables
+ENV ROS_DISTRO=jazzy
+ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Create workspace directory
+RUN mkdir -p /ros2_ws/src
+
+# Copy the source packages to install dependencies via rosdep
+COPY third_party/IsaacSim-ros_workspaces/jazzy_ws/src /ros2_ws/src
+
+# Install ROS dependencies and system packages
+RUN apt-get update && \
+    rosdep update && \
+    rosdep install --from-paths /ros2_ws/src --ignore-src -r -y && \
+    apt-get install -y \
+    ros-jazzy-cv-bridge \
+    ros-jazzy-image-transport \
+    ros-jazzy-image-transport-plugins \
+    python3-pip \
+    python3-opencv \
+    python3-numpy \
+    python3-matplotlib \
+    python3-yaml && \
+    rm -rf /var/lib/apt/lists/*
+
+# Disable PEP 668 externally-managed-environment check for pip
+RUN python3 -m pip config set global.break-system-packages true
+
+# Install PyTorch and ML dependencies from deployment_environment.yaml
+# Using CUDA 11.8 for compatibility (cudatoolkit=11. in yaml)
+RUN pip3 install --no-cache-dir \
+    torch \
+    torchvision \
+    --index-url https://download.pytorch.org/whl/cu118
+
+# Install additional dependencies from deployment_environment.yaml
+RUN pip3 install --no-cache-dir \
+    efficientnet_pytorch \
+    warmup_scheduler \
+    diffusers==0.11.1 \
+    pillow
+
+# Set the default workspace directory
+WORKDIR /ros2_ws
+
+# Copy the fastdds.xml configuration for multi-machine/docker communication
+COPY third_party/IsaacSim-ros_workspaces/jazzy_ws/fastdds.xml /ros2_ws/fastdds.xml
+ENV FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
+
+COPY docker/ros_entrypoint.sh /ros_entrypoint.sh
+RUN chmod +x /ros_entrypoint.sh
+
+ENTRYPOINT ["/ros_entrypoint.sh"]
+CMD ["bash"]

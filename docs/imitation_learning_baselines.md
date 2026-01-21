@@ -406,16 +406,18 @@ ViNT (Visual Navigation Transformer) is being implemented as the reference basel
 - [x] Process sidewalk navigation data to ViNT format
 - [x] Train ViNT model with collected data
 
-**Evaluation (Remaining - using ROS2 + NavDP agent pattern):**
+**Evaluation (Implemented ✅):**
 
-- [ ] Port ViNT agent from `third_party/NavDP/baselines/vint/vint_agent.py`
-- [ ] Create ROS2 policy node (`vint_ros2_node.py`) that:
+- [x] Port ViNT agent from `third_party/NavDP/baselines/vint/vint_agent.py`
+  - Location: `costnav_isaacsim/il_baselines/evaluation/agents/vint_agent.py`
+- [x] Create ROS2 policy node that:
   - Subscribes to `/front_stereo_camera/left/image_raw` (sensor_msgs/Image)
   - Subscribes to `/odom` (nav_msgs/Odometry)
-  - Subscribes to `/goal_pose` or `/goal_image` for ImageGoal mode
+  - Subscribes to `/goal_image` for ImageGoal mode (optional)
   - Publishes `/cmd_vel_model` (geometry_msgs/Twist)
-- [ ] Implement trajectory → cmd_vel conversion (from ViNT waypoints to Twist)
-- [ ] Add model switch integration with teleop node (`/is_model` topic)
+  - Location: `costnav_isaacsim/il_baselines/evaluation/nodes/vint_policy_node.py`
+- [x] Implement trajectory → cmd_vel conversion (proportional controller)
+- [x] Model switch integration works via existing teleop node (`/cmd_vel_model`)
 - [ ] Test with CostNav mission manager for automated evaluation
 
 #### 4.3 ViNT Model Configuration
@@ -440,72 +442,22 @@ inference:
   device: cuda:0
 ```
 
-#### 4.4 ViNT ROS2 Node Implementation
+#### 4.4 ViNT ROS2 Node Implementation (Implemented)
 
-```python
-# costnav_isaacsim/il_baselines/evaluation/vint_ros2_node.py
-import rclpy
-from rclpy.node import Node
-from sensor_msgs.msg import Image
-from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Twist, PoseStamped
-from cv_bridge import CvBridge
-import torch
-from vint_agent import ViNT_Agent
+The full implementation is at `costnav_isaacsim/il_baselines/evaluation/nodes/vint_policy_node.py`.
 
-class ViNTROS2Node(Node):
-    def __init__(self):
-        super().__init__('vint_policy_node')
+Key features:
 
-        # Load ViNT model
-        checkpoint = self.declare_parameter('checkpoint', '').value
-        self.agent = ViNT_Agent(checkpoint=checkpoint)
-        self.agent.reset(batch_size=1)
-        self.bridge = CvBridge()
+- Subscribes to camera images and runs ViNT inference at configurable rate
+- Publishes to `/cmd_vel_model` which is picked up by teleop when model control is enabled
+- Supports both ImageGoal and NoGoal navigation modes
+- Includes proportional controller for trajectory → velocity conversion
 
-        # Subscribers
-        self.create_subscription(Image, '/front_stereo_camera/left/image_raw',
-                                 self.image_callback, 10)
-        self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
+#### 4.5 CostNav ROS2 Integration (Implemented ✅)
 
-        # Publisher
-        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel_model', 10)
-
-        # Inference timer (~10Hz)
-        self.create_timer(0.1, self.inference_callback)
-        self.current_image = None
-        self.current_odom = None
-
-    def image_callback(self, msg):
-        self.current_image = self.bridge.imgmsg_to_cv2(msg, 'rgb8')
-
-    def odom_callback(self, msg):
-        self.current_odom = msg
-
-    def inference_callback(self):
-        if self.current_image is None:
-            return
-
-        # Run ViNT inference
-        trajectory = self.agent.step_nogoal(self.current_image, depth=None)
-
-        # Convert first waypoint to velocity command
-        cmd_vel = self.trajectory_to_twist(trajectory[0])
-        self.cmd_vel_pub.publish(cmd_vel)
-
-    def trajectory_to_twist(self, waypoint):
-        """Convert waypoint (dx, dy, dtheta) to Twist message."""
-        twist = Twist()
-        # Simple proportional control (can be replaced with MPC)
-        twist.linear.x = min(waypoint[0] * 2.0, 1.0)  # Forward velocity
-        twist.angular.z = waypoint[2] * 1.5           # Angular velocity
-        return twist
-```
-
-#### 4.5 CostNav ROS2 Integration
-
-- [ ] Create ROS2 launch file for ViNT policy node
-- [ ] Integrate with existing teleop node (`/cmd_vel_model` → `/cmd_vel`)
+- [x] Create ROS2 launch file for ViNT policy node
+  - Location: `costnav_isaacsim/il_baselines/evaluation/launch/vint_policy.launch.py`
+- [x] Integrate with existing teleop node (`/cmd_vel_model` → `/cmd_vel`)
 - [ ] Add mission manager support for automated IL evaluation
 - [ ] Implement trajectory → velocity conversion (pure pursuit or MPC)
 

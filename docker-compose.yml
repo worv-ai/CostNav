@@ -29,7 +29,7 @@ x-ros2-service: &ros2-service
 services:
   # Isaac Sim environment
   isaac-sim:
-    profiles: ["isaac-sim", "nav2", "teleop"]
+    profiles: ["isaac-sim", "nav2", "teleop", "vint"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -191,7 +191,7 @@ services:
   # ROS2 with RViz (teleop profile) - hides TF/point clouds by default
   ros2-rviz-teleop:
     <<: *ros2-service
-    profiles: ["teleop"]
+    profiles: ["teleop", "vint"]
     container_name: costnav-ros2-rviz-teleop
     depends_on:
       isaac-sim:
@@ -211,7 +211,7 @@ services:
   # ROS2 with teleop - waits for Isaac Sim to be healthy before starting
   ros2-teleop:
     <<: *ros2-service
-    profiles: ["teleop"]
+    profiles: ["teleop", "vint"]
     container_name: costnav-ros2-teleop
     depends_on:
       isaac-sim:
@@ -255,3 +255,51 @@ services:
                mkdir -p /workspace/rosbags &&
                ros2 run image_transport republish --ros-args -p in_transport:=raw -p out_transport:=compressed --remap in:=/front_stereo_camera/left/image_raw --remap out/compressed:=/front_stereo_camera/left/image_raw/compressed &
                ros2 bag record -a -o /workspace/rosbags/recording_$$(date +%Y%m%d_%H%M%S) --exclude-topics /front_stereo_camera/left/image_raw"
+
+  # ROS2 with ViNT policy - IL baseline evaluation
+  ros2-vint:
+    profiles: ["vint"]
+    build:
+      context: .
+      dockerfile: Dockerfile.vint
+    image: costnav-ros2-vint:${COSTNAV_VERSION:-0.1.0}
+    container_name: costnav-ros2-vint
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${GPU_DEVICE_IDS:-0}"]
+              capabilities: [gpu]
+    depends_on:
+      isaac-sim:
+        condition: service_healthy
+    environment:
+      - ROS_DISTRO=jazzy
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+      - DISPLAY=${DISPLAY:-:0}
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
+    volumes:
+      - ./third_party/IsaacSim-ros_workspaces/build_ws/jazzy/isaac_sim_ros_ws:/workspace/build_ws:rw
+      - ./costnav_isaacsim/il_baselines/evaluation:/workspace/costnav_il_baselines:rw
+      - ./checkpoints:/workspace/checkpoints:ro
+      - ${MODEL_CHECKPOINT}:/workspace/checkpoints/model.pth:ro
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    working_dir: /workspace
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+               source /workspace/build_ws/install/local_setup.sh &&
+               cd /workspace/costnav_il_baselines &&
+               pip install -e . --quiet &&
+               python3 nodes/vint_policy_node.py --ros-args \
+                 -p checkpoint:=/workspace/checkpoints/model.pth \
+                 -p model_config:=/workspace/costnav_il_baselines/configs/vint_eval.yaml \
+                 -p robot_config:=/workspace/costnav_il_baselines/configs/robot_carter.yaml \
+                 -p inference_rate:=10.0"
+    network_mode: host
+    ipc: host
+    stdin_open: true
+    tty: true
