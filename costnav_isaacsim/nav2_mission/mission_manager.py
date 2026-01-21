@@ -300,9 +300,7 @@ class MissionManager:
             logger.info(
                 f"[{self._state.name}] Distance range: {self.config.min_distance}m - {self.config.max_distance}m"
             )
-            logger.info(
-                f"[{self._state.name}] Goal tolerance: {self.mission_config.goal_tolerance}m"
-            )
+            logger.info(f"[{self._state.name}] Goal tolerance: {self.mission_config.goal_tolerance}m")
 
         except Exception as e:
             logger.error(f"[{self._state.name}] Failed to initialize mission manager: {e}")

@@ -17,4 +17,3 @@ from std_srvs.srv import Trigger
 
 # Re-export Trigger as GetMissionResult for cleaner imports
 GetMissionResult = Trigger
-
