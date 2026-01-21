@@ -625,11 +625,12 @@ class MissionManager:
     def _step_waiting_for_completion(self):
         """Wait for mission timeout before returning to wait-for-start."""
         elapsed = self._get_current_time_seconds() - self._mission_start_time
-        if elapsed >= self.mission_config.timeout:
-            self._state = MissionState.WAITING_FOR_START
-            logger.info(
-                f"[{self._state.name}] Mission {self._current_mission} timed out {self.mission_config.timeout=}, waiting for start signal"
-            )
+        if self.mission_config.timeout is not None:
+            if elapsed >= self.mission_config.timeout:
+                self._state = MissionState.WAITING_FOR_START
+                logger.info(
+                    f"[{self._state.name}] Mission {self._current_mission} timed out {self.mission_config.timeout=}, waiting for start signal"
+                )
 
     def _cleanup(self):
         """Clean up ROS2 resources."""
