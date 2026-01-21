@@ -308,7 +308,7 @@ class PeopleManager:
 
     def _wait_for_people_api(self, simulation_app, max_updates=300):
         """Wait for PeopleAPI CustomCommandManager to be ready."""
-        from omni.anim.people_api.scripts.custom_command.command_manager import CustomCommandManager # noqa: F401
+        from omni.anim.people_api.scripts.custom_command.command_manager import CustomCommandManager  # noqa: F401
 
         for _ in range(max_updates):
             if CustomCommandManager.get_instance() is not None:
