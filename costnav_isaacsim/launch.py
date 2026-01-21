@@ -600,11 +600,6 @@ def main():
     logger.info(f"  Robot: {robot_name}")
     logger.info(f"  USD path: {usd_path}")
 
-    robot_name = resolve_robot_name(args.robot)
-    usd_path = resolve_usd_path(args.usd_path, robot_name)
-    logger.info(f"  Robot: {robot_name}")
-    logger.info(f"  USD path: {usd_path}")
-
     if args.people > 0:
         logger.info(f"People spawning enabled: {args.people} people")
     else:
