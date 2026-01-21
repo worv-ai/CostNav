@@ -289,6 +289,11 @@ class CostNavSimLauncher:
         if mission_manager is not None:
             mission_manager.step()
 
+        # Update people manager for stuck detection/recovery (lightweight, self-throttled)
+        if self.people_manager is not None:
+            current_time = self.simulation_context.current_time
+            self.people_manager.update(current_time)
+
         if throttle:
             elapsed = time.perf_counter() - tick_start
             sleep_duration = self.rendering_dt - elapsed
