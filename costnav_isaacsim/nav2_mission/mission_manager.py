@@ -57,6 +57,14 @@ class MissionState(Enum):
     COMPLETED = "completed"
 
 
+class MissionResult(Enum):
+    """Result of a mission execution."""
+
+    PENDING = "pending"  # Mission not yet started or in progress
+    SUCCESS = "success"  # Robot reached goal within tolerance
+    FAILURE = "failure"  # Timeout reached before reaching goal
+
+
 class MissionManager:
     """Mission manager that runs in the main simulation loop.
 
@@ -134,11 +142,14 @@ class MissionManager:
         self._robot_prim_path = None
         self._executor = None
         self._start_service = None
+        self._result_service = None
+        self._odom_sub = None
 
         # State machine
         self._state = MissionState.INIT
         self._current_mission = 0
         self._mission_start_time = None
+        self._mission_end_time = None
         self._wait_start_time = None
         self._settle_steps_remaining = 0
         self._initialized = False
@@ -148,6 +159,13 @@ class MissionManager:
         # Current mission positions
         self._current_start = None
         self._current_goal = None
+
+        # Robot position tracking (from odom)
+        self._robot_position = None  # (x, y, z) tuple
+
+        # Mission result tracking
+        self._last_mission_result = MissionResult.PENDING
+        self._last_mission_distance = None  # Distance to goal at end
 
     def _get_current_time_seconds(self) -> float:
         """Get current time in seconds from ROS clock.
@@ -196,10 +214,12 @@ class MissionManager:
         import rclpy
         from rclpy.executors import SingleThreadedExecutor
         from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
+        from nav_msgs.msg import Odometry
         from rclpy.node import Node
         from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
         from std_srvs.srv import Trigger
 
+        from .mission_result_srv import GetMissionResult
         from .marker_publisher import MarkerPublisher
         from .navmesh_sampler import NavMeshSampler
 
@@ -212,6 +232,11 @@ class MissionManager:
 
             # Start mission service (manual trigger)
             self._start_service = self._node.create_service(Trigger, "/start_mission", self._handle_start_mission)
+
+            # Mission result service
+            self._result_service = self._node.create_service(
+                GetMissionResult, "/get_mission_result", self._handle_get_mission_result
+            )
 
             # Initialize NavMesh sampler with config values
             self._sampler = NavMeshSampler(
@@ -262,6 +287,11 @@ class MissionManager:
                 PoseStamped, self.mission_config.nav2.goal_pose_topic, pose_qos
             )
 
+            # Subscribe to odometry for robot position tracking
+            self._odom_sub = self._node.create_subscription(
+                Odometry, self.mission_config.nav2.odom_topic, self._odom_callback, 10
+            )
+
             self._initialized = True
             self._state = MissionState.WAITING_FOR_NAV2
             self._wait_start_time = self._get_current_time_seconds()
@@ -270,6 +300,7 @@ class MissionManager:
             logger.info(
                 f"[{self._state.name}] Distance range: {self.config.min_distance}m - {self.config.max_distance}m"
             )
+            logger.info(f"[{self._state.name}] Goal tolerance: {self.mission_config.goal_tolerance}m")
 
         except Exception as e:
             logger.error(f"[{self._state.name}] Failed to initialize mission manager: {e}")
@@ -293,14 +324,40 @@ class MissionManager:
         self._current_start = None
         self._current_goal = None
         self._mission_start_time = None
+        self._mission_end_time = None
         self._settle_steps_remaining = 0
+        self._last_mission_result = MissionResult.PENDING
+        self._last_mission_distance = None
 
-    def _handle_start_mission(self, request, response):
+    def _odom_callback(self, msg) -> None:
+        """Handle odometry messages for robot position tracking."""
+        pos = msg.pose.pose.position
+        self._robot_position = (pos.x, pos.y, pos.z)
+
+    def _get_distance_to_goal(self) -> Optional[float]:
+        """Calculate distance from robot to goal.
+
+        Returns:
+            Distance in meters, or None if positions unknown.
+        """
+        if self._robot_position is None or self._current_goal is None:
+            return None
+
+        rx, ry, _ = self._robot_position
+        gx, gy = self._current_goal.x, self._current_goal.y
+        return math.sqrt((rx - gx) ** 2 + (ry - gy) ** 2)
+
+    def _handle_start_mission(self, _request, response):
         """Handle external mission start trigger."""
         if self._state == MissionState.COMPLETED:
             response.success = False
             response.message = "Missions already completed."
             return response
+
+        # Reset mission result immediately to prevent race condition
+        # where the eval script sees the previous mission's SUCCESS result
+        self._last_mission_result = MissionResult.PENDING
+        self._last_mission_distance = None
 
         self._start_requested = True
         if self._is_mission_active():
@@ -314,6 +371,38 @@ class MissionManager:
 
         response.success = True
         response.message = "Mission start requested."
+        return response
+
+    def _handle_get_mission_result(self, _request, response):
+        """Handle mission result query service.
+
+        Returns the result of the last completed mission as JSON in the message field.
+        Response format:
+        {
+            "result": "pending" | "success" | "failure",
+            "mission_number": int,
+            "distance_to_goal": float,
+            "in_progress": bool
+        }
+        """
+        import json
+
+        in_progress = self._state == MissionState.WAITING_FOR_COMPLETION
+        distance = self._last_mission_distance if self._last_mission_distance is not None else -1.0
+
+        if in_progress:
+            current_dist = self._get_distance_to_goal()
+            distance = current_dist if current_dist is not None else -1.0
+
+        result_data = {
+            "result": self._last_mission_result.value,
+            "mission_number": self._current_mission,
+            "distance_to_goal": distance,
+            "in_progress": in_progress,
+        }
+
+        response.success = True
+        response.message = json.dumps(result_data)
         return response
 
     def _spin_ros_once(self) -> None:
@@ -623,12 +712,37 @@ class MissionManager:
             self._state = MissionState.WAITING_FOR_COMPLETION
 
     def _step_waiting_for_completion(self):
-        """Wait for mission timeout before returning to wait-for-start."""
+        """Wait for goal completion or timeout.
+
+        Success: Robot within goal_tolerance of goal position.
+        Failure: Timeout reached before reaching goal.
+        """
         elapsed = self._get_current_time_seconds() - self._mission_start_time
-        if elapsed >= self.mission_config.timeout:
+        distance = self._get_distance_to_goal()
+
+        # Check for goal completion (success)
+        if distance is not None and distance <= self.mission_config.goal_tolerance:
+            self._mission_end_time = self._get_current_time_seconds()
+            self._last_mission_result = MissionResult.SUCCESS
+            self._last_mission_distance = distance
             self._state = MissionState.WAITING_FOR_START
             logger.info(
-                f"[{self._state.name}] Mission {self._current_mission} timed out {self.mission_config.timeout=}, waiting for start signal"
+                f"[SUCCESS] Mission {self._current_mission} completed! "
+                f"Distance to goal: {distance:.2f}m (tolerance: {self.mission_config.goal_tolerance}m), "
+                f"elapsed: {elapsed:.1f}s"
+            )
+            return
+
+        # Check for timeout (failure)
+        if self.mission_config.timeout is not None and elapsed >= self.mission_config.timeout:
+            self._mission_end_time = self._get_current_time_seconds()
+            self._last_mission_result = MissionResult.FAILURE
+            self._last_mission_distance = distance if distance is not None else -1.0
+            self._state = MissionState.WAITING_FOR_START
+            logger.info(
+                f"[FAILURE] Mission {self._current_mission} timed out! "
+                f"Distance to goal: {distance:.2f}m (needed: {self.mission_config.goal_tolerance}m), "
+                f"timeout: {self.mission_config.timeout}s"
             )
 
     def _cleanup(self):

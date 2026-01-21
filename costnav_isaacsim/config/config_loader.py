@@ -63,6 +63,7 @@ class MissionConfig:
 
     # Mission execution
     timeout: float = 3600.0  # 1 hour
+    goal_tolerance: float = 1.0  # Distance to goal for success (meters)
 
     # Distance constraints
     min_distance: float = 5.0
@@ -126,6 +127,7 @@ class MissionConfig:
 
         return cls(
             timeout=mission_data.get("timeout", 3600.0),
+            goal_tolerance=mission_data.get("goal_tolerance", 1.0),
             min_distance=distance_data.get("min", 5.0),
             max_distance=distance_data.get("max", 50.0),
             nav2=nav2_config,

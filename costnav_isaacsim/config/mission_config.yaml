@@ -9,7 +9,7 @@
 mission:
 
   # Mission timeout (seconds)
-  timeout: 3600.0  # 1 hour
+  timeout: null  # No timeout (use a float number like 3600.0 for 1 hour)
 
 # Distance constraints for start/goal sampling (in meters)
 distance:
