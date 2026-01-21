@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("costnav_launch")
 
 # Default constants
-DEFAULT_PHYSICS_DT = 1.0 / 60.0
+DEFAULT_PHYSICS_DT = 1.0 / 120.0
 DEFAULT_RENDERING_DT = 1.0 / 30.0
 WARMUP_STEPS = 100
 DEFAULT_ROBOT_NAME = "nova_carter"
