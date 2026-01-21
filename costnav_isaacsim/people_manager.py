@@ -122,14 +122,6 @@ class PeopleManager:
             else:
                 logger.info("NavMesh is already baked")
 
-            # Stop timeline before spawning
-            import omni.timeline
-            timeline = omni.timeline.get_timeline_interface()
-            was_playing = timeline.is_playing()
-            if was_playing:
-                timeline.stop()
-                for _ in range(10):
-                    simulation_app.update()
 
             # Create character setup with warmup to prevent animation system crashes
             # Note: CharacterSetup uses starting_point only for distance validation when spawning
@@ -231,10 +223,6 @@ class PeopleManager:
                 skelroots.append(skelroot)
 
             logger.info(f"Spawned {len(skelroots)} people: {self.character_names}")
-
-            # Resume timeline if it was playing
-            if was_playing:
-                timeline.play()
 
             self.initialized = True
             logger.info("PeopleManager initialization complete!")
