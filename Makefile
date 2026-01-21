@@ -69,10 +69,11 @@ run-isaac-sim:
 	$(DOCKER_COMPOSE) --profile isaac-sim up
 
 # Run both Isaac Sim and ROS2 Nav2 navigation together (using combined 'nav2' profile)
+# Usage: make run-nav2 NUM_PEOPLE=5
 run-nav2:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile nav2 down
-	$(DOCKER_COMPOSE) --profile nav2 up
+	NUM_PEOPLE=$(NUM_PEOPLE) $(DOCKER_COMPOSE) --profile nav2 up
 
 # Trigger mission start (manual)
 start-mission:
@@ -117,6 +118,7 @@ endif
 endif
 
 # Run both Isaac Sim and ROS2 teleop together (using combined 'teleop' profile)
+# Usage: make run-teleop NUM_PEOPLE=5
 run-teleop:
 	@if [ "$(SIM_ROBOT)" != "nova_carter" ] && [ "$(SIM_ROBOT)" != "segway_e1" ]; then \
 		echo "Unsupported robot: $(SIM_ROBOT). Use nova_carter or segway_e1."; \
@@ -124,7 +126,7 @@ run-teleop:
 	fi
 	xhost +local:docker 2>/dev/null || true
 	SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile teleop down
-	SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile teleop up
+	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile teleop up
 
 # =============================================================================
 # ROS Bag Recording Targets
