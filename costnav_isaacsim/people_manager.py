@@ -76,7 +76,6 @@ class PeopleManager:
             try:
                 from omni.anim.people_api.settings import PeopleSettings
                 from omni.anim.people_api.scripts.character_setup import CharacterSetup, CharacterBehavior
-                from omni.anim.people_api.scripts.custom_command.command_manager import CustomCommandManager
                 from omni.anim.people_api.scripts.utils import Utils
 
                 logger.info("PeopleAPI modules imported successfully")
@@ -126,7 +125,7 @@ class PeopleManager:
             # Create character setup with warmup to prevent animation system crashes
             # Note: CharacterSetup uses starting_point only for distance validation when spawning
             # The actual spawn positions are random NavMesh points throughout the map
-            logger.info(f"Creating CharacterSetup with warmup enabled...")
+            logger.info("Creating CharacterSetup with warmup enabled...")
             self.character_setup = CharacterSetup(
                 self.robot_prim_path,
                 num_characters=0,  # We'll load them manually
@@ -309,7 +308,7 @@ class PeopleManager:
 
     def _wait_for_people_api(self, simulation_app, max_updates=300):
         """Wait for PeopleAPI CustomCommandManager to be ready."""
-        from omni.anim.people_api.scripts.custom_command.command_manager import CustomCommandManager
+        from omni.anim.people_api.scripts.custom_command.command_manager import CustomCommandManager # noqa: F401
 
         for _ in range(max_updates):
             if CustomCommandManager.get_instance() is not None:
