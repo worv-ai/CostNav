@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 run-ros2 run-isaac-sim run-nav2 run-teleop start-mission start-mission-record run-rosbag stop-rosbag
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 run-ros2 run-isaac-sim run-nav2 run-teleop start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop
 
 DOCKERFILE ?= Dockerfile
 DOCKER_BUILD ?= docker build
@@ -144,3 +144,51 @@ run-rosbag:
 stop-rosbag:
 	$(DOCKER_COMPOSE) --profile rosbag down
 	@echo "ROS bag recording stopped. Check ./rosbags/ for recorded bag files."
+
+# =============================================================================
+# Nav2 Evaluation Targets
+# =============================================================================
+
+# Default evaluation parameters
+TIMEOUT ?= 20
+NUM_MISSIONS ?= 10
+
+# Run Nav2 evaluation (requires running nav2 instance via make run-nav2)
+# Usage: make run-eval-nav2 TIMEOUT=20 NUM_MISSIONS=10
+# Output: ./logs/nav2_evaluation_<timestamp>.log
+run-eval-nav2:
+	@if ! docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-nav2"; then \
+		echo "ERROR: 'make run-nav2' is not running."; \
+		echo ""; \
+		echo "Please start nav2 first in a separate terminal:"; \
+		echo "  make run-nav2"; \
+		echo ""; \
+		echo "Then run this command again:"; \
+		echo "  make run-eval-nav2 TIMEOUT=$(TIMEOUT) NUM_MISSIONS=$(NUM_MISSIONS)"; \
+		exit 1; \
+	fi
+	@echo "Starting Nav2 evaluation..."
+	@echo "  Timeout per mission: $(TIMEOUT)s"
+	@echo "  Number of missions:  $(NUM_MISSIONS)"
+	@echo ""
+	@bash scripts/eval_nav2.sh $(TIMEOUT) $(NUM_MISSIONS)
+
+# Run Teleop evaluation (requires running teleop instance via make run-teleop)
+# Usage: make run-eval-teleop TIMEOUT=20 NUM_MISSIONS=10
+# Output: ./logs/teleop_evaluation_<timestamp>.log
+run-eval-teleop:
+	@if ! docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-teleop"; then \
+		echo "ERROR: 'make run-teleop' is not running."; \
+		echo ""; \
+		echo "Please start teleop first in a separate terminal:"; \
+		echo "  make run-teleop"; \
+		echo ""; \
+		echo "Then run this command again:"; \
+		echo "  make run-eval-teleop TIMEOUT=$(TIMEOUT) NUM_MISSIONS=$(NUM_MISSIONS)"; \
+		exit 1; \
+	fi
+	@echo "Starting Teleop evaluation..."
+	@echo "  Timeout per mission: $(TIMEOUT)s"
+	@echo "  Number of missions:  $(NUM_MISSIONS)"
+	@echo ""
+	@bash scripts/eval_teleop.sh $(TIMEOUT) $(NUM_MISSIONS)
