@@ -108,7 +108,7 @@ class SegwayE1(DifferentialRobot):
     def __init__(self) -> None:
         super().__init__(
             robot_name=self.__class__.__name__,
-            max_lin_vel=1.0,
-            max_ang_vel=1.0,
+            max_lin_vel=2.0,
+            max_ang_vel=1.2,
             max_linear_vel_level=1,
         )

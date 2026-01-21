@@ -183,14 +183,31 @@ class CostNavSimLauncher:
         # Setup simulation context
         self.simulation_context = self._setup_simulation_context()
 
+        robot_prim_path = None
+        try:
+            import omni.usd
+
+            stage = omni.usd.get_context().get_stage()
+            robot_prim_path = self._resolve_robot_prim_path(stage)
+        except Exception as exc:
+            logger.warning("Failed to resolve robot prim path: %s", exc)
+
+        if robot_prim_path:
+            if not os.environ.get("ROBOT_PRIM_PATH"):
+                os.environ["ROBOT_PRIM_PATH"] = robot_prim_path
+            self._update_mission_robot_prim(robot_prim_path)
+        else:
+            logger.warning("Robot prim path could not be resolved; teleportation may be disabled")
+
         # Initialize people manager (will be setup after warmup)
         self.people_manager = None
         if self.num_people > 0:
             from people_manager import PeopleManager
 
+            people_robot_prim_path = self._resolve_people_robot_prim(robot_prim_path)
             self.people_manager = PeopleManager(
                 num_people=self.num_people,
-                robot_prim_path="/World/Nova_Carter_ROS",
+                robot_prim_path=people_robot_prim_path,
                 character_root="/World/Characters",
             )
 
@@ -315,7 +332,6 @@ class CostNavSimLauncher:
             if prim.IsValid():
                 return env_override
             logger.warning("ROBOT_PRIM_PATH not found on stage: %s", env_override)
-            return None
 
         default_path = DEFAULT_ROBOT_PRIM_PATHS.get(self.robot_name)
         if default_path:
@@ -328,6 +344,16 @@ class CostNavSimLauncher:
             return self._find_robot_prim_by_tokens(stage, ("Segway", "segway"))
 
         return None
+
+    def _resolve_people_robot_prim(self, robot_prim_path: Optional[str]) -> str:
+        """Resolve robot prim path for PeopleAPI usage."""
+        if not robot_prim_path:
+            return "/World/Nova_Carter_ROS"
+
+        if robot_prim_path.endswith("/chassis_link"):
+            return robot_prim_path.rsplit("/", 1)[0]
+
+        return robot_prim_path
 
     def _find_robot_prim_by_tokens(self, stage, tokens: tuple[str, ...]) -> Optional[str]:
         """Find a prim path containing any of the supplied tokens."""
