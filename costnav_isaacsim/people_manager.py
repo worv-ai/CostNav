@@ -7,12 +7,146 @@ using the PeopleAPI extension. People walk naturally in NavMesh-enabled areas.
 """
 
 import logging
+from typing import Dict, Optional, Tuple
 
 import carb
 import omni.kit.commands
 from pxr import Sdf, Usd
 
 logger = logging.getLogger("people_manager")
+
+
+class CharacterStuckTracker:
+    """Lightweight tracker for detecting and recovering stuck characters.
+
+    This class tracks character positions over time to detect when characters
+    stop moving unexpectedly. It avoids NavMesh API calls by only reading
+    prim transforms which are already computed by the simulation.
+
+    Attributes:
+        stuck_time_threshold: Seconds a character must be stationary to be considered stuck
+        min_movement_distance: Minimum distance (meters) to be considered "moving"
+        recovery_cooldown: Seconds to wait between recovery attempts for the same character
+    """
+
+    def __init__(
+        self,
+        stuck_time_threshold: float = 10.0,
+        min_movement_distance: float = 0.1,
+        recovery_cooldown: float = 30.0,
+    ):
+        """Initialize the stuck tracker.
+
+        Args:
+            stuck_time_threshold: Time in seconds before a character is considered stuck
+            min_movement_distance: Minimum movement distance to reset stuck timer
+            recovery_cooldown: Minimum time between recovery attempts per character
+        """
+        self.stuck_time_threshold = stuck_time_threshold
+        self.min_movement_distance = min_movement_distance
+        self.recovery_cooldown = recovery_cooldown
+
+        # Tracking data: {character_name: (last_position, last_move_time, last_recovery_time)}
+        self._tracking_data: Dict[str, Tuple[Tuple[float, float, float], float, float]] = {}
+
+        # Statistics
+        self.total_recoveries = 0
+        self.recovery_count_per_character: Dict[str, int] = {}
+
+    def update_character(
+        self,
+        character_name: str,
+        position: Tuple[float, float, float],
+        current_time: float,
+    ) -> bool:
+        """Update tracking for a character and check if stuck.
+
+        This method should be called periodically (not every frame) to track
+        character movement. It returns True if the character appears stuck
+        and should be recovered.
+
+        Args:
+            character_name: Unique identifier for the character
+            position: Current (x, y, z) position of the character
+            current_time: Current simulation time in seconds
+
+        Returns:
+            True if the character is stuck and should be recovered, False otherwise
+        """
+        if character_name not in self._tracking_data:
+            # First time seeing this character - initialize tracking
+            self._tracking_data[character_name] = (position, current_time, 0.0)
+            self.recovery_count_per_character[character_name] = 0
+            return False
+
+        last_position, last_move_time, last_recovery_time = self._tracking_data[character_name]
+
+        # Calculate distance moved since last recorded position
+        dx = position[0] - last_position[0]
+        dy = position[1] - last_position[1]
+        distance_moved = (dx * dx + dy * dy) ** 0.5
+
+        if distance_moved >= self.min_movement_distance:
+            # Character has moved - update position and reset stuck timer
+            self._tracking_data[character_name] = (position, current_time, last_recovery_time)
+            return False
+
+        # Character hasn't moved significantly
+        time_stationary = current_time - last_move_time
+
+        # Check if stuck (stationary for too long)
+        if time_stationary >= self.stuck_time_threshold:
+            # Check recovery cooldown
+            time_since_last_recovery = current_time - last_recovery_time
+            if time_since_last_recovery >= self.recovery_cooldown:
+                logger.warning(
+                    f"Character '{character_name}' stuck at {position} "
+                    f"for {time_stationary:.1f}s - triggering recovery"
+                )
+                return True
+
+        return False
+
+    def mark_recovered(self, character_name: str, current_time: float) -> None:
+        """Mark a character as having been recovered.
+
+        This updates the recovery timestamp to prevent immediate re-recovery
+        and resets the movement tracking.
+
+        Args:
+            character_name: The character that was recovered
+            current_time: Current simulation time
+        """
+        if character_name in self._tracking_data:
+            last_position, _, _ = self._tracking_data[character_name]
+            # Reset with current time as last move time and update recovery time
+            self._tracking_data[character_name] = (last_position, current_time, current_time)
+            self.total_recoveries += 1
+            self.recovery_count_per_character[character_name] = (
+                self.recovery_count_per_character.get(character_name, 0) + 1
+            )
+            logger.info(f"Marked '{character_name}' as recovered (total recoveries: {self.total_recoveries})")
+
+    def remove_character(self, character_name: str) -> None:
+        """Stop tracking a character.
+
+        Args:
+            character_name: The character to stop tracking
+        """
+        self._tracking_data.pop(character_name, None)
+        self.recovery_count_per_character.pop(character_name, None)
+
+    def get_stats(self) -> Dict:
+        """Get tracking statistics.
+
+        Returns:
+            Dictionary with tracking statistics
+        """
+        return {
+            "tracked_characters": len(self._tracking_data),
+            "total_recoveries": self.total_recoveries,
+            "per_character_recoveries": dict(self.recovery_count_per_character),
+        }
 
 
 class PeopleManager:
@@ -31,6 +165,9 @@ class PeopleManager:
         robot_prim_path: str = "/World/Nova_Carter_ROS",
         character_root: str = "/World/Characters",
         performance_mode: bool = True,
+        stuck_detection_enabled: bool = True,
+        stuck_time_threshold: float = 10.0,
+        stuck_recovery_cooldown: float = 30.0,
     ):
         """Initialize the people manager.
 
@@ -39,6 +176,9 @@ class PeopleManager:
             robot_prim_path: Path to the robot prim (required for CharacterSetup API)
             character_root: Root path for character prims
             performance_mode: If True, disables dynamic avoidance for better FPS (default: True)
+            stuck_detection_enabled: If True, enables stuck character detection and recovery
+            stuck_time_threshold: Seconds a character must be stationary to be considered stuck
+            stuck_recovery_cooldown: Minimum seconds between recovery attempts per character
         """
         self.num_people = num_people
         self.robot_prim_path = robot_prim_path
@@ -48,6 +188,23 @@ class PeopleManager:
         self.character_setup = None
         self.character_names = []
         self.initialized = False
+
+        # Stuck detection and recovery
+        self.stuck_detection_enabled = stuck_detection_enabled
+        self._stuck_tracker: Optional[CharacterStuckTracker] = None
+        self._last_stuck_check_time: float = 0.0
+        self._stuck_check_interval: float = 2.0  # Check every 2 seconds to minimize overhead
+        self._skelroot_cache: Dict[str, any] = {}  # Cache SkelRoot prims for recovery
+
+        if stuck_detection_enabled:
+            self._stuck_tracker = CharacterStuckTracker(
+                stuck_time_threshold=stuck_time_threshold,
+                min_movement_distance=0.1,
+                recovery_cooldown=stuck_recovery_cooldown,
+            )
+            logger.info(
+                f"Stuck detection enabled: threshold={stuck_time_threshold}s, cooldown={stuck_recovery_cooldown}s"
+            )
 
         logger.info(f"PeopleManager created: num_people={num_people}, performance_mode={performance_mode}")
 
@@ -220,7 +377,15 @@ class PeopleManager:
                 self._apply_behavior_to_skelroot(skelroot, anim_graph, script_path, Utils)
                 skelroots.append(skelroot)
 
+                # Cache SkelRoot for stuck recovery
+                self._skelroot_cache[name] = skelroot
+
             logger.info(f"Spawned {len(skelroots)} people: {self.character_names}")
+
+            # Cache animation graph and script path for recovery
+            self._cached_anim_graph = anim_graph
+            self._cached_script_path = script_path
+            self._cached_utils = Utils
 
             self.initialized = True
             logger.info("PeopleManager initialization complete!")
@@ -454,6 +619,183 @@ class PeopleManager:
         attr.Set([r"{}".format(script_path)])
         Utils.add_colliders(skelroot_prim)
         Utils.add_rigid_body_dynamics(skelroot_prim)
+
+    def update(self, current_time: float) -> None:
+        """Periodic update for stuck detection and recovery.
+
+        This method should be called periodically (e.g., every frame or every few frames)
+        to check for stuck characters and trigger recovery. It is designed to be lightweight
+        and only performs work at the configured check interval.
+
+        The method avoids NavMesh API calls by only reading prim transforms which are
+        already computed by the simulation.
+
+        Args:
+            current_time: Current simulation time in seconds
+        """
+        if not self.initialized or not self.stuck_detection_enabled or self._stuck_tracker is None:
+            return
+
+        # Throttle checks to reduce overhead
+        if current_time - self._last_stuck_check_time < self._stuck_check_interval:
+            return
+
+        self._last_stuck_check_time = current_time
+
+        # Check each character for stuck status
+        for character_name in self.character_names:
+            position = self._get_character_position(character_name)
+            if position is None:
+                continue
+
+            is_stuck = self._stuck_tracker.update_character(character_name, position, current_time)
+
+            if is_stuck:
+                success = self._recover_stuck_character(character_name)
+                if success:
+                    self._stuck_tracker.mark_recovered(character_name, current_time)
+
+    def _get_character_position(self, character_name: str) -> Optional[Tuple[float, float, float]]:
+        """Get the current position of a character without NavMesh queries.
+
+        This method reads the prim transform directly, which is already computed
+        by the simulation, avoiding expensive NavMesh API calls.
+
+        Args:
+            character_name: Name of the character
+
+        Returns:
+            (x, y, z) position tuple, or None if position cannot be determined
+        """
+        try:
+            # Get SkelRoot from cache
+            skelroot = self._skelroot_cache.get(character_name)
+            if skelroot is None or not skelroot.IsValid():
+                return None
+
+            # Try to get position from the behavior script instance (most accurate)
+            try:
+                from omni.metropolis.utils.simulation_util import SimulationUtil
+
+                script_instance = SimulationUtil.get_agent_script_instance_by_path(str(skelroot.GetPrimPath()))
+                if script_instance and hasattr(script_instance, "get_current_position"):
+                    pos = script_instance.get_current_position()
+                    if pos is not None:
+                        return (float(pos[0]), float(pos[1]), float(pos[2]))
+            except Exception:
+                pass  # Fall back to prim transform
+
+            # Fallback: Read prim transform directly (no NavMesh query)
+            from pxr import UsdGeom
+
+            xformable = UsdGeom.Xformable(skelroot)
+            if xformable:
+                transform = xformable.ComputeLocalToWorldTransform(Usd.TimeCode.Default())
+                translation = transform.ExtractTranslation()
+                return (float(translation[0]), float(translation[1]), float(translation[2]))
+
+            return None
+
+        except Exception as e:
+            logger.debug(f"Failed to get position for '{character_name}': {e}")
+            return None
+
+    def _recover_stuck_character(self, character_name: str) -> bool:
+        """Attempt to recover a stuck character by resetting its behavior script.
+
+        This recovery mechanism is lightweight and avoids NavMesh API calls:
+        1. Clears the current command queue of the behavior script
+        2. Forces the script to regenerate new random commands
+        3. Does NOT re-query NavMesh or recalculate paths
+
+        The behavior script's get_simulation_commands() will naturally use the
+        pre-cached NavMesh positions when it regenerates commands.
+
+        Args:
+            character_name: Name of the stuck character
+
+        Returns:
+            True if recovery was successful, False otherwise
+        """
+        try:
+            logger.info(f"Attempting to recover stuck character: {character_name}")
+
+            # Get the behavior script instance
+            skelroot = self._skelroot_cache.get(character_name)
+            if skelroot is None or not skelroot.IsValid():
+                logger.warning(f"Cannot recover '{character_name}': SkelRoot not found in cache")
+                return False
+
+            try:
+                from omni.metropolis.utils.simulation_util import SimulationUtil
+
+                script_instance = SimulationUtil.get_agent_script_instance_by_path(str(skelroot.GetPrimPath()))
+
+                if script_instance is None:
+                    logger.warning(f"Cannot recover '{character_name}': behavior script not found")
+                    return False
+
+                # Method 1: Try to end current command and clear command queue
+                # This forces the script to regenerate new random commands
+                if hasattr(script_instance, "end_current_command"):
+                    script_instance.end_current_command(set_status=False)
+
+                if hasattr(script_instance, "commands"):
+                    # Clear the command queue - the script will regenerate on next update
+                    script_instance.commands = []
+
+                if hasattr(script_instance, "current_command"):
+                    script_instance.current_command = None
+
+                # Reset any stuck state in navigation manager if present
+                if hasattr(script_instance, "navigation_manager") and script_instance.navigation_manager:
+                    nav_mgr = script_instance.navigation_manager
+                    if hasattr(nav_mgr, "path_targets"):
+                        nav_mgr.path_targets = []
+                    if hasattr(nav_mgr, "path_points"):
+                        nav_mgr.path_points = []
+
+                logger.info(f"Successfully reset behavior script for '{character_name}'")
+                return True
+
+            except ImportError:
+                # SimulationUtil not available, try alternative recovery
+                logger.debug("SimulationUtil not available, trying alternative recovery")
+
+            # Alternative recovery: Re-apply behavior script (more heavyweight but reliable)
+            # This is a last resort and still avoids NavMesh queries
+            if hasattr(self, "_cached_anim_graph") and hasattr(self, "_cached_script_path"):
+                stage = omni.usd.get_context().get_stage()
+                root_path = f"{self.character_root}/{character_name}"
+                root_prim = stage.GetPrimAtPath(root_path)
+
+                if root_prim and root_prim.IsValid():
+                    # Clear and re-apply behavior script
+                    self._clear_behavior_scripts(root_prim)
+                    self._apply_behavior_to_skelroot(
+                        skelroot,
+                        self._cached_anim_graph,
+                        self._cached_script_path,
+                        self._cached_utils,
+                    )
+                    logger.info(f"Re-applied behavior script for '{character_name}'")
+                    return True
+
+            return False
+
+        except Exception as e:
+            logger.error(f"Failed to recover stuck character '{character_name}': {e}")
+            return False
+
+    def get_stuck_detection_stats(self) -> Dict:
+        """Get statistics about stuck detection and recoveries.
+
+        Returns:
+            Dictionary with statistics, or empty dict if stuck detection is disabled
+        """
+        if self._stuck_tracker is None:
+            return {}
+        return self._stuck_tracker.get_stats()
 
     def shutdown(self):
         """Cleanup people manager resources."""
