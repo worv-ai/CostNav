@@ -173,19 +173,23 @@ services:
     <<: *ros2-service
     profiles: [ "nav2" ]
     container_name: costnav-ros2-nav2
+    environment:
+      - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
     depends_on:
       isaac-sim:
         condition: service_healthy
     command: >
       bash -c "source /opt/ros/jazzy/setup.bash &&
                source /workspace/build_ws/install/local_setup.sh &&
-               ros2 launch /workspace/nav2_params/nav2.launch.py"
+               ros2 launch /workspace/nav2_params/nav2.launch.py params_file:=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params.yaml"
 
   # ROS2 with RViz - standalone visualization service that runs alongside Isaac Sim
   ros2-rviz:
     <<: *ros2-service
     profiles: [ "isaac-sim", "nav2" ]
     container_name: costnav-ros2-rviz
+    environment:
+      - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
     depends_on:
       isaac-sim:
         condition: service_healthy
@@ -193,7 +197,7 @@ services:
       bash -c "
         source /opt/ros/jazzy/setup.bash &&
         source /workspace/build_ws/install/local_setup.sh &&
-        ros2 launch /workspace/nav2_params/rviz.launch.py
+        ros2 launch /workspace/nav2_params/rviz.launch.py rviz_config:=/workspace/nav2_params/$${SIM_ROBOT}/navigation.rviz map:=/workspace/nav2_params/maps/sidewalk.yaml params_file:=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params.yaml
       "
 
   # ROS2 with RViz (teleop profile) - hides TF/point clouds by default
@@ -205,17 +209,13 @@ services:
       isaac-sim:
         condition: service_healthy
     environment:
-      - ROS_DISTRO=jazzy
-      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
-      - DISPLAY=${DISPLAY:-:0}
-      - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
       - LIBGL_ALWAYS_SOFTWARE=1
+      - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
     command: >
       bash -c "
         source /opt/ros/jazzy/setup.bash &&
         source /workspace/build_ws/install/local_setup.sh &&
-        ros2 launch /workspace/nav2_params/rviz.launch.py rviz_config:=/workspace/nav2_params/carter_navigation_teleop.rviz
+        ros2 launch /workspace/nav2_params/rviz.launch.py rviz_config:=/workspace/nav2_params/$${SIM_ROBOT}/navigation_teleop.rviz map:=/workspace/nav2_params/maps/sidewalk.yaml params_file:=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params.yaml
       "
 
   # ROS2 with teleop - waits for Isaac Sim to be healthy before starting

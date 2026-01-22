@@ -13,23 +13,25 @@
 ### ✅ Completed
 
 - **Nav2 Integration with Nova Carter**: Full ROS2 Navigation Stack 2 integration complete
+- **Nav2 Integration with Segway E1**: Dynamic robot selection via SIM_ROBOT environment variable
 - **Docker Setup**: Multi-container architecture configured
 - **ROS2 Bridge**: Communication between Isaac Sim and Nav2 established
 - **Occupancy Map**: Generated and configured for Street_sidewalk environment
-- **Basic Navigation**: Nova Carter successfully navigates to goals
+- **Basic Navigation**: Both Nova Carter and Segway E1 successfully navigate to goals
 - **Mission Orchestration**: Automated start/goal sampling, robot teleportation, and RViz visualization
 - **NavMesh Position Sampling**: Valid start/goal positions sampled from Isaac Sim's NavMesh
 - **RViz Marker Visualization**: Start (green), goal (red), and robot (blue) markers
+- **Robot-Specific Configuration**: Separate parameter files for Nova Carter and Segway E1
 
 ### ⏳ In Progress
 
-1. **Parameter Tuning**: Optimizing Nav2 parameters for Nova Carter performance
+1. **Parameter Tuning**: Optimizing Nav2 parameters for both Nova Carter and Segway E1 performance
 2. **Cost Model Integration**: Track economic metrics for Nav2 navigation
 
 ### 📋 Future Work
 
-- **COCO Robot Integration**: Adapt Nav2 for COCO delivery robot (lower priority)
 - **Hybrid RL+Nav2**: Combine learning-based and rule-based approaches
+- **Multi-Robot Navigation**: Extend to support multiple robots simultaneously
 
 ---
 
@@ -37,8 +39,9 @@
 
 This document outlines the Nav2 integration for CostNav, following NVIDIA's official [Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html).
 
-**Primary Robot:** Nova Carter (NVIDIA's reference platform)
-**Future Robot:** COCO delivery robot (planned)
+**Supported Robots:**
+- **Nova Carter** (NVIDIA's reference platform) - ✅ Complete
+- **Segway E1** (Delivery robot) - ✅ Complete
 
 **Current Capabilities:**
 
@@ -70,9 +73,10 @@ CostNav currently supports:
 
 - **Learning-based navigation** using RL-Games, RSL-RL, SKRL, and Stable-Baselines3
 - **Isaac Sim/Isaac Lab** simulation environment (v5.1.0 / v2.3.0)
-- **✅ Nav2 Integration with Nova Carter** - Complete and operational
-- **Nova Carter robot** (primary) - NVIDIA's reference platform with full sensor suite
-- **COCO delivery robot** (future) - Custom delivery robot for urban navigation
+- **✅ Nav2 Integration** - Complete and operational for both robots
+- **Nova Carter robot** - NVIDIA's reference platform with full sensor suite
+- **Segway E1 delivery robot** - Delivery robot for urban navigation
+- **Dynamic robot selection** - SIM_ROBOT environment variable for switching between robots
 - **Cost-driven evaluation** metrics (SLA compliance, profitability, break-even time)
 - **Custom MDP components** for navigation (commands, observations, rewards, terminations)
 
@@ -87,9 +91,9 @@ CostNav currently supports:
 ### Remaining Tasks
 
 1. ~~**Start and Goal Sampling**~~ - ✅ Complete (nav2_mission module)
-2. **Parameter Tuning** - Optimize Nav2 parameters for Nova Carter navigation performance
-3. **Cost Model Integration** - Track economic metrics for Nav2 navigation
-4. **COCO Robot Adaptation** - Extend Nav2 support to COCO delivery robot (future work)
+2. ~~**Segway E1 Robot Adaptation**~~ - ✅ Complete (SIM_ROBOT environment variable with dynamic parameter selection)
+3. **Parameter Tuning** - Optimize Nav2 parameters for both Nova Carter and Segway E1 navigation performance
+4. **Cost Model Integration** - Track economic metrics for Nav2 navigation
 
 ---
 
@@ -112,12 +116,13 @@ This implementation follows NVIDIA's official tutorial which covers:
 - **Status:** Fully operational Nav2 integration
 - **Remaining Work:** Start/goal sampling and parameter tuning
 
-**Future Adaptation:**
+**Current Capabilities:**
 
-- Extend to **COCO delivery robot** (lower priority)
-- Add **cost model tracking** for economic metrics
-- Integrate with **existing CostNav benchmark framework**
-- Enable **comparison with RL-based navigation**
+- ✅ **Multi-robot support** - Nova Carter and Segway E1 via SIM_ROBOT environment variable
+- ✅ **Dynamic parameter selection** - Robot-specific navigation parameters and RViz configurations
+- 📋 **Cost model tracking** for economic metrics (in progress)
+- 📋 **Integration with existing CostNav benchmark framework** (in progress)
+- 📋 **Comparison with RL-based navigation** (planned)
 
 **Tutorial Sections to Follow:**
 
@@ -157,8 +162,8 @@ This implementation follows NVIDIA's official tutorial which covers:
 │  │  │              │  │   LiDAR)   │  │            │       │  │
 │  │  └──────────────┘  └────────────┘  └────────────┘       │  │
 │  │  ┌──────────────┐                                        │  │
-│  │  │ COCO Robot   │  (Future Work)                        │  │
-│  │  │  (Future)    │                                        │  │
+│  │  │ Segway E1    │  ✅ Supported                         │  │
+│  │  │ (Delivery)   │                                        │  │
 │  │  └──────────────┘                                        │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                  │
@@ -180,7 +185,69 @@ This implementation follows NVIDIA's official tutorial which covers:
 
 ---
 
-## Running Nav2 with Nova Carter
+## Robot Selection
+
+CostNav supports multiple robots for Nav2 navigation. Use the `SIM_ROBOT` environment variable to select between supported robots.
+
+### Supported Robots
+
+| Robot | Value | Status | Description |
+|-------|-------|--------|-------------|
+| Nova Carter | `nova_carter` | ✅ Complete | NVIDIA's reference platform with full sensor suite |
+| Segway E1 | `segway_e1` | ✅ Complete | Delivery robot for urban navigation |
+
+### Configuration Structure
+
+Robot-specific configuration files are organized as follows:
+
+```
+nav2_params/
+├── maps/                          # Shared map files for all robots
+│   ├── sidewalk.yaml
+│   ├── sidewalk.png
+│   └── sidewalk_orthographic.png
+├── nova_carter/                   # Nova Carter specific files
+│   ├── navigation_params.yaml
+│   ├── navigation.rviz
+│   └── navigation_teleop.rviz
+└── segway_e1/                     # Segway E1 specific files
+    ├── navigation_params.yaml
+    ├── navigation.rviz
+    └── navigation_teleop.rviz
+```
+
+### Switching Between Robots
+
+**Option 1: Environment Variable**
+```bash
+# Use Nova Carter (default)
+make run-nav2
+
+# Use Segway E1
+SIM_ROBOT=segway_e1 make run-nav2
+```
+
+**Option 2: Set in `.env` file**
+```bash
+# Add to .env file
+SIM_ROBOT=segway_e1
+```
+
+**Option 3: Docker Compose Override**
+```bash
+# Use Segway E1
+docker compose --profile nav2 up -e SIM_ROBOT=segway_e1
+```
+
+The `SIM_ROBOT` variable automatically selects:
+- Robot-specific navigation parameters (`/workspace/nav2_params/${SIM_ROBOT}/navigation_params.yaml`)
+- Robot-specific RViz configuration (`/workspace/nav2_params/${SIM_ROBOT}/navigation.rviz`)
+- Robot-specific teleop RViz configuration (`/workspace/nav2_params/${SIM_ROBOT}/navigation_teleop.rviz`)
+- Shared map files (`/workspace/nav2_params/maps/sidewalk.yaml`)
+
+---
+
+## Running Nav2
 
 ### Quick Start
 
@@ -610,7 +677,7 @@ python launch.py --mission-timeout 600 --min-distance 10
 │  │                            │  │                            ││
 │  │  ┌──────────────────────┐  │  │  ┌──────────────────────┐ ││
 │  │  │ Isaac Sim Simulation │  │  │  │  Nav2 Stack          │ ││
-│  │  │ - COCO Robot         │  │  │  │  - BT Navigator      │ ││
+│  │  │ - Nova Carter        │  │  │  │  - BT Navigator      │ ││
 │  │  │ - Sensors (RGB-D)    │  │  │  │  - Planner Server    │ ││
 │  │  │ - Environment        │  │  │  │  - Controller Server │ ││
 │  │  └──────────────────────┘  │  │  │  - Costmap 2D        │ ││
@@ -770,6 +837,7 @@ nav2_metrics = {
 | 1.0     | 2025-12-10 | CostNav Team | Updated to reflect completed Nav2 integration with Nova Carter, removed network config, updated priorities |
 | 1.1     | 2025-12-12 | CostNav Team | Week 3 complete: Added nav2_mission module with NavMesh sampling, RViz markers, mission orchestration, integrated launch |
 | 1.2     | 2025-12-12 | CostNav Team | Refactored to use YAML config file (config/mission_config.yaml), added MissionRunner, separated config module |
+| 1.3     | 2026-01-22 | CostNav Team | Added Segway E1 robot support with SIM_ROBOT environment variable for dynamic robot selection, robot-specific parameter files, and shared map directory structure |
 
 ---
 

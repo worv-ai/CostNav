@@ -15,12 +15,13 @@
             "preLaunchTask": "setup_python_env"
         },
         {
-            "name": "Python: Launch Mission",
+            "name": "Python: Launch People",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/costnav_isaacsim/launch.py",
             "args": [
-                "--mission"
+                "--people",
+                "5"
             ],
             "console": "integratedTerminal",
             "python": "/isaac-sim/kit/python/bin/python3",

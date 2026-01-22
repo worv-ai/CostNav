@@ -229,3 +229,7 @@ costnav_isaaclab/source/costnav_isaaclab/20*/
 # Work-in-progress refactored source
 src/
 .vscode/.standalone_examples.env
+
+/nav2_params/
+/build_ws/
+data/
