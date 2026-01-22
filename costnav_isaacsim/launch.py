@@ -49,7 +49,7 @@ DEFAULT_USD_PATHS = {
 }
 DEFAULT_ROBOT_PRIM_PATHS = {
     "nova_carter": "/World/Nova_Carter_ROS/chassis_link",
-    "segway_e1": "/World/Segway_E1_ROS2",
+    "segway_e1": "/World/Segway_E1_ROS2/base_link",
 }
 ROBOT_NAME_ALIASES = {
     "segway": "segway_e1",
