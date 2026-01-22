@@ -59,6 +59,8 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
       - DISPLAY=${DISPLAY:-:0}
       - XAUTHORITY=${XAUTHORITY:-/tmp/.X11-unix}
+      - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
+      - ROBOT_PRIM_PATH=${ROBOT_PRIM_PATH:-}
       - ISAAC_PATH=${ISAAC_PATH:-/isaac-sim}
       - CARB_APP_PATH=${CARB_APP_PATH:-/isaac-sim/kit}
       - EXP_PATH=${EXP_PATH:-/isaac-sim/apps}
@@ -77,6 +79,7 @@ services:
       - /tmp/isaac-sim/data:/root/.local/share/ov/data:rw
       - /tmp/isaac-sim/documents:/root/Documents:rw
       - ./third_party/PeopleAPI/exts:/isaac-sim/extsUser:rw
+      - ./third_party/FoodAssets/exts/worvai.assets.food:/isaac-sim/extsUser/worvai.assets.food:rw
     working_dir: /workspace
     command:
       - "-ic"

@@ -1,7 +1,7 @@
 #!/isaac-sim/python.sh
 """
 Isaac Sim launcher for CostNav project.
-Runs Street_sidewalk.usd with Nova Carter robot and Nav2 navigation.
+Runs Street_sidewalk.usd or street_sidewalk_segwaye1.usd based on robot selection.
 
 Usage:
     # Basic simulation
@@ -16,14 +16,20 @@ Usage:
     # Headless mode
     python launch.py --headless
 
+    # Select robot preset
+    python launch.py --robot segway_e1
+
 Missions are triggered manually via /start_mission (e.g. `make start-mission`).
 """
 
 import argparse
 import logging
 import os
+import posixpath
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Optional
+from urllib.parse import urlparse
 
 from isaacsim import SimulationApp
 
@@ -33,9 +39,30 @@ if TYPE_CHECKING:
 logger = logging.getLogger("costnav_launch")
 
 # Default constants
-DEFAULT_PHYSICS_DT = 1.0 / 60.0
+DEFAULT_PHYSICS_DT = 1.0 / 120.0
 DEFAULT_RENDERING_DT = 1.0 / 30.0
 WARMUP_STEPS = 100
+DEFAULT_ROBOT_NAME = "nova_carter"
+DEFAULT_USD_PATHS = {
+    "nova_carter": "omniverse://10.50.2.21/Users/worv/costnav/Street_sidewalk.usd",
+    "segway_e1": "omniverse://10.50.2.21/Users/worv/costnav/street_sidewalk_segwaye1.usd",
+}
+DEFAULT_ROBOT_PRIM_PATHS = {
+    "nova_carter": "/World/Nova_Carter_ROS/chassis_link",
+    "segway_e1": "/World/Segway_E1_ROS2/base_link",
+}
+ROBOT_NAME_ALIASES = {
+    "segway": "segway_e1",
+    "segway-e1": "segway_e1",
+    "segwaye1": "segway_e1",
+}
+SEGWAY_BUCKET_PRIM_PATH = "/World/Segway_E1_ROS2/PopcornBucket"
+SEGWAY_PIECES_PRIM_PATH = "/World/Segway_E1_ROS2/PopcornPieces"
+SEGWAY_BUCKET_HEIGHT_OFFSET = 0.33
+LEGACY_BUCKET_PRIM_PATHS = (
+    "/World/Segway_E1_ROS2/PopcornBucket",
+    "/World/Segway_E1_ROS2/PopcornPieces",
+)
 
 
 def parse_args():
@@ -47,8 +74,14 @@ def parse_args():
     sim_group.add_argument(
         "--usd_path",
         type=str,
-        default="omniverse://10.50.2.21/Users/worv/costnav/Street_sidewalk.usd",
-        help="Path to USD file",
+        default=None,
+        help="Path to USD file (overrides --robot)",
+    )
+    sim_group.add_argument(
+        "--robot",
+        type=str,
+        default=None,
+        help="Robot name to select a default USD (nova_carter, segway_e1)",
     )
     sim_group.add_argument(
         "--headless",
@@ -125,6 +158,7 @@ class CostNavSimLauncher:
     def __init__(
         self,
         usd_path: str,
+        robot_name: str,
         headless: bool,
         physics_dt: float,
         rendering_dt: float,
@@ -132,6 +166,7 @@ class CostNavSimLauncher:
         num_people: int = 0,
     ):
         self.usd_path = usd_path
+        self.robot_name = robot_name
         self.physics_dt = physics_dt
         self.rendering_dt = rendering_dt
         self.mission_config = mission_config
@@ -150,15 +185,33 @@ class CostNavSimLauncher:
 
         # Setup simulation context
         self.simulation_context = self._setup_simulation_context()
+        self._maybe_spawn_segway_food_assets()
+
+        robot_prim_path = None
+        try:
+            import omni.usd
+
+            stage = omni.usd.get_context().get_stage()
+            robot_prim_path = self._resolve_robot_prim_path(stage)
+        except Exception as exc:
+            logger.warning("Failed to resolve robot prim path: %s", exc)
+
+        if robot_prim_path:
+            if not os.environ.get("ROBOT_PRIM_PATH"):
+                os.environ["ROBOT_PRIM_PATH"] = robot_prim_path
+            self._update_mission_robot_prim(robot_prim_path)
+        else:
+            logger.warning("Robot prim path could not be resolved; teleportation may be disabled")
 
         # Initialize people manager (will be setup after warmup)
         self.people_manager = None
         if self.num_people > 0:
             from people_manager import PeopleManager
 
+            people_robot_prim_path = self._resolve_people_robot_prim(robot_prim_path)
             self.people_manager = PeopleManager(
                 num_people=self.num_people,
-                robot_prim_path="/World/Nova_Carter_ROS",
+                robot_prim_path=people_robot_prim_path,
                 character_root="/World/Characters",
             )
 
@@ -198,6 +251,9 @@ class CostNavSimLauncher:
 
         # ROS2 bridge for Nav2 communication
         enable_extension("isaacsim.ros2.bridge")
+
+        # Food Assets extension
+        enable_extension("worvai.assets.food")
 
         # People API extension (if people spawning is enabled)
         if self.num_people > 0:
@@ -274,6 +330,222 @@ class CostNavSimLauncher:
             stage_units_in_meters=1.0,
         )
         return simulation_context
+
+    @staticmethod
+    def _resolve_food_asset_paths(usd_path: str, ext_path: Optional[str]) -> tuple[str, str]:
+        """Resolve USD paths for the Segway popcorn assets."""
+        if usd_path.startswith("omniverse://"):
+            parsed = urlparse(usd_path)
+            if parsed.scheme == "omniverse" and parsed.netloc:
+                base_dir = posixpath.dirname(parsed.path)
+                root = f"{parsed.scheme}://{parsed.netloc}"
+                container_usd = f"{root}{posixpath.join(base_dir, 'foods', 'assets', 'popcorn-bucket.usdc')}"
+                piece_usd = f"{root}{posixpath.join(base_dir, 'foods', 'popcorn', 'popcorn-piece.usdc')}"
+                return container_usd, piece_usd
+
+        if ext_path:
+            assets_dir = os.path.join(ext_path, "assets")
+            return (
+                os.path.join(assets_dir, "popcorn-bucket.usdc"),
+                os.path.join(assets_dir, "popcorn-piece.usdc"),
+            )
+
+        return "", ""
+
+    def _maybe_spawn_segway_food_assets(self) -> None:
+        """Spawn a popcorn bucket with pieces for Segway runs."""
+        if self.robot_name != "segway_e1":
+            return
+
+        try:
+            import carb
+            import omni.kit.app
+            import omni.usd
+            from worvai.assets.food.items.containers.bucket import FoodBucket
+            from worvai.assets.food.utils.paths import asset_exists
+        except Exception as exc:
+            logger.warning("Food assets extension unavailable: %s", exc)
+            return
+
+        stage = omni.usd.get_context().get_stage()
+        if stage is None:
+            logger.warning("No USD stage available for food asset spawn.")
+            return
+
+        parent_path = SEGWAY_BUCKET_PRIM_PATH.rsplit("/", 1)[0]
+        if parent_path and not stage.GetPrimAtPath(parent_path).IsValid():
+            carb.log_warn(f"Creating parent prim for popcorn bucket: {parent_path}")
+            stage.DefinePrim(parent_path, "Xform")
+
+        for prim_path in (SEGWAY_BUCKET_PRIM_PATH, SEGWAY_PIECES_PRIM_PATH):
+            if stage.GetPrimAtPath(prim_path).IsValid():
+                stage.RemovePrim(prim_path)
+
+        robot_prim_path = self._resolve_robot_prim_path(stage)
+        self._update_mission_robot_prim(robot_prim_path)
+        if not robot_prim_path:
+            logger.warning("Segway robot prim path not found. Set ROBOT_PRIM_PATH to spawn popcorn bucket.")
+            return
+
+        ext_manager = omni.kit.app.get_app().get_extension_manager()
+        ext_path = ext_manager.get_extension_path_by_module("worvai.assets.food")
+        if not ext_path:
+            logger.warning("Food assets extension path not found.")
+            return
+
+        container_usd, piece_usd = self._resolve_food_asset_paths(self.usd_path, ext_path)
+        if not container_usd or not piece_usd:
+            logger.warning("Food asset paths could not be resolved for popcorn spawn.")
+            return
+
+        if not (asset_exists(container_usd) and asset_exists(piece_usd)):
+            if container_usd.startswith("omniverse://"):
+                local_assets_dir = os.path.join(ext_path, "assets")
+                local_container = Path(os.path.join(local_assets_dir, "popcorn-bucket.usdc")).as_uri()
+                local_piece = Path(os.path.join(local_assets_dir, "popcorn-piece.usdc")).as_uri()
+                if asset_exists(local_container) and asset_exists(local_piece):
+                    logger.info(
+                        "Falling back to local food assets: %s, %s",
+                        local_container,
+                        local_piece,
+                    )
+                    container_usd, piece_usd = local_container, local_piece
+                else:
+                    logger.warning(
+                        "Food asset files missing: %s, %s",
+                        container_usd,
+                        piece_usd,
+                    )
+                    return
+            else:
+                logger.warning("Food asset files missing: %s, %s", container_usd, piece_usd)
+                return
+
+        try:
+            bucket = FoodBucket.spawn(
+                bucket_prim_path=SEGWAY_BUCKET_PRIM_PATH,
+                instancer_path=SEGWAY_PIECES_PRIM_PATH,
+                container_usd_path=container_usd,
+                piece_usd_path=piece_usd,
+                backend="warp",
+            )
+        except Exception as exc:
+            logger.warning("Warp backend failed for popcorn spawn: %s", exc)
+            try:
+                bucket = FoodBucket.spawn(
+                    bucket_prim_path=SEGWAY_BUCKET_PRIM_PATH,
+                    instancer_path=SEGWAY_PIECES_PRIM_PATH,
+                    container_usd_path=container_usd,
+                    piece_usd_path=piece_usd,
+                    backend="numpy",
+                )
+            except Exception as fallback_exc:
+                logger.warning("Failed to spawn popcorn bucket: %s", fallback_exc)
+                return
+
+        robot_pos = self._get_prim_world_translation(stage, robot_prim_path)
+        if robot_pos is None:
+            logger.warning("Unable to resolve robot pivot position for popcorn spawn.")
+            return
+
+        bucket_pos = (
+            robot_pos[0],
+            robot_pos[1],
+            robot_pos[2] + SEGWAY_BUCKET_HEIGHT_OFFSET,
+        )
+        self._set_prim_world_translation(stage, bucket.bucket_prim_path, bucket_pos)
+        self._set_prim_world_translation(stage, bucket.instancer_path, bucket_pos)
+        logger.info(
+            "Spawned popcorn bucket at (%.3f, %.3f, %.3f)",
+            bucket_pos[0],
+            bucket_pos[1],
+            bucket_pos[2],
+        )
+
+    def _resolve_robot_prim_path(self, stage) -> Optional[str]:
+        """Resolve a robot prim path for pose lookups."""
+        env_override = os.environ.get("ROBOT_PRIM_PATH")
+        if env_override:
+            prim = stage.GetPrimAtPath(env_override)
+            if prim.IsValid():
+                return env_override
+            logger.warning("ROBOT_PRIM_PATH not found on stage: %s", env_override)
+
+        default_path = DEFAULT_ROBOT_PRIM_PATHS.get(self.robot_name)
+        if default_path:
+            prim = stage.GetPrimAtPath(default_path)
+            if prim.IsValid():
+                return default_path
+            logger.warning("Default robot prim path not found: %s", default_path)
+
+        if self.robot_name == "segway_e1":
+            return self._find_robot_prim_by_tokens(stage, ("Segway", "segway"))
+
+        return None
+
+    def _resolve_people_robot_prim(self, robot_prim_path: Optional[str]) -> str:
+        """Resolve robot prim path for PeopleAPI usage."""
+        if not robot_prim_path:
+            return "/World/Nova_Carter_ROS"
+
+        if robot_prim_path.endswith("/chassis_link"):
+            return robot_prim_path.rsplit("/", 1)[0]
+
+        return robot_prim_path
+
+    def _find_robot_prim_by_tokens(self, stage, tokens: tuple[str, ...]) -> Optional[str]:
+        """Find a prim path containing any of the supplied tokens."""
+        from pxr import UsdGeom
+
+        for prim in stage.Traverse():
+            name = prim.GetName()
+            if not name:
+                continue
+            if not any(token in name for token in tokens):
+                continue
+            if not (prim.IsA(UsdGeom.Xform) or prim.IsA(UsdGeom.Xformable)):
+                continue
+            return prim.GetPath().pathString
+
+        return None
+
+    def _get_prim_world_translation(self, stage, prim_path: str) -> Optional[tuple[float, float, float]]:
+        """Return the world translation for a prim path."""
+        from pxr import UsdGeom
+
+        prim = stage.GetPrimAtPath(prim_path)
+        if not prim.IsValid():
+            logger.warning("Prim not found for translation lookup: %s", prim_path)
+            return None
+
+        xform_cache = UsdGeom.XformCache()
+        transform = xform_cache.GetLocalToWorldTransform(prim)
+        translation = transform.ExtractTranslation()
+        return (float(translation[0]), float(translation[1]), float(translation[2]))
+
+    def _set_prim_world_translation(self, stage, prim_path: str, position: tuple[float, float, float]) -> None:
+        """Set the world translation for a prim path."""
+        from pxr import Gf, UsdGeom
+
+        prim = stage.GetPrimAtPath(prim_path)
+        if not prim.IsValid():
+            logger.warning("Prim not found for translation update: %s", prim_path)
+            return
+
+        xform = UsdGeom.Xformable(prim)
+        translate_ops = [op for op in xform.GetOrderedXformOps() if op.GetOpType() == UsdGeom.XformOp.TypeTranslate]
+        translate_op = translate_ops[0] if translate_ops else xform.AddTranslateOp()
+        translate_op.Set(Gf.Vec3d(position[0], position[1], position[2]))
+
+    def _update_mission_robot_prim(self, robot_prim_path: Optional[str]) -> None:
+        """Update mission config robot prim for teleportation."""
+        if not self.mission_config:
+            return
+
+        if robot_prim_path:
+            self.mission_config.teleport.robot_prim = robot_prim_path
+        else:
+            self.mission_config.teleport.robot_prim = ""
 
     def _step_simulation(self, mission_manager=None, throttle: bool = False):
         """Advance simulation one tick with optional throttling.
@@ -384,6 +656,40 @@ class CostNavSimLauncher:
         self.simulation_app.close()
 
 
+def resolve_robot_name(robot_name: Optional[str]) -> str:
+    """Resolve the robot name from CLI or environment.
+
+    Args:
+        robot_name: Optional robot name override.
+
+    Returns:
+        Normalized robot name.
+    """
+    selected_robot = robot_name or os.environ.get("SIM_ROBOT") or DEFAULT_ROBOT_NAME
+    return ROBOT_NAME_ALIASES.get(selected_robot, selected_robot)
+
+
+def resolve_usd_path(usd_path: Optional[str], robot_name: Optional[str]) -> str:
+    """Resolve the USD path based on CLI or robot selection.
+
+    Args:
+        usd_path: Optional USD path override.
+        robot_name: Optional robot name for default selection.
+
+    Returns:
+        Resolved USD path string.
+    """
+    if usd_path:
+        return usd_path
+
+    selected_robot = resolve_robot_name(robot_name)
+    if selected_robot not in DEFAULT_USD_PATHS:
+        supported = ", ".join(sorted(DEFAULT_USD_PATHS.keys()))
+        raise ValueError(f"Unknown robot '{selected_robot}'. Supported: {supported}")
+
+    return DEFAULT_USD_PATHS[selected_robot]
+
+
 def load_and_override_config(args) -> "MissionConfig":
     """Load mission config from file and apply CLI overrides.
 
@@ -427,13 +733,19 @@ def main():
     logger.info(f"  Distance: {mission_config.min_distance}m - {mission_config.max_distance}m")
     logger.info(f"  Nav2 wait: {mission_config.nav2.wait_time}s")
 
+    robot_name = resolve_robot_name(args.robot)
+    usd_path = resolve_usd_path(args.usd_path, robot_name)
+    logger.info(f"  Robot: {robot_name}")
+    logger.info(f"  USD path: {usd_path}")
+
     if args.people > 0:
         logger.info(f"People spawning enabled: {args.people} people")
     else:
         logger.info("People spawning disabled")
 
     launcher = CostNavSimLauncher(
-        usd_path=args.usd_path,
+        usd_path=usd_path,
+        robot_name=robot_name,
         headless=args.headless,
         physics_dt=args.physics_dt,
         rendering_dt=args.rendering_dt,

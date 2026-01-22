@@ -127,7 +127,8 @@ This starts Isaac Sim with the Street Sidewalk environment and Nova Carter robot
 ## Running Teleop (For Imitation Learning)
 
 ```bash
-make run-teleop
+make run-teleop nova_carter
+make run-teleop segway_e1
 make run-rosbag (start record)
 make stop-rosbag (stop record)
 ```

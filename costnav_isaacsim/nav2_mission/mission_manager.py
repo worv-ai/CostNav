@@ -470,7 +470,7 @@ class MissionManager:
         Returns:
             Callable that teleports the robot to a given position.
         """
-        from pxr import Gf, UsdGeom
+        from pxr import Gf, Sdf, UsdGeom
 
         def teleport_callback(position) -> bool:
             try:
@@ -496,10 +496,21 @@ class MissionManager:
                 pos = Gf.Vec3d(position.x, position.y, position.z)
                 translate_op.Set(pos)
 
-                # Convert yaw to quaternion (w, x, y, z) format for Gf.Quatd
+                # Convert yaw to quaternion (w, x, y, z) format
                 qx, qy, qz, qw = self._yaw_to_quaternion(position.heading)
-                # Gf.Quatd expects (real, imaginary) = (w, Vec3d(x, y, z))
-                orientation = Gf.Quatd(float(qw), Gf.Vec3d(float(qx), float(qy), float(qz)))
+
+                # Detect the expected quaternion type from the orient operation's attribute
+                # Some USD prims use GfQuatf (float) while others use GfQuatd (double)
+                orient_attr = orient_op.GetAttr()
+                type_name = orient_attr.GetTypeName()
+
+                if type_name == Sdf.ValueTypeNames.Quatf:
+                    # Use float precision quaternion (GfQuatf)
+                    orientation = Gf.Quatf(float(qw), Gf.Vec3f(float(qx), float(qy), float(qz)))
+                else:
+                    # Use double precision quaternion (GfQuatd) - default
+                    orientation = Gf.Quatd(float(qw), Gf.Vec3d(float(qx), float(qy), float(qz)))
+
                 orient_op.Set(orientation)
 
                 logger.info(

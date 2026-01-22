@@ -13,3 +13,6 @@
 [submodule "third_party/PeopleAPI"]
 	path = third_party/PeopleAPI
 	url = https://github.com/worv-ai/PeopleAPI
+[submodule "third_party/FoodAssets"]
+	path = third_party/FoodAssets
+	url = https://github.com/worv-ai/FoodAssets

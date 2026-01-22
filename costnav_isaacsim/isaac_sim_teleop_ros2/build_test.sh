@@ -74,7 +74,7 @@ echo "  2. Run: colcon build --packages-select isaac_sim_teleop_ros2"
 echo "  3. Source: source install/setup.bash"
 echo ""
 echo "To run:"
-echo "  export SIM_ROBOT=nova_carter  # or other robot type"
+echo "  export SIM_ROBOT=nova_carter  # or segway_e1"
 echo "  ros2 launch isaac_sim_teleop_ros2 teleop_isaac_sim.launch.py"
 echo ""
 
