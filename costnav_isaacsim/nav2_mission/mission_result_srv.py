@@ -9,7 +9,8 @@ Response format (JSON in message field):
     "result": "pending" | "success" | "failure",
     "mission_number": int,
     "distance_to_goal": float,
-    "in_progress": bool
+    "in_progress": bool,
+    "people_collision_count": int
 }
 """
 

@@ -188,6 +188,7 @@ class PeopleManager:
         self.character_setup = None
         self.character_names = []
         self.initialized = False
+        self._active_robot_collisions = set()
 
         # Stuck detection and recovery
         self.stuck_detection_enabled = stuck_detection_enabled
@@ -654,6 +655,33 @@ class PeopleManager:
                 success = self._recover_stuck_character(character_name)
                 if success:
                     self._stuck_tracker.mark_recovered(character_name, current_time)
+
+    def get_robot_collision_events(self):
+        """Return new robot-people collision events since the last call.
+
+        Uses PeopleAPI CharacterSetup trigger colliders to detect contacts
+        between the robot prim and character prims. Each character collision
+        is reported once when it starts; ongoing contacts are not re-reported.
+        """
+        if not self.initialized or self.character_setup is None:
+            return []
+
+        try:
+            collision_info = self.character_setup.get_collision_info()
+        except Exception as exc:
+            logger.debug("Failed to read collision info: %s", exc)
+            return []
+
+        current_collisions = set()
+        new_events = []
+        for character_prim, position in collision_info:
+            prim_path = str(character_prim)
+            current_collisions.add(prim_path)
+            if prim_path not in self._active_robot_collisions:
+                new_events.append((prim_path, position))
+
+        self._active_robot_collisions = current_collisions
+        return new_events
 
     def _get_character_position(self, character_name: str) -> Optional[Tuple[float, float, float]]:
         """Get the current position of a character without NavMesh queries.

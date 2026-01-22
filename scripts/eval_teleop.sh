@@ -25,6 +25,7 @@ declare -a MISSION_RESULTS
 declare -a MISSION_START_TIMES
 declare -a MISSION_END_TIMES
 declare -a MISSION_ERRORS
+declare -a MISSION_PEOPLE_COLLISIONS
 
 # Find the running teleop container (strictly requires costnav-ros2-teleop)
 find_container() {
@@ -92,6 +93,7 @@ run_mission() {
     local error_msg=""
     local mission_result="FAILED"
     local distance_to_goal=""
+    local people_collision_count=""
 
     start_time=$(date +%s.%N)
     MISSION_START_TIMES[$mission_num]=$(date '+%Y-%m-%d %H:%M:%S.%3N')
@@ -122,22 +124,23 @@ run_mission() {
             local in_progress
             in_progress=$(parse_result_field "$result_response" "in_progress")
             distance_to_goal=$(parse_result_field "$result_response" "distance_to_goal")
+            people_collision_count=$(parse_result_field "$result_response" "people_collision_count")
 
             # Check if mission completed (success or failure)
             if [ "$result_status" = "success" ]; then
                 mission_result="SUCCESS"
-                log "Mission $mission_num: Goal reached! Distance: ${distance_to_goal}m"
+                log "Mission $mission_num: Goal reached! Distance: ${distance_to_goal}m, people collisions: ${people_collision_count}"
                 break
             elif [ "$result_status" = "failure" ]; then
                 mission_result="FAILED"
                 error_msg="Timeout - distance to goal: ${distance_to_goal}m"
-                log "Mission $mission_num: Timeout! Distance: ${distance_to_goal}m"
+                log "Mission $mission_num: Timeout! Distance: ${distance_to_goal}m, people collisions: ${people_collision_count}"
                 break
             fi
 
             # Log progress every 5 seconds
             if [ $((elapsed % 5)) -eq 0 ]; then
-                log "Mission $mission_num: In progress... (${elapsed}s elapsed, distance_to_goal: ${distance_to_goal}m)"
+                log "Mission $mission_num: In progress... (${elapsed}s elapsed, distance_to_goal: ${distance_to_goal}m, people collisions: ${people_collision_count})"
             fi
         done
 
@@ -160,12 +163,14 @@ run_mission() {
     if [ "$mission_result" = "SUCCESS" ]; then
         SUCCESSFUL=$((SUCCESSFUL + 1))
         MISSION_RESULTS[$mission_num]="SUCCESS"
-        log "Mission $mission_num: SUCCESS (duration: ${duration}s, distance: ${distance_to_goal}m)"
+        MISSION_PEOPLE_COLLISIONS[$mission_num]="${people_collision_count}"
+        log "Mission $mission_num: SUCCESS (duration: ${duration}s, distance: ${distance_to_goal}m, people collisions: ${people_collision_count})"
     else
         FAILED=$((FAILED + 1))
         MISSION_RESULTS[$mission_num]="FAILED"
         MISSION_ERRORS[$mission_num]="$error_msg"
-        log "Mission $mission_num: FAILED (duration: ${duration}s) - $error_msg"
+        MISSION_PEOPLE_COLLISIONS[$mission_num]="${people_collision_count}"
+        log "Mission $mission_num: FAILED (duration: ${duration}s, people collisions: ${people_collision_count}) - $error_msg"
     fi
 }
 
@@ -192,6 +197,14 @@ generate_summary() {
     log_file "  - Successful missions: $SUCCESSFUL"
     log_file "  - Failed missions: $FAILED"
     log_file "  - Success rate: ${success_rate}%"
+    local total_people_collisions=0
+    for i in $(seq 1 $NUM_MISSIONS); do
+        local count="${MISSION_PEOPLE_COLLISIONS[$i]:-0}"
+        if [[ "$count" =~ ^[0-9]+$ ]]; then
+            total_people_collisions=$((total_people_collisions + count))
+        fi
+    done
+    log_file "  - Total people collisions: ${total_people_collisions}"
     log_file ""
     log_file "Per-Mission Results:"
     log_file "------------------------------------------------------------"
@@ -201,11 +214,13 @@ generate_summary() {
         local start="${MISSION_START_TIMES[$i]:-N/A}"
         local end="${MISSION_END_TIMES[$i]:-N/A}"
         local error="${MISSION_ERRORS[$i]:-}"
+        local collisions="${MISSION_PEOPLE_COLLISIONS[$i]:-N/A}"
 
         log_file "Mission $i:"
         log_file "  Status: $result"
         log_file "  Start:  $start"
         log_file "  End:    $end"
+        log_file "  Collisions: $collisions"
         if [ -n "$error" ]; then
             log_file "  Error:  $error"
         fi

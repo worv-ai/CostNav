@@ -565,6 +565,10 @@ class CostNavSimLauncher:
         if self.people_manager is not None:
             current_time = self.simulation_context.current_time
             self.people_manager.update(current_time)
+            if mission_manager is not None:
+                collision_events = self.people_manager.get_robot_collision_events()
+                for _prim_path, position in collision_events:
+                    mission_manager.publish_people_collision_event(position)
 
         if throttle:
             elapsed = time.perf_counter() - tick_start
