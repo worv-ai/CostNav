@@ -1,6 +1,6 @@
 
 {
-    "editor.rulers": [79],
+    "editor.rulers": [119],
     "python.languageServer": "Pylance",
     "python.jediEnabled": false,
     "python.defaultInterpreterPath": "/isaac-sim/python.sh",
