@@ -339,12 +339,8 @@ class CostNavSimLauncher:
             if parsed.scheme == "omniverse" and parsed.netloc:
                 base_dir = posixpath.dirname(parsed.path)
                 root = f"{parsed.scheme}://{parsed.netloc}"
-                container_usd = (
-                    f"{root}{posixpath.join(base_dir, 'foods', 'assets', 'popcorn-bucket.usdc')}"
-                )
-                piece_usd = (
-                    f"{root}{posixpath.join(base_dir, 'foods', 'popcorn', 'popcorn-piece.usdc')}"
-                )
+                container_usd = f"{root}{posixpath.join(base_dir, 'foods', 'assets', 'popcorn-bucket.usdc')}"
+                piece_usd = f"{root}{posixpath.join(base_dir, 'foods', 'popcorn', 'popcorn-piece.usdc')}"
                 return container_usd, piece_usd
 
         if ext_path:
@@ -405,12 +401,8 @@ class CostNavSimLauncher:
         if not (asset_exists(container_usd) and asset_exists(piece_usd)):
             if container_usd.startswith("omniverse://"):
                 local_assets_dir = os.path.join(ext_path, "assets")
-                local_container = Path(
-                    os.path.join(local_assets_dir, "popcorn-bucket.usdc")
-                ).as_uri()
-                local_piece = Path(
-                    os.path.join(local_assets_dir, "popcorn-piece.usdc")
-                ).as_uri()
+                local_container = Path(os.path.join(local_assets_dir, "popcorn-bucket.usdc")).as_uri()
+                local_piece = Path(os.path.join(local_assets_dir, "popcorn-piece.usdc")).as_uri()
                 if asset_exists(local_container) and asset_exists(local_piece):
                     logger.info(
                         "Falling back to local food assets: %s, %s",
@@ -426,9 +418,7 @@ class CostNavSimLauncher:
                     )
                     return
             else:
-                logger.warning(
-                    "Food asset files missing: %s, %s", container_usd, piece_usd
-                )
+                logger.warning("Food asset files missing: %s, %s", container_usd, piece_usd)
                 return
 
         try:
