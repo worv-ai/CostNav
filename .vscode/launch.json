@@ -29,6 +29,27 @@
             "cwd": "${workspaceFolder}/costnav_isaacsim"
         },
         {
+            "name": "Python: Teleop (segway_e1, 1 person)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/costnav_isaacsim/launch.py",
+            "args": [
+                "--robot",
+                "segway_e1",
+                "--people",
+                "1"
+            ],
+            "console": "integratedTerminal",
+            "python": "/isaac-sim/python.sh",
+            "envFile": "${workspaceFolder}/.vscode/.standalone_examples.env",
+            "preLaunchTask": "setup_python_env",
+            "cwd": "${workspaceFolder}/costnav_isaacsim",
+            "env": {
+                "SIM_ROBOT": "segway_e1",
+                "NUM_PEOPLE": "1"
+            }
+        },
+        {
             "name": "Python: Attach (windows-x86_64/linux-x86_64)",
             "type": "debugpy",
             "request": "attach",
