@@ -144,6 +144,8 @@ class MissionManager:
         self._start_service = None
         self._result_service = None
         self._odom_sub = None
+        self._people_collision_sub = None
+        self._people_collision_event_pub = None
 
         # State machine
         self._state = MissionState.INIT
@@ -166,6 +168,8 @@ class MissionManager:
         # Mission result tracking
         self._last_mission_result = MissionResult.PENDING
         self._last_mission_distance = None  # Distance to goal at end
+        self._last_mission_people_collision_count = 0
+        self._current_mission_people_collision_count = 0
 
     def _get_current_time_seconds(self) -> float:
         """Get current time in seconds from ROS clock.
@@ -213,7 +217,7 @@ class MissionManager:
         """Initialize ROS2 node and all components (called once on first step)."""
         import rclpy
         from rclpy.executors import SingleThreadedExecutor
-        from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
+        from geometry_msgs.msg import PointStamped, PoseStamped, PoseWithCovarianceStamped
         from nav_msgs.msg import Odometry
         from rclpy.node import Node
         from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
@@ -292,6 +296,12 @@ class MissionManager:
                 Odometry, self.mission_config.nav2.odom_topic, self._odom_callback, 10
             )
 
+            # Subscribe to people-collision events for per-mission counts
+            self._people_collision_sub = self._node.create_subscription(
+                PointStamped, "/collision_event", self._people_collision_callback, 10
+            )
+            self._people_collision_event_pub = self._node.create_publisher(PointStamped, "/collision_event", 10)
+
             self._initialized = True
             self._state = MissionState.WAITING_FOR_NAV2
             self._wait_start_time = self._get_current_time_seconds()
@@ -328,11 +338,36 @@ class MissionManager:
         self._settle_steps_remaining = 0
         self._last_mission_result = MissionResult.PENDING
         self._last_mission_distance = None
+        self._current_mission_people_collision_count = 0
 
     def _odom_callback(self, msg) -> None:
         """Handle odometry messages for robot position tracking."""
         pos = msg.pose.pose.position
         self._robot_position = (pos.x, pos.y, pos.z)
+
+    def _people_collision_callback(self, _msg) -> None:
+        """Count people collisions during active missions."""
+        if self._state == MissionState.WAITING_FOR_COMPLETION:
+            self._current_mission_people_collision_count += 1
+
+    def publish_people_collision_event(self, position, frame_id: str = "world") -> None:
+        """Publish a people-collision event if the ROS2 node is initialized."""
+        if self._node is None or self._people_collision_event_pub is None:
+            return
+
+        try:
+            from geometry_msgs.msg import PointStamped
+
+            msg = PointStamped()
+            msg.header.stamp = self._node.get_clock().now().to_msg()
+            msg.header.frame_id = frame_id
+            if position and len(position) >= 3:
+                msg.point.x = float(position[0])
+                msg.point.y = float(position[1])
+                msg.point.z = float(position[2])
+            self._people_collision_event_pub.publish(msg)
+        except Exception as exc:
+            logger.debug("Failed to publish collision event: %s", exc)
 
     def _get_distance_to_goal(self) -> Optional[float]:
         """Calculate distance from robot to goal.
@@ -358,6 +393,7 @@ class MissionManager:
         # where the eval script sees the previous mission's SUCCESS result
         self._last_mission_result = MissionResult.PENDING
         self._last_mission_distance = None
+        self._last_mission_people_collision_count = 0
 
         self._start_requested = True
         if self._is_mission_active():
@@ -382,7 +418,8 @@ class MissionManager:
             "result": "pending" | "success" | "failure",
             "mission_number": int,
             "distance_to_goal": float,
-            "in_progress": bool
+            "in_progress": bool,
+            "people_collision_count": int
         }
         """
         import json
@@ -399,6 +436,9 @@ class MissionManager:
             "mission_number": self._current_mission,
             "distance_to_goal": distance,
             "in_progress": in_progress,
+            "people_collision_count": self._current_mission_people_collision_count
+            if in_progress
+            else self._last_mission_people_collision_count,
         }
 
         response.success = True
@@ -656,6 +696,7 @@ class MissionManager:
         self._current_mission += 1
         self._start_requested = False
         self._restart_requested = False
+        self._current_mission_people_collision_count = 0
         logger.info(f"[{self._state.name}] \n{'=' * 50}")
         logger.info(f"[{self._state.name}] Mission {self._current_mission}")
         logger.info(f"[{self._state.name}] {'=' * 50}")
@@ -736,11 +777,12 @@ class MissionManager:
             self._mission_end_time = self._get_current_time_seconds()
             self._last_mission_result = MissionResult.SUCCESS
             self._last_mission_distance = distance
+            self._last_mission_people_collision_count = self._current_mission_people_collision_count
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[SUCCESS] Mission {self._current_mission} completed! "
                 f"Distance to goal: {distance:.2f}m (tolerance: {self.mission_config.goal_tolerance}m), "
-                f"elapsed: {elapsed:.1f}s"
+                f"elapsed: {elapsed:.1f}s, people collisions: {self._current_mission_people_collision_count}"
             )
             return
 
@@ -749,11 +791,12 @@ class MissionManager:
             self._mission_end_time = self._get_current_time_seconds()
             self._last_mission_result = MissionResult.FAILURE
             self._last_mission_distance = distance if distance is not None else -1.0
+            self._last_mission_people_collision_count = self._current_mission_people_collision_count
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE] Mission {self._current_mission} timed out! "
                 f"Distance to goal: {distance:.2f}m (needed: {self.mission_config.goal_tolerance}m), "
-                f"timeout: {self.mission_config.timeout}s"
+                f"timeout: {self.mission_config.timeout}s, people collisions: {self._current_mission_people_collision_count}"
             )
 
     def _cleanup(self):
