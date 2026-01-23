@@ -164,10 +164,16 @@ class MissionManager:
         # Robot position tracking (from odom)
         self._robot_position = None  # (x, y, z) tuple
         self._robot_orientation = None  # (x, y, z, w) quaternion tuple
+        self._prev_robot_position = None  # Previous position for distance tracking
 
         # Mission result tracking
         self._last_mission_result = MissionResult.PENDING
         self._last_mission_distance = None  # Distance to goal at end
+
+        # Mission metrics tracking
+        self._traveled_distance = 0.0  # Cumulative distance traveled (meters)
+        self._last_traveled_distance = None  # Final traveled distance for last mission (meters)
+        self._last_elapsed_time = None  # Elapsed time for last mission (seconds)
 
     def _get_current_time_seconds(self) -> float:
         """Get current time in seconds from ROS clock.
@@ -220,6 +226,7 @@ class MissionManager:
         from rclpy.node import Node
         from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
         from std_srvs.srv import Trigger
+        from std_msgs.msg import Float64
 
         from .mission_result_srv import GetMissionResult
         from .marker_publisher import MarkerPublisher
@@ -238,6 +245,11 @@ class MissionManager:
             # Mission result service
             self._result_service = self._node.create_service(
                 GetMissionResult, "/get_mission_result", self._handle_get_mission_result
+            )
+
+            # Timeout configuration subscriber (allows dynamic timeout setting)
+            self._timeout_sub = self._node.create_subscription(
+                Float64, "/set_mission_timeout", self._handle_set_timeout, 10
             )
 
             # Initialize NavMesh sampler with config values
@@ -330,6 +342,10 @@ class MissionManager:
         self._settle_steps_remaining = 0
         self._last_mission_result = MissionResult.PENDING
         self._last_mission_distance = None
+        self._traveled_distance = 0.0
+        self._prev_robot_position = None
+        self._last_traveled_distance = None
+        self._last_elapsed_time = None
 
     def _odom_callback(self, msg) -> None:
         """Handle odometry messages for robot position and orientation tracking."""
@@ -337,6 +353,21 @@ class MissionManager:
         self._robot_position = (pos.x, pos.y, pos.z)
         orient = msg.pose.pose.orientation
         self._robot_orientation = (orient.x, orient.y, orient.z, orient.w)
+
+        """Handle odometry messages for robot position tracking and distance accumulation."""
+        new_position = (pos.x, pos.y, pos.z)
+
+        # Accumulate traveled distance during active mission
+        if self._state == MissionState.WAITING_FOR_COMPLETION and self._prev_robot_position is not None:
+            dx = new_position[0] - self._prev_robot_position[0]
+            dy = new_position[1] - self._prev_robot_position[1]
+            step_distance = math.sqrt(dx * dx + dy * dy)
+            # Only accumulate reasonable movements (filter out noise and teleportation)
+            if step_distance < 1.0:  # Max 1m per odom update (reasonable for robot)
+                self._traveled_distance += step_distance
+
+        self._prev_robot_position = new_position
+        self._robot_position = new_position
 
     def _get_distance_to_goal(self) -> Optional[float]:
         """Calculate distance from robot to goal.
@@ -383,6 +414,21 @@ class MissionManager:
         tilt_angle = math.acos(min(1.0, max(-1.0, gz_body_z)))
 
         return tilt_angle > limit_angle
+    
+    def _handle_set_timeout(self, msg):
+        """Handle dynamic timeout configuration.
+
+        Args:
+            msg: Float64 message with timeout value in seconds.
+                 Use 0 or negative value to disable timeout (infinite).
+        """
+        timeout_value = msg.data
+        if timeout_value <= 0:
+            self.mission_config.timeout = None
+            logger.info("[CONFIG] Mission timeout disabled (infinite)")
+        else:
+            self.mission_config.timeout = timeout_value
+            logger.info(f"[CONFIG] Mission timeout set to {timeout_value}s")
 
     def _handle_start_mission(self, _request, response):
         """Handle external mission start trigger."""
@@ -419,7 +465,9 @@ class MissionManager:
             "result": "pending" | "success" | "failure",
             "mission_number": int,
             "distance_to_goal": float,
-            "in_progress": bool
+            "in_progress": bool,
+            "traveled_distance": float,  # meters
+            "elapsed_time": float  # seconds
         }
         """
         import json
@@ -431,11 +479,29 @@ class MissionManager:
             current_dist = self._get_distance_to_goal()
             distance = current_dist if current_dist is not None else -1.0
 
+        # Calculate elapsed time
+        if in_progress and self._mission_start_time is not None:
+            elapsed_time = self._get_current_time_seconds() - self._mission_start_time
+        elif self._last_elapsed_time is not None:
+            elapsed_time = self._last_elapsed_time
+        else:
+            elapsed_time = -1.0
+
+        # Get traveled distance (current if in progress, or final from last mission)
+        if in_progress:
+            traveled_distance = self._traveled_distance
+        elif self._last_traveled_distance is not None:
+            traveled_distance = self._last_traveled_distance
+        else:
+            traveled_distance = self._traveled_distance  # Fallback to current
+
         result_data = {
             "result": self._last_mission_result.value,
             "mission_number": self._current_mission,
             "distance_to_goal": distance,
             "in_progress": in_progress,
+            "traveled_distance": traveled_distance,
+            "elapsed_time": elapsed_time,
         }
 
         response.success = True
@@ -757,6 +823,9 @@ class MissionManager:
 
             logger.info(f"[{self._state.name}] Mission {self._current_mission} initiated successfully")
             self._mission_start_time = self._get_current_time_seconds()
+            # Reset distance tracking for this mission
+            self._traveled_distance = 0.0
+            self._prev_robot_position = self._robot_position
             self._state = MissionState.WAITING_FOR_COMPLETION
 
     def _step_waiting_for_completion(self):
@@ -774,11 +843,13 @@ class MissionManager:
             self._mission_end_time = self._get_current_time_seconds()
             self._last_mission_result = MissionResult.SUCCESS
             self._last_mission_distance = distance
+            self._last_elapsed_time = elapsed
+            self._last_traveled_distance = self._traveled_distance
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[SUCCESS] Mission {self._current_mission} completed! "
                 f"Distance to goal: {distance:.2f}m (tolerance: {self.mission_config.goal_tolerance}m), "
-                f"elapsed: {elapsed:.1f}s"
+                f"elapsed: {elapsed:.1f}s, traveled: {self._traveled_distance:.2f}m"
             )
             return
 
@@ -787,6 +858,8 @@ class MissionManager:
             self._mission_end_time = self._get_current_time_seconds()
             self._last_mission_result = MissionResult.FAILURE_PHYSICALASSISTANCE
             self._last_mission_distance = distance if distance is not None else -1.0
+            self._last_elapsed_time = elapsed
+            self._last_traveled_distance = self._traveled_distance
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_PHYSICALASSISTANCE] Mission {self._current_mission} failed - robot fell down! "
@@ -803,7 +876,7 @@ class MissionManager:
             logger.info(
                 f"[FAILURE_TIMEOUT] Mission {self._current_mission} timed out! "
                 f"Distance to goal: {distance:.2f}m (needed: {self.mission_config.goal_tolerance}m), "
-                f"timeout: {self.mission_config.timeout}s"
+                f"timeout: {self.mission_config.timeout}s, traveled: {self._traveled_distance:.2f}m"
             )
 
     def _cleanup(self):
