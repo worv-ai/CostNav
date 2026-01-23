@@ -7,6 +7,9 @@
 #   NUM_MISSIONS: Number of missions to run (default: 10)
 #
 # Requires: A running nav2 instance (make run-nav2)
+#
+# Controls:
+#   Right Arrow (→): Skip current mission
 
 set -e
 
@@ -21,10 +24,48 @@ LOG_FILE="${LOG_DIR}/nav2_evaluation_${TIMESTAMP}.log"
 # Statistics tracking
 SUCCESSFUL=0
 FAILED=0
+SKIPPED=0
 declare -a MISSION_RESULTS
 declare -a MISSION_START_TIMES
 declare -a MISSION_END_TIMES
 declare -a MISSION_ERRORS
+
+# Terminal settings for non-blocking input
+ORIGINAL_STTY=""
+
+# Save and restore terminal settings
+save_terminal_settings() {
+    ORIGINAL_STTY=$(stty -g 2>/dev/null || true)
+}
+
+restore_terminal_settings() {
+    if [ -n "$ORIGINAL_STTY" ]; then
+        stty "$ORIGINAL_STTY" 2>/dev/null || true
+    fi
+}
+
+# Cleanup on exit
+cleanup() {
+    restore_terminal_settings
+}
+trap cleanup EXIT
+
+# Check for right arrow key press (non-blocking)
+# Returns 0 if right arrow was pressed, 1 otherwise
+check_skip_key() {
+    local key
+    # Read with 0.1s timeout, non-blocking
+    if read -t 0.1 -n 1 key 2>/dev/null; then
+        # Check for escape sequence start
+        if [ "$key" = $'\e' ]; then
+            read -t 0.1 -n 2 key 2>/dev/null || true
+            if [ "$key" = "[C" ]; then
+                return 0  # Right arrow pressed
+            fi
+        fi
+    fi
+    return 1
+}
 
 # Find the running nav2 container (strictly requires costnav-ros2-nav2)
 find_container() {
@@ -84,6 +125,7 @@ parse_result_field() {
 }
 
 # Run a single mission with timeout and result checking
+# Returns 0 for normal completion, 1 for skip requested
 run_mission() {
     local mission_num=$1
     local start_time
@@ -92,11 +134,12 @@ run_mission() {
     local error_msg=""
     local mission_result="FAILED"
     local distance_to_goal=""
+    local was_skipped=false
 
     start_time=$(date +%s.%N)
     MISSION_START_TIMES[$mission_num]=$(date '+%Y-%m-%d %H:%M:%S.%3N')
 
-    log "Mission $mission_num/$NUM_MISSIONS: Starting (timeout: ${TIMEOUT}s)"
+    log "Mission $mission_num/$NUM_MISSIONS: Starting (timeout: ${TIMEOUT}s) [Press → to skip]"
 
     # Call start_mission service
     local service_result
@@ -111,6 +154,14 @@ run_mission() {
         local result_status="pending"
 
         while [ "$elapsed" -lt "$TIMEOUT" ]; do
+            # Check for skip key (right arrow)
+            if check_skip_key; then
+                mission_result="SKIPPED"
+                was_skipped=true
+                log "Mission $mission_num: SKIPPED by user (→ key pressed)"
+                break
+            fi
+
             sleep "$poll_interval"
             elapsed=$((elapsed + poll_interval))
 
@@ -142,7 +193,7 @@ run_mission() {
         done
 
         # If we exited the loop due to our timeout (not mission manager's), mark as failed
-        if [ "$result_status" = "pending" ]; then
+        if [ "$result_status" = "pending" ] && [ "$was_skipped" = false ]; then
             mission_result="FAILED"
             error_msg="Evaluation timeout reached"
             log "Mission $mission_num: Evaluation timeout!"
@@ -161,6 +212,11 @@ run_mission() {
         SUCCESSFUL=$((SUCCESSFUL + 1))
         MISSION_RESULTS[$mission_num]="SUCCESS"
         log "Mission $mission_num: SUCCESS (duration: ${duration}s, distance: ${distance_to_goal}m)"
+    elif [ "$mission_result" = "SKIPPED" ]; then
+        SKIPPED=$((SKIPPED + 1))
+        MISSION_RESULTS[$mission_num]="SKIPPED"
+        MISSION_ERRORS[$mission_num]="Skipped by user"
+        log "Mission $mission_num: SKIPPED (duration: ${duration}s)"
     else
         FAILED=$((FAILED + 1))
         MISSION_RESULTS[$mission_num]="FAILED"
@@ -172,8 +228,9 @@ run_mission() {
 # Generate evaluation summary
 generate_summary() {
     local success_rate
-    if [ "$NUM_MISSIONS" -gt 0 ]; then
-        success_rate=$(echo "scale=2; $SUCCESSFUL * 100 / $NUM_MISSIONS" | bc)
+    local completed_missions=$((NUM_MISSIONS - SKIPPED))
+    if [ "$completed_missions" -gt 0 ]; then
+        success_rate=$(echo "scale=2; $SUCCESSFUL * 100 / $completed_missions" | bc)
     else
         success_rate="0"
     fi
@@ -191,7 +248,8 @@ generate_summary() {
     log_file "Results:"
     log_file "  - Successful missions: $SUCCESSFUL"
     log_file "  - Failed missions: $FAILED"
-    log_file "  - Success rate: ${success_rate}%"
+    log_file "  - Skipped missions: $SKIPPED"
+    log_file "  - Success rate: ${success_rate}% (excluding skipped)"
     log_file ""
     log_file "Per-Mission Results:"
     log_file "------------------------------------------------------------"
@@ -221,6 +279,9 @@ main() {
     # Create log directory if it doesn't exist
     mkdir -p "$LOG_DIR"
 
+    # Save terminal settings for keyboard input
+    save_terminal_settings
+
     # Initialize log file
     log_file "============================================================"
     log_file "NAV2 EVALUATION LOG"
@@ -235,6 +296,7 @@ main() {
     echo "  Timeout:      ${TIMEOUT}s"
     echo "  Missions:     $NUM_MISSIONS"
     echo "  Log file:     $LOG_FILE"
+    echo "  Controls:     Press → (right arrow) to skip mission"
     echo "=============================================="
     echo ""
 
@@ -267,8 +329,9 @@ main() {
 
     # Print final summary to console
     local success_rate
-    if [ "$NUM_MISSIONS" -gt 0 ]; then
-        success_rate=$(echo "scale=2; $SUCCESSFUL * 100 / $NUM_MISSIONS" | bc)
+    local completed_missions=$((NUM_MISSIONS - SKIPPED))
+    if [ "$completed_missions" -gt 0 ]; then
+        success_rate=$(echo "scale=2; $SUCCESSFUL * 100 / $completed_missions" | bc)
     else
         success_rate="0"
     fi
@@ -279,11 +342,11 @@ main() {
     echo "=============================================="
     echo "  Successful: $SUCCESSFUL / $NUM_MISSIONS"
     echo "  Failed:     $FAILED / $NUM_MISSIONS"
-    echo "  Success Rate: ${success_rate}%"
+    echo "  Skipped:    $SKIPPED / $NUM_MISSIONS"
+    echo "  Success Rate: ${success_rate}% (excluding skipped)"
     echo "  Log file:   $LOG_FILE"
     echo "=============================================="
 }
 
 # Run main
 main
-
