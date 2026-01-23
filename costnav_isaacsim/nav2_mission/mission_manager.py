@@ -223,6 +223,7 @@ class MissionManager:
         from rclpy.node import Node
         from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
         from std_srvs.srv import Trigger
+        from std_msgs.msg import Float64
 
         from .mission_result_srv import GetMissionResult
         from .marker_publisher import MarkerPublisher
@@ -241,6 +242,11 @@ class MissionManager:
             # Mission result service
             self._result_service = self._node.create_service(
                 GetMissionResult, "/get_mission_result", self._handle_get_mission_result
+            )
+
+            # Timeout configuration subscriber (allows dynamic timeout setting)
+            self._timeout_sub = self._node.create_subscription(
+                Float64, "/set_mission_timeout", self._handle_set_timeout, 10
             )
 
             # Initialize NavMesh sampler with config values
@@ -366,6 +372,21 @@ class MissionManager:
         rx, ry, _ = self._robot_position
         gx, gy = self._current_goal.x, self._current_goal.y
         return math.sqrt((rx - gx) ** 2 + (ry - gy) ** 2)
+
+    def _handle_set_timeout(self, msg):
+        """Handle dynamic timeout configuration.
+
+        Args:
+            msg: Float64 message with timeout value in seconds.
+                 Use 0 or negative value to disable timeout (infinite).
+        """
+        timeout_value = msg.data
+        if timeout_value <= 0:
+            self.mission_config.timeout = None
+            logger.info("[CONFIG] Mission timeout disabled (infinite)")
+        else:
+            self.mission_config.timeout = timeout_value
+            logger.info(f"[CONFIG] Mission timeout set to {timeout_value}s")
 
     def _handle_start_mission(self, _request, response):
         """Handle external mission start trigger."""

@@ -100,6 +100,12 @@ ros2_exec() {
     " 2>&1
 }
 
+# Set mission timeout via ROS2 topic
+set_mission_timeout() {
+    local timeout_seconds=$1
+    ros2_exec "ros2 topic pub --once /set_mission_timeout std_msgs/msg/Float64 '{data: $timeout_seconds}'" > /dev/null 2>&1
+}
+
 # Call start_mission service and wait for response
 start_mission() {
     local result
@@ -145,6 +151,9 @@ run_mission() {
 
     log "Mission $mission_num/$NUM_MISSIONS: Starting (timeout: ${TIMEOUT}s) [Press → to skip]"
 
+    # Set mission timeout in mission manager before starting
+    set_mission_timeout "$TIMEOUT"
+
     # Call start_mission service
     local service_result
     service_result=$(start_mission 2>&1)
@@ -152,12 +161,27 @@ run_mission() {
     if echo "$service_result" | grep -q "success=True"; then
         log "Mission $mission_num: Started, monitoring for completion..."
 
-        # Poll for mission completion or timeout
+        # Poll for mission completion using wall-clock time
         local poll_interval=1
-        local elapsed=0
         local result_status="pending"
+        local loop_start_time
+        local current_time
+        local wall_elapsed
+        local last_log_time=0
+        loop_start_time=$(date +%s)
 
-        while [ "$elapsed" -lt "$TIMEOUT" ]; do
+        while true; do
+            # Check wall-clock elapsed time
+            current_time=$(date +%s)
+            wall_elapsed=$((current_time - loop_start_time))
+
+            # Safety timeout: allow extra time beyond mission manager timeout for polling overhead
+            # The mission manager handles the actual timeout; this is just a safety net
+            local safety_timeout=$((TIMEOUT + 30))
+            if [ "$wall_elapsed" -ge "$safety_timeout" ]; then
+                break
+            fi
+
             # Check for skip key (right arrow)
             if check_skip_key; then
                 mission_result="SKIPPED"
@@ -167,7 +191,6 @@ run_mission() {
             fi
 
             sleep "$poll_interval"
-            elapsed=$((elapsed + poll_interval))
 
             # Query mission result
             local result_response
@@ -180,7 +203,7 @@ run_mission() {
             traveled_distance=$(parse_result_field "$result_response" "traveled_distance")
             elapsed_time=$(parse_result_field "$result_response" "elapsed_time")
 
-            # Check if mission completed (success or failure)
+            # Check if mission completed (success or failure from mission manager)
             if [ "$result_status" = "success" ]; then
                 mission_result="SUCCESS"
                 log "Mission $mission_num: Goal reached! Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
@@ -192,17 +215,18 @@ run_mission() {
                 break
             fi
 
-            # Log progress every 5 seconds
-            if [ $((elapsed % 5)) -eq 0 ]; then
-                log "Mission $mission_num: In progress... (${elapsed}s elapsed, distance_to_goal: ${distance_to_goal}m, traveled: ${traveled_distance}m)"
+            # Log progress every 5 seconds (wall-clock time)
+            if [ $((wall_elapsed - last_log_time)) -ge 5 ]; then
+                log "Mission $mission_num: In progress... (${wall_elapsed}s elapsed, distance_to_goal: ${distance_to_goal}m, traveled: ${traveled_distance}m)"
+                last_log_time=$wall_elapsed
             fi
         done
 
-        # If we exited the loop due to our timeout (not mission manager's), mark as failed
+        # If we exited due to safety timeout without mission manager response
         if [ "$result_status" = "pending" ] && [ "$was_skipped" = false ]; then
             mission_result="FAILED"
-            error_msg="Evaluation timeout reached"
-            log "Mission $mission_num: Evaluation timeout!"
+            error_msg="Safety timeout reached (mission manager may be unresponsive)"
+            log "Mission $mission_num: Safety timeout!"
         fi
     else
         error_msg="Service call failed: $service_result"
