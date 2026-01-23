@@ -4,7 +4,7 @@
 
 **Status:** ✅ Nav2 Integration Complete | ✅ Mission Orchestration Complete | ⏳ Parameter Tuning In Progress
 **Target Version:** CostNav v0.2.0
-**Last Updated:** 2025-12-12
+**Last Updated:** 2026-01-23
 
 ---
 
@@ -26,12 +26,29 @@
 ### ⏳ In Progress
 
 1. **Parameter Tuning**: Optimizing Nav2 parameters for both Nova Carter and Segway E1 performance
+   - **Known Issue**: Segway E1 cannot spin in place - requires investigation and parameter adjustment
 2. **Cost Model Integration**: Track economic metrics for Nav2 navigation
 
 ### 📋 Future Work
 
 - **Hybrid RL+Nav2**: Combine learning-based and rule-based approaches
 - **Multi-Robot Navigation**: Extend to support multiple robots simultaneously
+
+### ⚠️ Known Issues
+
+1. **Segway E1 Spin-in-Place Problem**
+   - **Description**: The Segway E1 robot cannot perform in-place rotation maneuvers
+   - **Impact**: Affects navigation in tight spaces and goal orientation alignment
+   - **Status**: Under investigation
+   - **Potential Causes**:
+     - Controller parameters may need adjustment for differential drive kinematics
+     - Rotation velocity limits may be too conservative
+     - Local planner configuration may not support zero-radius turns
+   - **Next Steps**:
+     - Review DWB controller parameters (min_vel_theta, max_vel_theta)
+     - Test rotation recovery behavior configuration
+     - Compare with Nova Carter rotation parameters
+     - Validate robot kinematic constraints in URDF/controller config
 
 ---
 
@@ -40,6 +57,7 @@
 This document outlines the Nav2 integration for CostNav, following NVIDIA's official [Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html).
 
 **Supported Robots:**
+
 - **Nova Carter** (NVIDIA's reference platform) - ✅ Complete
 - **Segway E1** (Delivery robot) - ✅ Complete
 
@@ -191,10 +209,10 @@ CostNav supports multiple robots for Nav2 navigation. Use the `SIM_ROBOT` enviro
 
 ### Supported Robots
 
-| Robot | Value | Status | Description |
-|-------|-------|--------|-------------|
+| Robot       | Value         | Status      | Description                                        |
+| ----------- | ------------- | ----------- | -------------------------------------------------- |
 | Nova Carter | `nova_carter` | ✅ Complete | NVIDIA's reference platform with full sensor suite |
-| Segway E1 | `segway_e1` | ✅ Complete | Delivery robot for urban navigation |
+| Segway E1   | `segway_e1`   | ✅ Complete | Delivery robot for urban navigation                |
 
 ### Configuration Structure
 
@@ -219,6 +237,7 @@ nav2_params/
 ### Switching Between Robots
 
 **Option 1: Environment Variable**
+
 ```bash
 # Use Nova Carter (default)
 make run-nav2
@@ -228,18 +247,21 @@ SIM_ROBOT=segway_e1 make run-nav2
 ```
 
 **Option 2: Set in `.env` file**
+
 ```bash
 # Add to .env file
 SIM_ROBOT=segway_e1
 ```
 
 **Option 3: Docker Compose Override**
+
 ```bash
 # Use Segway E1
 docker compose --profile nav2 up -e SIM_ROBOT=segway_e1
 ```
 
 The `SIM_ROBOT` variable automatically selects:
+
 - Robot-specific navigation parameters (`/workspace/nav2_params/${SIM_ROBOT}/navigation_params.yaml`)
 - Robot-specific RViz configuration (`/workspace/nav2_params/${SIM_ROBOT}/navigation.rviz`)
 - Robot-specific teleop RViz configuration (`/workspace/nav2_params/${SIM_ROBOT}/navigation_teleop.rviz`)
@@ -484,14 +506,14 @@ Mission parameters are configured via YAML file at `config/mission_config.yaml`:
 
 ```yaml
 mission:
-  timeout: 3600.0   # Mission timeout (seconds)
+  timeout: 3600.0 # Mission timeout (seconds)
 
 distance:
-  min: 5.0          # Minimum start-goal distance (meters)
-  max: 50.0         # Maximum start-goal distance (meters)
+  min: 5.0 # Minimum start-goal distance (meters)
+  max: 50.0 # Maximum start-goal distance (meters)
 
 nav2:
-  wait_time: 10.0   # Wait for Nav2 stack to initialize
+  wait_time: 10.0 # Wait for Nav2 stack to initialize
 
 teleport:
   robot_prim: "/World/Nova_Carter_ROS"
@@ -529,11 +551,11 @@ python launch.py --mission-timeout 600 --min-distance 10
 
 #### RViz Marker Topics
 
-| Topic          | Color | Description                    |
-| -------------- | ----- | ------------------------------ |
-| `/start_marker`| Green | Start position (ARROW marker)  |
-| `/goal_marker` | Red   | Goal position (ARROW marker)   |
-| `/robot_marker`| Blue  | Current robot position (10 Hz) |
+| Topic           | Color | Description                    |
+| --------------- | ----- | ------------------------------ |
+| `/start_marker` | Green | Start position (ARROW marker)  |
+| `/goal_marker`  | Red   | Goal position (ARROW marker)   |
+| `/robot_marker` | Blue  | Current robot position (10 Hz) |
 
 ---
 
@@ -830,14 +852,15 @@ nav2_metrics = {
 
 ## Document History
 
-| Version | Date       | Author       | Changes                                                                                                    |
-| ------- | ---------- | ------------ | ---------------------------------------------------------------------------------------------------------- |
-| 0.1     | 2025-11-21 | CostNav Team | Initial draft                                                                                              |
-| 0.2     | 2025-11-21 | CostNav Team | Updated with multi-container architecture and official Isaac Sim Nav2 tutorial references                  |
-| 1.0     | 2025-12-10 | CostNav Team | Updated to reflect completed Nav2 integration with Nova Carter, removed network config, updated priorities |
-| 1.1     | 2025-12-12 | CostNav Team | Week 3 complete: Added nav2_mission module with NavMesh sampling, RViz markers, mission orchestration, integrated launch |
-| 1.2     | 2025-12-12 | CostNav Team | Refactored to use YAML config file (config/mission_config.yaml), added MissionRunner, separated config module |
+| Version | Date       | Author       | Changes                                                                                                                                                           |
+| ------- | ---------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0.1     | 2025-11-21 | CostNav Team | Initial draft                                                                                                                                                     |
+| 0.2     | 2025-11-21 | CostNav Team | Updated with multi-container architecture and official Isaac Sim Nav2 tutorial references                                                                         |
+| 1.0     | 2025-12-10 | CostNav Team | Updated to reflect completed Nav2 integration with Nova Carter, removed network config, updated priorities                                                        |
+| 1.1     | 2025-12-12 | CostNav Team | Week 3 complete: Added nav2_mission module with NavMesh sampling, RViz markers, mission orchestration, integrated launch                                          |
+| 1.2     | 2025-12-12 | CostNav Team | Refactored to use YAML config file (config/mission_config.yaml), added MissionRunner, separated config module                                                     |
 | 1.3     | 2026-01-22 | CostNav Team | Added Segway E1 robot support with SIM_ROBOT environment variable for dynamic robot selection, robot-specific parameter files, and shared map directory structure |
+| 1.4     | 2026-01-23 | CostNav Team | Documented known issue: Segway E1 cannot spin in place, added troubleshooting section and investigation steps                                                     |
 
 ---
 
