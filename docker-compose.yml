@@ -182,10 +182,10 @@ services:
                ros2 launch /workspace/nav2_params/nav2.launch.py"
 
   # ROS2 with RViz - standalone visualization service that runs alongside Isaac Sim
-  ros2-rviz:
+  ros2-rviz-nav2:
     <<: *ros2-service
     profiles: [ "isaac-sim", "nav2" ]
-    container_name: costnav-ros2-rviz
+    container_name: costnav-ros2-rviz-nav2
     depends_on:
       isaac-sim:
         condition: service_healthy
