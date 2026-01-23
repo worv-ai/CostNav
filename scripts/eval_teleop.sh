@@ -376,7 +376,7 @@ main() {
         success_rate="0"
     fi
 
-    # Calculate averages for console output
+    # Calculate averages for console output (excluding skipped)
     local total_distance=0
     local total_time=0
     local count=0
@@ -398,6 +398,28 @@ main() {
         avg_time=$(echo "scale=2; $total_time / $count" | bc)
     fi
 
+    # Calculate averages including skipped
+    local total_distance_all=0
+    local total_time_all=0
+    local count_all=0
+    for i in $(seq 1 $NUM_MISSIONS); do
+        local result="${MISSION_RESULTS[$i]:-N/A}"
+        if [ "$result" != "N/A" ]; then
+            local dist="${MISSION_TRAVELED_DISTANCES[$i]:-0}"
+            local time="${MISSION_ELAPSED_TIMES[$i]:-0}"
+            total_distance_all=$(echo "$total_distance_all + $dist" | bc)
+            total_time_all=$(echo "$total_time_all + $time" | bc)
+            count_all=$((count_all + 1))
+        fi
+    done
+
+    local avg_distance_all="0"
+    local avg_time_all="0"
+    if [ "$count_all" -gt 0 ]; then
+        avg_distance_all=$(echo "scale=2; $total_distance_all / $count_all" | bc)
+        avg_time_all=$(echo "scale=2; $total_time_all / $count_all" | bc)
+    fi
+
     echo ""
     echo "=============================================="
     echo "  Evaluation Complete"
@@ -408,6 +430,8 @@ main() {
     echo "  Success Rate: ${success_rate}% (excluding skipped)"
     echo "  Avg Distance: ${avg_distance}m (excluding skipped)"
     echo "  Avg Time:     ${avg_time}s (excluding skipped)"
+    echo "  Avg Distance: ${avg_distance_all}m (including skipped)"
+    echo "  Avg Time:     ${avg_time_all}s (including skipped)"
     echo "  Log file:   $LOG_FILE"
     echo "=============================================="
 }
