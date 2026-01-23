@@ -17,7 +17,7 @@ distance:
   min: 20.0
 
   # Maximum distance between start and goal positions
-  max: 250.0
+  max: 1000.0
 
 # Nav2 integration settings
 nav2:
