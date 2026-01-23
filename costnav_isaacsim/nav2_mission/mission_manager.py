@@ -491,90 +491,125 @@ class MissionManager:
             logger.error(f"[FOOD] Error counting food pieces: {e}")
             return 0
 
-    def _setup_food_tracking(self) -> None:
-        """Setup food tracking by spawning the food USD asset and configuring paths.
+    def _get_robot_z_offset(self) -> Optional[float]:
+        """Get the robot-specific z offset for positioning.
 
-        Spawns the food USD asset as a reference at the configured prim path,
-        then constructs full prim paths for the food pieces and bucket.
+        This offset is used for both robot teleportation and food positioning
+        to ensure consistent height placement above the ground.
 
-        Robot-specific positioning:
-        - segway_e1: Spawns food with z offset of 0.33 (bucket height on Segway)
-        - Other robots: Not yet implemented (placeholder for future support)
+        Returns:
+            Z offset in meters, or None if robot not supported.
+
+        Robot-specific offsets:
+        - segway_e1: 0.33m
+        - nova_carter: Uses config teleport.height_offset (default behavior)
+        - Other robots: Not yet implemented
         """
-        if not self.mission_config.food.enabled:
-            return
-
-        food_config = self.mission_config.food
-        base_path = food_config.prim_path.rstrip("/")
-
-        # Determine robot type and z_offset from robot_prim path
         robot_prim = self.mission_config.teleport.robot_prim.lower()
 
         if "segway" in robot_prim:
-            z_offset = 0.33  # Segway E1 bucket height offset
+            return 0.33  # Segway E1 height offset
         elif "nova_carter" in robot_prim:
-            # TODO: Implement food spawning for Nova Carter
-            # 1. Determine the appropriate z_offset for Nova Carter's carrying position
-            # 2. Optionally attach the food to a specific prim on the robot
-            # 3. Adjust pieces_prim_path and bucket_prim_path if using different food assets
-            logger.warning(
-                f"[FOOD] Food spawning not implemented for Nova Carter. "
-                f"Disabling food tracking."
-            )
-            self.mission_config.food.enabled = False
-            return
+            # Nova Carter uses the config teleport.height_offset
+            return self.config.teleport_height
         else:
-            # TODO: Implement food spawning for other robots
-            # 1. Determine the appropriate z_offset for the robot's carrying position
-            # 2. Optionally attach the food to a specific prim on the robot
-            # 3. Adjust pieces_prim_path and bucket_prim_path if using different food assets
+            # Other robots: return None to indicate not supported for food
+            # but teleportation can still use config value
+            return None
+
+    def _spawn_food_at_position(
+        self, x: float = 0.0, y: float = 0.0, z: float = 0.0, remove_existing: bool = False
+    ) -> bool:
+        """Spawn food USD asset at the specified position.
+
+        This is the internal method used by both _setup_food_tracking and
+        _reset_food_for_teleport to spawn or respawn the food asset.
+
+        Args:
+            x: X position in world coordinates.
+            y: Y position in world coordinates.
+            z: Z position in world coordinates (z_offset will be added).
+            remove_existing: If True, remove existing food prim before spawning.
+
+        Returns:
+            True if food was successfully spawned, False otherwise.
+        """
+        food_config = self.mission_config.food
+        base_path = food_config.prim_path.rstrip("/")
+
+        z_offset = self._get_robot_z_offset()
+        if z_offset is None:
+            # Robot not supported for food spawning
+            robot_prim = self.mission_config.teleport.robot_prim.lower()
             logger.warning(
                 f"[FOOD] Food spawning not implemented for robot: {robot_prim}. "
                 f"Currently only segway_e1 is supported. Disabling food tracking."
             )
             self.mission_config.food.enabled = False
-            return
+            return False
 
-        # Spawn the food USD asset
         try:
             import omni.usd
             from pxr import Gf, UsdGeom
 
             stage = omni.usd.get_context().get_stage()
 
-            # Check if food prim already exists
+            # Remove existing food prim if requested
+            if remove_existing:
+                food_prim = stage.GetPrimAtPath(base_path)
+                if food_prim.IsValid():
+                    stage.RemovePrim(base_path)
+                    logger.info(f"[FOOD] Removed existing food prim at: {base_path}")
+
+            # Check if food prim already exists (if not removing)
             food_prim = stage.GetPrimAtPath(base_path)
-            if not food_prim.IsValid():
-                # Create Xform prim and add USD reference
-                food_prim = stage.DefinePrim(base_path, "Xform")
-                if not food_prim.IsValid():
-                    logger.error(f"[FOOD] Failed to create prim at: {base_path}")
-                    return
-
-                # Add reference to the food USD asset
-                success = food_prim.GetReferences().AddReference(food_config.usd_path)
-                if not success:
-                    logger.error(
-                        f"[FOOD] Failed to add USD reference: {food_config.usd_path}"
-                    )
-                    return
-
-                # Apply robot-specific z offset
-                xformable = UsdGeom.Xformable(food_prim)
-                xformable.ClearXformOpOrder()
-                translate_op = xformable.AddTranslateOp()
-                translate_op.Set(Gf.Vec3d(0.0, 0.0, z_offset))
-
-                logger.info(f"[FOOD] Spawned food asset from: {food_config.usd_path}")
-                logger.info(f"[FOOD] Spawned at prim path: {base_path} with z_offset: {z_offset}")
-            else:
+            if food_prim.IsValid():
                 logger.info(f"[FOOD] Food prim already exists at: {base_path}")
+                return True
+
+            # Create Xform prim and add USD reference
+            food_prim = stage.DefinePrim(base_path, "Xform")
+            if not food_prim.IsValid():
+                logger.error(f"[FOOD] Failed to create prim at: {base_path}")
+                return False
+
+            # Add reference to the food USD asset
+            success = food_prim.GetReferences().AddReference(food_config.usd_path)
+            if not success:
+                logger.error(f"[FOOD] Failed to add USD reference: {food_config.usd_path}")
+                return False
+
+            # Apply position with robot-specific z offset
+            final_z = z + z_offset
+            xformable = UsdGeom.Xformable(food_prim)
+            xformable.ClearXformOpOrder()
+            translate_op = xformable.AddTranslateOp()
+            translate_op.Set(Gf.Vec3d(x, y, final_z))
+
+            logger.info(f"[FOOD] Spawned food asset from: {food_config.usd_path}")
+            logger.info(f"[FOOD] Position: ({x:.2f}, {y:.2f}, {final_z:.2f})")
+            return True
 
         except Exception as e:
             logger.error(f"[FOOD] Error spawning food asset: {e}")
+            return False
+
+    def _setup_food_tracking(self) -> None:
+        """Setup food tracking by spawning the food USD asset and configuring paths.
+
+        Spawns the food USD asset as a reference at the configured prim path,
+        then constructs full prim paths for the food pieces and bucket.
+        """
+        if not self.mission_config.food.enabled:
+            return
+
+        # Spawn food at origin (will be repositioned on first teleport)
+        if not self._spawn_food_at_position(x=0.0, y=0.0, z=0.0):
             return
 
         # Setup prim paths for tracking
+        food_config = self.mission_config.food
+        base_path = food_config.prim_path.rstrip("/")
         self._food_pieces_prim_path = f"{base_path}/{food_config.pieces_prim_path}"
         self._food_bucket_prim_path = f"{base_path}/{food_config.bucket_prim_path}"
 
@@ -608,6 +643,30 @@ class MissionManager:
         )
 
         return loss_fraction > self.mission_config.food.spoilage_threshold
+
+    def _reset_food_for_teleport(self, robot_position) -> bool:
+        """Reset food by removing and respawning at robot's new position.
+
+        When the robot teleports to a new start position, the food (e.g., popcorn bucket)
+        must be repositioned to match. Simply teleporting the food doesn't work well
+        because physics state of the pieces needs to be reset. This method removes
+        the existing food prim and respawns it at the robot's new location.
+
+        Args:
+            robot_position: The robot's new position (SampledPosition with x, y, z).
+
+        Returns:
+            True if food was successfully reset, False otherwise.
+        """
+        if not self.mission_config.food.enabled:
+            return True
+
+        return self._spawn_food_at_position(
+            x=robot_position.x,
+            y=robot_position.y,
+            z=robot_position.z,
+            remove_existing=True,
+        )
 
     def _handle_set_timeout(self, msg):
         """Handle dynamic timeout configuration.
@@ -851,11 +910,16 @@ class MissionManager:
             # Import here to avoid circular dependency
             from .navmesh_sampler import SampledPosition
 
+            # Get robot-specific z offset, fall back to config value if not supported
+            z_offset = self._get_robot_z_offset()
+            if z_offset is None:
+                z_offset = self.config.teleport_height
+
             # Add height offset for teleportation
             teleport_pos = SampledPosition(
                 x=position.x,
                 y=position.y,
-                z=position.z + self.config.teleport_height,
+                z=position.z + z_offset,
                 heading=position.heading,
             )
             success = self._teleport_callback(teleport_pos)
@@ -974,11 +1038,16 @@ class MissionManager:
         self._state = MissionState.TELEPORTING
 
     def _step_teleporting(self):
-        """Teleport robot to start position."""
+        """Teleport robot to start position and reset food."""
         if not self._teleport_robot(self._current_start):
             logger.error(f"[{self._state.name}] Teleportation failed, skipping mission")
             self._state = MissionState.READY
             return
+
+        # Reset food at robot's new position (remove and respawn)
+        if self.mission_config.food.enabled:
+            if not self._reset_food_for_teleport(self._current_start):
+                logger.warning(f"[{self._state.name}] Food reset failed, continuing without food tracking")
 
         # After teleportation, we need to settle physics
         self._settle_steps_remaining = self.config.teleport_settle_steps
