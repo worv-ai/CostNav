@@ -414,7 +414,7 @@ class MissionManager:
         tilt_angle = math.acos(min(1.0, max(-1.0, gz_body_z)))
 
         return tilt_angle > limit_angle
-    
+
     def _handle_set_timeout(self, msg):
         """Handle dynamic timeout configuration.
 
