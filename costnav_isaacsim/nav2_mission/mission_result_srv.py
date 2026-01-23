@@ -6,11 +6,17 @@ in the response message field.
 
 Response format (JSON in message field):
 {
-    "result": "pending" | "success" | "failure",
+    "result": "pending" | "success" | "failure_timeout" | "failure_physicalassistance",
     "mission_number": int,
     "distance_to_goal": float,
     "in_progress": bool
 }
+
+Result values:
+- "pending": Mission not yet started or in progress
+- "success": Robot reached goal within tolerance
+- "failure_timeout": Timeout reached before reaching goal
+- "failure_physicalassistance": Robot fell down (bad orientation, requires physical assistance)
 """
 
 from std_srvs.srv import Trigger

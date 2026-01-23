@@ -208,10 +208,10 @@ run_mission() {
                 mission_result="SUCCESS"
                 log "Mission $mission_num: Goal reached! Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
                 break
-            elif [ "$result_status" = "failure" ]; then
+            elif [[ "$result_status" == failure_* ]]; then
                 mission_result="FAILED"
-                error_msg="Timeout - distance to goal: ${distance_to_goal}m"
-                log "Mission $mission_num: Timeout! Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
+                error_msg="${result_status} - distance to goal: ${distance_to_goal}m"
+                log "Mission $mission_num: ${result_status}! Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
                 break
             fi
 

@@ -62,7 +62,8 @@ class MissionResult(Enum):
 
     PENDING = "pending"  # Mission not yet started or in progress
     SUCCESS = "success"  # Robot reached goal within tolerance
-    FAILURE = "failure"  # Timeout reached before reaching goal
+    FAILURE_TIMEOUT = "failure_timeout"  # Timeout reached before reaching goal
+    FAILURE_PHYSICALASSISTANCE = "failure_physicalassistance"  # Robot fell down (bad orientation)
 
 
 class MissionManager:
@@ -162,6 +163,7 @@ class MissionManager:
 
         # Robot position tracking (from odom)
         self._robot_position = None  # (x, y, z) tuple
+        self._robot_orientation = None  # (x, y, z, w) quaternion tuple
         self._prev_robot_position = None  # Previous position for distance tracking
 
         # Mission result tracking
@@ -346,8 +348,13 @@ class MissionManager:
         self._last_elapsed_time = None
 
     def _odom_callback(self, msg) -> None:
-        """Handle odometry messages for robot position tracking and distance accumulation."""
+        """Handle odometry messages for robot position and orientation tracking."""
         pos = msg.pose.pose.position
+        self._robot_position = (pos.x, pos.y, pos.z)
+        orient = msg.pose.pose.orientation
+        self._robot_orientation = (orient.x, orient.y, orient.z, orient.w)
+
+        """Handle odometry messages for robot position tracking and distance accumulation."""
         new_position = (pos.x, pos.y, pos.z)
 
         # Accumulate traveled distance during active mission
@@ -374,6 +381,39 @@ class MissionManager:
         rx, ry, _ = self._robot_position
         gx, gy = self._current_goal.x, self._current_goal.y
         return math.sqrt((rx - gx) ** 2 + (ry - gy) ** 2)
+
+    def _is_robot_fallen(self, limit_angle: float = 0.5) -> bool:
+        """Check if the robot has fallen based on orientation.
+
+        This checks if the robot's orientation deviates too much from upright.
+        It computes the angle between the robot's up vector (z-axis in body frame)
+        and the world up vector (gravity direction).
+
+        Args:
+            limit_angle: Maximum allowed tilt angle in radians (default: ~28.6 degrees).
+                        If the robot tilts beyond this, it's considered fallen.
+
+        Returns:
+            True if the robot has fallen, False otherwise.
+        """
+        if self._robot_orientation is None:
+            return False
+
+        qx, qy, _qz, _qw = self._robot_orientation
+
+        # Compute the z-component of the body z-axis projected to world z
+        # For a quaternion (qx, qy, qz, qw), this is:
+        # gz_body_z = 1 - 2 * (qx*qx + qy*qy)
+        # When robot is upright: gz_body_z = 1, tilt_angle = 0
+        # When robot is tilted 90°: gz_body_z = 0, tilt_angle = π/2
+        # When robot is upside down: gz_body_z = -1, tilt_angle = π
+        gz_body_z = 1.0 - 2.0 * (qx * qx + qy * qy)
+
+        # Compute tilt angle from upright (angle between body z and world z)
+        # gz_body_z is the cosine of the tilt angle
+        tilt_angle = math.acos(min(1.0, max(-1.0, gz_body_z)))
+
+        return tilt_angle > limit_angle
 
     def _handle_set_timeout(self, msg):
         """Handle dynamic timeout configuration.
@@ -789,10 +829,11 @@ class MissionManager:
             self._state = MissionState.WAITING_FOR_COMPLETION
 
     def _step_waiting_for_completion(self):
-        """Wait for goal completion or timeout.
+        """Wait for goal completion, timeout, or robot fall.
 
         Success: Robot within goal_tolerance of goal position.
-        Failure: Timeout reached before reaching goal.
+        Failure (timeout): Timeout reached before reaching goal.
+        Failure (physical assistance): Robot fell down (bad orientation).
         """
         elapsed = self._get_current_time_seconds() - self._mission_start_time
         distance = self._get_distance_to_goal()
@@ -812,16 +853,28 @@ class MissionManager:
             )
             return
 
-        # Check for timeout (failure)
-        if self.mission_config.timeout is not None and elapsed >= self.mission_config.timeout:
+        # Check for robot fall (requires physical assistance)
+        if self._is_robot_fallen():
             self._mission_end_time = self._get_current_time_seconds()
-            self._last_mission_result = MissionResult.FAILURE
+            self._last_mission_result = MissionResult.FAILURE_PHYSICALASSISTANCE
             self._last_mission_distance = distance if distance is not None else -1.0
             self._last_elapsed_time = elapsed
             self._last_traveled_distance = self._traveled_distance
             self._state = MissionState.WAITING_FOR_START
             logger.info(
-                f"[FAILURE] Mission {self._current_mission} timed out! "
+                f"[FAILURE_PHYSICALASSISTANCE] Mission {self._current_mission} failed - robot fell down! "
+                f"Distance to goal: {distance:.2f}m, elapsed: {elapsed:.1f}s"
+            )
+            return
+
+        # Check for timeout (failure)
+        if self.mission_config.timeout is not None and elapsed >= self.mission_config.timeout:
+            self._mission_end_time = self._get_current_time_seconds()
+            self._last_mission_result = MissionResult.FAILURE_TIMEOUT
+            self._last_mission_distance = distance if distance is not None else -1.0
+            self._state = MissionState.WAITING_FOR_START
+            logger.info(
+                f"[FAILURE_TIMEOUT] Mission {self._current_mission} timed out! "
                 f"Distance to goal: {distance:.2f}m (needed: {self.mission_config.goal_tolerance}m), "
                 f"timeout: {self.mission_config.timeout}s, traveled: {self._traveled_distance:.2f}m"
             )
