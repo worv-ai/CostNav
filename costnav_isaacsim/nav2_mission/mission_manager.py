@@ -170,6 +170,7 @@ class MissionManager:
 
         # Mission metrics tracking
         self._traveled_distance = 0.0  # Cumulative distance traveled (meters)
+        self._last_traveled_distance = None  # Final traveled distance for last mission (meters)
         self._last_elapsed_time = None  # Elapsed time for last mission (seconds)
 
     def _get_current_time_seconds(self) -> float:
@@ -341,6 +342,7 @@ class MissionManager:
         self._last_mission_distance = None
         self._traveled_distance = 0.0
         self._prev_robot_position = None
+        self._last_traveled_distance = None
         self._last_elapsed_time = None
 
     def _odom_callback(self, msg) -> None:
@@ -445,8 +447,13 @@ class MissionManager:
         else:
             elapsed_time = -1.0
 
-        # Get traveled distance (current or final)
-        traveled_distance = self._traveled_distance
+        # Get traveled distance (current if in progress, or final from last mission)
+        if in_progress:
+            traveled_distance = self._traveled_distance
+        elif self._last_traveled_distance is not None:
+            traveled_distance = self._last_traveled_distance
+        else:
+            traveled_distance = self._traveled_distance  # Fallback to current
 
         result_data = {
             "result": self._last_mission_result.value,
@@ -796,6 +803,7 @@ class MissionManager:
             self._last_mission_result = MissionResult.SUCCESS
             self._last_mission_distance = distance
             self._last_elapsed_time = elapsed
+            self._last_traveled_distance = self._traveled_distance
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[SUCCESS] Mission {self._current_mission} completed! "
@@ -810,6 +818,7 @@ class MissionManager:
             self._last_mission_result = MissionResult.FAILURE
             self._last_mission_distance = distance if distance is not None else -1.0
             self._last_elapsed_time = elapsed
+            self._last_traveled_distance = self._traveled_distance
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE] Mission {self._current_mission} timed out! "
