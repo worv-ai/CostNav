@@ -644,16 +644,13 @@ class MissionManager:
 
         return loss_fraction > self.mission_config.food.spoilage_threshold
 
-    def _reset_food_for_teleport(self, robot_position) -> bool:
-        """Reset food by removing and respawning at robot's new position.
+    def _reset_food_for_teleport(self) -> bool:
+        """Reset food by removing and respawning at robot's current position.
 
-        When the robot teleports to a new start position, the food (e.g., popcorn bucket)
-        must be repositioned to match. Simply teleporting the food doesn't work well
-        because physics state of the pieces needs to be reset. This method removes
-        the existing food prim and respawns it at the robot's new location.
-
-        Args:
-            robot_position: The robot's new position (SampledPosition with x, y, z).
+        When the robot teleports to a new start position and settles, the food
+        (e.g., popcorn bucket) must be repositioned to match. This method reads
+        the robot's actual position from its prim (base_link or chassis_link)
+        and spawns the food at that location.
 
         Returns:
             True if food was successfully reset, False otherwise.
@@ -661,12 +658,40 @@ class MissionManager:
         if not self.mission_config.food.enabled:
             return True
 
-        return self._spawn_food_at_position(
-            x=robot_position.x,
-            y=robot_position.y,
-            z=robot_position.z,
-            remove_existing=True,
-        )
+        # Get robot's actual position from its prim after settling
+        try:
+            import omni.usd
+            from pxr import UsdGeom
+
+            stage = omni.usd.get_context().get_stage()
+            robot_prim_path = self.mission_config.teleport.robot_prim
+            robot_prim = stage.GetPrimAtPath(robot_prim_path)
+
+            if not robot_prim.IsValid():
+                logger.error(f"[FOOD] Robot prim not found: {robot_prim_path}")
+                return False
+
+            # Get robot's world transform
+            xformable = UsdGeom.Xformable(robot_prim)
+            world_transform = xformable.ComputeLocalToWorldTransform(0)
+            robot_pos = world_transform.ExtractTranslation()
+
+            logger.info(
+                f"[FOOD] Robot position from prim: "
+                f"({robot_pos[0]:.2f}, {robot_pos[1]:.2f}, {robot_pos[2]:.2f})"
+            )
+
+            # Spawn food at robot's actual position (z_offset will be added)
+            return self._spawn_food_at_position(
+                x=robot_pos[0],
+                y=robot_pos[1],
+                z=robot_pos[2],
+                remove_existing=True,
+            )
+
+        except Exception as e:
+            logger.error(f"[FOOD] Error getting robot position: {e}")
+            return False
 
     def _handle_set_timeout(self, msg):
         """Handle dynamic timeout configuration.
@@ -1038,18 +1063,13 @@ class MissionManager:
         self._state = MissionState.TELEPORTING
 
     def _step_teleporting(self):
-        """Teleport robot to start position and reset food."""
+        """Teleport robot to start position."""
         if not self._teleport_robot(self._current_start):
             logger.error(f"[{self._state.name}] Teleportation failed, skipping mission")
             self._state = MissionState.READY
             return
 
-        # Reset food at robot's new position (remove and respawn)
-        if self.mission_config.food.enabled:
-            if not self._reset_food_for_teleport(self._current_start):
-                logger.warning(f"[{self._state.name}] Food reset failed, continuing without food tracking")
-
-        # After teleportation, we need to settle physics
+        # After teleportation, we need to settle physics before spawning food
         self._settle_steps_remaining = self.config.teleport_settle_steps
         self._state = MissionState.SETTLING
         logger.info(f"[SETTLING] Teleportation complete, settling physics for {self._settle_steps_remaining} steps")
@@ -1060,13 +1080,22 @@ class MissionManager:
         This is critical: after XFormPrim.set_world_pose(), we must step the
         simulation multiple times to allow the physics engine to process the
         new pose and update all internal states.
+
+        After settling, food is spawned at the robot's position.
         """
         if self._settle_steps_remaining > 0:
             # Simulation step is already called in main loop before this
             # We just count down the steps
             self._settle_steps_remaining -= 1
             if self._settle_steps_remaining == 0:
-                logger.info(f"[{self._state.name}] Physics settled, publishing initial pose")
+                logger.info(f"[{self._state.name}] Physics settled")
+
+                # Spawn food at robot's actual position after robot has settled
+                if self.mission_config.food.enabled:
+                    if not self._reset_food_for_teleport():
+                        logger.warning(f"[{self._state.name}] Food reset failed, continuing without food tracking")
+
+                logger.info(f"[{self._state.name}] Publishing initial pose")
                 self._state = MissionState.PUBLISHING_INITIAL_POSE
 
     def _step_publishing_initial_pose(self):

@@ -88,7 +88,7 @@ food:
   prim_path: "/World/Food"
 
   # Relative path to the pieces prim under food prim
-  pieces_prim_path: "PopcornBucket/PopcornPieces"
+  pieces_prim_path: "PopcornPieces"
 
   # Relative path to the bucket/container prim under food prim
   bucket_prim_path: "PopcornBucket"
