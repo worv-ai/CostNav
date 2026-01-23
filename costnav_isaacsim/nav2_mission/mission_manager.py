@@ -162,10 +162,15 @@ class MissionManager:
 
         # Robot position tracking (from odom)
         self._robot_position = None  # (x, y, z) tuple
+        self._prev_robot_position = None  # Previous position for distance tracking
 
         # Mission result tracking
         self._last_mission_result = MissionResult.PENDING
         self._last_mission_distance = None  # Distance to goal at end
+
+        # Mission metrics tracking
+        self._traveled_distance = 0.0  # Cumulative distance traveled (meters)
+        self._last_elapsed_time = None  # Elapsed time for last mission (seconds)
 
     def _get_current_time_seconds(self) -> float:
         """Get current time in seconds from ROS clock.
@@ -328,11 +333,26 @@ class MissionManager:
         self._settle_steps_remaining = 0
         self._last_mission_result = MissionResult.PENDING
         self._last_mission_distance = None
+        self._traveled_distance = 0.0
+        self._prev_robot_position = None
+        self._last_elapsed_time = None
 
     def _odom_callback(self, msg) -> None:
-        """Handle odometry messages for robot position tracking."""
+        """Handle odometry messages for robot position tracking and distance accumulation."""
         pos = msg.pose.pose.position
-        self._robot_position = (pos.x, pos.y, pos.z)
+        new_position = (pos.x, pos.y, pos.z)
+
+        # Accumulate traveled distance during active mission
+        if self._state == MissionState.WAITING_FOR_COMPLETION and self._prev_robot_position is not None:
+            dx = new_position[0] - self._prev_robot_position[0]
+            dy = new_position[1] - self._prev_robot_position[1]
+            step_distance = math.sqrt(dx * dx + dy * dy)
+            # Only accumulate reasonable movements (filter out noise and teleportation)
+            if step_distance < 1.0:  # Max 1m per odom update (reasonable for robot)
+                self._traveled_distance += step_distance
+
+        self._prev_robot_position = new_position
+        self._robot_position = new_position
 
     def _get_distance_to_goal(self) -> Optional[float]:
         """Calculate distance from robot to goal.
@@ -382,7 +402,9 @@ class MissionManager:
             "result": "pending" | "success" | "failure",
             "mission_number": int,
             "distance_to_goal": float,
-            "in_progress": bool
+            "in_progress": bool,
+            "traveled_distance": float,  # meters
+            "elapsed_time": float  # seconds
         }
         """
         import json
@@ -394,11 +416,24 @@ class MissionManager:
             current_dist = self._get_distance_to_goal()
             distance = current_dist if current_dist is not None else -1.0
 
+        # Calculate elapsed time
+        if in_progress and self._mission_start_time is not None:
+            elapsed_time = self._get_current_time_seconds() - self._mission_start_time
+        elif self._last_elapsed_time is not None:
+            elapsed_time = self._last_elapsed_time
+        else:
+            elapsed_time = -1.0
+
+        # Get traveled distance (current or final)
+        traveled_distance = self._traveled_distance
+
         result_data = {
             "result": self._last_mission_result.value,
             "mission_number": self._current_mission,
             "distance_to_goal": distance,
             "in_progress": in_progress,
+            "traveled_distance": traveled_distance,
+            "elapsed_time": elapsed_time,
         }
 
         response.success = True
@@ -720,6 +755,9 @@ class MissionManager:
 
             logger.info(f"[{self._state.name}] Mission {self._current_mission} initiated successfully")
             self._mission_start_time = self._get_current_time_seconds()
+            # Reset distance tracking for this mission
+            self._traveled_distance = 0.0
+            self._prev_robot_position = self._robot_position
             self._state = MissionState.WAITING_FOR_COMPLETION
 
     def _step_waiting_for_completion(self):
@@ -736,11 +774,12 @@ class MissionManager:
             self._mission_end_time = self._get_current_time_seconds()
             self._last_mission_result = MissionResult.SUCCESS
             self._last_mission_distance = distance
+            self._last_elapsed_time = elapsed
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[SUCCESS] Mission {self._current_mission} completed! "
                 f"Distance to goal: {distance:.2f}m (tolerance: {self.mission_config.goal_tolerance}m), "
-                f"elapsed: {elapsed:.1f}s"
+                f"elapsed: {elapsed:.1f}s, traveled: {self._traveled_distance:.2f}m"
             )
             return
 
@@ -749,11 +788,12 @@ class MissionManager:
             self._mission_end_time = self._get_current_time_seconds()
             self._last_mission_result = MissionResult.FAILURE
             self._last_mission_distance = distance if distance is not None else -1.0
+            self._last_elapsed_time = elapsed
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE] Mission {self._current_mission} timed out! "
                 f"Distance to goal: {distance:.2f}m (needed: {self.mission_config.goal_tolerance}m), "
-                f"timeout: {self.mission_config.timeout}s"
+                f"timeout: {self.mission_config.timeout}s, traveled: {self._traveled_distance:.2f}m"
             )
 
     def _cleanup(self):

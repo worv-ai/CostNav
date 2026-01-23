@@ -29,6 +29,8 @@ declare -a MISSION_RESULTS
 declare -a MISSION_START_TIMES
 declare -a MISSION_END_TIMES
 declare -a MISSION_ERRORS
+declare -a MISSION_TRAVELED_DISTANCES
+declare -a MISSION_ELAPSED_TIMES
 
 # Terminal settings for non-blocking input
 ORIGINAL_STTY=""
@@ -134,6 +136,8 @@ run_mission() {
     local error_msg=""
     local mission_result="FAILED"
     local distance_to_goal=""
+    local traveled_distance=""
+    local elapsed_time=""
     local was_skipped=false
 
     start_time=$(date +%s.%N)
@@ -173,22 +177,24 @@ run_mission() {
             local in_progress
             in_progress=$(parse_result_field "$result_response" "in_progress")
             distance_to_goal=$(parse_result_field "$result_response" "distance_to_goal")
+            traveled_distance=$(parse_result_field "$result_response" "traveled_distance")
+            elapsed_time=$(parse_result_field "$result_response" "elapsed_time")
 
             # Check if mission completed (success or failure)
             if [ "$result_status" = "success" ]; then
                 mission_result="SUCCESS"
-                log "Mission $mission_num: Goal reached! Distance: ${distance_to_goal}m"
+                log "Mission $mission_num: Goal reached! Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
                 break
             elif [ "$result_status" = "failure" ]; then
                 mission_result="FAILED"
                 error_msg="Timeout - distance to goal: ${distance_to_goal}m"
-                log "Mission $mission_num: Timeout! Distance: ${distance_to_goal}m"
+                log "Mission $mission_num: Timeout! Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
                 break
             fi
 
             # Log progress every 5 seconds
             if [ $((elapsed % 5)) -eq 0 ]; then
-                log "Mission $mission_num: In progress... (${elapsed}s elapsed, distance_to_goal: ${distance_to_goal}m)"
+                log "Mission $mission_num: In progress... (${elapsed}s elapsed, distance_to_goal: ${distance_to_goal}m, traveled: ${traveled_distance}m)"
             fi
         done
 
@@ -208,10 +214,14 @@ run_mission() {
 
     duration=$(echo "$end_time - $start_time" | bc)
 
+    # Store traveled distance and elapsed time
+    MISSION_TRAVELED_DISTANCES[$mission_num]="${traveled_distance:-0}"
+    MISSION_ELAPSED_TIMES[$mission_num]="${elapsed_time:-0}"
+
     if [ "$mission_result" = "SUCCESS" ]; then
         SUCCESSFUL=$((SUCCESSFUL + 1))
         MISSION_RESULTS[$mission_num]="SUCCESS"
-        log "Mission $mission_num: SUCCESS (duration: ${duration}s, distance: ${distance_to_goal}m)"
+        log "Mission $mission_num: SUCCESS (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s)"
     elif [ "$mission_result" = "SKIPPED" ]; then
         SKIPPED=$((SKIPPED + 1))
         MISSION_RESULTS[$mission_num]="SKIPPED"
@@ -221,7 +231,7 @@ run_mission() {
         FAILED=$((FAILED + 1))
         MISSION_RESULTS[$mission_num]="FAILED"
         MISSION_ERRORS[$mission_num]="$error_msg"
-        log "Mission $mission_num: FAILED (duration: ${duration}s) - $error_msg"
+        log "Mission $mission_num: FAILED (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s) - $error_msg"
     fi
 }
 
@@ -233,6 +243,28 @@ generate_summary() {
         success_rate=$(echo "scale=2; $SUCCESSFUL * 100 / $completed_missions" | bc)
     else
         success_rate="0"
+    fi
+
+    # Calculate average distance and time for completed (non-skipped) missions
+    local total_distance=0
+    local total_time=0
+    local count=0
+    for i in $(seq 1 $NUM_MISSIONS); do
+        local result="${MISSION_RESULTS[$i]:-N/A}"
+        if [ "$result" != "SKIPPED" ] && [ "$result" != "N/A" ]; then
+            local dist="${MISSION_TRAVELED_DISTANCES[$i]:-0}"
+            local time="${MISSION_ELAPSED_TIMES[$i]:-0}"
+            total_distance=$(echo "$total_distance + $dist" | bc)
+            total_time=$(echo "$total_time + $time" | bc)
+            count=$((count + 1))
+        fi
+    done
+
+    local avg_distance="0"
+    local avg_time="0"
+    if [ "$count" -gt 0 ]; then
+        avg_distance=$(echo "scale=2; $total_distance / $count" | bc)
+        avg_time=$(echo "scale=2; $total_time / $count" | bc)
     fi
 
     log_file ""
@@ -251,6 +283,10 @@ generate_summary() {
     log_file "  - Skipped missions: $SKIPPED"
     log_file "  - Success rate: ${success_rate}% (excluding skipped)"
     log_file ""
+    log_file "Averages (excluding skipped):"
+    log_file "  - Average traveled distance: ${avg_distance}m"
+    log_file "  - Average elapsed time: ${avg_time}s"
+    log_file ""
     log_file "Per-Mission Results:"
     log_file "------------------------------------------------------------"
 
@@ -259,11 +295,15 @@ generate_summary() {
         local start="${MISSION_START_TIMES[$i]:-N/A}"
         local end="${MISSION_END_TIMES[$i]:-N/A}"
         local error="${MISSION_ERRORS[$i]:-}"
+        local traveled="${MISSION_TRAVELED_DISTANCES[$i]:-N/A}"
+        local elapsed="${MISSION_ELAPSED_TIMES[$i]:-N/A}"
 
         log_file "Mission $i:"
         log_file "  Status: $result"
         log_file "  Start:  $start"
         log_file "  End:    $end"
+        log_file "  Traveled distance: ${traveled}m"
+        log_file "  Elapsed time: ${elapsed}s"
         if [ -n "$error" ]; then
             log_file "  Error:  $error"
         fi
@@ -336,6 +376,28 @@ main() {
         success_rate="0"
     fi
 
+    # Calculate averages for console output
+    local total_distance=0
+    local total_time=0
+    local count=0
+    for i in $(seq 1 $NUM_MISSIONS); do
+        local result="${MISSION_RESULTS[$i]:-N/A}"
+        if [ "$result" != "SKIPPED" ] && [ "$result" != "N/A" ]; then
+            local dist="${MISSION_TRAVELED_DISTANCES[$i]:-0}"
+            local time="${MISSION_ELAPSED_TIMES[$i]:-0}"
+            total_distance=$(echo "$total_distance + $dist" | bc)
+            total_time=$(echo "$total_time + $time" | bc)
+            count=$((count + 1))
+        fi
+    done
+
+    local avg_distance="0"
+    local avg_time="0"
+    if [ "$count" -gt 0 ]; then
+        avg_distance=$(echo "scale=2; $total_distance / $count" | bc)
+        avg_time=$(echo "scale=2; $total_time / $count" | bc)
+    fi
+
     echo ""
     echo "=============================================="
     echo "  Evaluation Complete"
@@ -344,6 +406,8 @@ main() {
     echo "  Failed:     $FAILED / $NUM_MISSIONS"
     echo "  Skipped:    $SKIPPED / $NUM_MISSIONS"
     echo "  Success Rate: ${success_rate}% (excluding skipped)"
+    echo "  Avg Distance: ${avg_distance}m (excluding skipped)"
+    echo "  Avg Time:     ${avg_time}s (excluding skipped)"
     echo "  Log file:   $LOG_FILE"
     echo "=============================================="
 }
