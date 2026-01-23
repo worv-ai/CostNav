@@ -233,7 +233,6 @@ class PeopleManager:
             try:
                 from omni.anim.people_api.settings import PeopleSettings
                 from omni.anim.people_api.scripts.character_setup import CharacterSetup, CharacterBehavior
-                from omni.anim.people_api.scripts.utils import Utils
 
                 logger.info("PeopleAPI modules imported successfully")
             except ImportError as e:
