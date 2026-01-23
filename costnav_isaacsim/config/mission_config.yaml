@@ -73,3 +73,25 @@ sampling:
   # Minimum distance from navmesh edges for sampled positions (meters)
   # Prevents sampling positions too close to boundaries
   edge_margin: 1.0
+
+# Food evaluation settings (for delivery missions)
+# NOTE: Currently only segway_e1 robot is supported for food evaluation.
+# For other robots, implement robot-specific positioning in MissionManager._setup_food_tracking()
+food:
+  # Enable food spoilage evaluation (only works with segway_e1)
+  enabled: false
+
+  # Path to the food USD asset
+  usd_path: "omniverse://10.50.2.21/Users/worv/costnav/foods/popcorn/popcorn.usd"
+
+  # Prim path where the food is spawned in the stage
+  prim_path: "/World/Food"
+
+  # Relative path to the pieces prim under food prim
+  pieces_prim_path: "Popcorn/PopcornBucket/PopcornPieces"
+
+  # Relative path to the bucket/container prim under food prim
+  bucket_prim_path: "Popcorn/PopcornBucket"
+
+  # Fraction of pieces that can be lost before mission fails (0.0 = no loss, 0.05 = 5% loss allowed)
+  spoilage_threshold: 0.05

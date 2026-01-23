@@ -64,6 +64,7 @@ class MissionResult(Enum):
     SUCCESS = "success"  # Robot reached goal within tolerance
     FAILURE_TIMEOUT = "failure_timeout"  # Timeout reached before reaching goal
     FAILURE_PHYSICALASSISTANCE = "failure_physicalassistance"  # Robot fell down (bad orientation)
+    FAILURE_FOODSPOILED = "failure_foodspoiled"  # Food spoiled during delivery
 
 
 class MissionManager:
@@ -174,6 +175,12 @@ class MissionManager:
         self._traveled_distance = 0.0  # Cumulative distance traveled (meters)
         self._last_traveled_distance = None  # Final traveled distance for last mission (meters)
         self._last_elapsed_time = None  # Elapsed time for last mission (seconds)
+
+        # Food tracking for spoilage evaluation
+        self._food_pieces_prim_path = None  # Full prim path to food pieces
+        self._food_bucket_prim_path = None  # Full prim path to food bucket
+        self._initial_food_piece_count = 0  # Piece count at mission start
+        self._final_food_piece_count = None  # Piece count at mission end
 
     def _get_current_time_seconds(self) -> float:
         """Get current time in seconds from ROS clock.
@@ -306,6 +313,9 @@ class MissionManager:
                 Odometry, self.mission_config.nav2.odom_topic, self._odom_callback, 10
             )
 
+            # Setup food tracking if enabled
+            self._setup_food_tracking()
+
             self._initialized = True
             self._state = MissionState.WAITING_FOR_NAV2
             self._wait_start_time = self._get_current_time_seconds()
@@ -346,6 +356,9 @@ class MissionManager:
         self._prev_robot_position = None
         self._last_traveled_distance = None
         self._last_elapsed_time = None
+        # Reset food tracking
+        self._initial_food_piece_count = 0
+        self._final_food_piece_count = None
 
     def _odom_callback(self, msg) -> None:
         """Handle odometry messages for robot position and orientation tracking."""
@@ -414,6 +427,187 @@ class MissionManager:
         tilt_angle = math.acos(min(1.0, max(-1.0, gz_body_z)))
 
         return tilt_angle > limit_angle
+
+    def _count_food_pieces_in_bucket(self) -> int:
+        """Count the number of food pieces currently inside the bucket.
+
+        Uses bounding box comparison to determine if pieces are within the bucket.
+        This method iterates through all piece prims under the pieces path and
+        checks if their positions fall within the bucket's bounding box.
+
+        Returns:
+            Number of pieces inside the bucket, or 0 if food tracking is disabled.
+        """
+        if not self.mission_config.food.enabled or self._food_pieces_prim_path is None:
+            return 0
+
+        try:
+            import omni.usd
+            from pxr import UsdGeom
+            from isaacsim.core.utils import bounds as bounds_utils
+
+            stage = omni.usd.get_context().get_stage()
+
+            # Get bucket bounding box
+            bucket_prim = stage.GetPrimAtPath(self._food_bucket_prim_path)
+            if not bucket_prim.IsValid():
+                logger.warning(f"[FOOD] Bucket prim not found: {self._food_bucket_prim_path}")
+                return 0
+
+            bbox_cache = bounds_utils.create_bbox_cache()
+            bucket_bounds = bounds_utils.compute_aabb(bbox_cache, prim_path=self._food_bucket_prim_path)
+            min_xyz = bucket_bounds[:3]
+            max_xyz = bucket_bounds[3:]
+
+            # Get pieces parent prim and count children inside bucket
+            pieces_prim = stage.GetPrimAtPath(self._food_pieces_prim_path)
+            if not pieces_prim.IsValid():
+                logger.warning(f"[FOOD] Pieces prim not found: {self._food_pieces_prim_path}")
+                return 0
+
+            count = 0
+            for child in pieces_prim.GetChildren():
+                if not child.IsValid():
+                    continue
+                xformable = UsdGeom.Xformable(child)
+                if not xformable:
+                    continue
+
+                # Get world position of the piece
+                world_transform = xformable.ComputeLocalToWorldTransform(0)
+                position = world_transform.ExtractTranslation()
+
+                # Check if position is within bucket bounds
+                if (
+                    min_xyz[0] <= position[0] <= max_xyz[0] and
+                    min_xyz[1] <= position[1] <= max_xyz[1] and
+                    min_xyz[2] <= position[2] <= max_xyz[2]
+                ):
+                    count += 1
+
+            return count
+
+        except Exception as e:
+            logger.error(f"[FOOD] Error counting food pieces: {e}")
+            return 0
+
+    def _setup_food_tracking(self) -> None:
+        """Setup food tracking by spawning the food USD asset and configuring paths.
+
+        Spawns the food USD asset as a reference at the configured prim path,
+        then constructs full prim paths for the food pieces and bucket.
+
+        Robot-specific positioning:
+        - segway_e1: Spawns food with z offset of 0.33 (bucket height on Segway)
+        - Other robots: Not yet implemented (placeholder for future support)
+        """
+        if not self.mission_config.food.enabled:
+            return
+
+        food_config = self.mission_config.food
+        base_path = food_config.prim_path.rstrip("/")
+
+        # Determine robot type and z_offset from robot_prim path
+        robot_prim = self.mission_config.teleport.robot_prim.lower()
+
+        if "segway" in robot_prim:
+            z_offset = 0.33  # Segway E1 bucket height offset
+        elif "nova_carter" in robot_prim:
+            # TODO: Implement food spawning for Nova Carter
+            # 1. Determine the appropriate z_offset for Nova Carter's carrying position
+            # 2. Optionally attach the food to a specific prim on the robot
+            # 3. Adjust pieces_prim_path and bucket_prim_path if using different food assets
+            logger.warning(
+                f"[FOOD] Food spawning not implemented for Nova Carter. "
+                f"Disabling food tracking."
+            )
+            self.mission_config.food.enabled = False
+            return
+        else:
+            # TODO: Implement food spawning for other robots
+            # 1. Determine the appropriate z_offset for the robot's carrying position
+            # 2. Optionally attach the food to a specific prim on the robot
+            # 3. Adjust pieces_prim_path and bucket_prim_path if using different food assets
+            logger.warning(
+                f"[FOOD] Food spawning not implemented for robot: {robot_prim}. "
+                f"Currently only segway_e1 is supported. Disabling food tracking."
+            )
+            self.mission_config.food.enabled = False
+            return
+
+        # Spawn the food USD asset
+        try:
+            import omni.usd
+            from pxr import Gf, UsdGeom
+
+            stage = omni.usd.get_context().get_stage()
+
+            # Check if food prim already exists
+            food_prim = stage.GetPrimAtPath(base_path)
+            if not food_prim.IsValid():
+                # Create Xform prim and add USD reference
+                food_prim = stage.DefinePrim(base_path, "Xform")
+                if not food_prim.IsValid():
+                    logger.error(f"[FOOD] Failed to create prim at: {base_path}")
+                    return
+
+                # Add reference to the food USD asset
+                success = food_prim.GetReferences().AddReference(food_config.usd_path)
+                if not success:
+                    logger.error(
+                        f"[FOOD] Failed to add USD reference: {food_config.usd_path}"
+                    )
+                    return
+
+                # Apply robot-specific z offset
+                xformable = UsdGeom.Xformable(food_prim)
+                xformable.ClearXformOpOrder()
+                translate_op = xformable.AddTranslateOp()
+                translate_op.Set(Gf.Vec3d(0.0, 0.0, z_offset))
+
+                logger.info(f"[FOOD] Spawned food asset from: {food_config.usd_path}")
+                logger.info(f"[FOOD] Spawned at prim path: {base_path} with z_offset: {z_offset}")
+            else:
+                logger.info(f"[FOOD] Food prim already exists at: {base_path}")
+
+        except Exception as e:
+            logger.error(f"[FOOD] Error spawning food asset: {e}")
+            return
+
+        # Setup prim paths for tracking
+        self._food_pieces_prim_path = f"{base_path}/{food_config.pieces_prim_path}"
+        self._food_bucket_prim_path = f"{base_path}/{food_config.bucket_prim_path}"
+
+        logger.info(f"[FOOD] Food tracking enabled")
+        logger.info(f"[FOOD] Pieces path: {self._food_pieces_prim_path}")
+        logger.info(f"[FOOD] Bucket path: {self._food_bucket_prim_path}")
+
+    def _check_food_spoilage(self) -> bool:
+        """Check if food has spoiled (pieces lost from bucket).
+
+        Compares the initial piece count to the current count and determines
+        if the loss exceeds the configured threshold.
+
+        Returns:
+            True if food has spoiled (too many pieces lost), False otherwise.
+        """
+        if not self.mission_config.food.enabled:
+            return False
+
+        self._final_food_piece_count = self._count_food_pieces_in_bucket()
+
+        if self._initial_food_piece_count == 0:
+            return False
+
+        pieces_lost = self._initial_food_piece_count - self._final_food_piece_count
+        loss_fraction = pieces_lost / self._initial_food_piece_count
+
+        logger.info(
+            f"[FOOD] Pieces: initial={self._initial_food_piece_count}, "
+            f"final={self._final_food_piece_count}, lost={pieces_lost} ({loss_fraction:.1%})"
+        )
+
+        return loss_fraction > self.mission_config.food.spoilage_threshold
 
     def _handle_set_timeout(self, msg):
         """Handle dynamic timeout configuration.
@@ -821,6 +1015,11 @@ class MissionManager:
             # Update RViz markers
             self._marker_publisher.publish_start_goal_from_sampled(self._current_start, self._current_goal)
 
+            # Record initial food piece count for spoilage evaluation
+            if self.mission_config.food.enabled:
+                self._initial_food_piece_count = self._count_food_pieces_in_bucket()
+                logger.info(f"[FOOD] Initial piece count: {self._initial_food_piece_count}")
+
             logger.info(f"[{self._state.name}] Mission {self._current_mission} initiated successfully")
             self._mission_start_time = self._get_current_time_seconds()
             # Reset distance tracking for this mission
@@ -838,13 +1037,25 @@ class MissionManager:
         elapsed = self._get_current_time_seconds() - self._mission_start_time
         distance = self._get_distance_to_goal()
 
-        # Check for goal completion (success)
+        # Check for goal completion (success or food spoiled)
         if distance is not None and distance <= self.mission_config.goal_tolerance:
             self._mission_end_time = self._get_current_time_seconds()
-            self._last_mission_result = MissionResult.SUCCESS
             self._last_mission_distance = distance
             self._last_elapsed_time = elapsed
             self._last_traveled_distance = self._traveled_distance
+
+            # Check for food spoilage before declaring success
+            if self._check_food_spoilage():
+                self._last_mission_result = MissionResult.FAILURE_FOODSPOILED
+                self._state = MissionState.WAITING_FOR_START
+                logger.info(
+                    f"[FAILURE_FOODSPOILED] Mission {self._current_mission} failed - food spoiled! "
+                    f"Distance to goal: {distance:.2f}m, elapsed: {elapsed:.1f}s, "
+                    f"pieces: {self._initial_food_piece_count} -> {self._final_food_piece_count}"
+                )
+                return
+
+            self._last_mission_result = MissionResult.SUCCESS
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[SUCCESS] Mission {self._current_mission} completed! "
