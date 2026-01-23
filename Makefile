@@ -150,8 +150,8 @@ stop-rosbag:
 # =============================================================================
 
 # Default evaluation parameters
-TIMEOUT ?= 20
-NUM_MISSIONS ?= 10
+TIMEOUT ?= 169 # based on S_EvalTimeout
+NUM_MISSIONS ?= 3
 
 # Run Nav2 evaluation (requires running nav2 instance via make run-nav2)
 # Usage: make run-eval-nav2 TIMEOUT=20 NUM_MISSIONS=10
