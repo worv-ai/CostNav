@@ -613,7 +613,7 @@ class MissionManager:
         self._food_pieces_prim_path = f"{base_path}/{food_config.pieces_prim_path}"
         self._food_bucket_prim_path = f"{base_path}/{food_config.bucket_prim_path}"
 
-        logger.info(f"[FOOD] Food tracking enabled")
+        logger.info("[FOOD] Food tracking enabled")
         logger.info(f"[FOOD] Pieces path: {self._food_pieces_prim_path}")
         logger.info(f"[FOOD] Bucket path: {self._food_bucket_prim_path}")
 
