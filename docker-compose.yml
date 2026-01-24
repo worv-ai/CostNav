@@ -66,6 +66,7 @@ services:
       - EXP_PATH=${EXP_PATH:-/isaac-sim/apps}
       - NUM_PEOPLE=${NUM_PEOPLE:-0}
       - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
+      - FOOD=${FOOD:-True}
     volumes:
       - .:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -83,7 +84,7 @@ services:
     working_dir: /workspace
     command:
       - "-ic"
-      - "/workspace/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-0} --robot $${SIM_ROBOT:-nova_carter}"
+      - "/workspace/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-0} --robot $${SIM_ROBOT:-nova_carter} --food-enabled $${FOOD:-True}"
     healthcheck:
       test: [ "CMD", "bash", "-c", "[ -e /tmp/.isaac_sim_running ] || exit 1 && exit 0" ]
       interval: 10s

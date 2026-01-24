@@ -22,8 +22,10 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_FILE="${LOG_DIR}/teleop_evaluation_${TIMESTAMP}.log"
 
 # Statistics tracking
-SUCCESSFUL=0
-FAILED=0
+SUCCESS_SLA=0
+FAILURE_TIMEOUT=0
+FAILURE_PHYSICALASSISTANCE=0
+FAILURE_FOODSPOILED=0
 SKIPPED=0
 declare -a MISSION_RESULTS
 declare -a MISSION_START_TIMES
@@ -31,6 +33,11 @@ declare -a MISSION_END_TIMES
 declare -a MISSION_ERRORS
 declare -a MISSION_TRAVELED_DISTANCES
 declare -a MISSION_ELAPSED_TIMES
+declare -a MISSION_FOOD_ENABLED
+declare -a MISSION_FOOD_INITIAL_PIECES
+declare -a MISSION_FOOD_FINAL_PIECES
+declare -a MISSION_FOOD_LOSS_FRACTION
+declare -a MISSION_FOOD_SPOILED
 
 # Terminal settings for non-blocking input
 ORIGINAL_STTY=""
@@ -144,6 +151,11 @@ run_mission() {
     local distance_to_goal=""
     local traveled_distance=""
     local elapsed_time=""
+    local food_enabled="false"
+    local food_initial_pieces="-1"
+    local food_final_pieces="-1"
+    local food_loss_fraction="-1"
+    local food_spoiled="false"
     local was_skipped=false
 
     start_time=$(date +%s.%N)
@@ -202,16 +214,37 @@ run_mission() {
             distance_to_goal=$(parse_result_field "$result_response" "distance_to_goal")
             traveled_distance=$(parse_result_field "$result_response" "traveled_distance")
             elapsed_time=$(parse_result_field "$result_response" "elapsed_time")
+            food_enabled=$(parse_result_field "$result_response" "food_enabled")
+            food_initial_pieces=$(parse_result_field "$result_response" "food_initial_pieces")
+            food_final_pieces=$(parse_result_field "$result_response" "food_final_pieces")
+            food_loss_fraction=$(parse_result_field "$result_response" "food_loss_fraction")
+            food_spoiled=$(parse_result_field "$result_response" "food_spoiled")
+
+            if [ -z "$food_enabled" ]; then
+                food_enabled="false"
+            fi
+            if [ -z "$food_initial_pieces" ]; then
+                food_initial_pieces="-1"
+            fi
+            if [ -z "$food_final_pieces" ]; then
+                food_final_pieces="-1"
+            fi
+            if [ -z "$food_loss_fraction" ]; then
+                food_loss_fraction="-1"
+            fi
+            if [ -z "$food_spoiled" ]; then
+                food_spoiled="false"
+            fi
 
             # Check if mission completed (success or failure from mission manager)
             if [ "$result_status" = "success" ]; then
                 mission_result="SUCCESS"
-                log "Mission $mission_num: Goal reached! Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
+                log "Mission $mission_num: Goal reached! Goal Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
                 break
             elif [[ "$result_status" == failure_* ]]; then
                 mission_result="FAILED"
                 error_msg="${result_status} - distance to goal: ${distance_to_goal}m"
-                log "Mission $mission_num: ${result_status}! Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
+                log "Mission $mission_num: ${result_status}! Goal Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
                 break
             fi
 
@@ -242,21 +275,46 @@ run_mission() {
     # Store traveled distance and elapsed time
     MISSION_TRAVELED_DISTANCES[$mission_num]="${traveled_distance:-0}"
     MISSION_ELAPSED_TIMES[$mission_num]="${elapsed_time:-0}"
+    MISSION_FOOD_ENABLED[$mission_num]="${food_enabled}"
+    MISSION_FOOD_INITIAL_PIECES[$mission_num]="${food_initial_pieces}"
+    MISSION_FOOD_FINAL_PIECES[$mission_num]="${food_final_pieces}"
+    MISSION_FOOD_LOSS_FRACTION[$mission_num]="${food_loss_fraction}"
+    MISSION_FOOD_SPOILED[$mission_num]="${food_spoiled}"
 
     if [ "$mission_result" = "SUCCESS" ]; then
-        SUCCESSFUL=$((SUCCESSFUL + 1))
-        MISSION_RESULTS[$mission_num]="SUCCESS"
-        log "Mission $mission_num: SUCCESS (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s)"
+        SUCCESS_SLA=$((SUCCESS_SLA + 1))
+        MISSION_RESULTS[$mission_num]="SUCCESS_SLA"
+        log "Mission $mission_num: SUCCESS_SLA (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s)"
     elif [ "$mission_result" = "SKIPPED" ]; then
         SKIPPED=$((SKIPPED + 1))
         MISSION_RESULTS[$mission_num]="SKIPPED"
         MISSION_ERRORS[$mission_num]="Skipped by user"
         log "Mission $mission_num: SKIPPED (duration: ${duration}s)"
     else
-        FAILED=$((FAILED + 1))
-        MISSION_RESULTS[$mission_num]="FAILED"
+        # Parse specific failure type from result_status
+        if [ "$result_status" = "failure_timeout" ]; then
+            FAILURE_TIMEOUT=$((FAILURE_TIMEOUT + 1))
+            MISSION_RESULTS[$mission_num]="FAILURE_TIMEOUT"
+        elif [ "$result_status" = "failure_physicalassistance" ]; then
+            FAILURE_PHYSICALASSISTANCE=$((FAILURE_PHYSICALASSISTANCE + 1))
+            MISSION_RESULTS[$mission_num]="FAILURE_PHYSICALASSISTANCE"
+        elif [ "$result_status" = "failure_foodspoiled" ]; then
+            FAILURE_FOODSPOILED=$((FAILURE_FOODSPOILED + 1))
+            MISSION_RESULTS[$mission_num]="FAILURE_FOODSPOILED"
+        else
+            # Unknown failure type, count as timeout
+            FAILURE_TIMEOUT=$((FAILURE_TIMEOUT + 1))
+            MISSION_RESULTS[$mission_num]="FAILURE_TIMEOUT"
+        fi
         MISSION_ERRORS[$mission_num]="$error_msg"
-        log "Mission $mission_num: FAILED (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s) - $error_msg"
+        log "Mission $mission_num: ${MISSION_RESULTS[$mission_num]} (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s) - $error_msg"
+    fi
+
+    if [ "$food_enabled" = "true" ]; then
+        log "Mission $mission_num: Food pieces ${food_initial_pieces} -> ${food_final_pieces} (loss fraction: ${food_loss_fraction})"
+        if [ "$food_spoiled" = "true" ]; then
+            log "Mission $mission_num: Food spoiled"
+        fi
     fi
 }
 
@@ -265,7 +323,7 @@ generate_summary() {
     local success_rate
     local completed_missions=$((NUM_MISSIONS - SKIPPED))
     if [ "$completed_missions" -gt 0 ]; then
-        success_rate=$(echo "scale=2; $SUCCESSFUL * 100 / $completed_missions" | bc)
+        success_rate=$(echo "scale=2; $SUCCESS_SLA * 100 / $completed_missions" | bc)
     else
         success_rate="0"
     fi
@@ -303,9 +361,11 @@ generate_summary() {
     log_file "  - Container: $CONTAINER"
     log_file ""
     log_file "Results:"
-    log_file "  - Successful missions: $SUCCESSFUL"
-    log_file "  - Failed missions: $FAILED"
-    log_file "  - Skipped missions: $SKIPPED"
+    log_file "  - SUCCESS_SLA: $SUCCESS_SLA"
+    log_file "  - FAILURE_TIMEOUT: $FAILURE_TIMEOUT"
+    log_file "  - FAILURE_PHYSICALASSISTANCE: $FAILURE_PHYSICALASSISTANCE"
+    log_file "  - FAILURE_FOODSPOILED: $FAILURE_FOODSPOILED"
+    log_file "  - Skipped: $SKIPPED"
     log_file "  - Success rate: ${success_rate}% (excluding skipped)"
     log_file ""
     log_file "Averages (excluding skipped):"
@@ -322,6 +382,11 @@ generate_summary() {
         local error="${MISSION_ERRORS[$i]:-}"
         local traveled="${MISSION_TRAVELED_DISTANCES[$i]:-N/A}"
         local elapsed="${MISSION_ELAPSED_TIMES[$i]:-N/A}"
+        local food_enabled="${MISSION_FOOD_ENABLED[$i]:-false}"
+        local food_initial="${MISSION_FOOD_INITIAL_PIECES[$i]:-N/A}"
+        local food_final="${MISSION_FOOD_FINAL_PIECES[$i]:-N/A}"
+        local food_loss="${MISSION_FOOD_LOSS_FRACTION[$i]:-N/A}"
+        local food_spoiled="${MISSION_FOOD_SPOILED[$i]:-false}"
 
         log_file "Mission $i:"
         log_file "  Status: $result"
@@ -329,6 +394,11 @@ generate_summary() {
         log_file "  End:    $end"
         log_file "  Traveled distance: ${traveled}m"
         log_file "  Elapsed time: ${elapsed}s"
+        if [ "$food_enabled" = "true" ]; then
+            log_file "  Food pieces: ${food_initial} -> ${food_final}"
+            log_file "  Food loss fraction: ${food_loss}"
+            log_file "  Food spoiled: ${food_spoiled}"
+        fi
         if [ -n "$error" ]; then
             log_file "  Error:  $error"
         fi
@@ -396,7 +466,7 @@ main() {
     local success_rate
     local completed_missions=$((NUM_MISSIONS - SKIPPED))
     if [ "$completed_missions" -gt 0 ]; then
-        success_rate=$(echo "scale=2; $SUCCESSFUL * 100 / $completed_missions" | bc)
+        success_rate=$(echo "scale=2; $SUCCESS_SLA * 100 / $completed_missions" | bc)
     else
         success_rate="0"
     fi
@@ -449,9 +519,11 @@ main() {
     echo "=============================================="
     echo "  Evaluation Complete"
     echo "=============================================="
-    echo "  Successful: $SUCCESSFUL / $NUM_MISSIONS"
-    echo "  Failed:     $FAILED / $NUM_MISSIONS"
-    echo "  Skipped:    $SKIPPED / $NUM_MISSIONS"
+    echo "  SUCCESS_SLA:              $SUCCESS_SLA / $NUM_MISSIONS"
+    echo "  FAILURE_TIMEOUT:          $FAILURE_TIMEOUT / $NUM_MISSIONS"
+    echo "  FAILURE_PHYSICALASSISTANCE: $FAILURE_PHYSICALASSISTANCE / $NUM_MISSIONS"
+    echo "  FAILURE_FOODSPOILED:      $FAILURE_FOODSPOILED / $NUM_MISSIONS"
+    echo "  Skipped:                  $SKIPPED / $NUM_MISSIONS"
     echo "  Success Rate: ${success_rate}% (excluding skipped)"
     echo "  Avg Distance: ${avg_distance}m (excluding skipped)"
     echo "  Avg Time:     ${avg_time}s (excluding skipped)"

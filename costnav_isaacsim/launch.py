@@ -25,11 +25,8 @@ Missions are triggered manually via /start_mission (e.g. `make start-mission`).
 import argparse
 import logging
 import os
-import posixpath
 import time
-from pathlib import Path
 from typing import TYPE_CHECKING, Optional
-from urllib.parse import urlparse
 
 from isaacsim import SimulationApp
 
@@ -56,13 +53,6 @@ ROBOT_NAME_ALIASES = {
     "segway-e1": "segway_e1",
     "segwaye1": "segway_e1",
 }
-SEGWAY_BUCKET_PRIM_PATH = "/World/Segway_E1_ROS2/PopcornBucket"
-SEGWAY_PIECES_PRIM_PATH = "/World/Segway_E1_ROS2/PopcornPieces"
-SEGWAY_BUCKET_HEIGHT_OFFSET = 0.33
-LEGACY_BUCKET_PRIM_PATHS = (
-    "/World/Segway_E1_ROS2/PopcornBucket",
-    "/World/Segway_E1_ROS2/PopcornPieces",
-)
 
 
 def parse_args():
@@ -140,6 +130,27 @@ def parse_args():
         help="Override: Seconds to wait for Nav2 stack",
     )
 
+    # Food evaluation arguments
+    food_group = parser.add_argument_group("Food Evaluation")
+    food_group.add_argument(
+        "--food-enabled",
+        type=str,
+        default=None,
+        help="Enable food spoilage evaluation (True/False or 1/0)",
+    )
+    food_group.add_argument(
+        "--food-prim-path",
+        type=str,
+        default=None,
+        help="Override: Prim path where food is spawned in the stage",
+    )
+    food_group.add_argument(
+        "--food-spoilage-threshold",
+        type=float,
+        default=None,
+        help="Override: Fraction of pieces that can be lost (0.0 = no loss allowed)",
+    )
+
     # People arguments
     people_group = parser.add_argument_group("People")
     people_group.add_argument(
@@ -185,7 +196,6 @@ class CostNavSimLauncher:
 
         # Setup simulation context
         self.simulation_context = self._setup_simulation_context()
-        self._maybe_spawn_segway_food_assets()
 
         robot_prim_path = None
         try:
@@ -242,8 +252,12 @@ class CostNavSimLauncher:
         from isaacsim.core.utils.extensions import enable_extension
         import omni.kit.app
 
-        # Navigation extension (must be enabled before using navmesh)
+        # Navigation extensions (must be enabled before using navmesh)
         enable_extension("omni.anim.navigation.core")
+
+        # Debugging extension
+        enable_extension("omni.anim.navigation.bundle")
+        enable_extension("omni.physx.bundle")
 
         # Core extensions
         enable_extension("omni.isaac.sensor")
@@ -251,9 +265,6 @@ class CostNavSimLauncher:
 
         # ROS2 bridge for Nav2 communication
         enable_extension("isaacsim.ros2.bridge")
-
-        # Food Assets extension
-        enable_extension("worvai.assets.food")
 
         # People API extension (if people spawning is enabled)
         if self.num_people > 0:
@@ -330,137 +341,6 @@ class CostNavSimLauncher:
             stage_units_in_meters=1.0,
         )
         return simulation_context
-
-    @staticmethod
-    def _resolve_food_asset_paths(usd_path: str, ext_path: Optional[str]) -> tuple[str, str]:
-        """Resolve USD paths for the Segway popcorn assets."""
-        if usd_path.startswith("omniverse://"):
-            parsed = urlparse(usd_path)
-            if parsed.scheme == "omniverse" and parsed.netloc:
-                base_dir = posixpath.dirname(parsed.path)
-                root = f"{parsed.scheme}://{parsed.netloc}"
-                container_usd = f"{root}{posixpath.join(base_dir, 'foods', 'assets', 'popcorn-bucket.usdc')}"
-                piece_usd = f"{root}{posixpath.join(base_dir, 'foods', 'popcorn', 'popcorn-piece.usdc')}"
-                return container_usd, piece_usd
-
-        if ext_path:
-            assets_dir = os.path.join(ext_path, "assets")
-            return (
-                os.path.join(assets_dir, "popcorn-bucket.usdc"),
-                os.path.join(assets_dir, "popcorn-piece.usdc"),
-            )
-
-        return "", ""
-
-    def _maybe_spawn_segway_food_assets(self) -> None:
-        """Spawn a popcorn bucket with pieces for Segway runs."""
-        if self.robot_name != "segway_e1":
-            return
-
-        try:
-            import carb
-            import omni.kit.app
-            import omni.usd
-            from worvai.assets.food.items.containers.bucket import FoodBucket
-            from worvai.assets.food.utils.paths import asset_exists
-        except Exception as exc:
-            logger.warning("Food assets extension unavailable: %s", exc)
-            return
-
-        stage = omni.usd.get_context().get_stage()
-        if stage is None:
-            logger.warning("No USD stage available for food asset spawn.")
-            return
-
-        parent_path = SEGWAY_BUCKET_PRIM_PATH.rsplit("/", 1)[0]
-        if parent_path and not stage.GetPrimAtPath(parent_path).IsValid():
-            carb.log_warn(f"Creating parent prim for popcorn bucket: {parent_path}")
-            stage.DefinePrim(parent_path, "Xform")
-
-        for prim_path in (SEGWAY_BUCKET_PRIM_PATH, SEGWAY_PIECES_PRIM_PATH):
-            if stage.GetPrimAtPath(prim_path).IsValid():
-                stage.RemovePrim(prim_path)
-
-        robot_prim_path = self._resolve_robot_prim_path(stage)
-        self._update_mission_robot_prim(robot_prim_path)
-        if not robot_prim_path:
-            logger.warning("Segway robot prim path not found. Set ROBOT_PRIM_PATH to spawn popcorn bucket.")
-            return
-
-        ext_manager = omni.kit.app.get_app().get_extension_manager()
-        ext_path = ext_manager.get_extension_path_by_module("worvai.assets.food")
-        if not ext_path:
-            logger.warning("Food assets extension path not found.")
-            return
-
-        container_usd, piece_usd = self._resolve_food_asset_paths(self.usd_path, ext_path)
-        if not container_usd or not piece_usd:
-            logger.warning("Food asset paths could not be resolved for popcorn spawn.")
-            return
-
-        if not (asset_exists(container_usd) and asset_exists(piece_usd)):
-            if container_usd.startswith("omniverse://"):
-                local_assets_dir = os.path.join(ext_path, "assets")
-                local_container = Path(os.path.join(local_assets_dir, "popcorn-bucket.usdc")).as_uri()
-                local_piece = Path(os.path.join(local_assets_dir, "popcorn-piece.usdc")).as_uri()
-                if asset_exists(local_container) and asset_exists(local_piece):
-                    logger.info(
-                        "Falling back to local food assets: %s, %s",
-                        local_container,
-                        local_piece,
-                    )
-                    container_usd, piece_usd = local_container, local_piece
-                else:
-                    logger.warning(
-                        "Food asset files missing: %s, %s",
-                        container_usd,
-                        piece_usd,
-                    )
-                    return
-            else:
-                logger.warning("Food asset files missing: %s, %s", container_usd, piece_usd)
-                return
-
-        try:
-            bucket = FoodBucket.spawn(
-                bucket_prim_path=SEGWAY_BUCKET_PRIM_PATH,
-                instancer_path=SEGWAY_PIECES_PRIM_PATH,
-                container_usd_path=container_usd,
-                piece_usd_path=piece_usd,
-                backend="warp",
-            )
-        except Exception as exc:
-            logger.warning("Warp backend failed for popcorn spawn: %s", exc)
-            try:
-                bucket = FoodBucket.spawn(
-                    bucket_prim_path=SEGWAY_BUCKET_PRIM_PATH,
-                    instancer_path=SEGWAY_PIECES_PRIM_PATH,
-                    container_usd_path=container_usd,
-                    piece_usd_path=piece_usd,
-                    backend="numpy",
-                )
-            except Exception as fallback_exc:
-                logger.warning("Failed to spawn popcorn bucket: %s", fallback_exc)
-                return
-
-        robot_pos = self._get_prim_world_translation(stage, robot_prim_path)
-        if robot_pos is None:
-            logger.warning("Unable to resolve robot pivot position for popcorn spawn.")
-            return
-
-        bucket_pos = (
-            robot_pos[0],
-            robot_pos[1],
-            robot_pos[2] + SEGWAY_BUCKET_HEIGHT_OFFSET,
-        )
-        self._set_prim_world_translation(stage, bucket.bucket_prim_path, bucket_pos)
-        self._set_prim_world_translation(stage, bucket.instancer_path, bucket_pos)
-        logger.info(
-            "Spawned popcorn bucket at (%.3f, %.3f, %.3f)",
-            bucket_pos[0],
-            bucket_pos[1],
-            bucket_pos[2],
-        )
 
     def _resolve_robot_prim_path(self, stage) -> Optional[str]:
         """Resolve a robot prim path for pose lookups."""
@@ -713,6 +593,15 @@ def load_and_override_config(args) -> "MissionConfig":
         config.max_distance = args.max_distance
     if args.nav2_wait is not None:
         config.nav2.wait_time = args.nav2_wait
+
+    # Food evaluation overrides
+    # CLI flag takes priority, then config default
+    if args.food_enabled is not None:
+        config.food.enabled = args.food_enabled.lower() in ("true", "1")
+    if args.food_prim_path is not None:
+        config.food.prim_path = args.food_prim_path
+    if args.food_spoilage_threshold is not None:
+        config.food.spoilage_threshold = args.food_spoilage_threshold
 
     return config
 
