@@ -239,12 +239,12 @@ run_mission() {
             # Check if mission completed (success or failure from mission manager)
             if [ "$result_status" = "success" ]; then
                 mission_result="SUCCESS"
-                log "Mission $mission_num: Goal reached! Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
+                log "Mission $mission_num: Goal reached! Goal Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
                 break
             elif [[ "$result_status" == failure_* ]]; then
                 mission_result="FAILED"
                 error_msg="${result_status} - distance to goal: ${distance_to_goal}m"
-                log "Mission $mission_num: ${result_status}! Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
+                log "Mission $mission_num: ${result_status}! Goal Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
                 break
             fi
 
