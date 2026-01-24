@@ -324,6 +324,7 @@ class CostNavSimLauncher:
         import carb.settings
 
         settings = carb.settings.get_settings()
+        settings.set("/log/channels/omni.physx.plugin", "error")
         # Turn off GPU for navmesh baking
         settings.set_bool("/persistent/exts/omni.anim.navigation.core/navMesh/useGpu", False)
 
