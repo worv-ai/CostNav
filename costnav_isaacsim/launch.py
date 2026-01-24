@@ -42,7 +42,7 @@ WARMUP_STEPS = 100
 DEFAULT_ROBOT_NAME = "nova_carter"
 DEFAULT_USD_PATHS = {
     "nova_carter": "omniverse://10.50.2.21/Users/worv/costnav/Street_sidewalk.usd",
-    "segway_e1": "omniverse://10.50.2.21/Users/worv/costnav/street_sidewalk_segwaye1.usd",
+    "segway_e1": "omniverse://10.50.2.21/Users/worv/costnav/street_sidewalk_segwaye1_Corrected.usd",
 }
 DEFAULT_ROBOT_PRIM_PATHS = {
     "nova_carter": "/World/Nova_Carter_ROS/chassis_link",

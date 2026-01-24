@@ -33,11 +33,16 @@ declare -a MISSION_END_TIMES
 declare -a MISSION_ERRORS
 declare -a MISSION_TRAVELED_DISTANCES
 declare -a MISSION_ELAPSED_TIMES
+declare -a MISSION_AVG_VELOCITIES
+declare -a MISSION_AVG_MECHANICAL_POWERS
 declare -a MISSION_FOOD_ENABLED
 declare -a MISSION_FOOD_INITIAL_PIECES
 declare -a MISSION_FOOD_FINAL_PIECES
 declare -a MISSION_FOOD_LOSS_FRACTION
 declare -a MISSION_FOOD_SPOILED
+
+# Mechanical energy constants
+ROLLING_RESISTANCE_FORCE=18.179  # Newtons
 
 # Terminal settings for non-blocking input
 ORIGINAL_STTY=""
@@ -275,6 +280,17 @@ run_mission() {
     # Store traveled distance and elapsed time
     MISSION_TRAVELED_DISTANCES[$mission_num]="${traveled_distance:-0}"
     MISSION_ELAPSED_TIMES[$mission_num]="${elapsed_time:-0}"
+
+    # Calculate average velocity and mechanical power (in kW)
+    local avg_velocity="0"
+    local avg_mech_power="0"
+    if [ -n "$elapsed_time" ] && [ "$elapsed_time" != "0" ]; then
+        avg_velocity=$(echo "scale=4; ${traveled_distance:-0} / $elapsed_time" | bc)
+        avg_mech_power=$(echo "scale=6; $ROLLING_RESISTANCE_FORCE * $avg_velocity / 1000" | bc)
+    fi
+    MISSION_AVG_VELOCITIES[$mission_num]="$avg_velocity"
+    MISSION_AVG_MECHANICAL_POWERS[$mission_num]="$avg_mech_power"
+
     MISSION_FOOD_ENABLED[$mission_num]="${food_enabled}"
     MISSION_FOOD_INITIAL_PIECES[$mission_num]="${food_initial_pieces}"
     MISSION_FOOD_FINAL_PIECES[$mission_num]="${food_final_pieces}"
@@ -284,7 +300,7 @@ run_mission() {
     if [ "$mission_result" = "SUCCESS" ]; then
         SUCCESS_SLA=$((SUCCESS_SLA + 1))
         MISSION_RESULTS[$mission_num]="SUCCESS_SLA"
-        log "Mission $mission_num: SUCCESS_SLA (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s)"
+        log "Mission $mission_num: SUCCESS_SLA (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s, avg_vel: ${avg_velocity}m/s, avg_mech_power: ${avg_mech_power}kW)"
     elif [ "$mission_result" = "SKIPPED" ]; then
         SKIPPED=$((SKIPPED + 1))
         MISSION_RESULTS[$mission_num]="SKIPPED"
@@ -307,7 +323,7 @@ run_mission() {
             MISSION_RESULTS[$mission_num]="FAILURE_TIMEOUT"
         fi
         MISSION_ERRORS[$mission_num]="$error_msg"
-        log "Mission $mission_num: ${MISSION_RESULTS[$mission_num]} (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s) - $error_msg"
+        log "Mission $mission_num: ${MISSION_RESULTS[$mission_num]} (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s, avg_vel: ${avg_velocity}m/s, avg_mech_power: ${avg_mech_power}kW) - $error_msg"
     fi
 
     if [ "$food_enabled" = "true" ]; then
@@ -328,26 +344,36 @@ generate_summary() {
         success_rate="0"
     fi
 
-    # Calculate average distance and time for completed (non-skipped) missions
+    # Calculate average distance, time, velocity, and mechanical power for completed (non-skipped) missions
     local total_distance=0
     local total_time=0
+    local total_velocity=0
+    local total_mech_power=0
     local count=0
     for i in $(seq 1 $NUM_MISSIONS); do
         local result="${MISSION_RESULTS[$i]:-N/A}"
         if [ "$result" != "SKIPPED" ] && [ "$result" != "N/A" ]; then
             local dist="${MISSION_TRAVELED_DISTANCES[$i]:-0}"
             local time="${MISSION_ELAPSED_TIMES[$i]:-0}"
+            local vel="${MISSION_AVG_VELOCITIES[$i]:-0}"
+            local mech_power="${MISSION_AVG_MECHANICAL_POWERS[$i]:-0}"
             total_distance=$(echo "$total_distance + $dist" | bc)
             total_time=$(echo "$total_time + $time" | bc)
+            total_velocity=$(echo "$total_velocity + $vel" | bc)
+            total_mech_power=$(echo "$total_mech_power + $mech_power" | bc)
             count=$((count + 1))
         fi
     done
 
     local avg_distance="0"
     local avg_time="0"
+    local avg_velocity="0"
+    local avg_mech_power="0"
     if [ "$count" -gt 0 ]; then
         avg_distance=$(echo "scale=2; $total_distance / $count" | bc)
         avg_time=$(echo "scale=2; $total_time / $count" | bc)
+        avg_velocity=$(echo "scale=4; $total_velocity / $count" | bc)
+        avg_mech_power=$(echo "scale=4; $total_mech_power / $count" | bc)
     fi
 
     log_file ""
@@ -359,6 +385,7 @@ generate_summary() {
     log_file "  - Timeout per mission: ${TIMEOUT}s"
     log_file "  - Total missions: $NUM_MISSIONS"
     log_file "  - Container: $CONTAINER"
+    log_file "  - Rolling resistance force: ${ROLLING_RESISTANCE_FORCE}N"
     log_file ""
     log_file "Results:"
     log_file "  - SUCCESS_SLA: $SUCCESS_SLA"
@@ -371,6 +398,8 @@ generate_summary() {
     log_file "Averages (excluding skipped):"
     log_file "  - Average traveled distance: ${avg_distance}m"
     log_file "  - Average elapsed time: ${avg_time}s"
+    log_file "  - Average velocity: ${avg_velocity}m/s"
+    log_file "  - Average mechanical power: ${avg_mech_power}kW"
     log_file ""
     log_file "Per-Mission Results:"
     log_file "------------------------------------------------------------"
@@ -382,6 +411,8 @@ generate_summary() {
         local error="${MISSION_ERRORS[$i]:-}"
         local traveled="${MISSION_TRAVELED_DISTANCES[$i]:-N/A}"
         local elapsed="${MISSION_ELAPSED_TIMES[$i]:-N/A}"
+        local mission_avg_vel="${MISSION_AVG_VELOCITIES[$i]:-N/A}"
+        local mission_avg_power="${MISSION_AVG_MECHANICAL_POWERS[$i]:-N/A}"
         local food_enabled="${MISSION_FOOD_ENABLED[$i]:-false}"
         local food_initial="${MISSION_FOOD_INITIAL_PIECES[$i]:-N/A}"
         local food_final="${MISSION_FOOD_FINAL_PIECES[$i]:-N/A}"
@@ -394,6 +425,8 @@ generate_summary() {
         log_file "  End:    $end"
         log_file "  Traveled distance: ${traveled}m"
         log_file "  Elapsed time: ${elapsed}s"
+        log_file "  Average velocity: ${mission_avg_vel}m/s"
+        log_file "  Average mechanical power: ${mission_avg_power}kW"
         if [ "$food_enabled" = "true" ]; then
             log_file "  Food pieces: ${food_initial} -> ${food_final}"
             log_file "  Food loss fraction: ${food_loss}"
@@ -474,45 +507,65 @@ main() {
     # Calculate averages for console output (excluding skipped)
     local total_distance=0
     local total_time=0
+    local total_velocity=0
+    local total_mech_power=0
     local count=0
     for i in $(seq 1 $NUM_MISSIONS); do
         local result="${MISSION_RESULTS[$i]:-N/A}"
         if [ "$result" != "SKIPPED" ] && [ "$result" != "N/A" ]; then
             local dist="${MISSION_TRAVELED_DISTANCES[$i]:-0}"
             local time="${MISSION_ELAPSED_TIMES[$i]:-0}"
+            local vel="${MISSION_AVG_VELOCITIES[$i]:-0}"
+            local mech_power="${MISSION_AVG_MECHANICAL_POWERS[$i]:-0}"
             total_distance=$(echo "$total_distance + $dist" | bc)
             total_time=$(echo "$total_time + $time" | bc)
+            total_velocity=$(echo "$total_velocity + $vel" | bc)
+            total_mech_power=$(echo "$total_mech_power + $mech_power" | bc)
             count=$((count + 1))
         fi
     done
 
     local avg_distance="0"
     local avg_time="0"
+    local avg_velocity="0"
+    local avg_mech_power="0"
     if [ "$count" -gt 0 ]; then
         avg_distance=$(echo "scale=2; $total_distance / $count" | bc)
         avg_time=$(echo "scale=2; $total_time / $count" | bc)
+        avg_velocity=$(echo "scale=4; $total_velocity / $count" | bc)
+        avg_mech_power=$(echo "scale=4; $total_mech_power / $count" | bc)
     fi
 
     # Calculate averages including skipped
     local total_distance_all=0
     local total_time_all=0
+    local total_velocity_all=0
+    local total_mech_power_all=0
     local count_all=0
     for i in $(seq 1 $NUM_MISSIONS); do
         local result="${MISSION_RESULTS[$i]:-N/A}"
         if [ "$result" != "N/A" ]; then
             local dist="${MISSION_TRAVELED_DISTANCES[$i]:-0}"
             local time="${MISSION_ELAPSED_TIMES[$i]:-0}"
+            local vel="${MISSION_AVG_VELOCITIES[$i]:-0}"
+            local mech_power="${MISSION_AVG_MECHANICAL_POWERS[$i]:-0}"
             total_distance_all=$(echo "$total_distance_all + $dist" | bc)
             total_time_all=$(echo "$total_time_all + $time" | bc)
+            total_velocity_all=$(echo "$total_velocity_all + $vel" | bc)
+            total_mech_power_all=$(echo "$total_mech_power_all + $mech_power" | bc)
             count_all=$((count_all + 1))
         fi
     done
 
     local avg_distance_all="0"
     local avg_time_all="0"
+    local avg_velocity_all="0"
+    local avg_mech_power_all="0"
     if [ "$count_all" -gt 0 ]; then
         avg_distance_all=$(echo "scale=2; $total_distance_all / $count_all" | bc)
         avg_time_all=$(echo "scale=2; $total_time_all / $count_all" | bc)
+        avg_velocity_all=$(echo "scale=4; $total_velocity_all / $count_all" | bc)
+        avg_mech_power_all=$(echo "scale=4; $total_mech_power_all / $count_all" | bc)
     fi
 
     echo ""
@@ -520,15 +573,19 @@ main() {
     echo "  Evaluation Complete"
     echo "=============================================="
     echo "  SUCCESS_SLA:              $SUCCESS_SLA / $NUM_MISSIONS"
+    echo "  FAILURE_FOODSPOILED:      $FAILURE_FOODSPOILED / $NUM_MISSIONS"
     echo "  FAILURE_TIMEOUT:          $FAILURE_TIMEOUT / $NUM_MISSIONS"
     echo "  FAILURE_PHYSICALASSISTANCE: $FAILURE_PHYSICALASSISTANCE / $NUM_MISSIONS"
-    echo "  FAILURE_FOODSPOILED:      $FAILURE_FOODSPOILED / $NUM_MISSIONS"
     echo "  Skipped:                  $SKIPPED / $NUM_MISSIONS"
     echo "  Success Rate: ${success_rate}% (excluding skipped)"
     echo "  Avg Distance: ${avg_distance}m (excluding skipped)"
     echo "  Avg Time:     ${avg_time}s (excluding skipped)"
+    echo "  Avg Velocity: ${avg_velocity}m/s (excluding skipped)"
+    echo "  Avg Mech Power: ${avg_mech_power}kW (excluding skipped)"
     echo "  Avg Distance: ${avg_distance_all}m (including skipped)"
     echo "  Avg Time:     ${avg_time_all}s (including skipped)"
+    echo "  Avg Velocity: ${avg_velocity_all}m/s (including skipped)"
+    echo "  Avg Mech Power: ${avg_mech_power_all}kW (including skipped)"
     echo "  Log file:   $LOG_FILE"
     echo "=============================================="
 }
