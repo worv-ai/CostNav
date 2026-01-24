@@ -252,8 +252,12 @@ class CostNavSimLauncher:
         from isaacsim.core.utils.extensions import enable_extension
         import omni.kit.app
 
-        # Navigation extension (must be enabled before using navmesh)
+        # Navigation extensions (must be enabled before using navmesh)
         enable_extension("omni.anim.navigation.core")
+
+        # Debugging extension
+        enable_extension("omni.anim.navigation.bundle")
+        enable_extension("omni.physx.bundle")
 
         # Core extensions
         enable_extension("omni.isaac.sensor")
