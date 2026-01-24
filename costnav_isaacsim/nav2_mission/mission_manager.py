@@ -190,7 +190,7 @@ class MissionManager:
 
         # Food tracking for spoilage evaluation
         self._food_root_prim_path = None  # Root prim path for food assets
-        self._food_prefix_path = None     # Pre-calculated prefix for startswith check
+        self._food_prefix_path = None  # Pre-calculated prefix for startswith check
         self._food_pieces_prim_path = None  # Full prim path to food pieces
         self._food_bucket_prim_path = None  # Full prim path to food bucket
         self._initial_food_piece_count = 0  # Piece count at mission start
@@ -449,6 +449,7 @@ class MissionManager:
     def _reset_impulse_health(self) -> None:
         self._impulse_damage_accumulated = 0.0
         self._impulse_health = self._impulse_health_max
+        self._last_damage_steps_remaining = 0
 
     def _setup_contact_reporting(self) -> None:
         food_root = self.mission_config.food.prim_path
@@ -462,7 +463,7 @@ class MissionManager:
         base_link_path = self.mission_config.teleport.robot_prim or self.config.robot_prim_path
         if base_link_path:
             base_link_path = base_link_path.rstrip("/")
-        
+
         robot_hint = base_link_path.lower() if base_link_path else ""
         if "segway" in robot_hint:
             base_link_path = "/World/Segway_E1_ROS2/base_link"
@@ -512,28 +513,31 @@ class MissionManager:
         if not self._contact_report_targets:
             return
 
-        if self._state != MissionState.WAITING_FOR_COMPLETION:
+        if self._last_damage_steps_remaining > 0:
+            self._last_damage_steps_remaining = max(0, self._last_damage_steps_remaining - 1)
             return
+
         try:
             from pxr import PhysicsSchemaTools
         except ImportError:
             return
 
-        check_food = self._food_root_prim_path is not None
+        food_root: str = self._food_root_prim_path or ""
         for header in contact_headers:
             actor0 = str(PhysicsSchemaTools.intToSdfPath(header.actor0))
             actor1 = str(PhysicsSchemaTools.intToSdfPath(header.actor1))
             if (actor0 not in self._contact_report_targets) and (actor1 not in self._contact_report_targets):
                 continue
 
-            if check_food:
-                if (actor0 in self._contact_report_targets and (
-                    actor1 == self._food_root_prim_path or actor1.startswith(self._food_prefix_path)
-                )):
+            if food_root:
+                food_prefix_str: str = f"{food_root}/"
+                if actor0 in self._contact_report_targets and (
+                    actor1 == food_root or actor1[: len(food_prefix_str)] == food_prefix_str
+                ):
                     continue
-                if (actor1 in self._contact_report_targets and (
-                    actor0 == self._food_root_prim_path or actor0.startswith(self._food_prefix_path)
-                )):
+                if actor1 in self._contact_report_targets and (
+                    actor0 == food_root or actor0[: len(food_prefix_str)] == food_prefix_str
+                ):
                     continue
 
             if header.num_contact_data == 0:
@@ -549,6 +553,8 @@ class MissionManager:
                 if impulse_amount < self._impulse_min_threshold:
                     continue
                 self._apply_impulse_damage(impulse_amount)
+                self._last_damage_steps_remaining = self._damage_cooldown_steps
+                return
 
     def handle_simulation_restart(self, stage_reloaded: bool = False) -> None:
         """Refresh cached sim handles after stop/reset or stage reload."""
