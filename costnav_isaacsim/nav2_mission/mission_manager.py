@@ -718,6 +718,8 @@ class MissionManager:
         # where the eval script sees the previous mission's SUCCESS result
         self._last_mission_result = MissionResult.PENDING
         self._last_mission_distance = None
+        self._last_elapsed_time = None
+        self._last_traveled_distance = None
 
         self._start_requested = True
         if self._is_mission_active():
@@ -1210,6 +1212,8 @@ class MissionManager:
                 self._final_food_piece_count = self._count_food_pieces_in_bucket()
             self._last_mission_result = MissionResult.FAILURE_TIMEOUT
             self._last_mission_distance = distance if distance is not None else -1.0
+            self._last_elapsed_time = elapsed
+            self._last_traveled_distance = self._traveled_distance
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_TIMEOUT] Mission {self._current_mission} timed out! "
