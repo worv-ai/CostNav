@@ -39,7 +39,7 @@ class MissionManagerConfig:
     goal_delay: float = 0.5  # Delay after publishing goal (seconds)
     teleport_height: float = 0.1  # Height offset for teleportation (meters)
     robot_prim_path: Optional[str] = None  # Robot prim path in Isaac Sim USD stage
-    teleport_settle_steps: int = 5  # Number of simulation steps after teleportation for physics to settle
+    teleport_settle_steps: int = 30  # Number of simulation steps after teleportation for physics to settle
 
 
 class MissionState(Enum):
@@ -127,8 +127,8 @@ class MissionManager:
                 initial_pose_delay=mission_config.nav2.initial_pose_delay,
                 teleport_height=mission_config.teleport.height_offset,
                 robot_prim_path=mission_config.teleport.robot_prim,
-                # Use default value of 5 for teleport_settle_steps (not in TeleportConfig)
-                teleport_settle_steps=5,
+                # Use default value of MissionManagerConfig (not in TeleportConfig)
+                teleport_settle_steps=MissionManagerConfig.teleport_settle_steps,
             )
         self.config = manager_config
 
