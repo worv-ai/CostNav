@@ -745,7 +745,12 @@ class MissionManager:
             "distance_to_goal": float,
             "in_progress": bool,
             "traveled_distance": float,  # meters
-            "elapsed_time": float  # seconds
+            "elapsed_time": float,  # seconds
+            "food_enabled": bool,
+            "food_initial_pieces": int,
+            "food_final_pieces": int,
+            "food_loss_fraction": float,
+            "food_spoiled": bool
         }
         """
         import json
@@ -773,6 +778,20 @@ class MissionManager:
         else:
             traveled_distance = self._traveled_distance  # Fallback to current
 
+        # Food metrics
+        food_enabled = bool(self.mission_config.food.enabled)
+        food_initial_pieces = self._initial_food_piece_count if food_enabled else -1
+        if food_enabled and self._final_food_piece_count is not None:
+            food_final_pieces = self._final_food_piece_count
+        else:
+            food_final_pieces = -1
+
+        food_loss_fraction = -1.0
+        if food_enabled and self._initial_food_piece_count > 0 and self._final_food_piece_count is not None:
+            food_loss_fraction = (self._initial_food_piece_count - self._final_food_piece_count) / self._initial_food_piece_count
+
+        food_spoiled = self._last_mission_result == MissionResult.FAILURE_FOODSPOILED
+
         result_data = {
             "result": self._last_mission_result.value,
             "mission_number": self._current_mission,
@@ -780,6 +799,11 @@ class MissionManager:
             "in_progress": in_progress,
             "traveled_distance": traveled_distance,
             "elapsed_time": elapsed_time,
+            "food_enabled": food_enabled,
+            "food_initial_pieces": food_initial_pieces,
+            "food_final_pieces": food_final_pieces,
+            "food_loss_fraction": food_loss_fraction,
+            "food_spoiled": food_spoiled,
         }
 
         response.success = True
@@ -1165,6 +1189,8 @@ class MissionManager:
         # Check for robot fall (requires physical assistance)
         if self._is_robot_fallen():
             self._mission_end_time = self._get_current_time_seconds()
+            if self.mission_config.food.enabled:
+                self._final_food_piece_count = self._count_food_pieces_in_bucket()
             self._last_mission_result = MissionResult.FAILURE_PHYSICALASSISTANCE
             self._last_mission_distance = distance if distance is not None else -1.0
             self._last_elapsed_time = elapsed
@@ -1179,6 +1205,8 @@ class MissionManager:
         # Check for timeout (failure)
         if self.mission_config.timeout is not None and elapsed >= self.mission_config.timeout:
             self._mission_end_time = self._get_current_time_seconds()
+            if self.mission_config.food.enabled:
+                self._final_food_piece_count = self._count_food_pieces_in_bucket()
             self._last_mission_result = MissionResult.FAILURE_TIMEOUT
             self._last_mission_distance = distance if distance is not None else -1.0
             self._state = MissionState.WAITING_FOR_START
