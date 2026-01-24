@@ -479,9 +479,9 @@ class MissionManager:
 
                 # Check if position is within bucket bounds
                 if (
-                    min_xyz[0] <= position[0] <= max_xyz[0] and
-                    min_xyz[1] <= position[1] <= max_xyz[1] and
-                    min_xyz[2] <= position[2] <= max_xyz[2]
+                    min_xyz[0] <= position[0] <= max_xyz[0]
+                    and min_xyz[1] <= position[1] <= max_xyz[1]
+                    and min_xyz[2] <= position[2] <= max_xyz[2]
                 ):
                     count += 1
 
@@ -677,8 +677,7 @@ class MissionManager:
             robot_pos = world_transform.ExtractTranslation()
 
             logger.info(
-                f"[FOOD] Robot position from prim: "
-                f"({robot_pos[0]:.2f}, {robot_pos[1]:.2f}, {robot_pos[2]:.2f})"
+                f"[FOOD] Robot position from prim: ({robot_pos[0]:.2f}, {robot_pos[1]:.2f}, {robot_pos[2]:.2f})"
             )
 
             # Spawn food at robot's actual position (z_offset will be added)
@@ -788,7 +787,9 @@ class MissionManager:
 
         food_loss_fraction = -1.0
         if food_enabled and self._initial_food_piece_count > 0 and self._final_food_piece_count is not None:
-            food_loss_fraction = (self._initial_food_piece_count - self._final_food_piece_count) / self._initial_food_piece_count
+            food_loss_fraction = (
+                self._initial_food_piece_count - self._final_food_piece_count
+            ) / self._initial_food_piece_count
 
         food_spoiled = self._last_mission_result == MissionResult.FAILURE_FOODSPOILED
 
