@@ -591,7 +591,11 @@ def load_and_override_config(args) -> "MissionConfig":
         config.nav2.wait_time = args.nav2_wait
 
     # Food evaluation overrides
-    if args.food_enabled is not None:
+    # Environment variable takes priority, then CLI flag, then config default
+    food_env = os.environ.get("FOOD")
+    if food_env is not None:
+        config.food.enabled = food_env == "1"
+    elif args.food_enabled is not None:
         config.food.enabled = args.food_enabled
     if args.food_prim_path is not None:
         config.food.prim_path = args.food_prim_path
