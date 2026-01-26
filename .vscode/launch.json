@@ -15,20 +15,6 @@
             "preLaunchTask": "setup_python_env"
         },
         {
-            "name": "Python: Launch Mission",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/costnav_isaacsim/launch.py",
-            "args": [
-                "--mission"
-            ],
-            "console": "integratedTerminal",
-            "python": "/isaac-sim/kit/python/bin/python3",
-            "envFile": "${workspaceFolder}/.vscode/.standalone_examples.env",
-            "preLaunchTask": "setup_python_env",
-            "cwd": "${workspaceFolder}/costnav_isaacsim"
-        },
-        {
             "name": "Python: Teleop (segway_e1, 1 person)",
             "type": "debugpy",
             "request": "launch",
@@ -90,6 +76,13 @@
                     "ignoreFailures": true
                 }
             ]
+        },
+        {
+            "name": "Start Mission",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "make start-mission",
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

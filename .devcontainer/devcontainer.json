@@ -2,12 +2,8 @@
   // =============================================================================
   // CostNav Dev Container Configuration
   // =============================================================================
-  // To select a different service, set environment variables before opening:
-  //
-  //   export DEVCONTAINER_SERVICE=isaac-lab
-  //
-  // Or add to your .env file (copy from .env.example)
-  //
+  // Select the Docker service to use for the dev container.
+  // To select a different service, change the "service" and "runServices" fields below.
   // Available services: isaac-sim (default), isaac-lab, dev, ros2
   // See docker-compose.yml for full service definitions.
   // =============================================================================

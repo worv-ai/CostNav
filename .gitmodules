@@ -16,3 +16,6 @@
 [submodule "third_party/FoodAssets"]
 	path = third_party/FoodAssets
 	url = https://github.com/worv-ai/FoodAssets
+[submodule "third_party/navigation2"]
+	path = third_party/navigation2
+	url = https://github.com/ros-navigation/navigation2.git

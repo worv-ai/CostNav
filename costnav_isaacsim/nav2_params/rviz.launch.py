@@ -44,7 +44,7 @@ def generate_launch_description():
 
     map_yaml_file = LaunchConfiguration(
         "map",
-        default=os.path.join(this_dir, "carter_sidewalk.yaml"),
+        default=os.path.join(this_dir, "maps", "sidewalk.yaml"),
     )
 
     params_file = LaunchConfiguration(

@@ -2,9 +2,9 @@
 
 **Issue Reference:** [#5 - Support rule-based navigation with nav2](https://github.com/worv-ai/CostNav/issues/5)
 
-**Status:** ✅ Nav2 Integration Complete | ✅ Mission Orchestration Complete | ⏳ Parameter Tuning In Progress
+**Status:** ✅ Nav2 Integration Complete | ✅ Mission Orchestration Complete | ✅ Parameter Tuning Complete | ⏳ Cost Model Integration In Progress
 **Target Version:** CostNav v0.2.0
-**Last Updated:** 2025-12-12
+**Last Updated:** 2026-01-26
 
 ---
 
@@ -13,23 +13,171 @@
 ### ✅ Completed
 
 - **Nav2 Integration with Nova Carter**: Full ROS2 Navigation Stack 2 integration complete
+- **Nav2 Integration with Segway E1**: Dynamic robot selection via SIM_ROBOT environment variable
 - **Docker Setup**: Multi-container architecture configured
 - **ROS2 Bridge**: Communication between Isaac Sim and Nav2 established
 - **Occupancy Map**: Generated and configured for Street_sidewalk environment
-- **Basic Navigation**: Nova Carter successfully navigates to goals
+- **Basic Navigation**: Both Nova Carter and Segway E1 successfully navigate to goals
 - **Mission Orchestration**: Automated start/goal sampling, robot teleportation, and RViz visualization
 - **NavMesh Position Sampling**: Valid start/goal positions sampled from Isaac Sim's NavMesh
 - **RViz Marker Visualization**: Start (green), goal (red), and robot (blue) markers
+- **Robot-Specific Configuration**: Separate parameter files for Nova Carter and Segway E1
+- **Parameter Tuning**: Nav2 parameters optimized for both Nova Carter and Segway E1
 
 ### ⏳ In Progress
 
-1. **Parameter Tuning**: Optimizing Nav2 parameters for Nova Carter performance
-2. **Cost Model Integration**: Track economic metrics for Nav2 navigation
+1. **Cost Model Integration**: Track economic metrics for Nav2 navigation
+   - ✅ Energy consumption tracking via odometry (merged to main)
+   - ✅ Distance and time metrics logging (merged to main)
+   - ✅ Collision impulse tracking and health monitoring (merged to main)
+   - ✅ Food spoilage tracking for delivery missions (merged to main)
+   - ⏳ Integration with existing cost model framework
+   - ⏳ Benchmark comparison with RL baseline
 
 ### 📋 Future Work
 
-- **COCO Robot Integration**: Adapt Nav2 for COCO delivery robot (lower priority)
 - **Hybrid RL+Nav2**: Combine learning-based and rule-based approaches
+- **Multi-Robot Navigation**: Extend to support multiple robots simultaneously
+
+### ⚠️ Known Issues
+
+1. **~~Segway E1 Spin-in-Place Problem~~** - ✅ RESOLVED
+   - **Description**: The Segway E1 robot could not perform in-place rotation maneuvers
+   - **Impact**: Affected navigation in tight spaces and goal orientation alignment
+   - **Status**: ✅ Resolved by modifying Isaac Sim USD Action Graph robot controller configuration
+   - **Root Cause Solution**: Changed the robot controller used in the USD Action Graph of Isaac Sim to properly support differential drive in-place rotation commands
+   - **Navigation Enhancement**: Implemented `nav2_rotation_shim_controller::RotationShimController` wrapper around DWB controller as a complementary improvement for better in-place rotation behavior
+   - **Details**: See "Parameter Tuning: RotationShimController" section below for the navigation enhancement configuration
+
+---
+
+## Parameter Tuning: RotationShimController
+
+### Overview
+
+To resolve the Segway E1 spin-in-place problem and improve navigation performance for both robots, we implemented the **Nav2 RotationShimController** as a wrapper around the DWB local planner. This controller enforces in-place rotation when the robot needs to make large heading corrections before following a path.
+
+### What is RotationShimController?
+
+The RotationShimController is a Nav2 controller plugin that:
+
+1. **Monitors heading error** between the robot's current orientation and the path direction
+2. **Triggers in-place rotation** when heading error exceeds a threshold (e.g., 45°)
+3. **Hands off to primary controller** (DWB) once the robot is roughly aligned with the path
+4. **Enables smooth transitions** between rotation and path-following modes
+
+**Reference:** [Nav2 RotationShimController Documentation](https://docs.nav2.org/configuration/packages/configuring-rotation-shim-controller.html)
+
+### Configuration Strategy
+
+We use **consistent angular velocity limits** across all navigation phases:
+
+| Phase                  | Controller             | Angular Velocity | Purpose                                        |
+| ---------------------- | ---------------------- | ---------------- | ---------------------------------------------- |
+| **In-Place Rotation**  | RotationShimController | 0.5 rad/s        | Controlled heading corrections when stationary |
+| **Path Following**     | DWB Controller         | 0.5 rad/s        | Stable turning while moving forward            |
+| **Recovery Behaviors** | Behavior Server        | 0.5 rad/s        | Controlled recovery spins                      |
+
+### Parameter Configuration
+
+#### 1. RotationShimController Parameters
+
+```yaml
+FollowPath:
+  plugin: "nav2_rotation_shim_controller::RotationShimController"
+  angular_dist_threshold: 0.785 # 45° in radians - rotate in place if heading error > this
+  forward_sampling_distance: 0.5 # meters - distance to look ahead on path
+  rotate_to_heading_angular_vel: 0.5 # rad/s - rotation speed during in-place rotation
+  max_angular_accel: 3.5 # rad/s² - max angular acceleration
+  simulate_ahead_time: 2.0 # seconds - collision checking projection time
+  rotate_to_goal_heading: false # Don't rotate to goal heading at the end
+  closed_loop: false # Use commanded velocity instead of odometry (prevents premature deceleration)
+```
+
+**Note on `closed_loop: false` (Segway E1 only):**
+
+- When `true` (default): Uses robot odometry velocity for acceleration calculations
+- When `false`: Uses last commanded velocity for acceleration calculations
+- Setting to `false` prevents the controller from decelerating too early when approaching the target heading
+- This ensures the robot maintains minimum velocity (0.3 rad/s) during in-place rotation
+- Only needed for Segway E1 due to its specific dynamics
+
+#### 2. DWB Controller Parameters (Wrapped by RotationShim)
+
+```yaml
+primary_controller: "dwb_core::DWBLocalPlanner"
+max_vel_theta: 0.5 # rad/s - Cap angular velocity
+min_speed_theta: 0.3 # rad/s - Minimum rotation speed when rotating
+```
+
+#### 3. Velocity Smoother Parameters
+
+```yaml
+velocity_smoother:
+  max_velocity: [2.0, 0.0, 0.5] # [vx, vy, vθ] - Cap angular velocity
+  min_velocity: [-2.0, 0.0, -0.5]
+```
+
+#### 4. Behavior Server Parameters
+
+```yaml
+behavior_server:
+  max_rotational_vel: 0.5 # rad/s - Cap angular velocity
+  min_rotational_vel: 0.3
+  rotational_acc_lim: 3.5
+```
+
+### Why This Configuration Works
+
+1. **Controlled In-Place Rotations (0.5 rad/s)**
+   - Slower speed prevents position loss during rotation
+   - 180° turn takes ~6.3 seconds
+   - Only active when heading error > 45° (angular_dist_threshold)
+   - Prevents excessive speed that could cause localization drift
+
+2. **Stable Forward Motion (0.5 rad/s)**
+   - Consistent angular velocity limit across all navigation phases
+   - Prevents excessive oscillation on curved paths
+   - Maintains smooth trajectory tracking
+   - Reduces wear on motors during normal navigation
+
+3. **Velocity Smoother Compatibility**
+   - Set to 0.5 rad/s to match controller limits
+   - Ensures consistent velocity caps across the navigation stack
+   - Smooths acceleration/deceleration for motor protection
+
+4. **Consistent Recovery Behaviors**
+   - Recovery spins use same 0.5 rad/s as in-place rotations
+   - Controlled recovery from stuck situations
+   - Consistent behavior across navigation modes
+
+5. **Minimum Velocity Enforcement (0.3 rad/s)**
+   - Prevents robot from getting stuck with very low angular velocities
+   - `closed_loop: false` helps maintain this minimum during deceleration
+   - Ensures reliable rotation completion
+
+### Implementation Files
+
+**Tuned Parameter Files:**
+
+- `costnav_isaacsim/nav2_params/nova_carter/navigation_params_tuned_true.yaml`
+- `costnav_isaacsim/nav2_params/segway_e1/navigation_params_tuned_true.yaml`
+
+**Key Sections:**
+
+- `controller_server.FollowPath` - RotationShimController configuration
+- `controller_server.FollowPath.primary_controller` - DWB parameters
+- `velocity_smoother` - Velocity limits
+- `behavior_server` - Recovery behavior parameters
+
+### Benefits
+
+✅ **Segway E1 can now perform in-place rotations** - Resolved the spin-in-place problem
+✅ **Controlled navigation** - Consistent 0.5 rad/s angular velocity across all phases
+✅ **Stable path tracking** - Limited angular velocity prevents oscillation
+✅ **Smooth transitions** - RotationShimController hands off cleanly to DWB
+✅ **Prevents position loss** - Slower rotation (0.5 rad/s) maintains better localization
+✅ **Reliable rotation completion** - Minimum 0.3 rad/s prevents getting stuck
 
 ---
 
@@ -37,8 +185,10 @@
 
 This document outlines the Nav2 integration for CostNav, following NVIDIA's official [Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html).
 
-**Primary Robot:** Nova Carter (NVIDIA's reference platform)
-**Future Robot:** COCO delivery robot (planned)
+**Supported Robots:**
+
+- **Nova Carter** (NVIDIA's reference platform) - ✅ Complete
+- **Segway E1** (Delivery robot) - ✅ Complete
 
 **Current Capabilities:**
 
@@ -70,9 +220,10 @@ CostNav currently supports:
 
 - **Learning-based navigation** using RL-Games, RSL-RL, SKRL, and Stable-Baselines3
 - **Isaac Sim/Isaac Lab** simulation environment (v5.1.0 / v2.3.0)
-- **✅ Nav2 Integration with Nova Carter** - Complete and operational
-- **Nova Carter robot** (primary) - NVIDIA's reference platform with full sensor suite
-- **COCO delivery robot** (future) - Custom delivery robot for urban navigation
+- **✅ Nav2 Integration** - Complete and operational for both robots
+- **Nova Carter robot** - NVIDIA's reference platform with full sensor suite
+- **Segway E1 delivery robot** - Delivery robot for urban navigation
+- **Dynamic robot selection** - SIM_ROBOT environment variable for switching between robots
 - **Cost-driven evaluation** metrics (SLA compliance, profitability, break-even time)
 - **Custom MDP components** for navigation (commands, observations, rewards, terminations)
 
@@ -84,12 +235,15 @@ CostNav currently supports:
 - ✅ Multi-container Docker architecture
 - ✅ ROS2 bridge for Isaac Sim communication
 
+### Completed Tasks
+
+1. ✅ **Start and Goal Sampling** - Complete (nav2_mission module)
+2. ✅ **Segway E1 Robot Adaptation** - Complete (SIM_ROBOT environment variable with dynamic parameter selection)
+3. ✅ **Parameter Tuning** - Complete (Optimized Nav2 parameters for both Nova Carter and Segway E1, including RotationShimController configuration)
+
 ### Remaining Tasks
 
-1. ~~**Start and Goal Sampling**~~ - ✅ Complete (nav2_mission module)
-2. **Parameter Tuning** - Optimize Nav2 parameters for Nova Carter navigation performance
-3. **Cost Model Integration** - Track economic metrics for Nav2 navigation
-4. **COCO Robot Adaptation** - Extend Nav2 support to COCO delivery robot (future work)
+1. **Cost Model Integration** - Track economic metrics for Nav2 navigation
 
 ---
 
@@ -112,12 +266,13 @@ This implementation follows NVIDIA's official tutorial which covers:
 - **Status:** Fully operational Nav2 integration
 - **Remaining Work:** Start/goal sampling and parameter tuning
 
-**Future Adaptation:**
+**Current Capabilities:**
 
-- Extend to **COCO delivery robot** (lower priority)
-- Add **cost model tracking** for economic metrics
-- Integrate with **existing CostNav benchmark framework**
-- Enable **comparison with RL-based navigation**
+- ✅ **Multi-robot support** - Nova Carter and Segway E1 via SIM_ROBOT environment variable
+- ✅ **Dynamic parameter selection** - Robot-specific navigation parameters and RViz configurations
+- 📋 **Cost model tracking** for economic metrics (in progress)
+- 📋 **Integration with existing CostNav benchmark framework** (in progress)
+- 📋 **Comparison with RL-based navigation** (planned)
 
 **Tutorial Sections to Follow:**
 
@@ -157,8 +312,8 @@ This implementation follows NVIDIA's official tutorial which covers:
 │  │  │              │  │   LiDAR)   │  │            │       │  │
 │  │  └──────────────┘  └────────────┘  └────────────┘       │  │
 │  │  ┌──────────────┐                                        │  │
-│  │  │ COCO Robot   │  (Future Work)                        │  │
-│  │  │  (Future)    │                                        │  │
+│  │  │ Segway E1    │  ✅ Supported                         │  │
+│  │  │ (Delivery)   │                                        │  │
 │  │  └──────────────┘                                        │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                  │
@@ -180,7 +335,73 @@ This implementation follows NVIDIA's official tutorial which covers:
 
 ---
 
-## Running Nav2 with Nova Carter
+## Robot Selection
+
+CostNav supports multiple robots for Nav2 navigation. Use the `SIM_ROBOT` environment variable to select between supported robots.
+
+### Supported Robots
+
+| Robot       | Value         | Status      | Description                                        |
+| ----------- | ------------- | ----------- | -------------------------------------------------- |
+| Nova Carter | `nova_carter` | ✅ Complete | NVIDIA's reference platform with full sensor suite |
+| Segway E1   | `segway_e1`   | ✅ Complete | Delivery robot for urban navigation                |
+
+### Configuration Structure
+
+Robot-specific configuration files are organized as follows:
+
+```
+nav2_params/
+├── maps/                          # Shared map files for all robots
+│   ├── sidewalk.yaml
+│   ├── sidewalk.png
+│   └── sidewalk_orthographic.png
+├── nova_carter/                   # Nova Carter specific files
+│   ├── navigation_params.yaml
+│   ├── navigation.rviz
+│   └── navigation_teleop.rviz
+└── segway_e1/                     # Segway E1 specific files
+    ├── navigation_params.yaml
+    ├── navigation.rviz
+    └── navigation_teleop.rviz
+```
+
+### Switching Between Robots
+
+**Option 1: Environment Variable**
+
+```bash
+# Use Nova Carter (default)
+make run-nav2
+
+# Use Segway E1
+SIM_ROBOT=segway_e1 make run-nav2
+```
+
+**Option 2: Set in `.env` file**
+
+```bash
+# Add to .env file
+SIM_ROBOT=segway_e1
+```
+
+**Option 3: Docker Compose Override**
+
+```bash
+# Use Segway E1
+docker compose --profile nav2 up -e SIM_ROBOT=segway_e1
+```
+
+The `SIM_ROBOT` variable automatically selects:
+
+- Robot-specific navigation parameters (`/workspace/nav2_params/${SIM_ROBOT}/navigation_params.yaml`)
+- Robot-specific RViz configuration (`/workspace/nav2_params/${SIM_ROBOT}/navigation.rviz`)
+- Robot-specific teleop RViz configuration (`/workspace/nav2_params/${SIM_ROBOT}/navigation_teleop.rviz`)
+- Shared map files (`/workspace/nav2_params/maps/sidewalk.yaml`)
+
+---
+
+## Running Nav2
 
 ### Quick Start
 
@@ -265,12 +486,14 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 - ✅ Week 1: Docker Setup & ROS2 Bridge - Complete
 - ✅ Week 2: Nova Carter Setup & Occupancy Map - Complete
 - ✅ Week 3: Nav2 Stack Configuration & Mission Orchestration - Complete
-- ⏳ Week 4: Cost Model Integration & Parameter Tuning - In progress
+- ✅ Week 4: Parameter Tuning - Complete
+- ⏳ Week 5: Cost Model Integration - In progress (partially merged to main)
 
 **Remaining Work:**
 
-- Parameter tuning for optimal Nova Carter performance
-- Cost model integration for economic metrics tracking
+- Complete cost model integration with existing framework
+- Benchmark comparison report: Nav2 vs RL baseline
+- Documentation of cost metrics and evaluation methodology
 
 ---
 
@@ -344,7 +567,7 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 - [x] Configure Nav2 parameters for Nova Carter
 - [x] Create ROS2 launch file for Nav2 stack
 - [x] Test navigation with RViz2 "Nav2 Goal" button
-- [ ] ⏳ Tune parameters for Nova Carter kinematics (moved to Week 4)
+- [x] Tune parameters for Nova Carter and Segway E1 kinematics
 - [x] Implement position sampling using NavMesh
 - [x] Ensure minimum distance threshold between start and goal
 - [x] Implement robot teleportation and mission initiation
@@ -358,7 +581,7 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 - ✅ Mission orchestration module at `/workspace/costnav_isaacsim/nav2_mission/`
 - ✅ Configuration module at `/workspace/costnav_isaacsim/config/` with YAML-based settings
 - ✅ Manual mission trigger via `/start_mission` with config loaded at startup
-- ⏳ Optimized parameters (moved to Week 4)
+- ✅ Optimized parameters for both Nova Carter and Segway E1
 
 **Success Criteria:**
 
@@ -368,7 +591,7 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 - ✅ Start/goal positions sampled from NavMesh with minimum distance threshold (5-50m configurable)
 - ✅ Robot teleports to start and navigates to goal automatically
 - ✅ RViz displays distinct markers for start (green), goal (red), and robot (blue) positions
-- ⏳ Parameters optimized for performance (moved to Week 4)
+- ✅ Parameters optimized for performance
 
 #### Implementation: Nav2 Mission Module
 
@@ -417,14 +640,14 @@ Mission parameters are configured via YAML file at `config/mission_config.yaml`:
 
 ```yaml
 mission:
-  timeout: 3600.0   # Mission timeout (seconds)
+  timeout: 3600.0 # Mission timeout (seconds)
 
 distance:
-  min: 5.0          # Minimum start-goal distance (meters)
-  max: 50.0         # Maximum start-goal distance (meters)
+  min: 5.0 # Minimum start-goal distance (meters)
+  max: 50.0 # Maximum start-goal distance (meters)
 
 nav2:
-  wait_time: 10.0   # Wait for Nav2 stack to initialize
+  wait_time: 10.0 # Wait for Nav2 stack to initialize
 
 teleport:
   robot_prim: "/World/Nova_Carter_ROS"
@@ -462,15 +685,48 @@ python launch.py --mission-timeout 600 --min-distance 10
 
 #### RViz Marker Topics
 
-| Topic          | Color | Description                    |
-| -------------- | ----- | ------------------------------ |
-| `/start_marker`| Green | Start position (ARROW marker)  |
-| `/goal_marker` | Red   | Goal position (ARROW marker)   |
-| `/robot_marker`| Blue  | Current robot position (10 Hz) |
+| Topic           | Color | Description                    |
+| --------------- | ----- | ------------------------------ |
+| `/start_marker` | Green | Start position (ARROW marker)  |
+| `/goal_marker`  | Red   | Goal position (ARROW marker)   |
+| `/robot_marker` | Blue  | Current robot position (10 Hz) |
 
 ---
 
-### Week 4: Cost Model Integration & Testing
+### Week 4: Parameter Tuning - ✅ COMPLETE
+
+**Objective:** Optimize Nav2 parameters for both Nova Carter and Segway E1 robots
+
+**Tasks:**
+
+- [x] Tune DWB controller parameters for Nova Carter
+- [x] Tune DWB controller parameters for Segway E1
+- [x] Optimize costmap parameters (inflation radius, obstacle layer)
+- [x] Configure planner parameters for efficient path planning
+- [x] Test and validate navigation performance for both robots
+- [x] Create robot-specific parameter files
+
+**Deliverables:**
+
+- ✅ Optimized `nova_carter/navigation_params.yaml`
+- ✅ Optimized `segway_e1/navigation_params.yaml`
+- ✅ Robot-specific RViz configurations
+- ✅ Validated navigation performance
+
+**Success Criteria:**
+
+- ✅ Both robots navigate successfully to goals
+- ✅ Obstacle avoidance works reliably
+- ✅ Recovery behaviors function properly
+- ✅ Parameters documented and committed
+
+**Known Issues:**
+
+- ⚠️ Segway E1 cannot spin in place (see Known Issues section for details)
+
+---
+
+### Week 5: Cost Model Integration & Testing - ⏳ IN PROGRESS
 
 **Objective:** Integrate cost tracking, run benchmark scenarios, and validate Nav2 against RL baseline
 
@@ -481,11 +737,13 @@ python launch.py --mission-timeout 600 --min-distance 10
 - [x] Basic Nav2 integration complete
 - [x] Create programmatic goal sender (Python script)
 - [x] Document usage and API
-- [ ] Create `nav2_cost_tracker.py` ROS2 node
-- [ ] Implement energy consumption model
-- [ ] Implement SLA compliance tracking
-- [ ] Implement collision and recovery event tracking
-- [ ] Create benchmark scenario runner
+- [x] Implement energy consumption tracking (via odometry in mission_manager.py)
+- [x] Implement distance and time metrics logging
+- [x] Implement collision impulse tracking and health monitoring
+- [x] Implement food spoilage tracking for delivery missions
+- [ ] Create unified `nav2_cost_tracker.py` ROS2 node (consolidate existing metrics)
+- [ ] Implement SLA compliance calculation based on distance/time metrics
+- [ ] Create benchmark scenario runner with automated evaluation
 - [ ] Generate comparison report: Nav2 vs RL
 
 **Deliverables:**
@@ -493,7 +751,13 @@ python launch.py --mission-timeout 600 --min-distance 10
 - ✅ Python launch script (`launch.py`)
 - ✅ Nav2 configuration files
 - ✅ Documentation
-- 📋 `nav2_cost_tracker.py` - ROS2 node for real-time cost tracking
+- ✅ Mission manager with integrated cost tracking (`mission_manager.py`)
+  - Energy consumption tracking via odometry
+  - Distance and time metrics
+  - Collision impulse and health monitoring
+  - Food spoilage tracking
+- ✅ Evaluation scripts (`eval_nav2.sh`, `eval_teleop.sh`)
+- 📋 `nav2_cost_tracker.py` - Unified ROS2 node for real-time cost tracking (consolidation)
 - 📋 `nav2_benchmark_runner.py` - Automated benchmark scenario executor
 - 📋 `nav2_metrics_report.py` - Report generator with comparison analysis
 - 📋 Benchmark results CSV/JSON files
@@ -501,45 +765,63 @@ python launch.py --mission-timeout 600 --min-distance 10
 
 **Success Criteria:**
 
-- ✅ Nav2 runs successfully with Nova Carter
+- ✅ Nav2 runs successfully with Nova Carter and Segway E1
 - ✅ Documentation published
-- 📋 Cost tracker node publishes real-time metrics to `/nav2/metrics` topic
-- 📋 Energy consumption tracked with <5% error vs ground truth
+- ✅ Energy consumption tracked via odometry integration
+- ✅ Distance and time metrics logged for each mission
+- ✅ Collision impulse and health monitoring implemented
+- ✅ Food spoilage tracking for delivery missions
+- 📋 Unified cost tracker node publishes real-time metrics to `/nav2/metrics` topic
 - 📋 SLA compliance calculated for each navigation mission
 - 📋 Benchmark scenarios complete with >95% automation
 - 📋 Comparison report shows Nav2 vs RL performance delta
 - 📋 Operating margin, break-even time, and SLA metrics comparable to RL baseline targets
 
-#### Implementation Details: Cost Tracker Node
+#### Implementation Details: Cost Tracker Integration
 
-**1. `nav2_cost_tracker.py` ROS2 Node**
+**Current Implementation (Merged to Main):**
 
-- Subscribe to `/cmd_vel` to compute energy consumption from velocity commands
-- Subscribe to `/odom` to track distance traveled and path efficiency
+The cost tracking functionality is currently integrated into `mission_manager.py` with the following features:
+
+**1. Energy Consumption Tracking**
+
+- Implemented via odometry subscription in `_odom_callback()`
+- Tracks distance traveled using odometry data
+- Calculates mechanical power based on velocity and robot mass
+- Logged in mission results for evaluation
+
+**2. Distance and Time Metrics**
+
+- `_traveled_distance`: Accumulated distance from odometry
+- `_last_elapsed_time`: Mission duration tracking
+- Logged via `eval_nav2.sh` and `eval_teleop.sh` scripts
+- Provides data for SLA compliance calculation
+
+**3. Collision Impulse and Health Monitoring**
+
+- Contact sensor integration via `_on_contact_report()`
+- Impulse-based health tracking system
+- Contact count and total impulse logging
+- Health degradation based on collision severity
+
+**4. Food Spoilage Tracking**
+
+- Food piece counting for delivery missions
+- Spoilage detection based on mission duration
+- Integration with Isaac Sim food assets
+- Logged in mission results
+
+**Future Consolidation: `nav2_cost_tracker.py` ROS2 Node**
+
+To improve modularity, the following consolidation is planned:
+
+- Extract cost tracking logic from `mission_manager.py` into dedicated node
+- Subscribe to `/cmd_vel` for velocity-based energy estimation
+- Subscribe to `/odom` for distance and path efficiency
 - Subscribe to Nav2 action server feedback for navigation status
-- Subscribe to `/local_costmap/costmap` to detect near-collision events
-- Implement timer-based tracking for time-to-goal metrics
-
-**2. Energy Consumption Model**
-
-- Calculate power draw: `P = k1*v + k2*ω + P_idle`
-- Integrate power over time to get total energy (Wh)
-- Use Nova Carter specifications for motor constants
-- Log instantaneous and cumulative energy consumption
-
-**3. SLA Compliance Tracking**
-
-- Define delivery time thresholds based on distance (e.g., 0.5 m/s average speed)
-- Track mission start time, goal reach time, and total duration
-- Compare against SLA deadline to determine compliance
-- Calculate SLA compliance rate across multiple missions
-
-**4. Collision and Recovery Event Tracking**
-
-- Monitor Nav2 behavior server for recovery triggers (spin, backup, wait)
-- Count recovery events per mission
-- Detect collision events from costmap proximity or contact sensors
-- Log recovery success/failure rates
+- Subscribe to `/local_costmap/costmap` for near-collision detection
+- Publish unified metrics to `/nav2/metrics` topic
+- Maintain compatibility with existing evaluation scripts
 
 #### Implementation Details: Benchmark Runner
 
@@ -610,7 +892,7 @@ python launch.py --mission-timeout 600 --min-distance 10
 │  │                            │  │                            ││
 │  │  ┌──────────────────────┐  │  │  ┌──────────────────────┐ ││
 │  │  │ Isaac Sim Simulation │  │  │  │  Nav2 Stack          │ ││
-│  │  │ - COCO Robot         │  │  │  │  - BT Navigator      │ ││
+│  │  │ - Nova Carter        │  │  │  │  - BT Navigator      │ ││
 │  │  │ - Sensors (RGB-D)    │  │  │  │  - Planner Server    │ ││
 │  │  │ - Environment        │  │  │  │  - Controller Server │ ││
 │  │  └──────────────────────┘  │  │  │  - Costmap 2D        │ ││
@@ -763,13 +1045,23 @@ nav2_metrics = {
 
 ## Document History
 
-| Version | Date       | Author       | Changes                                                                                                    |
-| ------- | ---------- | ------------ | ---------------------------------------------------------------------------------------------------------- |
-| 0.1     | 2025-11-21 | CostNav Team | Initial draft                                                                                              |
-| 0.2     | 2025-11-21 | CostNav Team | Updated with multi-container architecture and official Isaac Sim Nav2 tutorial references                  |
-| 1.0     | 2025-12-10 | CostNav Team | Updated to reflect completed Nav2 integration with Nova Carter, removed network config, updated priorities |
-| 1.1     | 2025-12-12 | CostNav Team | Week 3 complete: Added nav2_mission module with NavMesh sampling, RViz markers, mission orchestration, integrated launch |
-| 1.2     | 2025-12-12 | CostNav Team | Refactored to use YAML config file (config/mission_config.yaml), added MissionRunner, separated config module |
+| Version | Date       | Author       | Changes                                                                                                                                                                                  |
+| ------- | ---------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0.1     | 2025-11-21 | CostNav Team | Initial draft                                                                                                                                                                            |
+| 0.2     | 2025-11-21 | CostNav Team | Updated with multi-container architecture and official Isaac Sim Nav2 tutorial references                                                                                                |
+| 1.0     | 2025-12-10 | CostNav Team | Updated to reflect completed Nav2 integration with Nova Carter, removed network config, updated priorities                                                                               |
+| 1.1     | 2025-12-12 | CostNav Team | Week 3 complete: Added nav2_mission module with NavMesh sampling, RViz markers, mission orchestration, integrated launch                                                                 |
+| 1.2     | 2025-12-12 | CostNav Team | Refactored to use YAML config file (config/mission_config.yaml), added MissionRunner, separated config module                                                                            |
+| 1.3     | 2026-01-22 | CostNav Team | Added Segway E1 robot support with SIM_ROBOT environment variable for dynamic robot selection, robot-specific parameter files, and shared map directory structure                        |
+| 1.4     | 2026-01-23 | CostNav Team | Documented known issue: Segway E1 cannot spin in place, added troubleshooting section and investigation steps                                                                            |
+| 1.5     | 2026-01-23 | CostNav Team | Updated status to reflect completed parameter tuning for both robots, reorganized implementation plan with Week 4 complete and Week 5 in progress                                        |
+| 1.6     | 2026-01-26 | CostNav Team | Added RotationShimController documentation: resolved Segway E1 spin-in-place issue, documented angular velocity configuration strategy (1.2 rad/s in-place, 0.7 rad/s forward motion)    |
+| 1.7     | 2026-01-26 | CostNav Team | Clarified Known Issues section: Distinguished between root cause solution (Isaac Sim USD Action Graph robot controller changes) and navigation enhancement (RotationShimController)      |
+| 1.8     | 2026-01-26 | CostNav Team | Added `closed_loop: false` parameter to Segway E1 RotationShimController configuration to prevent premature deceleration and maintain minimum angular velocity during in-place rotation  |
+| 1.9     | 2026-01-26 | CostNav Team | Reorganized task sections: moved completed tasks (Start/Goal Sampling, Segway E1 Adaptation, Parameter Tuning) to "Completed Tasks" section instead of removing them                     |
+| 1.10    | 2026-01-26 | CostNav Team | Updated angular velocity parameters: reduced from 1.2 to 0.7 rad/s for all phases (rotation, path following, recovery), min_speed_theta reduced from 0.7 to 0.4 rad/s for better control |
+| 1.11    | 2026-01-26 | CostNav Team | Further reduced angular velocity to 0.5 rad/s and minimum to 0.3 rad/s (Segway E1 only) to prevent position loss during fast rotation                                                    |
+| 1.12    | 2026-01-26 | CostNav Team | Updated cost model integration status: documented merged features (energy tracking, distance/time metrics, collision monitoring, food spoilage), added RViz message filter queue issue   |
 
 ---
 

@@ -11,3 +11,5 @@ services:
 
   ros2:
     command: ["/bin/bash", "-c", "sleep infinity"]
+    volumes:
+      - .:/workspace

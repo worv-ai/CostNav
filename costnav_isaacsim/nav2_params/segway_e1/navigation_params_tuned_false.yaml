@@ -144,8 +144,8 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: "OPEN_LOOP"
-    max_velocity: [0.8, 0.0, 0.7]
-    min_velocity: [-0.8, 0.0, -0.7]
+    max_velocity: [2.0, 0.0, 1.5]  # Increased angular velocity limit to match rotation shim
+    min_velocity: [-2.0, 0.0, -1.5]
     # deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0
     # max_accel: [1.0, 0.0, 1.25]
@@ -189,12 +189,13 @@ controller_server:
       debug_trajectory_details: True
       min_vel_x: 0.0
       min_vel_y: 0.0
-      max_vel_x: 0.8
+      max_vel_x: 2.0
       max_vel_y: 0.0
-      max_vel_theta: 0.7
+      max_vel_theta: 1.5  # Increased angular velocity
       min_speed_xy: 0.0
-      max_speed_xy: 1.0
-      min_speed_theta: 0.0
+      max_speed_xy: 2.0
+      min_speed_theta: 0.4  # Minimum rotation speed when rotating
+      # Acceleration limits
       acc_lim_x: 2.5
       acc_lim_y: 0.0
       acc_lim_theta: 3.5
@@ -450,9 +451,9 @@ behavior_server:
     robot_base_frame: base_link
     transform_tolerance: 0.2
     simulate_ahead_time: 2.0
-    max_rotational_vel: 1.2
-    min_rotational_vel: 0.4
-    rotational_acc_lim: 3.2
+    max_rotational_vel: 1.5  # Increased to match rotation shim controller
+    min_rotational_vel: 0.8  # Increased minimum rotation speed
+    rotational_acc_lim: 3.5
 
 robot_state_publisher:
   ros__parameters:
