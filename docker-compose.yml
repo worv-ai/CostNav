@@ -248,11 +248,17 @@ services:
       - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
       - LIBGL_ALWAYS_SOFTWARE=1
       - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
+      - TUNED=${TUNED:-False}
     command: >
       bash -c "
         source /opt/ros/jazzy/setup.bash &&
         source /workspace/build_ws/install/local_setup.sh &&
-        ros2 launch /workspace/nav2_params/rviz.launch.py rviz_config:=/workspace/nav2_params/$${SIM_ROBOT}/navigation_teleop.rviz map:=/workspace/nav2_params/maps/sidewalk.yaml params_file:=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params.yaml
+        if [ \"$${TUNED}\" = \"True\" ]; then
+          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_true.yaml
+        else
+          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_false.yaml
+        fi &&
+        ros2 launch /workspace/nav2_params/rviz.launch.py rviz_config:=/workspace/nav2_params/$${SIM_ROBOT}/navigation_teleop.rviz map:=/workspace/nav2_params/maps/sidewalk.yaml params_file:=$${PARAMS_FILE}
       "
 
   # ROS2 with teleop - waits for Isaac Sim to be healthy before starting
