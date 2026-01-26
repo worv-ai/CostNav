@@ -223,6 +223,7 @@ class CostNavSimLauncher:
 
         # Initialize people manager (will be setup after warmup)
         self.people_manager = None
+        self._people_initialized = False  # Track if people have been initialized this session
         if self.num_people > 0:
             from people_manager import PeopleManager
 
@@ -387,6 +388,7 @@ class CostNavSimLauncher:
     def _on_stage_open(self, event) -> None:
         self._pending_stage_reload = True
         self._pending_physics_reinit = True
+        self._people_initialized = False  # Reset so people will be reinitialized for new stage
 
     def _ensure_simulation_context(self) -> None:
         from isaacsim.core.api import SimulationContext
@@ -481,10 +483,19 @@ class CostNavSimLauncher:
             except Exception as exc:
                 logger.warning("Failed to refresh mission manager after restart: %s", exc)
 
-        if needs_people_restart and self.people_manager is not None:
+        # Only restart people if the stage was reloaded OR if people haven't been initialized yet.
+        # Skip restart if it's just a physics reset (force_reset) and people are already initialized
+        # to prevent double-spawning during initial simulation setup.
+        should_restart_people = (
+            needs_people_restart
+            and self.people_manager is not None
+            and (stage_reloaded or not self._people_initialized)
+        )
+        if should_restart_people:
             try:
                 self.people_manager.shutdown()
                 self.people_manager.initialize(self.simulation_app, self.simulation_context)
+                self._people_initialized = True
             except Exception as exc:
                 logger.warning("Failed to reinitialize PeopleManager after physics reset: %s", exc)
 
@@ -634,6 +645,7 @@ class CostNavSimLauncher:
         if self.people_manager is not None:
             logger.info("Initializing people manager...")
             self.people_manager.initialize(self.simulation_app, self.simulation_context)
+            self._people_initialized = True
 
         # Mark as healthy - triggers Docker Compose to start ROS2 container
         self._check_healthy()
