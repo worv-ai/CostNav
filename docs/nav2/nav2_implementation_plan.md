@@ -2,7 +2,7 @@
 
 **Issue Reference:** [#5 - Support rule-based navigation with nav2](https://github.com/worv-ai/CostNav/issues/5)
 
-**Status:** ✅ Nav2 Integration Complete | ✅ Mission Orchestration Complete | ⏳ Parameter Tuning In Progress
+**Status:** ✅ Nav2 Integration Complete | ✅ Mission Orchestration Complete | ✅ Parameter Tuning Complete
 **Target Version:** CostNav v0.2.0
 **Last Updated:** 2026-01-23
 
@@ -22,12 +22,11 @@
 - **NavMesh Position Sampling**: Valid start/goal positions sampled from Isaac Sim's NavMesh
 - **RViz Marker Visualization**: Start (green), goal (red), and robot (blue) markers
 - **Robot-Specific Configuration**: Separate parameter files for Nova Carter and Segway E1
+- **Parameter Tuning**: Nav2 parameters optimized for both Nova Carter and Segway E1
 
 ### ⏳ In Progress
 
-1. **Parameter Tuning**: Optimizing Nav2 parameters for both Nova Carter and Segway E1 performance
-   - **Known Issue**: Segway E1 cannot spin in place - requires investigation and parameter adjustment
-2. **Cost Model Integration**: Track economic metrics for Nav2 navigation
+1. **Cost Model Integration**: Track economic metrics for Nav2 navigation
 
 ### 📋 Future Work
 
@@ -354,11 +353,11 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 - ✅ Week 1: Docker Setup & ROS2 Bridge - Complete
 - ✅ Week 2: Nova Carter Setup & Occupancy Map - Complete
 - ✅ Week 3: Nav2 Stack Configuration & Mission Orchestration - Complete
-- ⏳ Week 4: Cost Model Integration & Parameter Tuning - In progress
+- ✅ Week 4: Parameter Tuning - Complete
+- ⏳ Week 5: Cost Model Integration - In progress
 
 **Remaining Work:**
 
-- Parameter tuning for optimal Nova Carter performance
 - Cost model integration for economic metrics tracking
 
 ---
@@ -433,7 +432,7 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 - [x] Configure Nav2 parameters for Nova Carter
 - [x] Create ROS2 launch file for Nav2 stack
 - [x] Test navigation with RViz2 "Nav2 Goal" button
-- [ ] ⏳ Tune parameters for Nova Carter kinematics (moved to Week 4)
+- [x] Tune parameters for Nova Carter and Segway E1 kinematics
 - [x] Implement position sampling using NavMesh
 - [x] Ensure minimum distance threshold between start and goal
 - [x] Implement robot teleportation and mission initiation
@@ -447,7 +446,7 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 - ✅ Mission orchestration module at `/workspace/costnav_isaacsim/nav2_mission/`
 - ✅ Configuration module at `/workspace/costnav_isaacsim/config/` with YAML-based settings
 - ✅ Manual mission trigger via `/start_mission` with config loaded at startup
-- ⏳ Optimized parameters (moved to Week 4)
+- ✅ Optimized parameters for both Nova Carter and Segway E1
 
 **Success Criteria:**
 
@@ -457,7 +456,7 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 - ✅ Start/goal positions sampled from NavMesh with minimum distance threshold (5-50m configurable)
 - ✅ Robot teleports to start and navigates to goal automatically
 - ✅ RViz displays distinct markers for start (green), goal (red), and robot (blue) positions
-- ⏳ Parameters optimized for performance (moved to Week 4)
+- ✅ Parameters optimized for performance
 
 #### Implementation: Nav2 Mission Module
 
@@ -559,7 +558,40 @@ python launch.py --mission-timeout 600 --min-distance 10
 
 ---
 
-### Week 4: Cost Model Integration & Testing
+### Week 4: Parameter Tuning - ✅ COMPLETE
+
+**Objective:** Optimize Nav2 parameters for both Nova Carter and Segway E1 robots
+
+**Tasks:**
+
+- [x] Tune DWB controller parameters for Nova Carter
+- [x] Tune DWB controller parameters for Segway E1
+- [x] Optimize costmap parameters (inflation radius, obstacle layer)
+- [x] Configure planner parameters for efficient path planning
+- [x] Test and validate navigation performance for both robots
+- [x] Create robot-specific parameter files
+
+**Deliverables:**
+
+- ✅ Optimized `nova_carter/navigation_params.yaml`
+- ✅ Optimized `segway_e1/navigation_params.yaml`
+- ✅ Robot-specific RViz configurations
+- ✅ Validated navigation performance
+
+**Success Criteria:**
+
+- ✅ Both robots navigate successfully to goals
+- ✅ Obstacle avoidance works reliably
+- ✅ Recovery behaviors function properly
+- ✅ Parameters documented and committed
+
+**Known Issues:**
+
+- ⚠️ Segway E1 cannot spin in place (see Known Issues section for details)
+
+---
+
+### Week 5: Cost Model Integration & Testing - ⏳ IN PROGRESS
 
 **Objective:** Integrate cost tracking, run benchmark scenarios, and validate Nav2 against RL baseline
 
@@ -861,6 +893,7 @@ nav2_metrics = {
 | 1.2     | 2025-12-12 | CostNav Team | Refactored to use YAML config file (config/mission_config.yaml), added MissionRunner, separated config module                                                     |
 | 1.3     | 2026-01-22 | CostNav Team | Added Segway E1 robot support with SIM_ROBOT environment variable for dynamic robot selection, robot-specific parameter files, and shared map directory structure |
 | 1.4     | 2026-01-23 | CostNav Team | Documented known issue: Segway E1 cannot spin in place, added troubleshooting section and investigation steps                                                     |
+| 1.5     | 2026-01-23 | CostNav Team | Updated status to reflect completed parameter tuning for both robots, reorganized implementation plan with Week 4 complete and Week 5 in progress                 |
 
 ---
 
