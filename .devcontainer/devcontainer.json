@@ -12,9 +12,9 @@
     "../docker-compose.yml",
     "docker-compose.override.yml"
   ],
-  "service": "ros2",
+  "service": "${localEnv:DEVCONTAINER_SERVICE:isaac-sim}",
   "runServices": [
-    "ros2"
+    "${localEnv:DEVCONTAINER_SERVICE:isaac-sim}"
   ],
   "overrideCommand": true,
   "workspaceFolder": "/workspace",
