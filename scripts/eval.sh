@@ -60,6 +60,7 @@ declare -a MISSION_FOOD_INITIAL_PIECES
 declare -a MISSION_FOOD_FINAL_PIECES
 declare -a MISSION_FOOD_LOSS_FRACTION
 declare -a MISSION_FOOD_SPOILED
+declare -a MISSION_RESULT_REASONS
 
 # Mechanical energy constants
 ROLLING_RESISTANCE_FORCE=18.179  # Newtons
@@ -183,6 +184,7 @@ run_mission() {
     local food_final_pieces="-1"
     local food_loss_fraction="-1"
     local food_spoiled="false"
+    local result_reason=""
     local was_skipped=false
 
     start_time=$(date +%s.%N)
@@ -236,6 +238,7 @@ run_mission() {
             result_response=$(get_mission_result 2>&1)
 
             result_status=$(parse_result_field "$result_response" "result")
+            result_reason=$(parse_result_field "$result_response" "result_reason")
             local in_progress
             in_progress=$(parse_result_field "$result_response" "in_progress")
             distance_to_goal=$(parse_result_field "$result_response" "distance_to_goal")
@@ -270,6 +273,10 @@ run_mission() {
             if [ -z "$food_spoiled" ]; then
                 food_spoiled="false"
             fi
+            # Handle null result_reason (Python None becomes "null" in JSON)
+            if [ -z "$result_reason" ] || [ "$result_reason" = "null" ]; then
+                result_reason=""
+            fi
 
             # Check if mission completed (success or failure from mission manager)
             if [ "$result_status" = "success" ]; then
@@ -278,8 +285,13 @@ run_mission() {
                 break
             elif [[ "$result_status" == failure_* ]]; then
                 mission_result="FAILED"
-                error_msg="${result_status} - distance to goal: ${distance_to_goal}m"
-                log "Mission $mission_num: ${result_status}! Goal Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
+                if [ -n "$result_reason" ]; then
+                    error_msg="${result_status} (reason: ${result_reason}) - distance to goal: ${distance_to_goal}m"
+                    log "Mission $mission_num: ${result_status} (reason: ${result_reason})! Goal Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
+                else
+                    error_msg="${result_status} - distance to goal: ${distance_to_goal}m"
+                    log "Mission $mission_num: ${result_status}! Goal Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
+                fi
                 break
             fi
 
@@ -329,6 +341,7 @@ run_mission() {
     MISSION_FOOD_FINAL_PIECES[$mission_num]="${food_final_pieces}"
     MISSION_FOOD_LOSS_FRACTION[$mission_num]="${food_loss_fraction}"
     MISSION_FOOD_SPOILED[$mission_num]="${food_spoiled}"
+    MISSION_RESULT_REASONS[$mission_num]="${result_reason}"
 
     if [ "$mission_result" = "SUCCESS" ]; then
         SUCCESS_SLA=$((SUCCESS_SLA + 1))
@@ -359,6 +372,9 @@ run_mission() {
     # Log mission result in readable format
     log "Mission $mission_num:"
     log "  Status: ${MISSION_RESULTS[$mission_num]}"
+    if [ -n "$result_reason" ]; then
+        log "  Reason: ${result_reason}"
+    fi
     log "  Start:  ${MISSION_START_TIMES[$mission_num]}"
     log "  End:    ${MISSION_END_TIMES[$mission_num]}"
     log "  Traveled distance: ${traveled_distance}m"
@@ -462,6 +478,7 @@ generate_summary() {
 
     for i in $(seq 1 $NUM_MISSIONS); do
         local result="${MISSION_RESULTS[$i]:-N/A}"
+        local result_reason="${MISSION_RESULT_REASONS[$i]:-}"
         local start="${MISSION_START_TIMES[$i]:-N/A}"
         local end="${MISSION_END_TIMES[$i]:-N/A}"
         local error="${MISSION_ERRORS[$i]:-}"
@@ -479,6 +496,9 @@ generate_summary() {
 
         log_file "Mission $i:"
         log_file "  Status: $result"
+        if [ -n "$result_reason" ]; then
+            log_file "  Reason: $result_reason"
+        fi
         log_file "  Start:  $start"
         log_file "  End:    $end"
         log_file "  Traveled distance: ${traveled}m"
