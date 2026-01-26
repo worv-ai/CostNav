@@ -31,7 +31,7 @@ x-ros2-service: &ros2-service
 services:
   # Isaac Sim environment
   isaac-sim:
-    profiles: [ "isaac-sim", "nav2", "teleop" ]
+    profiles: ["isaac-sim", "nav2", "teleop"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -46,8 +46,8 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: [ "${GPU_DEVICE_IDS:-0}" ]
-              capabilities: [ gpu ]
+              device_ids: ["${GPU_DEVICE_IDS:-0}"]
+              capabilities: [gpu]
     env_file:
       - .env
     environment:
@@ -66,6 +66,7 @@ services:
       - EXP_PATH=${EXP_PATH:-/isaac-sim/apps}
       - NUM_PEOPLE=${NUM_PEOPLE:-0}
       - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
+      - FOOD=${FOOD:-True}
     volumes:
       - .:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -83,9 +84,15 @@ services:
     working_dir: /workspace
     command:
       - "-ic"
-      - "/workspace/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-0} --robot $${SIM_ROBOT:-nova_carter}"
+      - "/workspace/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-0} --robot $${SIM_ROBOT:-nova_carter} --food-enabled $${FOOD:-True}"
     healthcheck:
-      test: [ "CMD", "bash", "-c", "[ -e /tmp/.isaac_sim_running ] || exit 1 && exit 0" ]
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          "[ -e /tmp/.isaac_sim_running ] || exit 1 && exit 0",
+        ]
       interval: 10s
       timeout: 5s
       retries: 60
@@ -97,7 +104,7 @@ services:
 
   # Isaac Lab environment
   isaac-lab:
-    profiles: [ "isaac-lab" ]
+    profiles: ["isaac-lab"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -113,8 +120,8 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: [ "${GPU_DEVICE_IDS:-0}" ]
-              capabilities: [ gpu ]
+              device_ids: ["${GPU_DEVICE_IDS:-0}"]
+              capabilities: [gpu]
     env_file:
       - .env
     environment:
@@ -146,7 +153,7 @@ services:
     tty: true
     # Development environment (minimal dependencies)
   dev:
-    profiles: [ "dev" ]
+    profiles: ["dev"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -165,13 +172,13 @@ services:
   # ROS2 Jazzy Runtime Container
   ros2:
     <<: *ros2-service
-    profiles: [ "ros2" ]
+    profiles: ["ros2"]
     container_name: costnav-ros2
 
   # ROS2 with Nav2 - waits for Isaac Sim to be healthy before starting
   ros2-nav2:
     <<: *ros2-service
-    profiles: [ "nav2" ]
+    profiles: ["nav2"]
     container_name: costnav-ros2-nav2
     environment:
       - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
@@ -184,10 +191,10 @@ services:
                ros2 launch /workspace/nav2_params/nav2.launch.py params_file:=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params.yaml"
 
   # ROS2 with RViz - standalone visualization service that runs alongside Isaac Sim
-  ros2-rviz:
+  ros2-rviz-nav2:
     <<: *ros2-service
-    profiles: [ "isaac-sim", "nav2" ]
-    container_name: costnav-ros2-rviz
+    profiles: ["isaac-sim", "nav2"]
+    container_name: costnav-ros2-rviz-nav2
     environment:
       - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
     depends_on:
@@ -203,7 +210,7 @@ services:
   # ROS2 with RViz (teleop profile) - hides TF/point clouds by default
   ros2-rviz-teleop:
     <<: *ros2-service
-    profiles: [ "teleop" ]
+    profiles: ["teleop"]
     container_name: costnav-ros2-rviz-teleop
     depends_on:
       isaac-sim:
@@ -221,7 +228,7 @@ services:
   # ROS2 with teleop - waits for Isaac Sim to be healthy before starting
   ros2-teleop:
     <<: *ros2-service
-    profiles: [ "teleop" ]
+    profiles: ["teleop"]
     container_name: costnav-ros2-teleop
     depends_on:
       isaac-sim:
@@ -253,7 +260,7 @@ services:
   # ROS2 bag recorder - records all ROS messages to a bag file
   ros2-bag-recorder:
     <<: *ros2-service
-    profiles: [ "rosbag" ]
+    profiles: ["rosbag"]
     container_name: costnav-ros2-bag-recorder
     environment:
       - ROS_DISTRO=jazzy

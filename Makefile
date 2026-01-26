@@ -12,6 +12,7 @@ COSTNAV_VERSION ?= 0.1.0
 ROS_DISTRO ?= jazzy
 UBUNTU_VERSION ?= 24.04
 SIM_ROBOT ?= nova_carter
+FOOD ?= True
 
 ISAAC_SIM_IMAGE ?= costnav-isaacsim-$(ISAAC_SIM_VERSION):$(COSTNAV_VERSION)
 ISAAC_LAB_IMAGE ?= costnav-isaaclab-$(ISAAC_SIM_VERSION)-$(ISAAC_LAB_VERSION):$(COSTNAV_VERSION)
@@ -70,11 +71,11 @@ run-isaac-sim:
 	NUM_PEOPLE=$(NUM_PEOPLE) $(DOCKER_COMPOSE) --profile isaac-sim up
 
 # Run both Isaac Sim and ROS2 Nav2 navigation together (using combined 'nav2' profile)
-# Usage: make run-nav2 NUM_PEOPLE=5 SIM_ROBOT=nova_carter
+# Usage: make run-nav2 NUM_PEOPLE=5 SIM_ROBOT=nova_carter FOOD=1
 run-nav2:
 	xhost +local:docker 2>/dev/null || true
 	SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile nav2 down
-	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile nav2 up
+	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) $(DOCKER_COMPOSE) --profile nav2 up
 
 # Trigger mission start (manual)
 start-mission:
@@ -119,7 +120,7 @@ endif
 endif
 
 # Run both Isaac Sim and ROS2 teleop together (using combined 'teleop' profile)
-# Usage: make run-teleop NUM_PEOPLE=5
+# Usage: make run-teleop NUM_PEOPLE=5 FOOD=1
 run-teleop:
 	@if [ "$(SIM_ROBOT)" != "nova_carter" ] && [ "$(SIM_ROBOT)" != "segway_e1" ]; then \
 		echo "Unsupported robot: $(SIM_ROBOT). Use nova_carter or segway_e1."; \
@@ -127,7 +128,7 @@ run-teleop:
 	fi
 	xhost +local:docker 2>/dev/null || true
 	SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile teleop down
-	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile teleop up
+	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) $(DOCKER_COMPOSE) --profile teleop up
 
 # =============================================================================
 # ROS Bag Recording Targets
@@ -151,8 +152,8 @@ stop-rosbag:
 # =============================================================================
 
 # Default evaluation parameters
-TIMEOUT ?= 20
-NUM_MISSIONS ?= 10
+TIMEOUT ?= 169 # based on S_EvalTimeout
+NUM_MISSIONS ?= 3
 
 # Run Nav2 evaluation (requires running nav2 instance via make run-nav2)
 # Usage: make run-eval-nav2 TIMEOUT=20 NUM_MISSIONS=10

@@ -233,7 +233,6 @@ class PeopleManager:
             try:
                 from omni.anim.people_api.settings import PeopleSettings
                 from omni.anim.people_api.scripts.character_setup import CharacterSetup, CharacterBehavior
-                from omni.anim.people_api.scripts.utils import Utils
 
                 logger.info("PeopleAPI modules imported successfully")
             except ImportError as e:
@@ -374,7 +373,7 @@ class PeopleManager:
                     continue
 
                 logger.debug(f"Using SkelRoot {skelroot.GetPrimPath()} for {root_path}")
-                self._apply_behavior_to_skelroot(skelroot, anim_graph, script_path, Utils)
+                self._apply_behavior_to_skelroot(skelroot, anim_graph, script_path)
                 skelroots.append(skelroot)
 
                 # Cache SkelRoot for stuck recovery
@@ -385,7 +384,6 @@ class PeopleManager:
             # Cache animation graph and script path for recovery
             self._cached_anim_graph = anim_graph
             self._cached_script_path = script_path
-            self._cached_utils = Utils
 
             self.initialized = True
             logger.info("PeopleManager initialization complete!")
@@ -607,7 +605,7 @@ class PeopleManager:
                 cleared.append((str(prim.GetPrimPath()), scripts))
         return cleared
 
-    def _apply_behavior_to_skelroot(self, skelroot_prim, anim_graph_prim, script_path, Utils):
+    def _apply_behavior_to_skelroot(self, skelroot_prim, anim_graph_prim, script_path):
         """Apply animation graph and behavior script to a SkelRoot prim."""
         omni.kit.commands.execute(
             "ApplyAnimationGraphAPICommand",
@@ -617,8 +615,6 @@ class PeopleManager:
         omni.kit.commands.execute("ApplyScriptingAPICommand", paths=[Sdf.Path(skelroot_prim.GetPrimPath())])
         attr = skelroot_prim.GetAttribute("omni:scripting:scripts")
         attr.Set([r"{}".format(script_path)])
-        Utils.add_colliders(skelroot_prim)
-        Utils.add_rigid_body_dynamics(skelroot_prim)
 
     def update(self, current_time: float) -> None:
         """Periodic update for stuck detection and recovery.
@@ -776,7 +772,6 @@ class PeopleManager:
                         skelroot,
                         self._cached_anim_graph,
                         self._cached_script_path,
-                        self._cached_utils,
                     )
                     logger.info(f"Re-applied behavior script for '{character_name}'")
                     return True

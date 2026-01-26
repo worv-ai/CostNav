@@ -39,7 +39,7 @@ class MissionManagerConfig:
     goal_delay: float = 0.5  # Delay after publishing goal (seconds)
     teleport_height: float = 0.1  # Height offset for teleportation (meters)
     robot_prim_path: Optional[str] = None  # Robot prim path in Isaac Sim USD stage
-    teleport_settle_steps: int = 5  # Number of simulation steps after teleportation for physics to settle
+    teleport_settle_steps: int = 30  # Number of simulation steps after teleportation for physics to settle
 
 
 class MissionState(Enum):
@@ -62,7 +62,9 @@ class MissionResult(Enum):
 
     PENDING = "pending"  # Mission not yet started or in progress
     SUCCESS = "success"  # Robot reached goal within tolerance
-    FAILURE = "failure"  # Timeout reached before reaching goal
+    FAILURE_TIMEOUT = "failure_timeout"  # Timeout reached before reaching goal
+    FAILURE_PHYSICALASSISTANCE = "failure_physicalassistance"  # Robot fell down (bad orientation)
+    FAILURE_FOODSPOILED = "failure_foodspoiled"  # Food spoiled during delivery
 
 
 class MissionManager:
@@ -125,8 +127,8 @@ class MissionManager:
                 initial_pose_delay=mission_config.nav2.initial_pose_delay,
                 teleport_height=mission_config.teleport.height_offset,
                 robot_prim_path=mission_config.teleport.robot_prim,
-                # Use default value of 5 for teleport_settle_steps (not in TeleportConfig)
-                teleport_settle_steps=5,
+                # Use default value of MissionManagerConfig (not in TeleportConfig)
+                teleport_settle_steps=MissionManagerConfig.teleport_settle_steps,
             )
         self.config = manager_config
 
@@ -162,10 +164,23 @@ class MissionManager:
 
         # Robot position tracking (from odom)
         self._robot_position = None  # (x, y, z) tuple
+        self._robot_orientation = None  # (x, y, z, w) quaternion tuple
+        self._prev_robot_position = None  # Previous position for distance tracking
 
         # Mission result tracking
         self._last_mission_result = MissionResult.PENDING
         self._last_mission_distance = None  # Distance to goal at end
+
+        # Mission metrics tracking
+        self._traveled_distance = 0.0  # Cumulative distance traveled (meters)
+        self._last_traveled_distance = None  # Final traveled distance for last mission (meters)
+        self._last_elapsed_time = None  # Elapsed time for last mission (seconds)
+
+        # Food tracking for spoilage evaluation
+        self._food_pieces_prim_path = None  # Full prim path to food pieces
+        self._food_bucket_prim_path = None  # Full prim path to food bucket
+        self._initial_food_piece_count = 0  # Piece count at mission start
+        self._final_food_piece_count = None  # Piece count at mission end
 
     def _get_current_time_seconds(self) -> float:
         """Get current time in seconds from ROS clock.
@@ -218,6 +233,7 @@ class MissionManager:
         from rclpy.node import Node
         from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
         from std_srvs.srv import Trigger
+        from std_msgs.msg import Float64
 
         from .mission_result_srv import GetMissionResult
         from .marker_publisher import MarkerPublisher
@@ -236,6 +252,11 @@ class MissionManager:
             # Mission result service
             self._result_service = self._node.create_service(
                 GetMissionResult, "/get_mission_result", self._handle_get_mission_result
+            )
+
+            # Timeout configuration subscriber (allows dynamic timeout setting)
+            self._timeout_sub = self._node.create_subscription(
+                Float64, "/set_mission_timeout", self._handle_set_timeout, 10
             )
 
             # Initialize NavMesh sampler with config values
@@ -292,6 +313,9 @@ class MissionManager:
                 Odometry, self.mission_config.nav2.odom_topic, self._odom_callback, 10
             )
 
+            # Setup food tracking if enabled
+            self._setup_food_tracking()
+
             self._initialized = True
             self._state = MissionState.WAITING_FOR_NAV2
             self._wait_start_time = self._get_current_time_seconds()
@@ -328,11 +352,35 @@ class MissionManager:
         self._settle_steps_remaining = 0
         self._last_mission_result = MissionResult.PENDING
         self._last_mission_distance = None
+        self._traveled_distance = 0.0
+        self._prev_robot_position = None
+        self._last_traveled_distance = None
+        self._last_elapsed_time = None
+        # Reset food tracking
+        self._initial_food_piece_count = 0
+        self._final_food_piece_count = None
 
     def _odom_callback(self, msg) -> None:
-        """Handle odometry messages for robot position tracking."""
+        """Handle odometry messages for robot position and orientation tracking."""
         pos = msg.pose.pose.position
         self._robot_position = (pos.x, pos.y, pos.z)
+        orient = msg.pose.pose.orientation
+        self._robot_orientation = (orient.x, orient.y, orient.z, orient.w)
+
+        """Handle odometry messages for robot position tracking and distance accumulation."""
+        new_position = (pos.x, pos.y, pos.z)
+
+        # Accumulate traveled distance during active mission
+        if self._state == MissionState.WAITING_FOR_COMPLETION and self._prev_robot_position is not None:
+            dx = new_position[0] - self._prev_robot_position[0]
+            dy = new_position[1] - self._prev_robot_position[1]
+            step_distance = math.sqrt(dx * dx + dy * dy)
+            # Only accumulate reasonable movements (filter out noise and teleportation)
+            if step_distance < 1.0:  # Max 1m per odom update (reasonable for robot)
+                self._traveled_distance += step_distance
+
+        self._prev_robot_position = new_position
+        self._robot_position = new_position
 
     def _get_distance_to_goal(self) -> Optional[float]:
         """Calculate distance from robot to goal.
@@ -347,6 +395,318 @@ class MissionManager:
         gx, gy = self._current_goal.x, self._current_goal.y
         return math.sqrt((rx - gx) ** 2 + (ry - gy) ** 2)
 
+    def _is_robot_fallen(self, limit_angle: float = 0.5) -> bool:
+        """Check if the robot has fallen based on orientation.
+
+        This checks if the robot's orientation deviates too much from upright.
+        It computes the angle between the robot's up vector (z-axis in body frame)
+        and the world up vector (gravity direction).
+
+        Args:
+            limit_angle: Maximum allowed tilt angle in radians (default: ~28.6 degrees).
+                        If the robot tilts beyond this, it's considered fallen.
+
+        Returns:
+            True if the robot has fallen, False otherwise.
+        """
+        if self._robot_orientation is None:
+            return False
+
+        qx, qy, _qz, _qw = self._robot_orientation
+
+        # Compute the z-component of the body z-axis projected to world z
+        # For a quaternion (qx, qy, qz, qw), this is:
+        # gz_body_z = 1 - 2 * (qx*qx + qy*qy)
+        # When robot is upright: gz_body_z = 1, tilt_angle = 0
+        # When robot is tilted 90°: gz_body_z = 0, tilt_angle = π/2
+        # When robot is upside down: gz_body_z = -1, tilt_angle = π
+        gz_body_z = 1.0 - 2.0 * (qx * qx + qy * qy)
+
+        # Compute tilt angle from upright (angle between body z and world z)
+        # gz_body_z is the cosine of the tilt angle
+        tilt_angle = math.acos(min(1.0, max(-1.0, gz_body_z)))
+
+        return tilt_angle > limit_angle
+
+    def _count_food_pieces_in_bucket(self) -> int:
+        """Count the number of food pieces currently inside the bucket.
+
+        Uses bounding box comparison to determine if pieces are within the bucket.
+        This method iterates through all piece prims under the pieces path and
+        checks if their positions fall within the bucket's bounding box.
+
+        Returns:
+            Number of pieces inside the bucket, or 0 if food tracking is disabled.
+        """
+        if not self.mission_config.food.enabled or self._food_pieces_prim_path is None:
+            return 0
+
+        try:
+            import omni.usd
+            from pxr import UsdGeom
+            from isaacsim.core.utils import bounds as bounds_utils
+
+            stage = omni.usd.get_context().get_stage()
+
+            # Get bucket bounding box
+            bucket_prim = stage.GetPrimAtPath(self._food_bucket_prim_path)
+            if not bucket_prim.IsValid():
+                logger.warning(f"[FOOD] Bucket prim not found: {self._food_bucket_prim_path}")
+                return 0
+
+            bbox_cache = bounds_utils.create_bbox_cache()
+            bucket_bounds = bounds_utils.compute_aabb(bbox_cache, prim_path=self._food_bucket_prim_path)
+            min_xyz = bucket_bounds[:3]
+            max_xyz = bucket_bounds[3:]
+
+            # Get pieces parent prim and count children inside bucket
+            pieces_prim = stage.GetPrimAtPath(self._food_pieces_prim_path)
+            if not pieces_prim.IsValid():
+                logger.warning(f"[FOOD] Pieces prim not found: {self._food_pieces_prim_path}")
+                return 0
+
+            count = 0
+            for child in pieces_prim.GetChildren():
+                if not child.IsValid():
+                    continue
+                xformable = UsdGeom.Xformable(child)
+                if not xformable:
+                    continue
+
+                # Get world position of the piece
+                world_transform = xformable.ComputeLocalToWorldTransform(0)
+                position = world_transform.ExtractTranslation()
+
+                # Check if position is within bucket bounds
+                if (
+                    min_xyz[0] <= position[0] <= max_xyz[0]
+                    and min_xyz[1] <= position[1] <= max_xyz[1]
+                    and min_xyz[2] <= position[2] <= max_xyz[2]
+                ):
+                    count += 1
+
+            return count
+
+        except Exception as e:
+            logger.error(f"[FOOD] Error counting food pieces: {e}")
+            return 0
+
+    def _get_robot_z_offset(self) -> Optional[float]:
+        """Get the robot-specific z offset for positioning.
+
+        This offset is used for both robot teleportation and food positioning
+        to ensure consistent height placement above the ground.
+
+        Returns:
+            Z offset in meters, or None if robot not supported.
+
+        Robot-specific offsets:
+        - segway_e1: 0.33m
+        - nova_carter: Uses config teleport.height_offset (default behavior)
+        - Other robots: Not yet implemented
+        """
+        robot_prim = self.mission_config.teleport.robot_prim.lower()
+
+        if "segway" in robot_prim:
+            return 0.33  # Segway E1 height offset
+        elif "nova_carter" in robot_prim:
+            # Nova Carter uses the config teleport.height_offset
+            return self.config.teleport_height
+        else:
+            # Other robots: return None to indicate not supported for food
+            # but teleportation can still use config value
+            return None
+
+    def _spawn_food_at_position(
+        self, x: float = 0.0, y: float = 0.0, z: float = 0.0, remove_existing: bool = False
+    ) -> bool:
+        """Spawn food USD asset at the specified position.
+
+        This is the internal method used by both _setup_food_tracking and
+        _reset_food_for_teleport to spawn or respawn the food asset.
+
+        Args:
+            x: X position in world coordinates.
+            y: Y position in world coordinates.
+            z: Z position in world coordinates (z_offset will be added).
+            remove_existing: If True, remove existing food prim before spawning.
+
+        Returns:
+            True if food was successfully spawned, False otherwise.
+        """
+        food_config = self.mission_config.food
+        base_path = food_config.prim_path.rstrip("/")
+
+        z_offset = self._get_robot_z_offset()
+        if z_offset is None:
+            # Robot not supported for food spawning
+            robot_prim = self.mission_config.teleport.robot_prim.lower()
+            logger.warning(
+                f"[FOOD] Food spawning not implemented for robot: {robot_prim}. "
+                f"Currently only segway_e1 is supported. Disabling food tracking."
+            )
+            self.mission_config.food.enabled = False
+            return False
+
+        try:
+            import omni.usd
+            from pxr import Gf, UsdGeom
+
+            stage = omni.usd.get_context().get_stage()
+
+            # Remove existing food prim if requested
+            if remove_existing:
+                food_prim = stage.GetPrimAtPath(base_path)
+                if food_prim.IsValid():
+                    stage.RemovePrim(base_path)
+                    logger.info(f"[FOOD] Removed existing food prim at: {base_path}")
+
+            # Check if food prim already exists (if not removing)
+            food_prim = stage.GetPrimAtPath(base_path)
+            if food_prim.IsValid():
+                logger.info(f"[FOOD] Food prim already exists at: {base_path}")
+                return True
+
+            # Create Xform prim and add USD reference
+            food_prim = stage.DefinePrim(base_path, "Xform")
+            if not food_prim.IsValid():
+                logger.error(f"[FOOD] Failed to create prim at: {base_path}")
+                return False
+
+            # Add reference to the food USD asset
+            success = food_prim.GetReferences().AddReference(food_config.usd_path)
+            if not success:
+                logger.error(f"[FOOD] Failed to add USD reference: {food_config.usd_path}")
+                return False
+
+            # Apply position with robot-specific z offset
+            final_z = z + z_offset
+            xformable = UsdGeom.Xformable(food_prim)
+            xformable.ClearXformOpOrder()
+            translate_op = xformable.AddTranslateOp()
+            translate_op.Set(Gf.Vec3d(x, y, final_z))
+
+            logger.info(f"[FOOD] Spawned food asset from: {food_config.usd_path}")
+            logger.info(f"[FOOD] Position: ({x:.2f}, {y:.2f}, {final_z:.2f})")
+            return True
+
+        except Exception as e:
+            logger.error(f"[FOOD] Error spawning food asset: {e}")
+            return False
+
+    def _setup_food_tracking(self) -> None:
+        """Setup food tracking by spawning the food USD asset and configuring paths.
+
+        Spawns the food USD asset as a reference at the configured prim path,
+        then constructs full prim paths for the food pieces and bucket.
+        """
+        if not self.mission_config.food.enabled:
+            return
+
+        # Spawn food at origin (will be repositioned on first teleport)
+        if not self._spawn_food_at_position(x=0.0, y=0.0, z=0.0):
+            return
+
+        # Setup prim paths for tracking
+        food_config = self.mission_config.food
+        base_path = food_config.prim_path.rstrip("/")
+        self._food_pieces_prim_path = f"{base_path}/{food_config.pieces_prim_path}"
+        self._food_bucket_prim_path = f"{base_path}/{food_config.bucket_prim_path}"
+
+        logger.info("[FOOD] Food tracking enabled")
+        logger.info(f"[FOOD] Pieces path: {self._food_pieces_prim_path}")
+        logger.info(f"[FOOD] Bucket path: {self._food_bucket_prim_path}")
+
+    def _check_food_spoilage(self) -> bool:
+        """Check if food has spoiled (pieces lost from bucket).
+
+        Compares the initial piece count to the current count and determines
+        if the loss exceeds the configured threshold.
+
+        Returns:
+            True if food has spoiled (too many pieces lost), False otherwise.
+        """
+        if not self.mission_config.food.enabled:
+            return False
+
+        self._final_food_piece_count = self._count_food_pieces_in_bucket()
+
+        if self._initial_food_piece_count == 0:
+            return False
+
+        pieces_lost = self._initial_food_piece_count - self._final_food_piece_count
+        loss_fraction = pieces_lost / self._initial_food_piece_count
+
+        logger.info(
+            f"[FOOD] Pieces: initial={self._initial_food_piece_count}, "
+            f"final={self._final_food_piece_count}, lost={pieces_lost} ({loss_fraction:.1%})"
+        )
+
+        return loss_fraction > self.mission_config.food.spoilage_threshold
+
+    def _reset_food_for_teleport(self) -> bool:
+        """Reset food by removing and respawning at robot's current position.
+
+        When the robot teleports to a new start position and settles, the food
+        (e.g., popcorn bucket) must be repositioned to match. This method reads
+        the robot's actual position from its prim (base_link or chassis_link)
+        and spawns the food at that location.
+
+        Returns:
+            True if food was successfully reset, False otherwise.
+        """
+        if not self.mission_config.food.enabled:
+            return True
+
+        # Get robot's actual position from its prim after settling
+        try:
+            import omni.usd
+            from pxr import UsdGeom
+
+            stage = omni.usd.get_context().get_stage()
+            robot_prim_path = self.mission_config.teleport.robot_prim
+            robot_prim = stage.GetPrimAtPath(robot_prim_path)
+
+            if not robot_prim.IsValid():
+                logger.error(f"[FOOD] Robot prim not found: {robot_prim_path}")
+                return False
+
+            # Get robot's world transform
+            xformable = UsdGeom.Xformable(robot_prim)
+            world_transform = xformable.ComputeLocalToWorldTransform(0)
+            robot_pos = world_transform.ExtractTranslation()
+
+            logger.info(
+                f"[FOOD] Robot position from prim: ({robot_pos[0]:.2f}, {robot_pos[1]:.2f}, {robot_pos[2]:.2f})"
+            )
+
+            # Spawn food at robot's actual position (z_offset will be added)
+            return self._spawn_food_at_position(
+                x=robot_pos[0],
+                y=robot_pos[1],
+                z=robot_pos[2],
+                remove_existing=True,
+            )
+
+        except Exception as e:
+            logger.error(f"[FOOD] Error getting robot position: {e}")
+            return False
+
+    def _handle_set_timeout(self, msg):
+        """Handle dynamic timeout configuration.
+
+        Args:
+            msg: Float64 message with timeout value in seconds.
+                 Use 0 or negative value to disable timeout (infinite).
+        """
+        timeout_value = msg.data
+        if timeout_value <= 0:
+            self.mission_config.timeout = None
+            logger.info("[CONFIG] Mission timeout disabled (infinite)")
+        else:
+            self.mission_config.timeout = timeout_value
+            logger.info(f"[CONFIG] Mission timeout set to {timeout_value}s")
+
     def _handle_start_mission(self, _request, response):
         """Handle external mission start trigger."""
         if self._state == MissionState.COMPLETED:
@@ -358,6 +718,8 @@ class MissionManager:
         # where the eval script sees the previous mission's SUCCESS result
         self._last_mission_result = MissionResult.PENDING
         self._last_mission_distance = None
+        self._last_elapsed_time = None
+        self._last_traveled_distance = None
 
         self._start_requested = True
         if self._is_mission_active():
@@ -382,7 +744,14 @@ class MissionManager:
             "result": "pending" | "success" | "failure",
             "mission_number": int,
             "distance_to_goal": float,
-            "in_progress": bool
+            "in_progress": bool,
+            "traveled_distance": float,  # meters
+            "elapsed_time": float,  # seconds
+            "food_enabled": bool,
+            "food_initial_pieces": int,
+            "food_final_pieces": int,
+            "food_loss_fraction": float,
+            "food_spoiled": bool
         }
         """
         import json
@@ -394,11 +763,50 @@ class MissionManager:
             current_dist = self._get_distance_to_goal()
             distance = current_dist if current_dist is not None else -1.0
 
+        # Calculate elapsed time
+        if in_progress and self._mission_start_time is not None:
+            elapsed_time = self._get_current_time_seconds() - self._mission_start_time
+        elif self._last_elapsed_time is not None:
+            elapsed_time = self._last_elapsed_time
+        else:
+            elapsed_time = -1.0
+
+        # Get traveled distance (current if in progress, or final from last mission)
+        if in_progress:
+            traveled_distance = self._traveled_distance
+        elif self._last_traveled_distance is not None:
+            traveled_distance = self._last_traveled_distance
+        else:
+            traveled_distance = self._traveled_distance  # Fallback to current
+
+        # Food metrics
+        food_enabled = bool(self.mission_config.food.enabled)
+        food_initial_pieces = self._initial_food_piece_count if food_enabled else -1
+        if food_enabled and self._final_food_piece_count is not None:
+            food_final_pieces = self._final_food_piece_count
+        else:
+            food_final_pieces = -1
+
+        food_loss_fraction = -1.0
+        if food_enabled and self._initial_food_piece_count > 0 and self._final_food_piece_count is not None:
+            food_loss_fraction = (
+                self._initial_food_piece_count - self._final_food_piece_count
+            ) / self._initial_food_piece_count
+
+        food_spoiled = self._last_mission_result == MissionResult.FAILURE_FOODSPOILED
+
         result_data = {
             "result": self._last_mission_result.value,
             "mission_number": self._current_mission,
             "distance_to_goal": distance,
             "in_progress": in_progress,
+            "traveled_distance": traveled_distance,
+            "elapsed_time": elapsed_time,
+            "food_enabled": food_enabled,
+            "food_initial_pieces": food_initial_pieces,
+            "food_final_pieces": food_final_pieces,
+            "food_loss_fraction": food_loss_fraction,
+            "food_spoiled": food_spoiled,
         }
 
         response.success = True
@@ -554,11 +962,16 @@ class MissionManager:
             # Import here to avoid circular dependency
             from .navmesh_sampler import SampledPosition
 
+            # Get robot-specific z offset, fall back to config value if not supported
+            z_offset = self._get_robot_z_offset()
+            if z_offset is None:
+                z_offset = self.config.teleport_height
+
             # Add height offset for teleportation
             teleport_pos = SampledPosition(
                 x=position.x,
                 y=position.y,
-                z=position.z + self.config.teleport_height,
+                z=position.z + z_offset,
                 heading=position.heading,
             )
             success = self._teleport_callback(teleport_pos)
@@ -683,7 +1096,7 @@ class MissionManager:
             self._state = MissionState.READY
             return
 
-        # After teleportation, we need to settle physics
+        # After teleportation, we need to settle physics before spawning food
         self._settle_steps_remaining = self.config.teleport_settle_steps
         self._state = MissionState.SETTLING
         logger.info(f"[SETTLING] Teleportation complete, settling physics for {self._settle_steps_remaining} steps")
@@ -694,13 +1107,22 @@ class MissionManager:
         This is critical: after XFormPrim.set_world_pose(), we must step the
         simulation multiple times to allow the physics engine to process the
         new pose and update all internal states.
+
+        After settling, food is spawned at the robot's position.
         """
         if self._settle_steps_remaining > 0:
             # Simulation step is already called in main loop before this
             # We just count down the steps
             self._settle_steps_remaining -= 1
             if self._settle_steps_remaining == 0:
-                logger.info(f"[{self._state.name}] Physics settled, publishing initial pose")
+                logger.info(f"[{self._state.name}] Physics settled")
+
+                # Spawn food at robot's actual position after robot has settled
+                if self.mission_config.food.enabled:
+                    if not self._reset_food_for_teleport():
+                        logger.warning(f"[{self._state.name}] Food reset failed, continuing without food tracking")
+
+                logger.info(f"[{self._state.name}] Publishing initial pose")
                 self._state = MissionState.PUBLISHING_INITIAL_POSE
 
     def _step_publishing_initial_pose(self):
@@ -718,42 +1140,85 @@ class MissionManager:
             # Update RViz markers
             self._marker_publisher.publish_start_goal_from_sampled(self._current_start, self._current_goal)
 
+            # Record initial food piece count for spoilage evaluation
+            if self.mission_config.food.enabled:
+                self._initial_food_piece_count = self._count_food_pieces_in_bucket()
+                logger.info(f"[FOOD] Initial piece count: {self._initial_food_piece_count}")
+
             logger.info(f"[{self._state.name}] Mission {self._current_mission} initiated successfully")
             self._mission_start_time = self._get_current_time_seconds()
+            # Reset distance tracking for this mission
+            self._traveled_distance = 0.0
+            self._prev_robot_position = self._robot_position
             self._state = MissionState.WAITING_FOR_COMPLETION
 
     def _step_waiting_for_completion(self):
-        """Wait for goal completion or timeout.
+        """Wait for goal completion, timeout, or robot fall.
 
         Success: Robot within goal_tolerance of goal position.
-        Failure: Timeout reached before reaching goal.
+        Failure (timeout): Timeout reached before reaching goal.
+        Failure (physical assistance): Robot fell down (bad orientation).
         """
         elapsed = self._get_current_time_seconds() - self._mission_start_time
         distance = self._get_distance_to_goal()
 
-        # Check for goal completion (success)
+        # Check for goal completion (success or food spoiled)
         if distance is not None and distance <= self.mission_config.goal_tolerance:
             self._mission_end_time = self._get_current_time_seconds()
-            self._last_mission_result = MissionResult.SUCCESS
             self._last_mission_distance = distance
+            self._last_elapsed_time = elapsed
+            self._last_traveled_distance = self._traveled_distance
+
+            # Check for food spoilage before declaring success
+            if self._check_food_spoilage():
+                self._last_mission_result = MissionResult.FAILURE_FOODSPOILED
+                self._state = MissionState.WAITING_FOR_START
+                logger.info(
+                    f"[FAILURE_FOODSPOILED] Mission {self._current_mission} failed - food spoiled! "
+                    f"Distance to goal: {distance:.2f}m, elapsed: {elapsed:.1f}s, "
+                    f"pieces: {self._initial_food_piece_count} -> {self._final_food_piece_count}"
+                )
+                return
+
+            self._last_mission_result = MissionResult.SUCCESS
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[SUCCESS] Mission {self._current_mission} completed! "
                 f"Distance to goal: {distance:.2f}m (tolerance: {self.mission_config.goal_tolerance}m), "
-                f"elapsed: {elapsed:.1f}s"
+                f"elapsed: {elapsed:.1f}s, traveled: {self._traveled_distance:.2f}m"
+            )
+            return
+
+        # Check for robot fall (requires physical assistance)
+        if self._is_robot_fallen():
+            self._mission_end_time = self._get_current_time_seconds()
+            if self.mission_config.food.enabled:
+                self._final_food_piece_count = self._count_food_pieces_in_bucket()
+            self._last_mission_result = MissionResult.FAILURE_PHYSICALASSISTANCE
+            self._last_mission_distance = distance if distance is not None else -1.0
+            self._last_elapsed_time = elapsed
+            self._last_traveled_distance = self._traveled_distance
+            self._state = MissionState.WAITING_FOR_START
+            logger.info(
+                f"[FAILURE_PHYSICALASSISTANCE] Mission {self._current_mission} failed - robot fell down! "
+                f"Distance to goal: {distance:.2f}m, elapsed: {elapsed:.1f}s"
             )
             return
 
         # Check for timeout (failure)
         if self.mission_config.timeout is not None and elapsed >= self.mission_config.timeout:
             self._mission_end_time = self._get_current_time_seconds()
-            self._last_mission_result = MissionResult.FAILURE
+            if self.mission_config.food.enabled:
+                self._final_food_piece_count = self._count_food_pieces_in_bucket()
+            self._last_mission_result = MissionResult.FAILURE_TIMEOUT
             self._last_mission_distance = distance if distance is not None else -1.0
+            self._last_elapsed_time = elapsed
+            self._last_traveled_distance = self._traveled_distance
             self._state = MissionState.WAITING_FOR_START
             logger.info(
-                f"[FAILURE] Mission {self._current_mission} timed out! "
+                f"[FAILURE_TIMEOUT] Mission {self._current_mission} timed out! "
                 f"Distance to goal: {distance:.2f}m (needed: {self.mission_config.goal_tolerance}m), "
-                f"timeout: {self.mission_config.timeout}s"
+                f"timeout: {self.mission_config.timeout}s, traveled: {self._traveled_distance:.2f}m"
             )
 
     def _cleanup(self):

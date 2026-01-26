@@ -7,6 +7,9 @@
 #   NUM_MISSIONS: Number of missions to run (default: 10)
 #
 # Requires: A running nav2 instance (make run-nav2)
+#
+# Controls:
+#   Right Arrow (→): Skip current mission
 
 set -e
 
@@ -19,12 +22,64 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_FILE="${LOG_DIR}/nav2_evaluation_${TIMESTAMP}.log"
 
 # Statistics tracking
-SUCCESSFUL=0
-FAILED=0
+SUCCESS_SLA=0
+FAILURE_TIMEOUT=0
+FAILURE_PHYSICALASSISTANCE=0
+FAILURE_FOODSPOILED=0
+SKIPPED=0
 declare -a MISSION_RESULTS
 declare -a MISSION_START_TIMES
 declare -a MISSION_END_TIMES
 declare -a MISSION_ERRORS
+declare -a MISSION_TRAVELED_DISTANCES
+declare -a MISSION_ELAPSED_TIMES
+declare -a MISSION_AVG_VELOCITIES
+declare -a MISSION_AVG_MECHANICAL_POWERS
+declare -a MISSION_FOOD_ENABLED
+declare -a MISSION_FOOD_INITIAL_PIECES
+declare -a MISSION_FOOD_FINAL_PIECES
+declare -a MISSION_FOOD_LOSS_FRACTION
+declare -a MISSION_FOOD_SPOILED
+
+# Mechanical energy constants
+ROLLING_RESISTANCE_FORCE=18.179  # Newtons
+
+# Terminal settings for non-blocking input
+ORIGINAL_STTY=""
+
+# Save and restore terminal settings
+save_terminal_settings() {
+    ORIGINAL_STTY=$(stty -g 2>/dev/null || true)
+}
+
+restore_terminal_settings() {
+    if [ -n "$ORIGINAL_STTY" ]; then
+        stty "$ORIGINAL_STTY" 2>/dev/null || true
+    fi
+}
+
+# Cleanup on exit
+cleanup() {
+    restore_terminal_settings
+}
+trap cleanup EXIT
+
+# Check for right arrow key press (non-blocking)
+# Returns 0 if right arrow was pressed, 1 otherwise
+check_skip_key() {
+    local key
+    # Read with 0.1s timeout, non-blocking
+    if read -t 0.1 -n 1 key 2>/dev/null; then
+        # Check for escape sequence start
+        if [ "$key" = $'\e' ]; then
+            read -t 0.1 -n 2 key 2>/dev/null || true
+            if [ "$key" = "[C" ]; then
+                return 0  # Right arrow pressed
+            fi
+        fi
+    fi
+    return 1
+}
 
 # Find the running nav2 container (strictly requires costnav-ros2-nav2)
 find_container() {
@@ -57,6 +112,12 @@ ros2_exec() {
     " 2>&1
 }
 
+# Set mission timeout via ROS2 topic
+set_mission_timeout() {
+    local timeout_seconds=$1
+    ros2_exec "ros2 topic pub --once /set_mission_timeout std_msgs/msg/Float64 '{data: $timeout_seconds}'" > /dev/null 2>&1
+}
+
 # Call start_mission service and wait for response
 start_mission() {
     local result
@@ -84,6 +145,7 @@ parse_result_field() {
 }
 
 # Run a single mission with timeout and result checking
+# Returns 0 for normal completion, 1 for skip requested
 run_mission() {
     local mission_num=$1
     local start_time
@@ -92,11 +154,22 @@ run_mission() {
     local error_msg=""
     local mission_result="FAILED"
     local distance_to_goal=""
+    local traveled_distance=""
+    local elapsed_time=""
+    local food_enabled="false"
+    local food_initial_pieces="-1"
+    local food_final_pieces="-1"
+    local food_loss_fraction="-1"
+    local food_spoiled="false"
+    local was_skipped=false
 
     start_time=$(date +%s.%N)
     MISSION_START_TIMES[$mission_num]=$(date '+%Y-%m-%d %H:%M:%S.%3N')
 
-    log "Mission $mission_num/$NUM_MISSIONS: Starting (timeout: ${TIMEOUT}s)"
+    log "Mission $mission_num/$NUM_MISSIONS: Starting (timeout: ${TIMEOUT}s) [Press → to skip]"
+
+    # Set mission timeout in mission manager before starting
+    set_mission_timeout "$TIMEOUT"
 
     # Call start_mission service
     local service_result
@@ -105,14 +178,36 @@ run_mission() {
     if echo "$service_result" | grep -q "success=True"; then
         log "Mission $mission_num: Started, monitoring for completion..."
 
-        # Poll for mission completion or timeout
+        # Poll for mission completion using wall-clock time
         local poll_interval=1
-        local elapsed=0
         local result_status="pending"
+        local loop_start_time
+        local current_time
+        local wall_elapsed
+        local last_log_time=0
+        loop_start_time=$(date +%s)
 
-        while [ "$elapsed" -lt "$TIMEOUT" ]; do
+        while true; do
+            # Check wall-clock elapsed time
+            current_time=$(date +%s)
+            wall_elapsed=$((current_time - loop_start_time))
+
+            # Safety timeout: allow extra time beyond mission manager timeout for polling overhead
+            # The mission manager handles the actual timeout; this is just a safety net
+            local safety_timeout=$((TIMEOUT + 30))
+            if [ "$wall_elapsed" -ge "$safety_timeout" ]; then
+                break
+            fi
+
+            # Check for skip key (right arrow)
+            if check_skip_key; then
+                mission_result="SKIPPED"
+                was_skipped=true
+                log "Mission $mission_num: SKIPPED by user (→ key pressed)"
+                break
+            fi
+
             sleep "$poll_interval"
-            elapsed=$((elapsed + poll_interval))
 
             # Query mission result
             local result_response
@@ -122,30 +217,54 @@ run_mission() {
             local in_progress
             in_progress=$(parse_result_field "$result_response" "in_progress")
             distance_to_goal=$(parse_result_field "$result_response" "distance_to_goal")
+            traveled_distance=$(parse_result_field "$result_response" "traveled_distance")
+            elapsed_time=$(parse_result_field "$result_response" "elapsed_time")
+            food_enabled=$(parse_result_field "$result_response" "food_enabled")
+            food_initial_pieces=$(parse_result_field "$result_response" "food_initial_pieces")
+            food_final_pieces=$(parse_result_field "$result_response" "food_final_pieces")
+            food_loss_fraction=$(parse_result_field "$result_response" "food_loss_fraction")
+            food_spoiled=$(parse_result_field "$result_response" "food_spoiled")
 
-            # Check if mission completed (success or failure)
+            if [ -z "$food_enabled" ]; then
+                food_enabled="false"
+            fi
+            if [ -z "$food_initial_pieces" ]; then
+                food_initial_pieces="-1"
+            fi
+            if [ -z "$food_final_pieces" ]; then
+                food_final_pieces="-1"
+            fi
+            if [ -z "$food_loss_fraction" ]; then
+                food_loss_fraction="-1"
+            fi
+            if [ -z "$food_spoiled" ]; then
+                food_spoiled="false"
+            fi
+
+            # Check if mission completed (success or failure from mission manager)
             if [ "$result_status" = "success" ]; then
                 mission_result="SUCCESS"
-                log "Mission $mission_num: Goal reached! Distance: ${distance_to_goal}m"
+                log "Mission $mission_num: Goal reached! Goal Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
                 break
-            elif [ "$result_status" = "failure" ]; then
+            elif [[ "$result_status" == failure_* ]]; then
                 mission_result="FAILED"
-                error_msg="Timeout - distance to goal: ${distance_to_goal}m"
-                log "Mission $mission_num: Timeout! Distance: ${distance_to_goal}m"
+                error_msg="${result_status} - distance to goal: ${distance_to_goal}m"
+                log "Mission $mission_num: ${result_status}! Goal Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
                 break
             fi
 
-            # Log progress every 5 seconds
-            if [ $((elapsed % 5)) -eq 0 ]; then
-                log "Mission $mission_num: In progress... (${elapsed}s elapsed, distance_to_goal: ${distance_to_goal}m)"
+            # Log progress every 5 seconds (wall-clock time)
+            if [ $((wall_elapsed - last_log_time)) -ge 5 ]; then
+                log "Mission $mission_num: In progress... (${wall_elapsed}s elapsed, distance_to_goal: ${distance_to_goal}m, traveled: ${traveled_distance}m)"
+                last_log_time=$wall_elapsed
             fi
         done
 
-        # If we exited the loop due to our timeout (not mission manager's), mark as failed
-        if [ "$result_status" = "pending" ]; then
+        # If we exited due to safety timeout without mission manager response
+        if [ "$result_status" = "pending" ] && [ "$was_skipped" = false ]; then
             mission_result="FAILED"
-            error_msg="Evaluation timeout reached"
-            log "Mission $mission_num: Evaluation timeout!"
+            error_msg="Safety timeout reached (mission manager may be unresponsive)"
+            log "Mission $mission_num: Safety timeout!"
         fi
     else
         error_msg="Service call failed: $service_result"
@@ -157,25 +276,103 @@ run_mission() {
 
     duration=$(echo "$end_time - $start_time" | bc)
 
+    # Store traveled distance and elapsed time
+    MISSION_TRAVELED_DISTANCES[$mission_num]="${traveled_distance:-0}"
+    MISSION_ELAPSED_TIMES[$mission_num]="${elapsed_time:-0}"
+
+    # Calculate average velocity and mechanical power (in kW)
+    local avg_velocity="0"
+    local avg_mech_power="0"
+    if [ -n "$elapsed_time" ] && [ "$elapsed_time" != "0" ]; then
+        avg_velocity=$(echo "scale=4; ${traveled_distance:-0} / $elapsed_time" | bc)
+        avg_mech_power=$(echo "scale=6; $ROLLING_RESISTANCE_FORCE * $avg_velocity / 1000" | bc)
+    fi
+    MISSION_AVG_VELOCITIES[$mission_num]="$avg_velocity"
+    MISSION_AVG_MECHANICAL_POWERS[$mission_num]="$avg_mech_power"
+
+    MISSION_FOOD_ENABLED[$mission_num]="${food_enabled}"
+    MISSION_FOOD_INITIAL_PIECES[$mission_num]="${food_initial_pieces}"
+    MISSION_FOOD_FINAL_PIECES[$mission_num]="${food_final_pieces}"
+    MISSION_FOOD_LOSS_FRACTION[$mission_num]="${food_loss_fraction}"
+    MISSION_FOOD_SPOILED[$mission_num]="${food_spoiled}"
+
     if [ "$mission_result" = "SUCCESS" ]; then
-        SUCCESSFUL=$((SUCCESSFUL + 1))
-        MISSION_RESULTS[$mission_num]="SUCCESS"
-        log "Mission $mission_num: SUCCESS (duration: ${duration}s, distance: ${distance_to_goal}m)"
+        SUCCESS_SLA=$((SUCCESS_SLA + 1))
+        MISSION_RESULTS[$mission_num]="SUCCESS_SLA"
+        log "Mission $mission_num: SUCCESS_SLA (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s, avg_vel: ${avg_velocity}m/s, avg_mech_power: ${avg_mech_power}kW)"
+    elif [ "$mission_result" = "SKIPPED" ]; then
+        SKIPPED=$((SKIPPED + 1))
+        MISSION_RESULTS[$mission_num]="SKIPPED"
+        MISSION_ERRORS[$mission_num]="Skipped by user"
+        log "Mission $mission_num: SKIPPED (duration: ${duration}s)"
     else
-        FAILED=$((FAILED + 1))
-        MISSION_RESULTS[$mission_num]="FAILED"
+        # Parse specific failure type from result_status
+        if [ "$result_status" = "failure_timeout" ]; then
+            FAILURE_TIMEOUT=$((FAILURE_TIMEOUT + 1))
+            MISSION_RESULTS[$mission_num]="FAILURE_TIMEOUT"
+        elif [ "$result_status" = "failure_physicalassistance" ]; then
+            FAILURE_PHYSICALASSISTANCE=$((FAILURE_PHYSICALASSISTANCE + 1))
+            MISSION_RESULTS[$mission_num]="FAILURE_PHYSICALASSISTANCE"
+        elif [ "$result_status" = "failure_foodspoiled" ]; then
+            FAILURE_FOODSPOILED=$((FAILURE_FOODSPOILED + 1))
+            MISSION_RESULTS[$mission_num]="FAILURE_FOODSPOILED"
+        else
+            # Unknown failure type, count as timeout
+            FAILURE_TIMEOUT=$((FAILURE_TIMEOUT + 1))
+            MISSION_RESULTS[$mission_num]="FAILURE_TIMEOUT"
+        fi
         MISSION_ERRORS[$mission_num]="$error_msg"
-        log "Mission $mission_num: FAILED (duration: ${duration}s) - $error_msg"
+        log "Mission $mission_num: ${MISSION_RESULTS[$mission_num]} (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s, avg_vel: ${avg_velocity}m/s, avg_mech_power: ${avg_mech_power}kW) - $error_msg"
+    fi
+
+    if [ "$food_enabled" = "true" ]; then
+        log "Mission $mission_num: Food pieces ${food_initial_pieces} -> ${food_final_pieces} (loss fraction: ${food_loss_fraction})"
+        if [ "$food_spoiled" = "true" ]; then
+            log "Mission $mission_num: Food spoiled"
+        fi
     fi
 }
 
 # Generate evaluation summary
 generate_summary() {
     local success_rate
-    if [ "$NUM_MISSIONS" -gt 0 ]; then
-        success_rate=$(echo "scale=2; $SUCCESSFUL * 100 / $NUM_MISSIONS" | bc)
+    local completed_missions=$((NUM_MISSIONS - SKIPPED))
+    if [ "$completed_missions" -gt 0 ]; then
+        success_rate=$(echo "scale=2; $SUCCESS_SLA * 100 / $completed_missions" | bc)
     else
         success_rate="0"
+    fi
+
+    # Calculate average distance, time, velocity, and mechanical power for completed (non-skipped) missions
+    local total_distance=0
+    local total_time=0
+    local total_velocity=0
+    local total_mech_power=0
+    local count=0
+    for i in $(seq 1 $NUM_MISSIONS); do
+        local result="${MISSION_RESULTS[$i]:-N/A}"
+        if [ "$result" != "SKIPPED" ] && [ "$result" != "N/A" ]; then
+            local dist="${MISSION_TRAVELED_DISTANCES[$i]:-0}"
+            local time="${MISSION_ELAPSED_TIMES[$i]:-0}"
+            local vel="${MISSION_AVG_VELOCITIES[$i]:-0}"
+            local mech_power="${MISSION_AVG_MECHANICAL_POWERS[$i]:-0}"
+            total_distance=$(echo "$total_distance + $dist" | bc)
+            total_time=$(echo "$total_time + $time" | bc)
+            total_velocity=$(echo "$total_velocity + $vel" | bc)
+            total_mech_power=$(echo "$total_mech_power + $mech_power" | bc)
+            count=$((count + 1))
+        fi
+    done
+
+    local avg_distance="0"
+    local avg_time="0"
+    local avg_velocity="0"
+    local avg_mech_power="0"
+    if [ "$count" -gt 0 ]; then
+        avg_distance=$(echo "scale=2; $total_distance / $count" | bc)
+        avg_time=$(echo "scale=2; $total_time / $count" | bc)
+        avg_velocity=$(echo "scale=4; $total_velocity / $count" | bc)
+        avg_mech_power=$(echo "scale=6; $total_mech_power / $count" | bc)
     fi
 
     log_file ""
@@ -187,11 +384,21 @@ generate_summary() {
     log_file "  - Timeout per mission: ${TIMEOUT}s"
     log_file "  - Total missions: $NUM_MISSIONS"
     log_file "  - Container: $CONTAINER"
+    log_file "  - Rolling resistance force: ${ROLLING_RESISTANCE_FORCE}N"
     log_file ""
     log_file "Results:"
-    log_file "  - Successful missions: $SUCCESSFUL"
-    log_file "  - Failed missions: $FAILED"
-    log_file "  - Success rate: ${success_rate}%"
+    log_file "  - SUCCESS_SLA: $SUCCESS_SLA"
+    log_file "  - FAILURE_TIMEOUT: $FAILURE_TIMEOUT"
+    log_file "  - FAILURE_PHYSICALASSISTANCE: $FAILURE_PHYSICALASSISTANCE"
+    log_file "  - FAILURE_FOODSPOILED: $FAILURE_FOODSPOILED"
+    log_file "  - Skipped: $SKIPPED"
+    log_file "  - Success rate: ${success_rate}% (excluding skipped)"
+    log_file ""
+    log_file "Averages (excluding skipped):"
+    log_file "  - Average traveled distance: ${avg_distance}m"
+    log_file "  - Average elapsed time: ${avg_time}s"
+    log_file "  - Average velocity: ${avg_velocity}m/s"
+    log_file "  - Average mechanical power: ${avg_mech_power}kW"
     log_file ""
     log_file "Per-Mission Results:"
     log_file "------------------------------------------------------------"
@@ -201,11 +408,29 @@ generate_summary() {
         local start="${MISSION_START_TIMES[$i]:-N/A}"
         local end="${MISSION_END_TIMES[$i]:-N/A}"
         local error="${MISSION_ERRORS[$i]:-}"
+        local traveled="${MISSION_TRAVELED_DISTANCES[$i]:-N/A}"
+        local elapsed="${MISSION_ELAPSED_TIMES[$i]:-N/A}"
+        local mission_avg_vel="${MISSION_AVG_VELOCITIES[$i]:-N/A}"
+        local mission_avg_power="${MISSION_AVG_MECHANICAL_POWERS[$i]:-N/A}"
+        local food_enabled="${MISSION_FOOD_ENABLED[$i]:-false}"
+        local food_initial="${MISSION_FOOD_INITIAL_PIECES[$i]:-N/A}"
+        local food_final="${MISSION_FOOD_FINAL_PIECES[$i]:-N/A}"
+        local food_loss="${MISSION_FOOD_LOSS_FRACTION[$i]:-N/A}"
+        local food_spoiled="${MISSION_FOOD_SPOILED[$i]:-false}"
 
         log_file "Mission $i:"
         log_file "  Status: $result"
         log_file "  Start:  $start"
         log_file "  End:    $end"
+        log_file "  Traveled distance: ${traveled}m"
+        log_file "  Elapsed time: ${elapsed}s"
+        log_file "  Average velocity: ${mission_avg_vel}m/s"
+        log_file "  Average mechanical power: ${mission_avg_power}kW"
+        if [ "$food_enabled" = "true" ]; then
+            log_file "  Food pieces: ${food_initial} -> ${food_final}"
+            log_file "  Food loss fraction: ${food_loss}"
+            log_file "  Food spoiled: ${food_spoiled}"
+        fi
         if [ -n "$error" ]; then
             log_file "  Error:  $error"
         fi
@@ -221,6 +446,9 @@ main() {
     # Create log directory if it doesn't exist
     mkdir -p "$LOG_DIR"
 
+    # Save terminal settings for keyboard input
+    save_terminal_settings
+
     # Initialize log file
     log_file "============================================================"
     log_file "NAV2 EVALUATION LOG"
@@ -235,6 +463,7 @@ main() {
     echo "  Timeout:      ${TIMEOUT}s"
     echo "  Missions:     $NUM_MISSIONS"
     echo "  Log file:     $LOG_FILE"
+    echo "  Controls:     Press → (right arrow) to skip mission"
     echo "=============================================="
     echo ""
 
@@ -267,23 +496,98 @@ main() {
 
     # Print final summary to console
     local success_rate
-    if [ "$NUM_MISSIONS" -gt 0 ]; then
-        success_rate=$(echo "scale=2; $SUCCESSFUL * 100 / $NUM_MISSIONS" | bc)
+    local completed_missions=$((NUM_MISSIONS - SKIPPED))
+    if [ "$completed_missions" -gt 0 ]; then
+        success_rate=$(echo "scale=2; $SUCCESS_SLA * 100 / $completed_missions" | bc)
     else
         success_rate="0"
+    fi
+
+    # Calculate averages for console output (excluding skipped)
+    local total_distance=0
+    local total_time=0
+    local total_velocity=0
+    local total_mech_power=0
+    local count=0
+    for i in $(seq 1 $NUM_MISSIONS); do
+        local result="${MISSION_RESULTS[$i]:-N/A}"
+        if [ "$result" != "SKIPPED" ] && [ "$result" != "N/A" ]; then
+            local dist="${MISSION_TRAVELED_DISTANCES[$i]:-0}"
+            local time="${MISSION_ELAPSED_TIMES[$i]:-0}"
+            local vel="${MISSION_AVG_VELOCITIES[$i]:-0}"
+            local mech_power="${MISSION_AVG_MECHANICAL_POWERS[$i]:-0}"
+            total_distance=$(echo "$total_distance + $dist" | bc)
+            total_time=$(echo "$total_time + $time" | bc)
+            total_velocity=$(echo "$total_velocity + $vel" | bc)
+            total_mech_power=$(echo "$total_mech_power + $mech_power" | bc)
+            count=$((count + 1))
+        fi
+    done
+
+    local avg_distance="0"
+    local avg_time="0"
+    local avg_velocity="0"
+    local avg_mech_power="0"
+    if [ "$count" -gt 0 ]; then
+        avg_distance=$(echo "scale=2; $total_distance / $count" | bc)
+        avg_time=$(echo "scale=2; $total_time / $count" | bc)
+        avg_velocity=$(echo "scale=4; $total_velocity / $count" | bc)
+        avg_mech_power=$(echo "scale=6; $total_mech_power / $count" | bc)
+    fi
+
+    # Calculate averages including skipped
+    local total_distance_all=0
+    local total_time_all=0
+    local total_velocity_all=0
+    local total_mech_power_all=0
+    local count_all=0
+    for i in $(seq 1 $NUM_MISSIONS); do
+        local result="${MISSION_RESULTS[$i]:-N/A}"
+        if [ "$result" != "N/A" ]; then
+            local dist="${MISSION_TRAVELED_DISTANCES[$i]:-0}"
+            local time="${MISSION_ELAPSED_TIMES[$i]:-0}"
+            local vel="${MISSION_AVG_VELOCITIES[$i]:-0}"
+            local mech_power="${MISSION_AVG_MECHANICAL_POWERS[$i]:-0}"
+            total_distance_all=$(echo "$total_distance_all + $dist" | bc)
+            total_time_all=$(echo "$total_time_all + $time" | bc)
+            total_velocity_all=$(echo "$total_velocity_all + $vel" | bc)
+            total_mech_power_all=$(echo "$total_mech_power_all + $mech_power" | bc)
+            count_all=$((count_all + 1))
+        fi
+    done
+
+    local avg_distance_all="0"
+    local avg_time_all="0"
+    local avg_velocity_all="0"
+    local avg_mech_power_all="0"
+    if [ "$count_all" -gt 0 ]; then
+        avg_distance_all=$(echo "scale=2; $total_distance_all / $count_all" | bc)
+        avg_time_all=$(echo "scale=2; $total_time_all / $count_all" | bc)
+        avg_velocity_all=$(echo "scale=4; $total_velocity_all / $count_all" | bc)
+        avg_mech_power_all=$(echo "scale=6; $total_mech_power_all / $count_all" | bc)
     fi
 
     echo ""
     echo "=============================================="
     echo "  Evaluation Complete"
     echo "=============================================="
-    echo "  Successful: $SUCCESSFUL / $NUM_MISSIONS"
-    echo "  Failed:     $FAILED / $NUM_MISSIONS"
-    echo "  Success Rate: ${success_rate}%"
+    echo "  SUCCESS_SLA:              $SUCCESS_SLA / $NUM_MISSIONS"
+    echo "  FAILURE_FOODSPOILED:      $FAILURE_FOODSPOILED / $NUM_MISSIONS"
+    echo "  FAILURE_TIMEOUT:          $FAILURE_TIMEOUT / $NUM_MISSIONS"
+    echo "  FAILURE_PHYSICALASSISTANCE: $FAILURE_PHYSICALASSISTANCE / $NUM_MISSIONS"
+    echo "  Skipped:                  $SKIPPED / $NUM_MISSIONS"
+    echo "  Success Rate: ${success_rate}% (excluding skipped)"
+    echo "  Avg Distance: ${avg_distance}m (excluding skipped)"
+    echo "  Avg Time:     ${avg_time}s (excluding skipped)"
+    echo "  Avg Velocity: ${avg_velocity}m/s (excluding skipped)"
+    echo "  Avg Mech Power: ${avg_mech_power}kW (excluding skipped)"
+    echo "  Avg Distance: ${avg_distance_all}m (including skipped)"
+    echo "  Avg Time:     ${avg_time_all}s (including skipped)"
+    echo "  Avg Velocity: ${avg_velocity_all}m/s (including skipped)"
+    echo "  Avg Mech Power: ${avg_mech_power_all}kW (including skipped)"
     echo "  Log file:   $LOG_FILE"
     echo "=============================================="
 }
 
 # Run main
 main
-

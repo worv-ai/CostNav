@@ -26,7 +26,8 @@
         "ms-python.vscode-pylance",
         "charliermarsh.ruff",
         "Augment.vscode-augment",
-        "ms-vscode.cpptools"
+        "ms-vscode.cpptools",
+        "openai.chatgpt"
       ],
       "settings": {
         "python.defaultInterpreterPath": "/isaac-sim/kit/python/bin/python3",

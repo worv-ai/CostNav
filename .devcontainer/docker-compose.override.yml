@@ -1,20 +1,15 @@
 # Override docker-compose.yml for devcontainer
 # This file overrides the command to keep containers running for development
+# The command must be in array format to properly override the base command
 services:
   isaac-sim:
-    # Override command to keep container running (matches ENTRYPOINT ["/bin/bash"])
-    command:
-      - "-c"
-      - "sleep infinity"
+    # Override command to keep container running instead of launching Isaac Sim
+    command: ["/bin/bash", "-c", "sleep infinity"]
 
   isaac-lab:
-    command:
-      - "-c"
-      - "sleep infinity"
+    command: ["/bin/bash", "-c", "sleep infinity"]
 
   ros2:
-    command:
-      - "-c"
-      - "sleep infinity"
+    command: ["/bin/bash", "-c", "sleep infinity"]
     volumes:
       - .:/workspace
