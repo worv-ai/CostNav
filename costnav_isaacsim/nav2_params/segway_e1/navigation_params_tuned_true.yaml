@@ -1,8 +1,8 @@
 amcl:
   ros__parameters:
     use_sim_time: True
-    alpha1: 0.05
-    alpha2: 0.05
+    alpha1: 0.03
+    alpha2: 0.03
     alpha3: 0.1
     alpha4: 0.1
     alpha5: 0.05
@@ -160,8 +160,8 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: "OPEN_LOOP"
-    max_velocity: [2.0, 0.0, 0.7]  # Cap angular velocity
-    min_velocity: [-2.0, 0.0, -0.7]
+    max_velocity: [2.0, 0.0, 0.5]  # Cap angular velocity
+    min_velocity: [-2.0, 0.0, -0.5]
     # deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0
     # max_accel: [1.0, 0.0, 1.25]
@@ -208,11 +208,13 @@ controller_server:
     FollowPath:
       plugin: "nav2_rotation_shim_controller::RotationShimController"
       angular_dist_threshold: 0.785  # 45 degrees in radians - rotate in place if heading error > this
+      angular_disengage_threshold: 0.05  # ~3 degrees - very tight exit threshold to ensure robot stops before transitioning
       forward_sampling_distance: 0.5  # meters - distance to look ahead on path for rotation alignment
-      rotate_to_heading_angular_vel: 0.7  # rad/s - rotation speed during in-place rotation
+      rotate_to_heading_angular_vel: 0.5  # rad/s - rotation speed during in-place rotation
       max_angular_accel: 3.5  # rad/s^2 - max angular acceleration during rotation
       simulate_ahead_time: 2.0  # seconds - time to project robot motion for collision checking
       rotate_to_goal_heading: false  # Don't rotate to goal heading at the end
+      closed_loop: false  # Use commanded velocity instead of odometry for acceleration calculations (prevents low velocities)
 
       # Primary controller (DWB)
       # Newer Nav2 versions expect the internal controller plugin under:
@@ -224,10 +226,10 @@ controller_server:
       min_vel_y: 0.0
       max_vel_x: 2.0
       max_vel_y: 0.0
-      max_vel_theta: 0.7  # Cap angular velocity
+      max_vel_theta: 0.5  # Cap angular velocity
       min_speed_xy: 0.0
       max_speed_xy: 2.0
-      min_speed_theta: 0.4  # Minimum rotation speed when rotating
+      min_speed_theta: 0.3  # Minimum rotation speed when rotating
       # Acceleration limits
       acc_lim_x: 2.5
       acc_lim_y: 0.0
@@ -486,7 +488,7 @@ behavior_server:
     robot_base_frame: base_link
     transform_tolerance: 0.2
     simulate_ahead_time: 2.0
-    max_rotational_vel: 0.7  # Cap angular velocity
+    max_rotational_vel: 0.5  # Cap angular velocity
     min_rotational_vel: 0.3
     rotational_acc_lim: 3.5
 

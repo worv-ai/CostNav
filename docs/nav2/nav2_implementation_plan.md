@@ -35,19 +35,143 @@
 
 ### ⚠️ Known Issues
 
-1. **Segway E1 Spin-in-Place Problem**
-   - **Description**: The Segway E1 robot cannot perform in-place rotation maneuvers
-   - **Impact**: Affects navigation in tight spaces and goal orientation alignment
-   - **Status**: Under investigation
-   - **Potential Causes**:
-     - Controller parameters may need adjustment for differential drive kinematics
-     - Rotation velocity limits may be too conservative
-     - Local planner configuration may not support zero-radius turns
-   - **Next Steps**:
-     - Review DWB controller parameters (min_vel_theta, max_vel_theta)
-     - Test rotation recovery behavior configuration
-     - Compare with Nova Carter rotation parameters
-     - Validate robot kinematic constraints in URDF/controller config
+1. **~~Segway E1 Spin-in-Place Problem~~** - ✅ RESOLVED
+   - **Description**: The Segway E1 robot could not perform in-place rotation maneuvers
+   - **Impact**: Affected navigation in tight spaces and goal orientation alignment
+   - **Status**: ✅ Resolved by modifying Isaac Sim USD Action Graph robot controller configuration
+   - **Root Cause Solution**: Changed the robot controller used in the USD Action Graph of Isaac Sim to properly support differential drive in-place rotation commands
+   - **Navigation Enhancement**: Implemented `nav2_rotation_shim_controller::RotationShimController` wrapper around DWB controller as a complementary improvement for better in-place rotation behavior
+   - **Details**: See "Parameter Tuning: RotationShimController" section below for the navigation enhancement configuration
+
+---
+
+## Parameter Tuning: RotationShimController
+
+### Overview
+
+To resolve the Segway E1 spin-in-place problem and improve navigation performance for both robots, we implemented the **Nav2 RotationShimController** as a wrapper around the DWB local planner. This controller enforces in-place rotation when the robot needs to make large heading corrections before following a path.
+
+### What is RotationShimController?
+
+The RotationShimController is a Nav2 controller plugin that:
+
+1. **Monitors heading error** between the robot's current orientation and the path direction
+2. **Triggers in-place rotation** when heading error exceeds a threshold (e.g., 45°)
+3. **Hands off to primary controller** (DWB) once the robot is roughly aligned with the path
+4. **Enables smooth transitions** between rotation and path-following modes
+
+**Reference:** [Nav2 RotationShimController Documentation](https://docs.nav2.org/configuration/packages/configuring-rotation-shim-controller.html)
+
+### Configuration Strategy
+
+We use **consistent angular velocity limits** across all navigation phases:
+
+| Phase                  | Controller             | Angular Velocity | Purpose                                        |
+| ---------------------- | ---------------------- | ---------------- | ---------------------------------------------- |
+| **In-Place Rotation**  | RotationShimController | 0.5 rad/s        | Controlled heading corrections when stationary |
+| **Path Following**     | DWB Controller         | 0.5 rad/s        | Stable turning while moving forward            |
+| **Recovery Behaviors** | Behavior Server        | 0.5 rad/s        | Controlled recovery spins                      |
+
+### Parameter Configuration
+
+#### 1. RotationShimController Parameters
+
+```yaml
+FollowPath:
+  plugin: "nav2_rotation_shim_controller::RotationShimController"
+  angular_dist_threshold: 0.785 # 45° in radians - rotate in place if heading error > this
+  forward_sampling_distance: 0.5 # meters - distance to look ahead on path
+  rotate_to_heading_angular_vel: 0.5 # rad/s - rotation speed during in-place rotation
+  max_angular_accel: 3.5 # rad/s² - max angular acceleration
+  simulate_ahead_time: 2.0 # seconds - collision checking projection time
+  rotate_to_goal_heading: false # Don't rotate to goal heading at the end
+  closed_loop: false # Use commanded velocity instead of odometry (prevents premature deceleration)
+```
+
+**Note on `closed_loop: false` (Segway E1 only):**
+
+- When `true` (default): Uses robot odometry velocity for acceleration calculations
+- When `false`: Uses last commanded velocity for acceleration calculations
+- Setting to `false` prevents the controller from decelerating too early when approaching the target heading
+- This ensures the robot maintains minimum velocity (0.3 rad/s) during in-place rotation
+- Only needed for Segway E1 due to its specific dynamics
+
+#### 2. DWB Controller Parameters (Wrapped by RotationShim)
+
+```yaml
+primary_controller: "dwb_core::DWBLocalPlanner"
+max_vel_theta: 0.5 # rad/s - Cap angular velocity
+min_speed_theta: 0.3 # rad/s - Minimum rotation speed when rotating
+```
+
+#### 3. Velocity Smoother Parameters
+
+```yaml
+velocity_smoother:
+  max_velocity: [2.0, 0.0, 0.5] # [vx, vy, vθ] - Cap angular velocity
+  min_velocity: [-2.0, 0.0, -0.5]
+```
+
+#### 4. Behavior Server Parameters
+
+```yaml
+behavior_server:
+  max_rotational_vel: 0.5 # rad/s - Cap angular velocity
+  min_rotational_vel: 0.3
+  rotational_acc_lim: 3.5
+```
+
+### Why This Configuration Works
+
+1. **Controlled In-Place Rotations (0.5 rad/s)**
+   - Slower speed prevents position loss during rotation
+   - 180° turn takes ~6.3 seconds
+   - Only active when heading error > 45° (angular_dist_threshold)
+   - Prevents excessive speed that could cause localization drift
+
+2. **Stable Forward Motion (0.5 rad/s)**
+   - Consistent angular velocity limit across all navigation phases
+   - Prevents excessive oscillation on curved paths
+   - Maintains smooth trajectory tracking
+   - Reduces wear on motors during normal navigation
+
+3. **Velocity Smoother Compatibility**
+   - Set to 0.5 rad/s to match controller limits
+   - Ensures consistent velocity caps across the navigation stack
+   - Smooths acceleration/deceleration for motor protection
+
+4. **Consistent Recovery Behaviors**
+   - Recovery spins use same 0.5 rad/s as in-place rotations
+   - Controlled recovery from stuck situations
+   - Consistent behavior across navigation modes
+
+5. **Minimum Velocity Enforcement (0.3 rad/s)**
+   - Prevents robot from getting stuck with very low angular velocities
+   - `closed_loop: false` helps maintain this minimum during deceleration
+   - Ensures reliable rotation completion
+
+### Implementation Files
+
+**Tuned Parameter Files:**
+
+- `costnav_isaacsim/nav2_params/nova_carter/navigation_params_tuned_true.yaml`
+- `costnav_isaacsim/nav2_params/segway_e1/navigation_params_tuned_true.yaml`
+
+**Key Sections:**
+
+- `controller_server.FollowPath` - RotationShimController configuration
+- `controller_server.FollowPath.primary_controller` - DWB parameters
+- `velocity_smoother` - Velocity limits
+- `behavior_server` - Recovery behavior parameters
+
+### Benefits
+
+✅ **Segway E1 can now perform in-place rotations** - Resolved the spin-in-place problem
+✅ **Controlled navigation** - Consistent 0.5 rad/s angular velocity across all phases
+✅ **Stable path tracking** - Limited angular velocity prevents oscillation
+✅ **Smooth transitions** - RotationShimController hands off cleanly to DWB
+✅ **Prevents position loss** - Slower rotation (0.5 rad/s) maintains better localization
+✅ **Reliable rotation completion** - Minimum 0.3 rad/s prevents getting stuck
 
 ---
 
@@ -105,12 +229,15 @@ CostNav currently supports:
 - ✅ Multi-container Docker architecture
 - ✅ ROS2 bridge for Isaac Sim communication
 
+### Completed Tasks
+
+1. ✅ **Start and Goal Sampling** - Complete (nav2_mission module)
+2. ✅ **Segway E1 Robot Adaptation** - Complete (SIM_ROBOT environment variable with dynamic parameter selection)
+3. ✅ **Parameter Tuning** - Complete (Optimized Nav2 parameters for both Nova Carter and Segway E1, including RotationShimController configuration)
+
 ### Remaining Tasks
 
-1. ~~**Start and Goal Sampling**~~ - ✅ Complete (nav2_mission module)
-2. ~~**Segway E1 Robot Adaptation**~~ - ✅ Complete (SIM_ROBOT environment variable with dynamic parameter selection)
-3. **Parameter Tuning** - Optimize Nav2 parameters for both Nova Carter and Segway E1 navigation performance
-4. **Cost Model Integration** - Track economic metrics for Nav2 navigation
+1. **Cost Model Integration** - Track economic metrics for Nav2 navigation
 
 ---
 
@@ -884,16 +1011,22 @@ nav2_metrics = {
 
 ## Document History
 
-| Version | Date       | Author       | Changes                                                                                                                                                           |
-| ------- | ---------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0.1     | 2025-11-21 | CostNav Team | Initial draft                                                                                                                                                     |
-| 0.2     | 2025-11-21 | CostNav Team | Updated with multi-container architecture and official Isaac Sim Nav2 tutorial references                                                                         |
-| 1.0     | 2025-12-10 | CostNav Team | Updated to reflect completed Nav2 integration with Nova Carter, removed network config, updated priorities                                                        |
-| 1.1     | 2025-12-12 | CostNav Team | Week 3 complete: Added nav2_mission module with NavMesh sampling, RViz markers, mission orchestration, integrated launch                                          |
-| 1.2     | 2025-12-12 | CostNav Team | Refactored to use YAML config file (config/mission_config.yaml), added MissionRunner, separated config module                                                     |
-| 1.3     | 2026-01-22 | CostNav Team | Added Segway E1 robot support with SIM_ROBOT environment variable for dynamic robot selection, robot-specific parameter files, and shared map directory structure |
-| 1.4     | 2026-01-23 | CostNav Team | Documented known issue: Segway E1 cannot spin in place, added troubleshooting section and investigation steps                                                     |
-| 1.5     | 2026-01-23 | CostNav Team | Updated status to reflect completed parameter tuning for both robots, reorganized implementation plan with Week 4 complete and Week 5 in progress                 |
+| Version | Date       | Author       | Changes                                                                                                                                                                                  |
+| ------- | ---------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0.1     | 2025-11-21 | CostNav Team | Initial draft                                                                                                                                                                            |
+| 0.2     | 2025-11-21 | CostNav Team | Updated with multi-container architecture and official Isaac Sim Nav2 tutorial references                                                                                                |
+| 1.0     | 2025-12-10 | CostNav Team | Updated to reflect completed Nav2 integration with Nova Carter, removed network config, updated priorities                                                                               |
+| 1.1     | 2025-12-12 | CostNav Team | Week 3 complete: Added nav2_mission module with NavMesh sampling, RViz markers, mission orchestration, integrated launch                                                                 |
+| 1.2     | 2025-12-12 | CostNav Team | Refactored to use YAML config file (config/mission_config.yaml), added MissionRunner, separated config module                                                                            |
+| 1.3     | 2026-01-22 | CostNav Team | Added Segway E1 robot support with SIM_ROBOT environment variable for dynamic robot selection, robot-specific parameter files, and shared map directory structure                        |
+| 1.4     | 2026-01-23 | CostNav Team | Documented known issue: Segway E1 cannot spin in place, added troubleshooting section and investigation steps                                                                            |
+| 1.5     | 2026-01-23 | CostNav Team | Updated status to reflect completed parameter tuning for both robots, reorganized implementation plan with Week 4 complete and Week 5 in progress                                        |
+| 1.6     | 2026-01-26 | CostNav Team | Added RotationShimController documentation: resolved Segway E1 spin-in-place issue, documented angular velocity configuration strategy (1.2 rad/s in-place, 0.7 rad/s forward motion)    |
+| 1.7     | 2026-01-26 | CostNav Team | Clarified Known Issues section: Distinguished between root cause solution (Isaac Sim USD Action Graph robot controller changes) and navigation enhancement (RotationShimController)      |
+| 1.8     | 2026-01-26 | CostNav Team | Added `closed_loop: false` parameter to Segway E1 RotationShimController configuration to prevent premature deceleration and maintain minimum angular velocity during in-place rotation  |
+| 1.9     | 2026-01-26 | CostNav Team | Reorganized task sections: moved completed tasks (Start/Goal Sampling, Segway E1 Adaptation, Parameter Tuning) to "Completed Tasks" section instead of removing them                     |
+| 1.10    | 2026-01-26 | CostNav Team | Updated angular velocity parameters: reduced from 1.2 to 0.7 rad/s for all phases (rotation, path following, recovery), min_speed_theta reduced from 0.7 to 0.4 rad/s for better control |
+| 1.11    | 2026-01-26 | CostNav Team | Further reduced angular velocity to 0.5 rad/s and minimum to 0.3 rad/s (Segway E1 only) to prevent position loss during fast rotation                                                    |
 
 ---
 
