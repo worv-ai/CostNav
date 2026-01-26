@@ -11,7 +11,7 @@ COSTNAV_VERSION ?= 0.1.0
 # ROS configuration
 ROS_DISTRO ?= jazzy
 UBUNTU_VERSION ?= 24.04
-SIM_ROBOT ?= nova_carter
+SIM_ROBOT ?= segway_e1
 FOOD ?= True
 
 ISAAC_SIM_IMAGE ?= costnav-isaacsim-$(ISAAC_SIM_VERSION):$(COSTNAV_VERSION)
