@@ -502,6 +502,11 @@ class MissionManager:
             logger.error(f"[CONTACT] Failed to setup contact reporting: {exc}")
 
     def _apply_impulse_damage(self, impulse_amount: float) -> None:
+        # Only calculate health damage when mission is active
+        if not self._is_mission_active():
+            print(f"[CONTACT] Impulse: {impulse_amount:.2f}")
+            return
+
         if self._impulse_health <= 0.0:
             return
 
