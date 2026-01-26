@@ -57,8 +57,20 @@ PROPERTY_PRIM_PATHS = {
     # Building prims are matched broadly via prefix; keep only explicit non-standard
     # building-related prims here (e.g., cubes that represent building parts).
     "building": [
+        "/World/box/Cube",
         "/World/box/Cube_01",
         "/World/box/Cube_02",
+        "/World/box/Cube_03",
+        "/World/box/Cube_04",
+        "/World/box/Cube_05",
+        "/World/box/Cube_06",
+        "/World/box/Cube_07",
+        "/World/box/Cube_08",
+        "/World/box/Cube_09",
+        "/World/box/Cube_10",
+        "/World/box/Cube_11",
+        "/World/box/Cube_12",
+        "/World/box/Cube_13",
     ],
 }
 

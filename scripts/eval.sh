@@ -60,16 +60,13 @@ declare -a MISSION_FOOD_INITIAL_PIECES
 declare -a MISSION_FOOD_FINAL_PIECES
 declare -a MISSION_FOOD_LOSS_FRACTION
 declare -a MISSION_FOOD_SPOILED
-<<<<<<< HEAD:scripts/eval_teleop.sh
 declare -a MISSION_PROPERTY_FIRE_HYDRANT
 declare -a MISSION_PROPERTY_TRAFFIC_LIGHT
 declare -a MISSION_PROPERTY_STREET_LAMP
 declare -a MISSION_PROPERTY_BOLLARD
 declare -a MISSION_PROPERTY_BUILDING
 declare -a MISSION_PROPERTY_TOTAL
-=======
 declare -a MISSION_RESULT_REASONS
->>>>>>> main:scripts/eval.sh
 
 # Mechanical energy constants
 ROLLING_RESISTANCE_FORCE=18.179  # Newtons
@@ -193,16 +190,13 @@ run_mission() {
     local food_final_pieces="-1"
     local food_loss_fraction="-1"
     local food_spoiled="false"
-<<<<<<< HEAD:scripts/eval_teleop.sh
     local property_fire_hydrant="0"
     local property_traffic_light="0"
     local property_street_lamp="0"
     local property_bollard="0"
     local property_building="0"
     local property_total="0"
-=======
     local result_reason=""
->>>>>>> main:scripts/eval.sh
     local was_skipped=false
 
     start_time=$(date +%s.%N)
@@ -297,7 +291,6 @@ run_mission() {
             if [ -z "$food_spoiled" ]; then
                 food_spoiled="false"
             fi
-<<<<<<< HEAD:scripts/eval_teleop.sh
             if [ -z "$property_fire_hydrant" ]; then
                 property_fire_hydrant="0"
             fi
@@ -315,11 +308,9 @@ run_mission() {
             fi
             if [ -z "$property_total" ]; then
                 property_total="0"
-=======
             # Handle null result_reason (Python None becomes "null" in JSON)
             if [ -z "$result_reason" ] || [ "$result_reason" = "null" ]; then
                 result_reason=""
->>>>>>> main:scripts/eval.sh
             fi
 
             # Check if mission completed (success or failure from mission manager)
@@ -385,16 +376,13 @@ run_mission() {
     MISSION_FOOD_FINAL_PIECES[$mission_num]="${food_final_pieces}"
     MISSION_FOOD_LOSS_FRACTION[$mission_num]="${food_loss_fraction}"
     MISSION_FOOD_SPOILED[$mission_num]="${food_spoiled}"
-<<<<<<< HEAD:scripts/eval_teleop.sh
     MISSION_PROPERTY_FIRE_HYDRANT[$mission_num]="${property_fire_hydrant}"
     MISSION_PROPERTY_TRAFFIC_LIGHT[$mission_num]="${property_traffic_light}"
     MISSION_PROPERTY_STREET_LAMP[$mission_num]="${property_street_lamp}"
     MISSION_PROPERTY_BOLLARD[$mission_num]="${property_bollard}"
     MISSION_PROPERTY_BUILDING[$mission_num]="${property_building}"
     MISSION_PROPERTY_TOTAL[$mission_num]="${property_total}"
-=======
     MISSION_RESULT_REASONS[$mission_num]="${result_reason}"
->>>>>>> main:scripts/eval.sh
 
     if [ "$mission_result" = "SUCCESS" ]; then
         SUCCESS_SLA=$((SUCCESS_SLA + 1))
