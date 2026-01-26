@@ -333,12 +333,10 @@ run_mission() {
     if [ "$mission_result" = "SUCCESS" ]; then
         SUCCESS_SLA=$((SUCCESS_SLA + 1))
         MISSION_RESULTS[$mission_num]="SUCCESS_SLA"
-        log "Mission $mission_num: SUCCESS_SLA (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s, avg_vel: ${avg_velocity}m/s, avg_mech_power: ${avg_mech_power}kW, contacts: ${contact_count}, impulse: ${total_impulse}N*s)"
     elif [ "$mission_result" = "SKIPPED" ]; then
         SKIPPED=$((SKIPPED + 1))
         MISSION_RESULTS[$mission_num]="SKIPPED"
         MISSION_ERRORS[$mission_num]="Skipped by user"
-        log "Mission $mission_num: SKIPPED (duration: ${duration}s)"
     else
         # Parse specific failure type from result_status
         if [ "$result_status" = "failure_timeout" ]; then
@@ -356,14 +354,26 @@ run_mission() {
             MISSION_RESULTS[$mission_num]="FAILURE_TIMEOUT"
         fi
         MISSION_ERRORS[$mission_num]="$error_msg"
-        log "Mission $mission_num: ${MISSION_RESULTS[$mission_num]} (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s, avg_vel: ${avg_velocity}m/s, avg_mech_power: ${avg_mech_power}kW, contacts: ${contact_count}, impulse: ${total_impulse}N*s) - $error_msg"
     fi
 
+    # Log mission result in readable format
+    log "Mission $mission_num:"
+    log "  Status: ${MISSION_RESULTS[$mission_num]}"
+    log "  Start:  ${MISSION_START_TIMES[$mission_num]}"
+    log "  End:    ${MISSION_END_TIMES[$mission_num]}"
+    log "  Traveled distance: ${traveled_distance}m"
+    log "  Elapsed time: ${elapsed_time}s"
+    log "  Average velocity: ${avg_velocity}m/s"
+    log "  Average mechanical power: ${avg_mech_power}kW"
+    log "  Contact count: ${contact_count}"
+    log "  Total impulse: ${total_impulse} N*s"
     if [ "$food_enabled" = "true" ]; then
-        log "Mission $mission_num: Food pieces ${food_initial_pieces} -> ${food_final_pieces} (loss fraction: ${food_loss_fraction})"
-        if [ "$food_spoiled" = "true" ]; then
-            log "Mission $mission_num: Food spoiled"
-        fi
+        log "  Food pieces: ${food_initial_pieces} -> ${food_final_pieces}"
+        log "  Food loss fraction: ${food_loss_fraction}"
+        log "  Food spoiled: ${food_spoiled}"
+    fi
+    if [ -n "$error_msg" ]; then
+        log "  Error: $error_msg"
     fi
 }
 
