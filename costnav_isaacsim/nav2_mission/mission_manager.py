@@ -63,7 +63,9 @@ class MissionResult(Enum):
     PENDING = "pending"  # Mission not yet started or in progress
     SUCCESS = "success"  # Robot reached goal within tolerance
     FAILURE_TIMEOUT = "failure_timeout"  # Timeout reached before reaching goal
-    FAILURE_PHYSICALASSISTANCE = "failure_physicalassistance"  # Robot fell down (bad orientation) or impulse health depleted
+    FAILURE_PHYSICALASSISTANCE = (
+        "failure_physicalassistance"  # Robot fell down (bad orientation) or impulse health depleted
+    )
     FAILURE_FOODSPOILED = "failure_foodspoiled"  # Food spoiled during delivery
 
 
@@ -169,7 +171,9 @@ class MissionManager:
 
         # Mission result tracking
         self._last_mission_result = MissionResult.PENDING
-        self._last_mission_result_reason = None  # Specific reason for result (e.g., "orientation", "impulse_health_depletion")
+        self._last_mission_result_reason = (
+            None  # Specific reason for result (e.g., "orientation", "impulse_health_depletion")
+        )
         self._last_mission_distance = None  # Distance to goal at end
 
         # Mission metrics tracking
