@@ -1,25 +1,43 @@
 #!/bin/bash
-# Nav2 Evaluation Script
+# Unified Evaluation Script for Teleop and Nav2
 # Runs consecutive missions and generates comprehensive evaluation logs
 #
-# Usage: ./eval_nav2.sh [TIMEOUT] [NUM_MISSIONS]
+# Usage: ./eval.sh <MODE> [TIMEOUT] [NUM_MISSIONS]
+#   MODE: Either 'teleop' or 'nav2'
 #   TIMEOUT: Mission timeout in seconds (default: 20)
 #   NUM_MISSIONS: Number of missions to run (default: 10)
 #
-# Requires: A running nav2 instance (make run-nav2)
+# Requires: A running instance (make run-teleop or make run-nav2)
 #
 # Controls:
 #   Right Arrow (→): Skip current mission
 
 set -e
 
+# Mode validation
+MODE="${1:-}"
+if [ -z "$MODE" ] || { [ "$MODE" != "teleop" ] && [ "$MODE" != "nav2" ]; }; then
+    echo "ERROR: Mode must be 'teleop' or 'nav2'"
+    echo "Usage: $0 <teleop|nav2> [TIMEOUT] [NUM_MISSIONS]"
+    exit 1
+fi
+
+# Configuration based on mode
+if [ "$MODE" = "teleop" ]; then
+    CONTAINER_NAME="costnav-ros2-teleop"
+    MODE_DISPLAY="Teleop"
+else
+    CONTAINER_NAME="costnav-ros2-nav2"
+    MODE_DISPLAY="Nav2"
+fi
+
 # Configuration
-TIMEOUT="${1:-20}"
-NUM_MISSIONS="${2:-10}"
+TIMEOUT="${2:-20}"
+NUM_MISSIONS="${3:-10}"
 CONTAINER=""
 LOG_DIR="${LOG_DIR:-./logs}"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-LOG_FILE="${LOG_DIR}/nav2_evaluation_${TIMESTAMP}.log"
+LOG_FILE="${LOG_DIR}/${MODE}_evaluation_${TIMESTAMP}.log"
 
 # Statistics tracking
 SUCCESS_SLA=0
@@ -83,10 +101,10 @@ check_skip_key() {
     return 1
 }
 
-# Find the running nav2 container (strictly requires costnav-ros2-nav2)
+# Find the running container
 find_container() {
-    if docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-nav2"; then
-        CONTAINER="costnav-ros2-nav2"
+    if docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
+        CONTAINER="$CONTAINER_NAME"
         return 0
     fi
     return 1
@@ -297,7 +315,7 @@ run_mission() {
     local avg_mech_power="0"
     if [ -n "$elapsed_time" ] && [ "$elapsed_time" != "0" ]; then
         avg_velocity=$(echo "scale=4; ${traveled_distance:-0} / $elapsed_time" | bc)
-        avg_mech_power=$(echo "scale=6; $ROLLING_RESISTANCE_FORCE * $avg_velocity / 1000" | bc)
+        avg_mech_power=$(echo "scale=4; $ROLLING_RESISTANCE_FORCE * $avg_velocity / 1000" | bc)
     fi
     MISSION_AVG_VELOCITIES[$mission_num]="$avg_velocity"
     MISSION_AVG_MECHANICAL_POWERS[$mission_num]="$avg_mech_power"
@@ -349,6 +367,7 @@ run_mission() {
     fi
 }
 
+
 # Generate evaluation summary
 generate_summary() {
     local success_rate
@@ -396,14 +415,14 @@ generate_summary() {
         avg_distance=$(echo "scale=2; $total_distance / $count" | bc)
         avg_time=$(echo "scale=2; $total_time / $count" | bc)
         avg_velocity=$(echo "scale=4; $total_velocity / $count" | bc)
-        avg_mech_power=$(echo "scale=6; $total_mech_power / $count" | bc)
+        avg_mech_power=$(echo "scale=4; $total_mech_power / $count" | bc)
         avg_contact_count=$(echo "scale=2; $total_contact_count / $count" | bc)
         avg_total_impulse=$(echo "scale=2; $total_impulse_sum / $count" | bc)
     fi
 
     log_file ""
     log_file "============================================================"
-    log_file "NAV2 EVALUATION SUMMARY"
+    log_file "${MODE_DISPLAY^^} EVALUATION SUMMARY"
     log_file "============================================================"
     log_file "Timestamp: $(date '+%Y-%m-%d %H:%M:%S')"
     log_file "Configuration:"
@@ -473,6 +492,7 @@ generate_summary() {
     log_file "============================================================"
 }
 
+
 # Main execution
 main() {
     # Create log directory if it doesn't exist
@@ -483,14 +503,14 @@ main() {
 
     # Initialize log file
     log_file "============================================================"
-    log_file "NAV2 EVALUATION LOG"
+    log_file "${MODE_DISPLAY^^} EVALUATION LOG"
     log_file "Started: $(date '+%Y-%m-%d %H:%M:%S')"
     log_file "============================================================"
     log_file ""
 
     echo ""
     echo "=============================================="
-    echo "  Nav2 Evaluation Script"
+    echo "  ${MODE_DISPLAY} Evaluation Script"
     echo "=============================================="
     echo "  Timeout:      ${TIMEOUT}s"
     echo "  Missions:     $NUM_MISSIONS"
@@ -499,13 +519,13 @@ main() {
     echo "=============================================="
     echo ""
 
-    # Find container (strictly requires make run-nav2)
+    # Find container (strictly requires make run-teleop or make run-nav2)
     if ! find_container; then
-        log "ERROR: 'make run-nav2' is not running."
-        log "Container 'costnav-ros2-nav2' not found."
+        log "ERROR: 'make run-${MODE}' is not running."
+        log "Container '${CONTAINER_NAME}' not found."
         log ""
-        log "Please start nav2 first in a separate terminal:"
-        log "  make run-nav2"
+        log "Please start ${MODE} first in a separate terminal:"
+        log "  make run-${MODE}"
         exit 1
     fi
 
@@ -572,7 +592,7 @@ main() {
         avg_distance=$(echo "scale=2; $total_distance / $count" | bc)
         avg_time=$(echo "scale=2; $total_time / $count" | bc)
         avg_velocity=$(echo "scale=4; $total_velocity / $count" | bc)
-        avg_mech_power=$(echo "scale=6; $total_mech_power / $count" | bc)
+        avg_mech_power=$(echo "scale=4; $total_mech_power / $count" | bc)
         avg_contact_count=$(echo "scale=2; $total_contact_count / $count" | bc)
         avg_total_impulse=$(echo "scale=2; $total_impulse_sum / $count" | bc)
     fi
@@ -614,7 +634,7 @@ main() {
         avg_distance_all=$(echo "scale=2; $total_distance_all / $count_all" | bc)
         avg_time_all=$(echo "scale=2; $total_time_all / $count_all" | bc)
         avg_velocity_all=$(echo "scale=4; $total_velocity_all / $count_all" | bc)
-        avg_mech_power_all=$(echo "scale=6; $total_mech_power_all / $count_all" | bc)
+        avg_mech_power_all=$(echo "scale=4; $total_mech_power_all / $count_all" | bc)
         avg_contact_count_all=$(echo "scale=2; $total_contact_count_all / $count_all" | bc)
         avg_total_impulse_all=$(echo "scale=2; $total_impulse_sum_all / $count_all" | bc)
     fi
