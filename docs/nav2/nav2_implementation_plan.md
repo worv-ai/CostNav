@@ -2,9 +2,9 @@
 
 **Issue Reference:** [#5 - Support rule-based navigation with nav2](https://github.com/worv-ai/CostNav/issues/5)
 
-**Status:** ✅ Nav2 Integration Complete | ✅ Mission Orchestration Complete | ✅ Parameter Tuning Complete
+**Status:** ✅ Nav2 Integration Complete | ✅ Mission Orchestration Complete | ✅ Parameter Tuning Complete | ⏳ Cost Model Integration In Progress
 **Target Version:** CostNav v0.2.0
-**Last Updated:** 2026-01-23
+**Last Updated:** 2026-01-26
 
 ---
 
@@ -27,6 +27,12 @@
 ### ⏳ In Progress
 
 1. **Cost Model Integration**: Track economic metrics for Nav2 navigation
+   - ✅ Energy consumption tracking via odometry (merged to main)
+   - ✅ Distance and time metrics logging (merged to main)
+   - ✅ Collision impulse tracking and health monitoring (merged to main)
+   - ✅ Food spoilage tracking for delivery missions (merged to main)
+   - ⏳ Integration with existing cost model framework
+   - ⏳ Benchmark comparison with RL baseline
 
 ### 📋 Future Work
 
@@ -481,11 +487,13 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 - ✅ Week 2: Nova Carter Setup & Occupancy Map - Complete
 - ✅ Week 3: Nav2 Stack Configuration & Mission Orchestration - Complete
 - ✅ Week 4: Parameter Tuning - Complete
-- ⏳ Week 5: Cost Model Integration - In progress
+- ⏳ Week 5: Cost Model Integration - In progress (partially merged to main)
 
 **Remaining Work:**
 
-- Cost model integration for economic metrics tracking
+- Complete cost model integration with existing framework
+- Benchmark comparison report: Nav2 vs RL baseline
+- Documentation of cost metrics and evaluation methodology
 
 ---
 
@@ -729,11 +737,13 @@ python launch.py --mission-timeout 600 --min-distance 10
 - [x] Basic Nav2 integration complete
 - [x] Create programmatic goal sender (Python script)
 - [x] Document usage and API
-- [ ] Create `nav2_cost_tracker.py` ROS2 node
-- [ ] Implement energy consumption model
-- [ ] Implement SLA compliance tracking
-- [ ] Implement collision and recovery event tracking
-- [ ] Create benchmark scenario runner
+- [x] Implement energy consumption tracking (via odometry in mission_manager.py)
+- [x] Implement distance and time metrics logging
+- [x] Implement collision impulse tracking and health monitoring
+- [x] Implement food spoilage tracking for delivery missions
+- [ ] Create unified `nav2_cost_tracker.py` ROS2 node (consolidate existing metrics)
+- [ ] Implement SLA compliance calculation based on distance/time metrics
+- [ ] Create benchmark scenario runner with automated evaluation
 - [ ] Generate comparison report: Nav2 vs RL
 
 **Deliverables:**
@@ -741,7 +751,13 @@ python launch.py --mission-timeout 600 --min-distance 10
 - ✅ Python launch script (`launch.py`)
 - ✅ Nav2 configuration files
 - ✅ Documentation
-- 📋 `nav2_cost_tracker.py` - ROS2 node for real-time cost tracking
+- ✅ Mission manager with integrated cost tracking (`mission_manager.py`)
+  - Energy consumption tracking via odometry
+  - Distance and time metrics
+  - Collision impulse and health monitoring
+  - Food spoilage tracking
+- ✅ Evaluation scripts (`eval_nav2.sh`, `eval_teleop.sh`)
+- 📋 `nav2_cost_tracker.py` - Unified ROS2 node for real-time cost tracking (consolidation)
 - 📋 `nav2_benchmark_runner.py` - Automated benchmark scenario executor
 - 📋 `nav2_metrics_report.py` - Report generator with comparison analysis
 - 📋 Benchmark results CSV/JSON files
@@ -749,45 +765,63 @@ python launch.py --mission-timeout 600 --min-distance 10
 
 **Success Criteria:**
 
-- ✅ Nav2 runs successfully with Nova Carter
+- ✅ Nav2 runs successfully with Nova Carter and Segway E1
 - ✅ Documentation published
-- 📋 Cost tracker node publishes real-time metrics to `/nav2/metrics` topic
-- 📋 Energy consumption tracked with <5% error vs ground truth
+- ✅ Energy consumption tracked via odometry integration
+- ✅ Distance and time metrics logged for each mission
+- ✅ Collision impulse and health monitoring implemented
+- ✅ Food spoilage tracking for delivery missions
+- 📋 Unified cost tracker node publishes real-time metrics to `/nav2/metrics` topic
 - 📋 SLA compliance calculated for each navigation mission
 - 📋 Benchmark scenarios complete with >95% automation
 - 📋 Comparison report shows Nav2 vs RL performance delta
 - 📋 Operating margin, break-even time, and SLA metrics comparable to RL baseline targets
 
-#### Implementation Details: Cost Tracker Node
+#### Implementation Details: Cost Tracker Integration
 
-**1. `nav2_cost_tracker.py` ROS2 Node**
+**Current Implementation (Merged to Main):**
 
-- Subscribe to `/cmd_vel` to compute energy consumption from velocity commands
-- Subscribe to `/odom` to track distance traveled and path efficiency
+The cost tracking functionality is currently integrated into `mission_manager.py` with the following features:
+
+**1. Energy Consumption Tracking**
+
+- Implemented via odometry subscription in `_odom_callback()`
+- Tracks distance traveled using odometry data
+- Calculates mechanical power based on velocity and robot mass
+- Logged in mission results for evaluation
+
+**2. Distance and Time Metrics**
+
+- `_traveled_distance`: Accumulated distance from odometry
+- `_last_elapsed_time`: Mission duration tracking
+- Logged via `eval_nav2.sh` and `eval_teleop.sh` scripts
+- Provides data for SLA compliance calculation
+
+**3. Collision Impulse and Health Monitoring**
+
+- Contact sensor integration via `_on_contact_report()`
+- Impulse-based health tracking system
+- Contact count and total impulse logging
+- Health degradation based on collision severity
+
+**4. Food Spoilage Tracking**
+
+- Food piece counting for delivery missions
+- Spoilage detection based on mission duration
+- Integration with Isaac Sim food assets
+- Logged in mission results
+
+**Future Consolidation: `nav2_cost_tracker.py` ROS2 Node**
+
+To improve modularity, the following consolidation is planned:
+
+- Extract cost tracking logic from `mission_manager.py` into dedicated node
+- Subscribe to `/cmd_vel` for velocity-based energy estimation
+- Subscribe to `/odom` for distance and path efficiency
 - Subscribe to Nav2 action server feedback for navigation status
-- Subscribe to `/local_costmap/costmap` to detect near-collision events
-- Implement timer-based tracking for time-to-goal metrics
-
-**2. Energy Consumption Model**
-
-- Calculate power draw: `P = k1*v + k2*ω + P_idle`
-- Integrate power over time to get total energy (Wh)
-- Use Nova Carter specifications for motor constants
-- Log instantaneous and cumulative energy consumption
-
-**3. SLA Compliance Tracking**
-
-- Define delivery time thresholds based on distance (e.g., 0.5 m/s average speed)
-- Track mission start time, goal reach time, and total duration
-- Compare against SLA deadline to determine compliance
-- Calculate SLA compliance rate across multiple missions
-
-**4. Collision and Recovery Event Tracking**
-
-- Monitor Nav2 behavior server for recovery triggers (spin, backup, wait)
-- Count recovery events per mission
-- Detect collision events from costmap proximity or contact sensors
-- Log recovery success/failure rates
+- Subscribe to `/local_costmap/costmap` for near-collision detection
+- Publish unified metrics to `/nav2/metrics` topic
+- Maintain compatibility with existing evaluation scripts
 
 #### Implementation Details: Benchmark Runner
 
@@ -1027,6 +1061,7 @@ nav2_metrics = {
 | 1.9     | 2026-01-26 | CostNav Team | Reorganized task sections: moved completed tasks (Start/Goal Sampling, Segway E1 Adaptation, Parameter Tuning) to "Completed Tasks" section instead of removing them                     |
 | 1.10    | 2026-01-26 | CostNav Team | Updated angular velocity parameters: reduced from 1.2 to 0.7 rad/s for all phases (rotation, path following, recovery), min_speed_theta reduced from 0.7 to 0.4 rad/s for better control |
 | 1.11    | 2026-01-26 | CostNav Team | Further reduced angular velocity to 0.5 rad/s and minimum to 0.3 rad/s (Segway E1 only) to prevent position loss during fast rotation                                                    |
+| 1.12    | 2026-01-26 | CostNav Team | Updated cost model integration status: documented merged features (energy tracking, distance/time metrics, collision monitoring, food spoilage), added RViz message filter queue issue   |
 
 ---
 

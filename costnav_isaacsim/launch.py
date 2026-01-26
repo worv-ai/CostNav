@@ -183,8 +183,6 @@ class CostNavSimLauncher:
         self.mission_config = mission_config
         self.num_people = num_people
 
-        self._timeline = None
-        self._timeline_stop_subscription = None
         self._stage_open_subscription = None
         self._pending_physics_reinit = False
         self._pending_stage_reload = False
@@ -360,19 +358,11 @@ class CostNavSimLauncher:
         return simulation_context
 
     def _register_simulation_event_handlers(self) -> None:
-        """Register timeline and stage event handlers for reinitialization."""
+        """Register stage event handlers for reinitialization."""
         try:
             import carb.eventdispatcher
-            import omni.timeline
             import omni.usd
 
-            self._timeline = omni.timeline.get_timeline_interface()
-            self._timeline_stop_subscription = (
-                self._timeline.get_timeline_event_stream().create_subscription_to_pop_by_type(
-                    int(omni.timeline.TimelineEventType.STOP),
-                    self._on_timeline_stop,
-                )
-            )
             dispatcher = carb.eventdispatcher.get_eventdispatcher()
             self._stage_open_subscription = dispatcher.observe_event(
                 event_name=omni.usd.get_context().stage_event_name(omni.usd.StageEventType.OPENED),
@@ -381,9 +371,6 @@ class CostNavSimLauncher:
             )
         except Exception as exc:
             logger.warning("Failed to register simulation event handlers: %s", exc)
-
-    def _on_timeline_stop(self, event) -> None:
-        self._pending_physics_reinit = True
 
     def _on_stage_open(self, event) -> None:
         self._pending_stage_reload = True
@@ -445,17 +432,6 @@ class CostNavSimLauncher:
                 force_reset = True
 
         if not self._pending_physics_reinit and not self._pending_stage_reload:
-            return
-
-        try:
-            if self._timeline is None:
-                import omni.timeline
-
-                self._timeline = omni.timeline.get_timeline_interface()
-            if self._timeline.is_stopped():
-                return
-        except Exception as exc:
-            logger.warning("Failed to query timeline state: %s", exc)
             return
 
         stage_reloaded = self._pending_stage_reload
@@ -696,11 +672,8 @@ class CostNavSimLauncher:
         if os.path.exists("/tmp/.isaac_sim_running"):
             os.remove("/tmp/.isaac_sim_running")
 
-        if self._timeline_stop_subscription is not None:
-            self._timeline_stop_subscription = None
         if self._stage_open_subscription is not None:
             self._stage_open_subscription = None
-        self._timeline = None
 
         self.simulation_context.stop()
         self.simulation_app.close()
