@@ -526,7 +526,9 @@ class MissionManager:
 
         self._impulse_damage_accumulated += impulse_amount
         self._impulse_health = max(0.0, self._impulse_health_max - self._impulse_damage_accumulated)
-        print(f"[CONTACT] Impulse: {impulse_amount:.2f}, Health: {self._impulse_health:.2f}, Count: {self._contact_count}")
+        print(
+            f"[CONTACT] Impulse: {impulse_amount:.2f}, Health: {self._impulse_health:.2f}, Count: {self._contact_count}"
+        )
 
     def _on_contact_report(self, contact_headers, contact_data) -> None:
         if not self._contact_report_targets:
