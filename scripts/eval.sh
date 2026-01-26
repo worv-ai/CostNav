@@ -60,6 +60,12 @@ declare -a MISSION_FOOD_INITIAL_PIECES
 declare -a MISSION_FOOD_FINAL_PIECES
 declare -a MISSION_FOOD_LOSS_FRACTION
 declare -a MISSION_FOOD_SPOILED
+declare -a MISSION_PROPERTY_FIRE_HYDRANT
+declare -a MISSION_PROPERTY_TRAFFIC_LIGHT
+declare -a MISSION_PROPERTY_STREET_LAMP
+declare -a MISSION_PROPERTY_BOLLARD
+declare -a MISSION_PROPERTY_BUILDING
+declare -a MISSION_PROPERTY_TOTAL
 declare -a MISSION_RESULT_REASONS
 
 # Mechanical energy constants
@@ -184,6 +190,12 @@ run_mission() {
     local food_final_pieces="-1"
     local food_loss_fraction="-1"
     local food_spoiled="false"
+    local property_fire_hydrant="0"
+    local property_traffic_light="0"
+    local property_street_lamp="0"
+    local property_bollard="0"
+    local property_building="0"
+    local property_total="0"
     local result_reason=""
     local was_skipped=false
 
@@ -251,6 +263,12 @@ run_mission() {
             food_final_pieces=$(parse_result_field "$result_response" "food_final_pieces")
             food_loss_fraction=$(parse_result_field "$result_response" "food_loss_fraction")
             food_spoiled=$(parse_result_field "$result_response" "food_spoiled")
+            property_fire_hydrant=$(parse_result_field "$result_response" "property_contact_fire_hydrant")
+            property_traffic_light=$(parse_result_field "$result_response" "property_contact_traffic_light")
+            property_street_lamp=$(parse_result_field "$result_response" "property_contact_street_lamp")
+            property_bollard=$(parse_result_field "$result_response" "property_contact_bollard")
+            property_building=$(parse_result_field "$result_response" "property_contact_building")
+            property_total=$(parse_result_field "$result_response" "property_contact_total")
 
             if [ -z "$contact_count" ]; then
                 contact_count="0"
@@ -272,6 +290,24 @@ run_mission() {
             fi
             if [ -z "$food_spoiled" ]; then
                 food_spoiled="false"
+            fi
+            if [ -z "$property_fire_hydrant" ]; then
+                property_fire_hydrant="0"
+            fi
+            if [ -z "$property_traffic_light" ]; then
+                property_traffic_light="0"
+            fi
+            if [ -z "$property_street_lamp" ]; then
+                property_street_lamp="0"
+            fi
+            if [ -z "$property_bollard" ]; then
+                property_bollard="0"
+            fi
+            if [ -z "$property_building" ]; then
+                property_building="0"
+            fi
+            if [ -z "$property_total" ]; then
+                property_total="0"
             fi
             # Handle null result_reason (Python None becomes "null" in JSON)
             if [ -z "$result_reason" ] || [ "$result_reason" = "null" ]; then
@@ -341,6 +377,12 @@ run_mission() {
     MISSION_FOOD_FINAL_PIECES[$mission_num]="${food_final_pieces}"
     MISSION_FOOD_LOSS_FRACTION[$mission_num]="${food_loss_fraction}"
     MISSION_FOOD_SPOILED[$mission_num]="${food_spoiled}"
+    MISSION_PROPERTY_FIRE_HYDRANT[$mission_num]="${property_fire_hydrant}"
+    MISSION_PROPERTY_TRAFFIC_LIGHT[$mission_num]="${property_traffic_light}"
+    MISSION_PROPERTY_STREET_LAMP[$mission_num]="${property_street_lamp}"
+    MISSION_PROPERTY_BOLLARD[$mission_num]="${property_bollard}"
+    MISSION_PROPERTY_BUILDING[$mission_num]="${property_building}"
+    MISSION_PROPERTY_TOTAL[$mission_num]="${property_total}"
     MISSION_RESULT_REASONS[$mission_num]="${result_reason}"
 
     if [ "$mission_result" = "SUCCESS" ]; then
@@ -382,6 +424,7 @@ run_mission() {
     log "  Average velocity: ${avg_velocity}m/s"
     log "  Average mechanical power: ${avg_mech_power}kW"
     log "  Contact count: ${contact_count}"
+    log "  Property contacts total=${property_total} (hydrant=${property_fire_hydrant}, traffic_light=${property_traffic_light}, street_lamp=${property_street_lamp}, bollard=${property_bollard}, building=${property_building})"
     log "  Total impulse: ${total_impulse} N*s"
     if [ "$food_enabled" = "true" ]; then
         log "  Food pieces: ${food_initial_pieces} -> ${food_final_pieces}"
@@ -411,6 +454,12 @@ generate_summary() {
     local total_mech_power=0
     local total_contact_count=0
     local total_impulse_sum=0
+    local total_property_count=0
+    local total_prop_hydrant=0
+    local total_prop_traffic_light=0
+    local total_prop_street_lamp=0
+    local total_prop_bollard=0
+    local total_prop_building=0
     local count=0
     for i in $(seq 1 $NUM_MISSIONS); do
         local result="${MISSION_RESULTS[$i]:-N/A}"
@@ -421,12 +470,24 @@ generate_summary() {
             local mech_power="${MISSION_AVG_MECHANICAL_POWERS[$i]:-0}"
             local contacts="${MISSION_CONTACT_COUNTS[$i]:-0}"
             local impulse="${MISSION_TOTAL_IMPULSES[$i]:-0}"
+            local property_count="${MISSION_PROPERTY_TOTAL[$i]:-0}"
+            local prop_hydrant="${MISSION_PROPERTY_FIRE_HYDRANT[$i]:-0}"
+            local prop_traffic_light="${MISSION_PROPERTY_TRAFFIC_LIGHT[$i]:-0}"
+            local prop_street_lamp="${MISSION_PROPERTY_STREET_LAMP[$i]:-0}"
+            local prop_bollard="${MISSION_PROPERTY_BOLLARD[$i]:-0}"
+            local prop_building="${MISSION_PROPERTY_BUILDING[$i]:-0}"
             total_distance=$(echo "$total_distance + $dist" | bc)
             total_time=$(echo "$total_time + $time" | bc)
             total_velocity=$(echo "$total_velocity + $vel" | bc)
             total_mech_power=$(echo "$total_mech_power + $mech_power" | bc)
             total_contact_count=$(echo "$total_contact_count + $contacts" | bc)
             total_impulse_sum=$(echo "$total_impulse_sum + $impulse" | bc)
+            total_property_count=$(echo "$total_property_count + $property_count" | bc)
+            total_prop_hydrant=$(echo "$total_prop_hydrant + $prop_hydrant" | bc)
+            total_prop_traffic_light=$(echo "$total_prop_traffic_light + $prop_traffic_light" | bc)
+            total_prop_street_lamp=$(echo "$total_prop_street_lamp + $prop_street_lamp" | bc)
+            total_prop_bollard=$(echo "$total_prop_bollard + $prop_bollard" | bc)
+            total_prop_building=$(echo "$total_prop_building + $prop_building" | bc)
             count=$((count + 1))
         fi
     done
@@ -437,6 +498,12 @@ generate_summary() {
     local avg_mech_power="0"
     local avg_contact_count="0"
     local avg_total_impulse="0"
+    local avg_property_count="0"
+    local avg_prop_hydrant="0"
+    local avg_prop_traffic_light="0"
+    local avg_prop_street_lamp="0"
+    local avg_prop_bollard="0"
+    local avg_prop_building="0"
     if [ "$count" -gt 0 ]; then
         avg_distance=$(echo "scale=2; $total_distance / $count" | bc)
         avg_time=$(echo "scale=2; $total_time / $count" | bc)
@@ -444,6 +511,12 @@ generate_summary() {
         avg_mech_power=$(echo "scale=4; $total_mech_power / $count" | bc)
         avg_contact_count=$(echo "scale=2; $total_contact_count / $count" | bc)
         avg_total_impulse=$(echo "scale=2; $total_impulse_sum / $count" | bc)
+        avg_property_count=$(echo "scale=2; $total_property_count / $count" | bc)
+        avg_prop_hydrant=$(echo "scale=2; $total_prop_hydrant / $count" | bc)
+        avg_prop_traffic_light=$(echo "scale=2; $total_prop_traffic_light / $count" | bc)
+        avg_prop_street_lamp=$(echo "scale=2; $total_prop_street_lamp / $count" | bc)
+        avg_prop_bollard=$(echo "scale=2; $total_prop_bollard / $count" | bc)
+        avg_prop_building=$(echo "scale=2; $total_prop_building / $count" | bc)
     fi
 
     log_file ""
@@ -471,6 +544,7 @@ generate_summary() {
     log_file "  - Average velocity: ${avg_velocity}m/s"
     log_file "  - Average mechanical power: ${avg_mech_power}kW"
     log_file "  - Average contact count: ${avg_contact_count}"
+    log_file "  - Average property contact count: ${avg_property_count} (hydrant=${avg_prop_hydrant}, traffic_light=${avg_prop_traffic_light}, street_lamp=${avg_prop_street_lamp}, bollard=${avg_prop_bollard}, building=${avg_prop_building})"
     log_file "  - Average total impulse: ${avg_total_impulse} N*s"
     log_file ""
     log_file "Per-Mission Results:"
@@ -493,6 +567,12 @@ generate_summary() {
         local food_final="${MISSION_FOOD_FINAL_PIECES[$i]:-N/A}"
         local food_loss="${MISSION_FOOD_LOSS_FRACTION[$i]:-N/A}"
         local food_spoiled="${MISSION_FOOD_SPOILED[$i]:-false}"
+        local property_fire_hydrant="${MISSION_PROPERTY_FIRE_HYDRANT[$i]:-0}"
+        local property_traffic_light="${MISSION_PROPERTY_TRAFFIC_LIGHT[$i]:-0}"
+        local property_street_lamp="${MISSION_PROPERTY_STREET_LAMP[$i]:-0}"
+        local property_bollard="${MISSION_PROPERTY_BOLLARD[$i]:-0}"
+        local property_building="${MISSION_PROPERTY_BUILDING[$i]:-0}"
+        local property_total="${MISSION_PROPERTY_TOTAL[$i]:-0}"
 
         log_file "Mission $i:"
         log_file "  Status: $result"
@@ -512,6 +592,7 @@ generate_summary() {
             log_file "  Food loss fraction: ${food_loss}"
             log_file "  Food spoiled: ${food_spoiled}"
         fi
+        log_file "  Property contacts: total=${property_total} (hydrant=${property_fire_hydrant}, traffic_light=${property_traffic_light}, street_lamp=${property_street_lamp}, bollard=${property_bollard}, building=${property_building})"
         if [ -n "$error" ]; then
             log_file "  Error:  $error"
         fi
@@ -592,6 +673,12 @@ main() {
     local total_mech_power=0
     local total_contact_count=0
     local total_impulse_sum=0
+    local total_property_count=0
+    local total_prop_hydrant=0
+    local total_prop_traffic_light=0
+    local total_prop_street_lamp=0
+    local total_prop_bollard=0
+    local total_prop_building=0
     local count=0
     for i in $(seq 1 $NUM_MISSIONS); do
         local result="${MISSION_RESULTS[$i]:-N/A}"
@@ -602,12 +689,24 @@ main() {
             local mech_power="${MISSION_AVG_MECHANICAL_POWERS[$i]:-0}"
             local contacts="${MISSION_CONTACT_COUNTS[$i]:-0}"
             local impulse="${MISSION_TOTAL_IMPULSES[$i]:-0}"
+            local property_count="${MISSION_PROPERTY_TOTAL[$i]:-0}"
+            local prop_hydrant="${MISSION_PROPERTY_FIRE_HYDRANT[$i]:-0}"
+            local prop_traffic_light="${MISSION_PROPERTY_TRAFFIC_LIGHT[$i]:-0}"
+            local prop_street_lamp="${MISSION_PROPERTY_STREET_LAMP[$i]:-0}"
+            local prop_bollard="${MISSION_PROPERTY_BOLLARD[$i]:-0}"
+            local prop_building="${MISSION_PROPERTY_BUILDING[$i]:-0}"
             total_distance=$(echo "$total_distance + $dist" | bc)
             total_time=$(echo "$total_time + $time" | bc)
             total_velocity=$(echo "$total_velocity + $vel" | bc)
             total_mech_power=$(echo "$total_mech_power + $mech_power" | bc)
             total_contact_count=$(echo "$total_contact_count + $contacts" | bc)
             total_impulse_sum=$(echo "$total_impulse_sum + $impulse" | bc)
+            total_property_count=$(echo "$total_property_count + $property_count" | bc)
+            total_prop_hydrant=$(echo "$total_prop_hydrant + $prop_hydrant" | bc)
+            total_prop_traffic_light=$(echo "$total_prop_traffic_light + $prop_traffic_light" | bc)
+            total_prop_street_lamp=$(echo "$total_prop_street_lamp + $prop_street_lamp" | bc)
+            total_prop_bollard=$(echo "$total_prop_bollard + $prop_bollard" | bc)
+            total_prop_building=$(echo "$total_prop_building + $prop_building" | bc)
             count=$((count + 1))
         fi
     done
@@ -618,6 +717,12 @@ main() {
     local avg_mech_power="0"
     local avg_contact_count="0"
     local avg_total_impulse="0"
+    local avg_property_count="0"
+    local avg_prop_hydrant="0"
+    local avg_prop_traffic_light="0"
+    local avg_prop_street_lamp="0"
+    local avg_prop_bollard="0"
+    local avg_prop_building="0"
     if [ "$count" -gt 0 ]; then
         avg_distance=$(echo "scale=2; $total_distance / $count" | bc)
         avg_time=$(echo "scale=2; $total_time / $count" | bc)
@@ -625,6 +730,12 @@ main() {
         avg_mech_power=$(echo "scale=4; $total_mech_power / $count" | bc)
         avg_contact_count=$(echo "scale=2; $total_contact_count / $count" | bc)
         avg_total_impulse=$(echo "scale=2; $total_impulse_sum / $count" | bc)
+        avg_property_count=$(echo "scale=2; $total_property_count / $count" | bc)
+        avg_prop_hydrant=$(echo "scale=2; $total_prop_hydrant / $count" | bc)
+        avg_prop_traffic_light=$(echo "scale=2; $total_prop_traffic_light / $count" | bc)
+        avg_prop_street_lamp=$(echo "scale=2; $total_prop_street_lamp / $count" | bc)
+        avg_prop_bollard=$(echo "scale=2; $total_prop_bollard / $count" | bc)
+        avg_prop_building=$(echo "scale=2; $total_prop_building / $count" | bc)
     fi
 
     # Calculate averages including skipped
@@ -634,6 +745,12 @@ main() {
     local total_mech_power_all=0
     local total_contact_count_all=0
     local total_impulse_sum_all=0
+    local total_property_count_all=0
+    local total_prop_hydrant_all=0
+    local total_prop_traffic_light_all=0
+    local total_prop_street_lamp_all=0
+    local total_prop_bollard_all=0
+    local total_prop_building_all=0
     local count_all=0
     for i in $(seq 1 $NUM_MISSIONS); do
         local result="${MISSION_RESULTS[$i]:-N/A}"
@@ -644,12 +761,24 @@ main() {
             local mech_power="${MISSION_AVG_MECHANICAL_POWERS[$i]:-0}"
             local contacts="${MISSION_CONTACT_COUNTS[$i]:-0}"
             local impulse="${MISSION_TOTAL_IMPULSES[$i]:-0}"
+            local property_count="${MISSION_PROPERTY_TOTAL[$i]:-0}"
+            local prop_hydrant="${MISSION_PROPERTY_FIRE_HYDRANT[$i]:-0}"
+            local prop_traffic_light="${MISSION_PROPERTY_TRAFFIC_LIGHT[$i]:-0}"
+            local prop_street_lamp="${MISSION_PROPERTY_STREET_LAMP[$i]:-0}"
+            local prop_bollard="${MISSION_PROPERTY_BOLLARD[$i]:-0}"
+            local prop_building="${MISSION_PROPERTY_BUILDING[$i]:-0}"
             total_distance_all=$(echo "$total_distance_all + $dist" | bc)
             total_time_all=$(echo "$total_time_all + $time" | bc)
             total_velocity_all=$(echo "$total_velocity_all + $vel" | bc)
             total_mech_power_all=$(echo "$total_mech_power_all + $mech_power" | bc)
             total_contact_count_all=$(echo "$total_contact_count_all + $contacts" | bc)
             total_impulse_sum_all=$(echo "$total_impulse_sum_all + $impulse" | bc)
+            total_property_count_all=$(echo "$total_property_count_all + $property_count" | bc)
+            total_prop_hydrant_all=$(echo "$total_prop_hydrant_all + $prop_hydrant" | bc)
+            total_prop_traffic_light_all=$(echo "$total_prop_traffic_light_all + $prop_traffic_light" | bc)
+            total_prop_street_lamp_all=$(echo "$total_prop_street_lamp_all + $prop_street_lamp" | bc)
+            total_prop_bollard_all=$(echo "$total_prop_bollard_all + $prop_bollard" | bc)
+            total_prop_building_all=$(echo "$total_prop_building_all + $prop_building" | bc)
             count_all=$((count_all + 1))
         fi
     done
@@ -660,6 +789,12 @@ main() {
     local avg_mech_power_all="0"
     local avg_contact_count_all="0"
     local avg_total_impulse_all="0"
+    local avg_property_count_all="0"
+    local avg_prop_hydrant_all="0"
+    local avg_prop_traffic_light_all="0"
+    local avg_prop_street_lamp_all="0"
+    local avg_prop_bollard_all="0"
+    local avg_prop_building_all="0"
     if [ "$count_all" -gt 0 ]; then
         avg_distance_all=$(echo "scale=2; $total_distance_all / $count_all" | bc)
         avg_time_all=$(echo "scale=2; $total_time_all / $count_all" | bc)
@@ -667,6 +802,12 @@ main() {
         avg_mech_power_all=$(echo "scale=4; $total_mech_power_all / $count_all" | bc)
         avg_contact_count_all=$(echo "scale=2; $total_contact_count_all / $count_all" | bc)
         avg_total_impulse_all=$(echo "scale=2; $total_impulse_sum_all / $count_all" | bc)
+        avg_property_count_all=$(echo "scale=2; $total_property_count_all / $count_all" | bc)
+        avg_prop_hydrant_all=$(echo "scale=2; $total_prop_hydrant_all / $count_all" | bc)
+        avg_prop_traffic_light_all=$(echo "scale=2; $total_prop_traffic_light_all / $count_all" | bc)
+        avg_prop_street_lamp_all=$(echo "scale=2; $total_prop_street_lamp_all / $count_all" | bc)
+        avg_prop_bollard_all=$(echo "scale=2; $total_prop_bollard_all / $count_all" | bc)
+        avg_prop_building_all=$(echo "scale=2; $total_prop_building_all / $count_all" | bc)
     fi
 
     echo ""
@@ -684,12 +825,14 @@ main() {
     echo "  Avg Velocity: ${avg_velocity}m/s (excluding skipped)"
     echo "  Avg Mech Power: ${avg_mech_power}kW (excluding skipped)"
     echo "  Avg Contact Count: ${avg_contact_count} (excluding skipped)"
+    echo "  Avg Property Contact Count: ${avg_property_count} (hydrant=${avg_prop_hydrant}, traffic_light=${avg_prop_traffic_light}, street_lamp=${avg_prop_street_lamp}, bollard=${avg_prop_bollard}, building=${avg_prop_building}) (excluding skipped)"
     echo "  Avg Total Impulse: ${avg_total_impulse} N*s (excluding skipped)"
     echo "  Avg Distance: ${avg_distance_all}m (including skipped)"
     echo "  Avg Time:     ${avg_time_all}s (including skipped)"
     echo "  Avg Velocity: ${avg_velocity_all}m/s (including skipped)"
     echo "  Avg Mech Power: ${avg_mech_power_all}kW (including skipped)"
     echo "  Avg Contact Count: ${avg_contact_count_all} (including skipped)"
+    echo "  Avg Property Contact Count: ${avg_property_count_all} (hydrant=${avg_prop_hydrant_all}, traffic_light=${avg_prop_traffic_light_all}, street_lamp=${avg_prop_street_lamp_all}, bollard=${avg_prop_bollard_all}, building=${avg_prop_building_all}) (including skipped)"
     echo "  Avg Total Impulse: ${avg_total_impulse_all} N*s (including skipped)"
     echo "  Log file:   $LOG_FILE"
     echo "=============================================="
