@@ -42,6 +42,12 @@ declare -a MISSION_FOOD_INITIAL_PIECES
 declare -a MISSION_FOOD_FINAL_PIECES
 declare -a MISSION_FOOD_LOSS_FRACTION
 declare -a MISSION_FOOD_SPOILED
+declare -a MISSION_PROPERTY_FIRE_HYDRANT
+declare -a MISSION_PROPERTY_TRAFFIC_LIGHT
+declare -a MISSION_PROPERTY_STREET_LAMP
+declare -a MISSION_PROPERTY_BOLLARD
+declare -a MISSION_PROPERTY_BUILDING
+declare -a MISSION_PROPERTY_TOTAL
 
 # Mechanical energy constants
 ROLLING_RESISTANCE_FORCE=18.179  # Newtons
@@ -165,6 +171,12 @@ run_mission() {
     local food_final_pieces="-1"
     local food_loss_fraction="-1"
     local food_spoiled="false"
+    local property_fire_hydrant="0"
+    local property_traffic_light="0"
+    local property_street_lamp="0"
+    local property_bollard="0"
+    local property_building="0"
+    local property_total="0"
     local was_skipped=false
 
     start_time=$(date +%s.%N)
@@ -230,6 +242,12 @@ run_mission() {
             food_final_pieces=$(parse_result_field "$result_response" "food_final_pieces")
             food_loss_fraction=$(parse_result_field "$result_response" "food_loss_fraction")
             food_spoiled=$(parse_result_field "$result_response" "food_spoiled")
+            property_fire_hydrant=$(parse_result_field "$result_response" "property_contact_fire_hydrant")
+            property_traffic_light=$(parse_result_field "$result_response" "property_contact_traffic_light")
+            property_street_lamp=$(parse_result_field "$result_response" "property_contact_street_lamp")
+            property_bollard=$(parse_result_field "$result_response" "property_contact_bollard")
+            property_building=$(parse_result_field "$result_response" "property_contact_building")
+            property_total=$(parse_result_field "$result_response" "property_contact_total")
 
             if [ -z "$contact_count" ]; then
                 contact_count="0"
@@ -251,6 +269,24 @@ run_mission() {
             fi
             if [ -z "$food_spoiled" ]; then
                 food_spoiled="false"
+            fi
+            if [ -z "$property_fire_hydrant" ]; then
+                property_fire_hydrant="0"
+            fi
+            if [ -z "$property_traffic_light" ]; then
+                property_traffic_light="0"
+            fi
+            if [ -z "$property_street_lamp" ]; then
+                property_street_lamp="0"
+            fi
+            if [ -z "$property_bollard" ]; then
+                property_bollard="0"
+            fi
+            if [ -z "$property_building" ]; then
+                property_building="0"
+            fi
+            if [ -z "$property_total" ]; then
+                property_total="0"
             fi
 
             # Check if mission completed (success or failure from mission manager)
@@ -312,6 +348,12 @@ run_mission() {
     MISSION_FOOD_FINAL_PIECES[$mission_num]="${food_final_pieces}"
     MISSION_FOOD_LOSS_FRACTION[$mission_num]="${food_loss_fraction}"
     MISSION_FOOD_SPOILED[$mission_num]="${food_spoiled}"
+    MISSION_PROPERTY_FIRE_HYDRANT[$mission_num]="${property_fire_hydrant}"
+    MISSION_PROPERTY_TRAFFIC_LIGHT[$mission_num]="${property_traffic_light}"
+    MISSION_PROPERTY_STREET_LAMP[$mission_num]="${property_street_lamp}"
+    MISSION_PROPERTY_BOLLARD[$mission_num]="${property_bollard}"
+    MISSION_PROPERTY_BUILDING[$mission_num]="${property_building}"
+    MISSION_PROPERTY_TOTAL[$mission_num]="${property_total}"
 
     if [ "$mission_result" = "SUCCESS" ]; then
         SUCCESS_SLA=$((SUCCESS_SLA + 1))
@@ -348,6 +390,7 @@ run_mission() {
             log "Mission $mission_num: Food spoiled"
         fi
     fi
+    log "Mission $mission_num: Property contacts total=${property_total} (hydrant=${property_fire_hydrant}, traffic_light=${property_traffic_light}, street_lamp=${property_street_lamp}, bollard=${property_bollard}, building=${property_building})"
 }
 
 # Generate evaluation summary
@@ -448,6 +491,12 @@ generate_summary() {
         local food_final="${MISSION_FOOD_FINAL_PIECES[$i]:-N/A}"
         local food_loss="${MISSION_FOOD_LOSS_FRACTION[$i]:-N/A}"
         local food_spoiled="${MISSION_FOOD_SPOILED[$i]:-false}"
+        local property_fire_hydrant="${MISSION_PROPERTY_FIRE_HYDRANT[$i]:-0}"
+        local property_traffic_light="${MISSION_PROPERTY_TRAFFIC_LIGHT[$i]:-0}"
+        local property_street_lamp="${MISSION_PROPERTY_STREET_LAMP[$i]:-0}"
+        local property_bollard="${MISSION_PROPERTY_BOLLARD[$i]:-0}"
+        local property_building="${MISSION_PROPERTY_BUILDING[$i]:-0}"
+        local property_total="${MISSION_PROPERTY_TOTAL[$i]:-0}"
 
         log_file "Mission $i:"
         log_file "  Status: $result"
@@ -464,6 +513,7 @@ generate_summary() {
             log_file "  Food loss fraction: ${food_loss}"
             log_file "  Food spoiled: ${food_spoiled}"
         fi
+        log_file "  Property contacts: total=${property_total} (hydrant=${property_fire_hydrant}, traffic_light=${property_traffic_light}, street_lamp=${property_street_lamp}, bollard=${property_bollard}, building=${property_building})"
         if [ -n "$error" ]; then
             log_file "  Error:  $error"
         fi

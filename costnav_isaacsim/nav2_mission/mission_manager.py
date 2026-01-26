@@ -27,6 +27,41 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("costnav_mission_manager")
 
+PROPERTY_PRIM_PATHS = {
+    "fire_hydrant": [
+        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section19",
+        "/World/Environment/SM_StreetDetails_002/SM_StreetDetails_03/SM_StreetDetails_002/Section53",
+        "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section57",
+        "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section55",
+    ],
+    "traffic_light": [
+        "/World/Environment/SM_StreetDetails_002/SM_StreetDetails_03/SM_StreetDetails_002/Section32",
+        "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section31",
+        "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section31",
+        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section12",
+        "/World/Environment/SM_StreetDetails_002/SM_StreetDetails_03/SM_StreetDetails_002/Section39",
+        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section39",
+        "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section41",
+        "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section41",
+    ],
+    "street_lamp": [
+        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section1",
+        "/World/Environment/SM_StreetDetails_002/SM_StreetDetails_03/SM_StreetDetails_002/Section1",
+        "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section1",
+        "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section1",
+        "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section78",
+    ],
+    "bollard": [
+        "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section77",
+    ],
+    # Building prims are matched broadly via prefix; keep only explicit non-standard
+    # building-related prims here (e.g., cubes that represent building parts).
+    "building": [
+        "/World/box/Cube_01",
+        "/World/box/Cube_02",
+    ],
+}
+
 
 @dataclass
 class MissionManagerConfig:
@@ -189,6 +224,8 @@ class MissionManager:
         self._total_impulse = 0.0  # Total impulse accumulated during mission
         self._last_contact_count = None  # Final contact count for last mission
         self._last_total_impulse = None  # Final total impulse for last mission
+        self._property_contact_counts = {key: 0 for key in PROPERTY_PRIM_PATHS}
+        self._last_property_contact_counts = None
 
         # Damager cooldown tracking
         self._last_damage_steps_remaining = 0
@@ -460,6 +497,7 @@ class MissionManager:
         self._last_damage_steps_remaining = 0
         self._contact_count = 0
         self._total_impulse = 0.0
+        self._property_contact_counts = {key: 0 for key in PROPERTY_PRIM_PATHS}
 
     def _setup_contact_reporting(self) -> None:
         food_root = self.mission_config.food.prim_path
@@ -510,6 +548,43 @@ class MissionManager:
             logger.warning(f"[CONTACT] Isaac Sim modules not available: {exc}")
         except Exception as exc:
             logger.error(f"[CONTACT] Failed to setup contact reporting: {exc}")
+
+    def _classify_property_from_prim_path(self, prim_path: str) -> Optional[str]:
+        if not prim_path:
+            return None
+        # Broad match for any building prims (handle both SM_Buidlng_ and SM_Buildlng_)
+        if prim_path.startswith("/World/Environment/SM_Buidlng_") or prim_path.startswith(
+            "/World/Environment/SM_Buildlng_"
+        ):
+            return "building"
+        for category, paths in PROPERTY_PRIM_PATHS.items():
+            for base_path in paths:
+                if prim_path == base_path or prim_path.startswith(base_path + "/"):
+                    return category
+        return None
+
+    def _record_property_contact_from_pair(self, actor0_path: str, actor1_path: str) -> Optional[str]:
+        target = next(iter(self._contact_report_targets), None)
+        if target:
+            if actor0_path == target or actor0_path.startswith(target + "/"):
+                category = self._classify_property_from_prim_path(actor1_path)
+            elif actor1_path == target or actor1_path.startswith(target + "/"):
+                category = self._classify_property_from_prim_path(actor0_path)
+            else:
+                category = None
+        else:
+            category = None
+
+        if category is None:
+            category = self._classify_property_from_prim_path(actor0_path)
+        if category is None:
+            category = self._classify_property_from_prim_path(actor1_path)
+
+        if category is None:
+            return None
+
+        self._property_contact_counts[category] += 1
+        return category
 
     def _apply_impulse_damage(self, impulse_amount: float) -> None:
         # Only calculate health damage when mission is active
@@ -573,6 +648,7 @@ class MissionManager:
                 impulse_amount = (impulse.x * impulse.x + impulse.y * impulse.y + impulse.z * impulse.z) ** 0.5
                 if impulse_amount < self._impulse_min_threshold:
                     continue
+                self._record_property_contact_from_pair(actor0, actor1)
                 self._apply_impulse_damage(impulse_amount)
                 self._last_damage_steps_remaining = self._damage_cooldown_steps
                 return
@@ -884,6 +960,7 @@ class MissionManager:
         self._last_traveled_distance = None
         self._last_contact_count = None
         self._last_total_impulse = None
+        self._last_property_contact_counts = None
 
         self._start_requested = True
         if self._is_mission_active():
@@ -913,6 +990,12 @@ class MissionManager:
             "elapsed_time": float,  # seconds
             "total_contact_count": int,  # number of contact events
             "total_impulse": float,  # accumulated impulse in N*s
+            "property_contact_fire_hydrant": int,
+            "property_contact_traffic_light": int,
+            "property_contact_street_lamp": int,
+            "property_contact_bollard": int,
+            "property_contact_building": int,
+            "property_contact_total": int,
             "food_enabled": bool,
             "food_initial_pieces": int,
             "food_final_pieces": int,
@@ -949,12 +1032,15 @@ class MissionManager:
         if in_progress:
             total_contact_count = self._contact_count
             total_impulse = self._total_impulse
+            property_counts = dict(self._property_contact_counts)
         elif self._last_contact_count is not None:
             total_contact_count = self._last_contact_count
             total_impulse = self._last_total_impulse if self._last_total_impulse is not None else 0.0
+            property_counts = dict(self._last_property_contact_counts or {})
         else:
             total_contact_count = self._contact_count
             total_impulse = self._total_impulse
+            property_counts = dict(self._property_contact_counts)
 
         # Food metrics
         food_enabled = bool(self.mission_config.food.enabled)
@@ -981,6 +1067,12 @@ class MissionManager:
             "elapsed_time": elapsed_time,
             "total_contact_count": total_contact_count,
             "total_impulse": total_impulse,
+            "property_contact_fire_hydrant": property_counts.get("fire_hydrant", 0),
+            "property_contact_traffic_light": property_counts.get("traffic_light", 0),
+            "property_contact_street_lamp": property_counts.get("street_lamp", 0),
+            "property_contact_bollard": property_counts.get("bollard", 0),
+            "property_contact_building": property_counts.get("building", 0),
+            "property_contact_total": sum(property_counts.values()),
             "food_enabled": food_enabled,
             "food_initial_pieces": food_initial_pieces,
             "food_final_pieces": food_final_pieces,
@@ -1350,6 +1442,7 @@ class MissionManager:
             self._last_traveled_distance = self._traveled_distance
             self._last_contact_count = self._contact_count
             self._last_total_impulse = self._total_impulse
+            self._last_property_contact_counts = dict(self._property_contact_counts)
 
             # Check for food spoilage before declaring success
             if self._check_food_spoilage():
@@ -1382,6 +1475,7 @@ class MissionManager:
             self._last_traveled_distance = self._traveled_distance
             self._last_contact_count = self._contact_count
             self._last_total_impulse = self._total_impulse
+            self._last_property_contact_counts = dict(self._property_contact_counts)
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_PHYSICALASSISTANCE] Mission {self._current_mission} failed - robot fell down! "
@@ -1400,6 +1494,7 @@ class MissionManager:
             self._last_traveled_distance = self._traveled_distance
             self._last_contact_count = self._contact_count
             self._last_total_impulse = self._total_impulse
+            self._last_property_contact_counts = dict(self._property_contact_counts)
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_PHYSICALASSISTANCE] Mission {self._current_mission} failed - impulse health depleted! "
@@ -1418,6 +1513,7 @@ class MissionManager:
             self._last_traveled_distance = self._traveled_distance
             self._last_contact_count = self._contact_count
             self._last_total_impulse = self._total_impulse
+            self._last_property_contact_counts = dict(self._property_contact_counts)
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_TIMEOUT] Mission {self._current_mission} timed out! "
