@@ -183,6 +183,13 @@ class CostNavSimLauncher:
         self.mission_config = mission_config
         self.num_people = num_people
 
+        self._timeline = None
+        self._timeline_stop_subscription = None
+        self._stage_open_subscription = None
+        self._pending_physics_reinit = False
+        self._pending_stage_reload = False
+        self._last_physics_reset_time = None
+
         # Setup simulation app
         self.simulation_app = self._setup_simulation_app(headless)
 
@@ -196,6 +203,7 @@ class CostNavSimLauncher:
 
         # Setup simulation context
         self.simulation_context = self._setup_simulation_context()
+        self._pending_physics_reinit = True
 
         robot_prim_path = None
         try:
@@ -215,6 +223,7 @@ class CostNavSimLauncher:
 
         # Initialize people manager (will be setup after warmup)
         self.people_manager = None
+        self._people_initialized = False  # Track if people have been initialized this session
         if self.num_people > 0:
             from people_manager import PeopleManager
 
@@ -224,6 +233,8 @@ class CostNavSimLauncher:
                 robot_prim_path=people_robot_prim_path,
                 character_root="/World/Characters",
             )
+
+        self._register_simulation_event_handlers()
 
         # Final app update
         self.simulation_app.update()
@@ -314,6 +325,7 @@ class CostNavSimLauncher:
         import carb.settings
 
         settings = carb.settings.get_settings()
+        settings.set("/log/channels/omni.physx.plugin", "error")
         # Turn off GPU for navmesh baking
         settings.set_bool("/persistent/exts/omni.anim.navigation.core/navMesh/useGpu", False)
 
@@ -329,6 +341,11 @@ class CostNavSimLauncher:
         if not result:
             raise RuntimeError(f"Failed to open USD file: {self.usd_path}")
 
+        from isaacsim.core.utils.stage import is_stage_loading
+
+        while is_stage_loading():
+            self.simulation_app.update()
+
         logger.info("Stage loaded successfully")
 
     def _setup_simulation_context(self):
@@ -341,6 +358,149 @@ class CostNavSimLauncher:
             stage_units_in_meters=1.0,
         )
         return simulation_context
+
+    def _register_simulation_event_handlers(self) -> None:
+        """Register timeline and stage event handlers for reinitialization."""
+        try:
+            import carb.eventdispatcher
+            import omni.timeline
+            import omni.usd
+
+            self._timeline = omni.timeline.get_timeline_interface()
+            self._timeline_stop_subscription = (
+                self._timeline.get_timeline_event_stream().create_subscription_to_pop_by_type(
+                    int(omni.timeline.TimelineEventType.STOP),
+                    self._on_timeline_stop,
+                )
+            )
+            dispatcher = carb.eventdispatcher.get_eventdispatcher()
+            self._stage_open_subscription = dispatcher.observe_event(
+                event_name=omni.usd.get_context().stage_event_name(omni.usd.StageEventType.OPENED),
+                on_event=self._on_stage_open,
+                observer_name="costnav.launcher.stage_open",
+            )
+        except Exception as exc:
+            logger.warning("Failed to register simulation event handlers: %s", exc)
+
+    def _on_timeline_stop(self, event) -> None:
+        self._pending_physics_reinit = True
+
+    def _on_stage_open(self, event) -> None:
+        self._pending_stage_reload = True
+        self._pending_physics_reinit = True
+        self._people_initialized = False  # Reset so people will be reinitialized for new stage
+
+    def _ensure_simulation_context(self) -> None:
+        from isaacsim.core.api import SimulationContext
+
+        sim_instance = SimulationContext.instance()
+        if sim_instance is None:
+            self.simulation_context = self._setup_simulation_context()
+        else:
+            self.simulation_context = sim_instance
+
+    def _refresh_robot_prim_paths(self) -> None:
+        try:
+            import omni.usd
+
+            stage = omni.usd.get_context().get_stage()
+            robot_prim_path = self._resolve_robot_prim_path(stage)
+        except Exception as exc:
+            logger.warning("Failed to resolve robot prim path after stage reload: %s", exc)
+            return
+
+        if robot_prim_path:
+            if not os.environ.get("ROBOT_PRIM_PATH"):
+                os.environ["ROBOT_PRIM_PATH"] = robot_prim_path
+            self._update_mission_robot_prim(robot_prim_path)
+        else:
+            logger.warning("Robot prim path could not be resolved after stage reload")
+
+        if self.people_manager is not None:
+            self.people_manager.robot_prim_path = self._resolve_people_robot_prim(robot_prim_path)
+
+    def _handle_pending_simulation_reinit(self, mission_manager=None) -> None:
+        self._ensure_simulation_context()
+
+        try:
+            from isaacsim.core.utils.stage import is_stage_loading
+
+            if is_stage_loading():
+                return
+        except Exception as exc:
+            logger.warning("Failed to query stage loading state: %s", exc)
+
+        force_reset = False
+        sim_view = self.simulation_context.physics_sim_view
+        if sim_view is not None:
+            try:
+                if hasattr(sim_view, "is_valid") and not sim_view.is_valid:
+                    self._pending_physics_reinit = True
+                    force_reset = True
+                elif hasattr(sim_view, "check") and not sim_view.check():
+                    self._pending_physics_reinit = True
+                    force_reset = True
+            except Exception:
+                self._pending_physics_reinit = True
+                force_reset = True
+
+        if not self._pending_physics_reinit and not self._pending_stage_reload:
+            return
+
+        try:
+            if self._timeline is None:
+                import omni.timeline
+
+                self._timeline = omni.timeline.get_timeline_interface()
+            if self._timeline.is_stopped():
+                return
+        except Exception as exc:
+            logger.warning("Failed to query timeline state: %s", exc)
+            return
+
+        stage_reloaded = self._pending_stage_reload
+        needs_people_restart = stage_reloaded or force_reset
+        if stage_reloaded:
+            self._refresh_robot_prim_paths()
+
+        if force_reset:
+            now = time.perf_counter()
+            if self._last_physics_reset_time is None or (now - self._last_physics_reset_time) > 1.0:
+                self._last_physics_reset_time = now
+                try:
+                    self.simulation_context.reset()
+                except Exception as exc:
+                    logger.warning("Failed to reset simulation after view invalidation: %s", exc)
+
+        try:
+            self.simulation_context.initialize_physics()
+        except Exception as exc:
+            logger.warning("Failed to initialize physics after restart: %s", exc)
+
+        if mission_manager is not None:
+            try:
+                mission_manager.handle_simulation_restart(stage_reloaded=stage_reloaded)
+            except Exception as exc:
+                logger.warning("Failed to refresh mission manager after restart: %s", exc)
+
+        # Only restart people if the stage was reloaded OR if people haven't been initialized yet.
+        # Skip restart if it's just a physics reset (force_reset) and people are already initialized
+        # to prevent double-spawning during initial simulation setup.
+        should_restart_people = (
+            needs_people_restart
+            and self.people_manager is not None
+            and (stage_reloaded or not self._people_initialized)
+        )
+        if should_restart_people:
+            try:
+                self.people_manager.shutdown()
+                self.people_manager.initialize(self.simulation_app, self.simulation_context)
+                self._people_initialized = True
+            except Exception as exc:
+                logger.warning("Failed to reinitialize PeopleManager after physics reset: %s", exc)
+
+        self._pending_physics_reinit = False
+        self._pending_stage_reload = False
 
     def _resolve_robot_prim_path(self, stage) -> Optional[str]:
         """Resolve a robot prim path for pose lookups."""
@@ -434,6 +594,7 @@ class CostNavSimLauncher:
             mission_manager: Optional mission manager to step after simulation step.
             throttle: Whether to throttle to maintain rendering_dt timing.
         """
+        self._handle_pending_simulation_reinit(mission_manager)
         tick_start = time.perf_counter()
         self.simulation_context.step(render=True)
 
@@ -471,6 +632,8 @@ class CostNavSimLauncher:
         self.simulation_context.play()
         logger.info("Simulation playing")
 
+        self._handle_pending_simulation_reinit()
+
         # Warm-up steps to initialize deltaTime properly
         # This prevents "Invalid deltaTime 0.000000" warnings
         logger.info(f"Running {WARMUP_STEPS} warm-up steps...")
@@ -482,6 +645,7 @@ class CostNavSimLauncher:
         if self.people_manager is not None:
             logger.info("Initializing people manager...")
             self.people_manager.initialize(self.simulation_app, self.simulation_context)
+            self._people_initialized = True
 
         # Mark as healthy - triggers Docker Compose to start ROS2 container
         self._check_healthy()
@@ -531,6 +695,12 @@ class CostNavSimLauncher:
         # Remove health check file
         if os.path.exists("/tmp/.isaac_sim_running"):
             os.remove("/tmp/.isaac_sim_running")
+
+        if self._timeline_stop_subscription is not None:
+            self._timeline_stop_subscription = None
+        if self._stage_open_subscription is not None:
+            self._stage_open_subscription = None
+        self._timeline = None
 
         self.simulation_context.stop()
         self.simulation_app.close()

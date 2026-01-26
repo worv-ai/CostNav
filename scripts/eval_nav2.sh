@@ -35,6 +35,8 @@ declare -a MISSION_TRAVELED_DISTANCES
 declare -a MISSION_ELAPSED_TIMES
 declare -a MISSION_AVG_VELOCITIES
 declare -a MISSION_AVG_MECHANICAL_POWERS
+declare -a MISSION_CONTACT_COUNTS
+declare -a MISSION_TOTAL_IMPULSES
 declare -a MISSION_FOOD_ENABLED
 declare -a MISSION_FOOD_INITIAL_PIECES
 declare -a MISSION_FOOD_FINAL_PIECES
@@ -156,6 +158,8 @@ run_mission() {
     local distance_to_goal=""
     local traveled_distance=""
     local elapsed_time=""
+    local contact_count="0"
+    local total_impulse="0"
     local food_enabled="false"
     local food_initial_pieces="-1"
     local food_final_pieces="-1"
@@ -219,12 +223,20 @@ run_mission() {
             distance_to_goal=$(parse_result_field "$result_response" "distance_to_goal")
             traveled_distance=$(parse_result_field "$result_response" "traveled_distance")
             elapsed_time=$(parse_result_field "$result_response" "elapsed_time")
+            contact_count=$(parse_result_field "$result_response" "total_contact_count")
+            total_impulse=$(parse_result_field "$result_response" "total_impulse")
             food_enabled=$(parse_result_field "$result_response" "food_enabled")
             food_initial_pieces=$(parse_result_field "$result_response" "food_initial_pieces")
             food_final_pieces=$(parse_result_field "$result_response" "food_final_pieces")
             food_loss_fraction=$(parse_result_field "$result_response" "food_loss_fraction")
             food_spoiled=$(parse_result_field "$result_response" "food_spoiled")
 
+            if [ -z "$contact_count" ]; then
+                contact_count="0"
+            fi
+            if [ -z "$total_impulse" ]; then
+                total_impulse="0"
+            fi
             if [ -z "$food_enabled" ]; then
                 food_enabled="false"
             fi
@@ -290,6 +302,10 @@ run_mission() {
     MISSION_AVG_VELOCITIES[$mission_num]="$avg_velocity"
     MISSION_AVG_MECHANICAL_POWERS[$mission_num]="$avg_mech_power"
 
+    # Store contact and impulse metrics
+    MISSION_CONTACT_COUNTS[$mission_num]="${contact_count:-0}"
+    MISSION_TOTAL_IMPULSES[$mission_num]="${total_impulse:-0}"
+
     MISSION_FOOD_ENABLED[$mission_num]="${food_enabled}"
     MISSION_FOOD_INITIAL_PIECES[$mission_num]="${food_initial_pieces}"
     MISSION_FOOD_FINAL_PIECES[$mission_num]="${food_final_pieces}"
@@ -299,7 +315,7 @@ run_mission() {
     if [ "$mission_result" = "SUCCESS" ]; then
         SUCCESS_SLA=$((SUCCESS_SLA + 1))
         MISSION_RESULTS[$mission_num]="SUCCESS_SLA"
-        log "Mission $mission_num: SUCCESS_SLA (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s, avg_vel: ${avg_velocity}m/s, avg_mech_power: ${avg_mech_power}kW)"
+        log "Mission $mission_num: SUCCESS_SLA (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s, avg_vel: ${avg_velocity}m/s, avg_mech_power: ${avg_mech_power}kW, contacts: ${contact_count}, impulse: ${total_impulse}N*s)"
     elif [ "$mission_result" = "SKIPPED" ]; then
         SKIPPED=$((SKIPPED + 1))
         MISSION_RESULTS[$mission_num]="SKIPPED"
@@ -322,7 +338,7 @@ run_mission() {
             MISSION_RESULTS[$mission_num]="FAILURE_TIMEOUT"
         fi
         MISSION_ERRORS[$mission_num]="$error_msg"
-        log "Mission $mission_num: ${MISSION_RESULTS[$mission_num]} (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s, avg_vel: ${avg_velocity}m/s, avg_mech_power: ${avg_mech_power}kW) - $error_msg"
+        log "Mission $mission_num: ${MISSION_RESULTS[$mission_num]} (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s, avg_vel: ${avg_velocity}m/s, avg_mech_power: ${avg_mech_power}kW, contacts: ${contact_count}, impulse: ${total_impulse}N*s) - $error_msg"
     fi
 
     if [ "$food_enabled" = "true" ]; then
@@ -343,11 +359,13 @@ generate_summary() {
         success_rate="0"
     fi
 
-    # Calculate average distance, time, velocity, and mechanical power for completed (non-skipped) missions
+    # Calculate average distance, time, velocity, mechanical power, contact count, and impulse for completed (non-skipped) missions
     local total_distance=0
     local total_time=0
     local total_velocity=0
     local total_mech_power=0
+    local total_contact_count=0
+    local total_impulse_sum=0
     local count=0
     for i in $(seq 1 $NUM_MISSIONS); do
         local result="${MISSION_RESULTS[$i]:-N/A}"
@@ -356,10 +374,14 @@ generate_summary() {
             local time="${MISSION_ELAPSED_TIMES[$i]:-0}"
             local vel="${MISSION_AVG_VELOCITIES[$i]:-0}"
             local mech_power="${MISSION_AVG_MECHANICAL_POWERS[$i]:-0}"
+            local contacts="${MISSION_CONTACT_COUNTS[$i]:-0}"
+            local impulse="${MISSION_TOTAL_IMPULSES[$i]:-0}"
             total_distance=$(echo "$total_distance + $dist" | bc)
             total_time=$(echo "$total_time + $time" | bc)
             total_velocity=$(echo "$total_velocity + $vel" | bc)
             total_mech_power=$(echo "$total_mech_power + $mech_power" | bc)
+            total_contact_count=$(echo "$total_contact_count + $contacts" | bc)
+            total_impulse_sum=$(echo "$total_impulse_sum + $impulse" | bc)
             count=$((count + 1))
         fi
     done
@@ -368,11 +390,15 @@ generate_summary() {
     local avg_time="0"
     local avg_velocity="0"
     local avg_mech_power="0"
+    local avg_contact_count="0"
+    local avg_total_impulse="0"
     if [ "$count" -gt 0 ]; then
         avg_distance=$(echo "scale=2; $total_distance / $count" | bc)
         avg_time=$(echo "scale=2; $total_time / $count" | bc)
         avg_velocity=$(echo "scale=4; $total_velocity / $count" | bc)
         avg_mech_power=$(echo "scale=6; $total_mech_power / $count" | bc)
+        avg_contact_count=$(echo "scale=2; $total_contact_count / $count" | bc)
+        avg_total_impulse=$(echo "scale=2; $total_impulse_sum / $count" | bc)
     fi
 
     log_file ""
@@ -399,6 +425,8 @@ generate_summary() {
     log_file "  - Average elapsed time: ${avg_time}s"
     log_file "  - Average velocity: ${avg_velocity}m/s"
     log_file "  - Average mechanical power: ${avg_mech_power}kW"
+    log_file "  - Average contact count: ${avg_contact_count}"
+    log_file "  - Average total impulse: ${avg_total_impulse} N*s"
     log_file ""
     log_file "Per-Mission Results:"
     log_file "------------------------------------------------------------"
@@ -412,6 +440,8 @@ generate_summary() {
         local elapsed="${MISSION_ELAPSED_TIMES[$i]:-N/A}"
         local mission_avg_vel="${MISSION_AVG_VELOCITIES[$i]:-N/A}"
         local mission_avg_power="${MISSION_AVG_MECHANICAL_POWERS[$i]:-N/A}"
+        local mission_contact_count="${MISSION_CONTACT_COUNTS[$i]:-0}"
+        local mission_total_impulse="${MISSION_TOTAL_IMPULSES[$i]:-0}"
         local food_enabled="${MISSION_FOOD_ENABLED[$i]:-false}"
         local food_initial="${MISSION_FOOD_INITIAL_PIECES[$i]:-N/A}"
         local food_final="${MISSION_FOOD_FINAL_PIECES[$i]:-N/A}"
@@ -426,6 +456,8 @@ generate_summary() {
         log_file "  Elapsed time: ${elapsed}s"
         log_file "  Average velocity: ${mission_avg_vel}m/s"
         log_file "  Average mechanical power: ${mission_avg_power}kW"
+        log_file "  Contact count: ${mission_contact_count}"
+        log_file "  Total impulse: ${mission_total_impulse} N*s"
         if [ "$food_enabled" = "true" ]; then
             log_file "  Food pieces: ${food_initial} -> ${food_final}"
             log_file "  Food loss fraction: ${food_loss}"
@@ -508,6 +540,8 @@ main() {
     local total_time=0
     local total_velocity=0
     local total_mech_power=0
+    local total_contact_count=0
+    local total_impulse_sum=0
     local count=0
     for i in $(seq 1 $NUM_MISSIONS); do
         local result="${MISSION_RESULTS[$i]:-N/A}"
@@ -516,10 +550,14 @@ main() {
             local time="${MISSION_ELAPSED_TIMES[$i]:-0}"
             local vel="${MISSION_AVG_VELOCITIES[$i]:-0}"
             local mech_power="${MISSION_AVG_MECHANICAL_POWERS[$i]:-0}"
+            local contacts="${MISSION_CONTACT_COUNTS[$i]:-0}"
+            local impulse="${MISSION_TOTAL_IMPULSES[$i]:-0}"
             total_distance=$(echo "$total_distance + $dist" | bc)
             total_time=$(echo "$total_time + $time" | bc)
             total_velocity=$(echo "$total_velocity + $vel" | bc)
             total_mech_power=$(echo "$total_mech_power + $mech_power" | bc)
+            total_contact_count=$(echo "$total_contact_count + $contacts" | bc)
+            total_impulse_sum=$(echo "$total_impulse_sum + $impulse" | bc)
             count=$((count + 1))
         fi
     done
@@ -528,11 +566,15 @@ main() {
     local avg_time="0"
     local avg_velocity="0"
     local avg_mech_power="0"
+    local avg_contact_count="0"
+    local avg_total_impulse="0"
     if [ "$count" -gt 0 ]; then
         avg_distance=$(echo "scale=2; $total_distance / $count" | bc)
         avg_time=$(echo "scale=2; $total_time / $count" | bc)
         avg_velocity=$(echo "scale=4; $total_velocity / $count" | bc)
         avg_mech_power=$(echo "scale=6; $total_mech_power / $count" | bc)
+        avg_contact_count=$(echo "scale=2; $total_contact_count / $count" | bc)
+        avg_total_impulse=$(echo "scale=2; $total_impulse_sum / $count" | bc)
     fi
 
     # Calculate averages including skipped
@@ -540,6 +582,8 @@ main() {
     local total_time_all=0
     local total_velocity_all=0
     local total_mech_power_all=0
+    local total_contact_count_all=0
+    local total_impulse_sum_all=0
     local count_all=0
     for i in $(seq 1 $NUM_MISSIONS); do
         local result="${MISSION_RESULTS[$i]:-N/A}"
@@ -548,10 +592,14 @@ main() {
             local time="${MISSION_ELAPSED_TIMES[$i]:-0}"
             local vel="${MISSION_AVG_VELOCITIES[$i]:-0}"
             local mech_power="${MISSION_AVG_MECHANICAL_POWERS[$i]:-0}"
+            local contacts="${MISSION_CONTACT_COUNTS[$i]:-0}"
+            local impulse="${MISSION_TOTAL_IMPULSES[$i]:-0}"
             total_distance_all=$(echo "$total_distance_all + $dist" | bc)
             total_time_all=$(echo "$total_time_all + $time" | bc)
             total_velocity_all=$(echo "$total_velocity_all + $vel" | bc)
             total_mech_power_all=$(echo "$total_mech_power_all + $mech_power" | bc)
+            total_contact_count_all=$(echo "$total_contact_count_all + $contacts" | bc)
+            total_impulse_sum_all=$(echo "$total_impulse_sum_all + $impulse" | bc)
             count_all=$((count_all + 1))
         fi
     done
@@ -560,11 +608,15 @@ main() {
     local avg_time_all="0"
     local avg_velocity_all="0"
     local avg_mech_power_all="0"
+    local avg_contact_count_all="0"
+    local avg_total_impulse_all="0"
     if [ "$count_all" -gt 0 ]; then
         avg_distance_all=$(echo "scale=2; $total_distance_all / $count_all" | bc)
         avg_time_all=$(echo "scale=2; $total_time_all / $count_all" | bc)
         avg_velocity_all=$(echo "scale=4; $total_velocity_all / $count_all" | bc)
         avg_mech_power_all=$(echo "scale=6; $total_mech_power_all / $count_all" | bc)
+        avg_contact_count_all=$(echo "scale=2; $total_contact_count_all / $count_all" | bc)
+        avg_total_impulse_all=$(echo "scale=2; $total_impulse_sum_all / $count_all" | bc)
     fi
 
     echo ""
@@ -581,10 +633,14 @@ main() {
     echo "  Avg Time:     ${avg_time}s (excluding skipped)"
     echo "  Avg Velocity: ${avg_velocity}m/s (excluding skipped)"
     echo "  Avg Mech Power: ${avg_mech_power}kW (excluding skipped)"
+    echo "  Avg Contact Count: ${avg_contact_count} (excluding skipped)"
+    echo "  Avg Total Impulse: ${avg_total_impulse} N*s (excluding skipped)"
     echo "  Avg Distance: ${avg_distance_all}m (including skipped)"
     echo "  Avg Time:     ${avg_time_all}s (including skipped)"
     echo "  Avg Velocity: ${avg_velocity_all}m/s (including skipped)"
     echo "  Avg Mech Power: ${avg_mech_power_all}kW (including skipped)"
+    echo "  Avg Contact Count: ${avg_contact_count_all} (including skipped)"
+    echo "  Avg Total Impulse: ${avg_total_impulse_all} N*s (including skipped)"
     echo "  Log file:   $LOG_FILE"
     echo "=============================================="
 }
