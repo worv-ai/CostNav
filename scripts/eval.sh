@@ -1,25 +1,43 @@
 #!/bin/bash
-# Nav2 Evaluation Script
+# Unified Evaluation Script for Teleop and Nav2
 # Runs consecutive missions and generates comprehensive evaluation logs
 #
-# Usage: ./eval_nav2.sh [TIMEOUT] [NUM_MISSIONS]
+# Usage: ./eval.sh <MODE> [TIMEOUT] [NUM_MISSIONS]
+#   MODE: Either 'teleop' or 'nav2'
 #   TIMEOUT: Mission timeout in seconds (default: 20)
 #   NUM_MISSIONS: Number of missions to run (default: 10)
 #
-# Requires: A running nav2 instance (make run-nav2)
+# Requires: A running instance (make run-teleop or make run-nav2)
 #
 # Controls:
 #   Right Arrow (→): Skip current mission
 
 set -e
 
+# Mode validation
+MODE="${1:-}"
+if [ -z "$MODE" ] || { [ "$MODE" != "teleop" ] && [ "$MODE" != "nav2" ]; }; then
+    echo "ERROR: Mode must be 'teleop' or 'nav2'"
+    echo "Usage: $0 <teleop|nav2> [TIMEOUT] [NUM_MISSIONS]"
+    exit 1
+fi
+
+# Configuration based on mode
+if [ "$MODE" = "teleop" ]; then
+    CONTAINER_NAME="costnav-ros2-teleop"
+    MODE_DISPLAY="Teleop"
+else
+    CONTAINER_NAME="costnav-ros2-nav2"
+    MODE_DISPLAY="Nav2"
+fi
+
 # Configuration
-TIMEOUT="${1:-20}"
-NUM_MISSIONS="${2:-10}"
+TIMEOUT="${2:-20}"
+NUM_MISSIONS="${3:-10}"
 CONTAINER=""
 LOG_DIR="${LOG_DIR:-./logs}"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-LOG_FILE="${LOG_DIR}/nav2_evaluation_${TIMESTAMP}.log"
+LOG_FILE="${LOG_DIR}/${MODE}_evaluation_${TIMESTAMP}.log"
 
 # Statistics tracking
 SUCCESS_SLA=0
@@ -35,11 +53,14 @@ declare -a MISSION_TRAVELED_DISTANCES
 declare -a MISSION_ELAPSED_TIMES
 declare -a MISSION_AVG_VELOCITIES
 declare -a MISSION_AVG_MECHANICAL_POWERS
+declare -a MISSION_CONTACT_COUNTS
+declare -a MISSION_TOTAL_IMPULSES
 declare -a MISSION_FOOD_ENABLED
 declare -a MISSION_FOOD_INITIAL_PIECES
 declare -a MISSION_FOOD_FINAL_PIECES
 declare -a MISSION_FOOD_LOSS_FRACTION
 declare -a MISSION_FOOD_SPOILED
+declare -a MISSION_RESULT_REASONS
 
 # Mechanical energy constants
 ROLLING_RESISTANCE_FORCE=18.179  # Newtons
@@ -81,10 +102,10 @@ check_skip_key() {
     return 1
 }
 
-# Find the running nav2 container (strictly requires costnav-ros2-nav2)
+# Find the running container
 find_container() {
-    if docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-nav2"; then
-        CONTAINER="costnav-ros2-nav2"
+    if docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
+        CONTAINER="$CONTAINER_NAME"
         return 0
     fi
     return 1
@@ -156,11 +177,14 @@ run_mission() {
     local distance_to_goal=""
     local traveled_distance=""
     local elapsed_time=""
+    local contact_count="0"
+    local total_impulse="0"
     local food_enabled="false"
     local food_initial_pieces="-1"
     local food_final_pieces="-1"
     local food_loss_fraction="-1"
     local food_spoiled="false"
+    local result_reason=""
     local was_skipped=false
 
     start_time=$(date +%s.%N)
@@ -214,17 +238,26 @@ run_mission() {
             result_response=$(get_mission_result 2>&1)
 
             result_status=$(parse_result_field "$result_response" "result")
+            result_reason=$(parse_result_field "$result_response" "result_reason")
             local in_progress
             in_progress=$(parse_result_field "$result_response" "in_progress")
             distance_to_goal=$(parse_result_field "$result_response" "distance_to_goal")
             traveled_distance=$(parse_result_field "$result_response" "traveled_distance")
             elapsed_time=$(parse_result_field "$result_response" "elapsed_time")
+            contact_count=$(parse_result_field "$result_response" "total_contact_count")
+            total_impulse=$(parse_result_field "$result_response" "total_impulse")
             food_enabled=$(parse_result_field "$result_response" "food_enabled")
             food_initial_pieces=$(parse_result_field "$result_response" "food_initial_pieces")
             food_final_pieces=$(parse_result_field "$result_response" "food_final_pieces")
             food_loss_fraction=$(parse_result_field "$result_response" "food_loss_fraction")
             food_spoiled=$(parse_result_field "$result_response" "food_spoiled")
 
+            if [ -z "$contact_count" ]; then
+                contact_count="0"
+            fi
+            if [ -z "$total_impulse" ]; then
+                total_impulse="0"
+            fi
             if [ -z "$food_enabled" ]; then
                 food_enabled="false"
             fi
@@ -240,6 +273,10 @@ run_mission() {
             if [ -z "$food_spoiled" ]; then
                 food_spoiled="false"
             fi
+            # Handle null result_reason (Python None becomes "null" in JSON)
+            if [ -z "$result_reason" ] || [ "$result_reason" = "null" ]; then
+                result_reason=""
+            fi
 
             # Check if mission completed (success or failure from mission manager)
             if [ "$result_status" = "success" ]; then
@@ -248,8 +285,13 @@ run_mission() {
                 break
             elif [[ "$result_status" == failure_* ]]; then
                 mission_result="FAILED"
-                error_msg="${result_status} - distance to goal: ${distance_to_goal}m"
-                log "Mission $mission_num: ${result_status}! Goal Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
+                if [ -n "$result_reason" ]; then
+                    error_msg="${result_status} (reason: ${result_reason}) - distance to goal: ${distance_to_goal}m"
+                    log "Mission $mission_num: ${result_status} (reason: ${result_reason})! Goal Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
+                else
+                    error_msg="${result_status} - distance to goal: ${distance_to_goal}m"
+                    log "Mission $mission_num: ${result_status}! Goal Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
+                fi
                 break
             fi
 
@@ -285,26 +327,29 @@ run_mission() {
     local avg_mech_power="0"
     if [ -n "$elapsed_time" ] && [ "$elapsed_time" != "0" ]; then
         avg_velocity=$(echo "scale=4; ${traveled_distance:-0} / $elapsed_time" | bc)
-        avg_mech_power=$(echo "scale=6; $ROLLING_RESISTANCE_FORCE * $avg_velocity / 1000" | bc)
+        avg_mech_power=$(echo "scale=4; $ROLLING_RESISTANCE_FORCE * $avg_velocity / 1000" | bc)
     fi
     MISSION_AVG_VELOCITIES[$mission_num]="$avg_velocity"
     MISSION_AVG_MECHANICAL_POWERS[$mission_num]="$avg_mech_power"
+
+    # Store contact and impulse metrics
+    MISSION_CONTACT_COUNTS[$mission_num]="${contact_count:-0}"
+    MISSION_TOTAL_IMPULSES[$mission_num]="${total_impulse:-0}"
 
     MISSION_FOOD_ENABLED[$mission_num]="${food_enabled}"
     MISSION_FOOD_INITIAL_PIECES[$mission_num]="${food_initial_pieces}"
     MISSION_FOOD_FINAL_PIECES[$mission_num]="${food_final_pieces}"
     MISSION_FOOD_LOSS_FRACTION[$mission_num]="${food_loss_fraction}"
     MISSION_FOOD_SPOILED[$mission_num]="${food_spoiled}"
+    MISSION_RESULT_REASONS[$mission_num]="${result_reason}"
 
     if [ "$mission_result" = "SUCCESS" ]; then
         SUCCESS_SLA=$((SUCCESS_SLA + 1))
         MISSION_RESULTS[$mission_num]="SUCCESS_SLA"
-        log "Mission $mission_num: SUCCESS_SLA (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s, avg_vel: ${avg_velocity}m/s, avg_mech_power: ${avg_mech_power}kW)"
     elif [ "$mission_result" = "SKIPPED" ]; then
         SKIPPED=$((SKIPPED + 1))
         MISSION_RESULTS[$mission_num]="SKIPPED"
         MISSION_ERRORS[$mission_num]="Skipped by user"
-        log "Mission $mission_num: SKIPPED (duration: ${duration}s)"
     else
         # Parse specific failure type from result_status
         if [ "$result_status" = "failure_timeout" ]; then
@@ -322,16 +367,32 @@ run_mission() {
             MISSION_RESULTS[$mission_num]="FAILURE_TIMEOUT"
         fi
         MISSION_ERRORS[$mission_num]="$error_msg"
-        log "Mission $mission_num: ${MISSION_RESULTS[$mission_num]} (duration: ${duration}s, traveled: ${traveled_distance}m, elapsed: ${elapsed_time}s, avg_vel: ${avg_velocity}m/s, avg_mech_power: ${avg_mech_power}kW) - $error_msg"
     fi
 
+    # Log mission result in readable format
+    log "Mission $mission_num:"
+    log "  Status: ${MISSION_RESULTS[$mission_num]}"
+    if [ -n "$result_reason" ]; then
+        log "  Reason: ${result_reason}"
+    fi
+    log "  Start:  ${MISSION_START_TIMES[$mission_num]}"
+    log "  End:    ${MISSION_END_TIMES[$mission_num]}"
+    log "  Traveled distance: ${traveled_distance}m"
+    log "  Elapsed time: ${elapsed_time}s"
+    log "  Average velocity: ${avg_velocity}m/s"
+    log "  Average mechanical power: ${avg_mech_power}kW"
+    log "  Contact count: ${contact_count}"
+    log "  Total impulse: ${total_impulse} N*s"
     if [ "$food_enabled" = "true" ]; then
-        log "Mission $mission_num: Food pieces ${food_initial_pieces} -> ${food_final_pieces} (loss fraction: ${food_loss_fraction})"
-        if [ "$food_spoiled" = "true" ]; then
-            log "Mission $mission_num: Food spoiled"
-        fi
+        log "  Food pieces: ${food_initial_pieces} -> ${food_final_pieces}"
+        log "  Food loss fraction: ${food_loss_fraction}"
+        log "  Food spoiled: ${food_spoiled}"
+    fi
+    if [ -n "$error_msg" ]; then
+        log "  Error: $error_msg"
     fi
 }
+
 
 # Generate evaluation summary
 generate_summary() {
@@ -343,11 +404,13 @@ generate_summary() {
         success_rate="0"
     fi
 
-    # Calculate average distance, time, velocity, and mechanical power for completed (non-skipped) missions
+    # Calculate average distance, time, velocity, mechanical power, contact count, and impulse for completed (non-skipped) missions
     local total_distance=0
     local total_time=0
     local total_velocity=0
     local total_mech_power=0
+    local total_contact_count=0
+    local total_impulse_sum=0
     local count=0
     for i in $(seq 1 $NUM_MISSIONS); do
         local result="${MISSION_RESULTS[$i]:-N/A}"
@@ -356,10 +419,14 @@ generate_summary() {
             local time="${MISSION_ELAPSED_TIMES[$i]:-0}"
             local vel="${MISSION_AVG_VELOCITIES[$i]:-0}"
             local mech_power="${MISSION_AVG_MECHANICAL_POWERS[$i]:-0}"
+            local contacts="${MISSION_CONTACT_COUNTS[$i]:-0}"
+            local impulse="${MISSION_TOTAL_IMPULSES[$i]:-0}"
             total_distance=$(echo "$total_distance + $dist" | bc)
             total_time=$(echo "$total_time + $time" | bc)
             total_velocity=$(echo "$total_velocity + $vel" | bc)
             total_mech_power=$(echo "$total_mech_power + $mech_power" | bc)
+            total_contact_count=$(echo "$total_contact_count + $contacts" | bc)
+            total_impulse_sum=$(echo "$total_impulse_sum + $impulse" | bc)
             count=$((count + 1))
         fi
     done
@@ -368,16 +435,20 @@ generate_summary() {
     local avg_time="0"
     local avg_velocity="0"
     local avg_mech_power="0"
+    local avg_contact_count="0"
+    local avg_total_impulse="0"
     if [ "$count" -gt 0 ]; then
         avg_distance=$(echo "scale=2; $total_distance / $count" | bc)
         avg_time=$(echo "scale=2; $total_time / $count" | bc)
         avg_velocity=$(echo "scale=4; $total_velocity / $count" | bc)
-        avg_mech_power=$(echo "scale=6; $total_mech_power / $count" | bc)
+        avg_mech_power=$(echo "scale=4; $total_mech_power / $count" | bc)
+        avg_contact_count=$(echo "scale=2; $total_contact_count / $count" | bc)
+        avg_total_impulse=$(echo "scale=2; $total_impulse_sum / $count" | bc)
     fi
 
     log_file ""
     log_file "============================================================"
-    log_file "NAV2 EVALUATION SUMMARY"
+    log_file "${MODE_DISPLAY^^} EVALUATION SUMMARY"
     log_file "============================================================"
     log_file "Timestamp: $(date '+%Y-%m-%d %H:%M:%S')"
     log_file "Configuration:"
@@ -399,12 +470,15 @@ generate_summary() {
     log_file "  - Average elapsed time: ${avg_time}s"
     log_file "  - Average velocity: ${avg_velocity}m/s"
     log_file "  - Average mechanical power: ${avg_mech_power}kW"
+    log_file "  - Average contact count: ${avg_contact_count}"
+    log_file "  - Average total impulse: ${avg_total_impulse} N*s"
     log_file ""
     log_file "Per-Mission Results:"
     log_file "------------------------------------------------------------"
 
     for i in $(seq 1 $NUM_MISSIONS); do
         local result="${MISSION_RESULTS[$i]:-N/A}"
+        local result_reason="${MISSION_RESULT_REASONS[$i]:-}"
         local start="${MISSION_START_TIMES[$i]:-N/A}"
         local end="${MISSION_END_TIMES[$i]:-N/A}"
         local error="${MISSION_ERRORS[$i]:-}"
@@ -412,6 +486,8 @@ generate_summary() {
         local elapsed="${MISSION_ELAPSED_TIMES[$i]:-N/A}"
         local mission_avg_vel="${MISSION_AVG_VELOCITIES[$i]:-N/A}"
         local mission_avg_power="${MISSION_AVG_MECHANICAL_POWERS[$i]:-N/A}"
+        local mission_contact_count="${MISSION_CONTACT_COUNTS[$i]:-0}"
+        local mission_total_impulse="${MISSION_TOTAL_IMPULSES[$i]:-0}"
         local food_enabled="${MISSION_FOOD_ENABLED[$i]:-false}"
         local food_initial="${MISSION_FOOD_INITIAL_PIECES[$i]:-N/A}"
         local food_final="${MISSION_FOOD_FINAL_PIECES[$i]:-N/A}"
@@ -420,12 +496,17 @@ generate_summary() {
 
         log_file "Mission $i:"
         log_file "  Status: $result"
+        if [ -n "$result_reason" ]; then
+            log_file "  Reason: $result_reason"
+        fi
         log_file "  Start:  $start"
         log_file "  End:    $end"
         log_file "  Traveled distance: ${traveled}m"
         log_file "  Elapsed time: ${elapsed}s"
         log_file "  Average velocity: ${mission_avg_vel}m/s"
         log_file "  Average mechanical power: ${mission_avg_power}kW"
+        log_file "  Contact count: ${mission_contact_count}"
+        log_file "  Total impulse: ${mission_total_impulse} N*s"
         if [ "$food_enabled" = "true" ]; then
             log_file "  Food pieces: ${food_initial} -> ${food_final}"
             log_file "  Food loss fraction: ${food_loss}"
@@ -441,6 +522,7 @@ generate_summary() {
     log_file "============================================================"
 }
 
+
 # Main execution
 main() {
     # Create log directory if it doesn't exist
@@ -451,14 +533,14 @@ main() {
 
     # Initialize log file
     log_file "============================================================"
-    log_file "NAV2 EVALUATION LOG"
+    log_file "${MODE_DISPLAY^^} EVALUATION LOG"
     log_file "Started: $(date '+%Y-%m-%d %H:%M:%S')"
     log_file "============================================================"
     log_file ""
 
     echo ""
     echo "=============================================="
-    echo "  Nav2 Evaluation Script"
+    echo "  ${MODE_DISPLAY} Evaluation Script"
     echo "=============================================="
     echo "  Timeout:      ${TIMEOUT}s"
     echo "  Missions:     $NUM_MISSIONS"
@@ -467,13 +549,13 @@ main() {
     echo "=============================================="
     echo ""
 
-    # Find container (strictly requires make run-nav2)
+    # Find container (strictly requires make run-teleop or make run-nav2)
     if ! find_container; then
-        log "ERROR: 'make run-nav2' is not running."
-        log "Container 'costnav-ros2-nav2' not found."
+        log "ERROR: 'make run-${MODE}' is not running."
+        log "Container '${CONTAINER_NAME}' not found."
         log ""
-        log "Please start nav2 first in a separate terminal:"
-        log "  make run-nav2"
+        log "Please start ${MODE} first in a separate terminal:"
+        log "  make run-${MODE}"
         exit 1
     fi
 
@@ -508,6 +590,8 @@ main() {
     local total_time=0
     local total_velocity=0
     local total_mech_power=0
+    local total_contact_count=0
+    local total_impulse_sum=0
     local count=0
     for i in $(seq 1 $NUM_MISSIONS); do
         local result="${MISSION_RESULTS[$i]:-N/A}"
@@ -516,10 +600,14 @@ main() {
             local time="${MISSION_ELAPSED_TIMES[$i]:-0}"
             local vel="${MISSION_AVG_VELOCITIES[$i]:-0}"
             local mech_power="${MISSION_AVG_MECHANICAL_POWERS[$i]:-0}"
+            local contacts="${MISSION_CONTACT_COUNTS[$i]:-0}"
+            local impulse="${MISSION_TOTAL_IMPULSES[$i]:-0}"
             total_distance=$(echo "$total_distance + $dist" | bc)
             total_time=$(echo "$total_time + $time" | bc)
             total_velocity=$(echo "$total_velocity + $vel" | bc)
             total_mech_power=$(echo "$total_mech_power + $mech_power" | bc)
+            total_contact_count=$(echo "$total_contact_count + $contacts" | bc)
+            total_impulse_sum=$(echo "$total_impulse_sum + $impulse" | bc)
             count=$((count + 1))
         fi
     done
@@ -528,11 +616,15 @@ main() {
     local avg_time="0"
     local avg_velocity="0"
     local avg_mech_power="0"
+    local avg_contact_count="0"
+    local avg_total_impulse="0"
     if [ "$count" -gt 0 ]; then
         avg_distance=$(echo "scale=2; $total_distance / $count" | bc)
         avg_time=$(echo "scale=2; $total_time / $count" | bc)
         avg_velocity=$(echo "scale=4; $total_velocity / $count" | bc)
-        avg_mech_power=$(echo "scale=6; $total_mech_power / $count" | bc)
+        avg_mech_power=$(echo "scale=4; $total_mech_power / $count" | bc)
+        avg_contact_count=$(echo "scale=2; $total_contact_count / $count" | bc)
+        avg_total_impulse=$(echo "scale=2; $total_impulse_sum / $count" | bc)
     fi
 
     # Calculate averages including skipped
@@ -540,6 +632,8 @@ main() {
     local total_time_all=0
     local total_velocity_all=0
     local total_mech_power_all=0
+    local total_contact_count_all=0
+    local total_impulse_sum_all=0
     local count_all=0
     for i in $(seq 1 $NUM_MISSIONS); do
         local result="${MISSION_RESULTS[$i]:-N/A}"
@@ -548,10 +642,14 @@ main() {
             local time="${MISSION_ELAPSED_TIMES[$i]:-0}"
             local vel="${MISSION_AVG_VELOCITIES[$i]:-0}"
             local mech_power="${MISSION_AVG_MECHANICAL_POWERS[$i]:-0}"
+            local contacts="${MISSION_CONTACT_COUNTS[$i]:-0}"
+            local impulse="${MISSION_TOTAL_IMPULSES[$i]:-0}"
             total_distance_all=$(echo "$total_distance_all + $dist" | bc)
             total_time_all=$(echo "$total_time_all + $time" | bc)
             total_velocity_all=$(echo "$total_velocity_all + $vel" | bc)
             total_mech_power_all=$(echo "$total_mech_power_all + $mech_power" | bc)
+            total_contact_count_all=$(echo "$total_contact_count_all + $contacts" | bc)
+            total_impulse_sum_all=$(echo "$total_impulse_sum_all + $impulse" | bc)
             count_all=$((count_all + 1))
         fi
     done
@@ -560,11 +658,15 @@ main() {
     local avg_time_all="0"
     local avg_velocity_all="0"
     local avg_mech_power_all="0"
+    local avg_contact_count_all="0"
+    local avg_total_impulse_all="0"
     if [ "$count_all" -gt 0 ]; then
         avg_distance_all=$(echo "scale=2; $total_distance_all / $count_all" | bc)
         avg_time_all=$(echo "scale=2; $total_time_all / $count_all" | bc)
         avg_velocity_all=$(echo "scale=4; $total_velocity_all / $count_all" | bc)
-        avg_mech_power_all=$(echo "scale=6; $total_mech_power_all / $count_all" | bc)
+        avg_mech_power_all=$(echo "scale=4; $total_mech_power_all / $count_all" | bc)
+        avg_contact_count_all=$(echo "scale=2; $total_contact_count_all / $count_all" | bc)
+        avg_total_impulse_all=$(echo "scale=2; $total_impulse_sum_all / $count_all" | bc)
     fi
 
     echo ""
@@ -581,10 +683,14 @@ main() {
     echo "  Avg Time:     ${avg_time}s (excluding skipped)"
     echo "  Avg Velocity: ${avg_velocity}m/s (excluding skipped)"
     echo "  Avg Mech Power: ${avg_mech_power}kW (excluding skipped)"
+    echo "  Avg Contact Count: ${avg_contact_count} (excluding skipped)"
+    echo "  Avg Total Impulse: ${avg_total_impulse} N*s (excluding skipped)"
     echo "  Avg Distance: ${avg_distance_all}m (including skipped)"
     echo "  Avg Time:     ${avg_time_all}s (including skipped)"
     echo "  Avg Velocity: ${avg_velocity_all}m/s (including skipped)"
     echo "  Avg Mech Power: ${avg_mech_power_all}kW (including skipped)"
+    echo "  Avg Contact Count: ${avg_contact_count_all} (including skipped)"
+    echo "  Avg Total Impulse: ${avg_total_impulse_all} N*s (including skipped)"
     echo "  Log file:   $LOG_FILE"
     echo "=============================================="
 }

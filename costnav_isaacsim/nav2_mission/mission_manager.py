@@ -63,7 +63,9 @@ class MissionResult(Enum):
     PENDING = "pending"  # Mission not yet started or in progress
     SUCCESS = "success"  # Robot reached goal within tolerance
     FAILURE_TIMEOUT = "failure_timeout"  # Timeout reached before reaching goal
-    FAILURE_PHYSICALASSISTANCE = "failure_physicalassistance"  # Robot fell down (bad orientation)
+    FAILURE_PHYSICALASSISTANCE = (
+        "failure_physicalassistance"  # Robot fell down (bad orientation) or impulse health depleted
+    )
     FAILURE_FOODSPOILED = "failure_foodspoiled"  # Food spoiled during delivery
 
 
@@ -169,6 +171,9 @@ class MissionManager:
 
         # Mission result tracking
         self._last_mission_result = MissionResult.PENDING
+        self._last_mission_result_reason = (
+            None  # Specific reason for result (e.g., "orientation", "impulse_health_depletion")
+        )
         self._last_mission_distance = None  # Distance to goal at end
 
         # Mission metrics tracking
@@ -176,7 +181,27 @@ class MissionManager:
         self._last_traveled_distance = None  # Final traveled distance for last mission (meters)
         self._last_elapsed_time = None  # Elapsed time for last mission (seconds)
 
+        # Impulse health tracking (structural damage)
+        self._impulse_min_threshold = 10.0
+        self._impulse_health_max = 177.8
+        self._impulse_health = self._impulse_health_max
+        self._impulse_damage_accumulated = 0.0
+        self._contact_report_subscription = None
+        self._contact_report_targets = set()
+
+        # Contact count and total impulse tracking (for evaluation metrics)
+        self._contact_count = 0  # Number of contact events during mission
+        self._total_impulse = 0.0  # Total impulse accumulated during mission
+        self._last_contact_count = None  # Final contact count for last mission
+        self._last_total_impulse = None  # Final total impulse for last mission
+
+        # Damager cooldown tracking
+        self._last_damage_steps_remaining = 0
+        self._damage_cooldown_steps = 30
+
         # Food tracking for spoilage evaluation
+        self._food_root_prim_path = None  # Root prim path for food assets
+        self._food_prefix_path = None  # Pre-calculated prefix for startswith check
         self._food_pieces_prim_path = None  # Full prim path to food pieces
         self._food_bucket_prim_path = None  # Full prim path to food bucket
         self._initial_food_piece_count = 0  # Piece count at mission start
@@ -316,6 +341,9 @@ class MissionManager:
             # Setup food tracking if enabled
             self._setup_food_tracking()
 
+            # Setup contact reporting for impulse health tracking
+            self._setup_contact_reporting()
+
             self._initialized = True
             self._state = MissionState.WAITING_FOR_NAV2
             self._wait_start_time = self._get_current_time_seconds()
@@ -351,11 +379,15 @@ class MissionManager:
         self._mission_end_time = None
         self._settle_steps_remaining = 0
         self._last_mission_result = MissionResult.PENDING
+        self._last_mission_result_reason = None
         self._last_mission_distance = None
         self._traveled_distance = 0.0
         self._prev_robot_position = None
         self._last_traveled_distance = None
         self._last_elapsed_time = None
+        self._last_contact_count = None
+        self._last_total_impulse = None
+        self._reset_impulse_health()
         # Reset food tracking
         self._initial_food_piece_count = 0
         self._final_food_piece_count = None
@@ -427,6 +459,142 @@ class MissionManager:
         tilt_angle = math.acos(min(1.0, max(-1.0, gz_body_z)))
 
         return tilt_angle > limit_angle
+
+    def _reset_impulse_health(self) -> None:
+        self._impulse_damage_accumulated = 0.0
+        self._impulse_health = self._impulse_health_max
+        self._last_damage_steps_remaining = 0
+        self._contact_count = 0
+        self._total_impulse = 0.0
+
+    def _setup_contact_reporting(self) -> None:
+        food_root = self.mission_config.food.prim_path
+        if food_root:
+            self._food_root_prim_path = food_root.rstrip("/")
+            self._food_prefix_path = f"{self._food_root_prim_path}/"
+        else:
+            self._food_root_prim_path = None
+            self._food_prefix_path = None
+
+        base_link_path = self.mission_config.teleport.robot_prim or self.config.robot_prim_path
+        if base_link_path:
+            base_link_path = base_link_path.rstrip("/")
+
+        robot_hint = base_link_path.lower() if base_link_path else ""
+        if "segway" in robot_hint:
+            base_link_path = "/World/Segway_E1_ROS2/base_link"
+        elif "nova_carter" in robot_hint or "carter" in robot_hint:
+            base_link_path = "/World/Nova_Carter_ROS/chassis_link"
+
+        if not base_link_path:
+            logger.warning("[CONTACT] Robot prim path not configured; skipping contact reporting")
+            return
+
+        try:
+            import omni.usd
+            from omni.physx import get_physx_simulation_interface
+            from pxr import PhysxSchema
+
+            stage = omni.usd.get_context().get_stage()
+            prim = stage.GetPrimAtPath(base_link_path)
+            if not prim.IsValid():
+                logger.warning(f"[CONTACT] Base link prim not found: {base_link_path}")
+                return
+
+            contact_api = PhysxSchema.PhysxContactReportAPI.Apply(prim)
+            contact_api.CreateThresholdAttr().Set(self._impulse_min_threshold)
+            self._contact_report_targets = {base_link_path}
+
+            if self._contact_report_subscription is None:
+                sim_interface = get_physx_simulation_interface()
+                self._contact_report_subscription = sim_interface.subscribe_contact_report_events(
+                    self._on_contact_report
+                )
+
+            logger.info(f"[CONTACT] Contact reporting enabled for {base_link_path}")
+        except ImportError as exc:
+            logger.warning(f"[CONTACT] Isaac Sim modules not available: {exc}")
+        except Exception as exc:
+            logger.error(f"[CONTACT] Failed to setup contact reporting: {exc}")
+
+    def _apply_impulse_damage(self, impulse_amount: float) -> None:
+        # Only calculate health damage when mission is active
+        if not self._is_mission_active():
+            print(f"[CONTACT] Impulse: {impulse_amount:.2f}")
+            return
+
+        if self._impulse_health <= 0.0:
+            return
+
+        # Track contact count and total impulse for evaluation metrics
+        self._contact_count += 1
+        self._total_impulse += impulse_amount
+
+        self._impulse_damage_accumulated += impulse_amount
+        self._impulse_health = max(0.0, self._impulse_health_max - self._impulse_damage_accumulated)
+        print(
+            f"[CONTACT] Impulse: {impulse_amount:.2f}, Health: {self._impulse_health:.2f}, Count: {self._contact_count}"
+        )
+
+    def _on_contact_report(self, contact_headers, contact_data) -> None:
+        if not self._contact_report_targets:
+            return
+
+        if self._last_damage_steps_remaining > 0:
+            self._last_damage_steps_remaining = max(0, self._last_damage_steps_remaining - 1)
+            return
+
+        try:
+            from pxr import PhysicsSchemaTools
+        except ImportError:
+            return
+
+        food_root: str = self._food_root_prim_path or ""
+        for header in contact_headers:
+            actor0 = str(PhysicsSchemaTools.intToSdfPath(header.actor0))
+            actor1 = str(PhysicsSchemaTools.intToSdfPath(header.actor1))
+            if (actor0 not in self._contact_report_targets) and (actor1 not in self._contact_report_targets):
+                continue
+
+            if food_root:
+                food_prefix_str: str = f"{food_root}/"
+                if actor0 in self._contact_report_targets and (
+                    actor1 == food_root or actor1[: len(food_prefix_str)] == food_prefix_str
+                ):
+                    continue
+                if actor1 in self._contact_report_targets and (
+                    actor0 == food_root or actor0[: len(food_prefix_str)] == food_prefix_str
+                ):
+                    continue
+
+            if header.num_contact_data == 0:
+                continue
+
+            contact_range = range(
+                header.contact_data_offset,
+                header.contact_data_offset + header.num_contact_data,
+            )
+            for idx in contact_range:
+                impulse = contact_data[idx].impulse
+                impulse_amount = (impulse.x * impulse.x + impulse.y * impulse.y + impulse.z * impulse.z) ** 0.5
+                if impulse_amount < self._impulse_min_threshold:
+                    continue
+                self._apply_impulse_damage(impulse_amount)
+                self._last_damage_steps_remaining = self._damage_cooldown_steps
+                return
+
+    def handle_simulation_restart(self, stage_reloaded: bool = False) -> None:
+        """Refresh cached sim handles after stop/reset or stage reload."""
+        self._reset_impulse_health()
+        self._contact_report_subscription = None
+        self._contact_report_targets = set()
+        self._setup_contact_reporting()
+
+        if stage_reloaded or self._teleport_callback is None:
+            self._setup_isaac_sim_teleport()
+
+        if stage_reloaded:
+            self._setup_food_tracking()
 
     def _count_food_pieces_in_bucket(self) -> int:
         """Count the number of food pieces currently inside the bucket.
@@ -717,9 +885,12 @@ class MissionManager:
         # Reset mission result immediately to prevent race condition
         # where the eval script sees the previous mission's SUCCESS result
         self._last_mission_result = MissionResult.PENDING
+        self._last_mission_result_reason = None
         self._last_mission_distance = None
         self._last_elapsed_time = None
         self._last_traveled_distance = None
+        self._last_contact_count = None
+        self._last_total_impulse = None
 
         self._start_requested = True
         if self._is_mission_active():
@@ -742,11 +913,14 @@ class MissionManager:
         Response format:
         {
             "result": "pending" | "success" | "failure",
+            "result_reason": str | null,  # specific reason (e.g., "orientation", "impulse_health_depletion")
             "mission_number": int,
             "distance_to_goal": float,
             "in_progress": bool,
             "traveled_distance": float,  # meters
             "elapsed_time": float,  # seconds
+            "total_contact_count": int,  # number of contact events
+            "total_impulse": float,  # accumulated impulse in N*s
             "food_enabled": bool,
             "food_initial_pieces": int,
             "food_final_pieces": int,
@@ -779,6 +953,17 @@ class MissionManager:
         else:
             traveled_distance = self._traveled_distance  # Fallback to current
 
+        # Get contact count and total impulse (current if in progress, or final from last mission)
+        if in_progress:
+            total_contact_count = self._contact_count
+            total_impulse = self._total_impulse
+        elif self._last_contact_count is not None:
+            total_contact_count = self._last_contact_count
+            total_impulse = self._last_total_impulse if self._last_total_impulse is not None else 0.0
+        else:
+            total_contact_count = self._contact_count
+            total_impulse = self._total_impulse
+
         # Food metrics
         food_enabled = bool(self.mission_config.food.enabled)
         food_initial_pieces = self._initial_food_piece_count if food_enabled else -1
@@ -797,11 +982,14 @@ class MissionManager:
 
         result_data = {
             "result": self._last_mission_result.value,
+            "result_reason": self._last_mission_result_reason,
             "mission_number": self._current_mission,
             "distance_to_goal": distance,
             "in_progress": in_progress,
             "traveled_distance": traveled_distance,
             "elapsed_time": elapsed_time,
+            "total_contact_count": total_contact_count,
+            "total_impulse": total_impulse,
             "food_enabled": food_enabled,
             "food_initial_pieces": food_initial_pieces,
             "food_final_pieces": food_final_pieces,
@@ -1066,6 +1254,7 @@ class MissionManager:
 
     def _step_ready(self):
         """Start next mission or complete if all done."""
+        self._reset_impulse_health()
         self._current_mission += 1
         self._start_requested = False
         self._restart_requested = False
@@ -1168,6 +1357,8 @@ class MissionManager:
             self._last_mission_distance = distance
             self._last_elapsed_time = elapsed
             self._last_traveled_distance = self._traveled_distance
+            self._last_contact_count = self._contact_count
+            self._last_total_impulse = self._total_impulse
 
             # Check for food spoilage before declaring success
             if self._check_food_spoilage():
@@ -1195,13 +1386,35 @@ class MissionManager:
             if self.mission_config.food.enabled:
                 self._final_food_piece_count = self._count_food_pieces_in_bucket()
             self._last_mission_result = MissionResult.FAILURE_PHYSICALASSISTANCE
+            self._last_mission_result_reason = "orientation"
             self._last_mission_distance = distance if distance is not None else -1.0
             self._last_elapsed_time = elapsed
             self._last_traveled_distance = self._traveled_distance
+            self._last_contact_count = self._contact_count
+            self._last_total_impulse = self._total_impulse
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_PHYSICALASSISTANCE] Mission {self._current_mission} failed - robot fell down! "
-                f"Distance to goal: {distance:.2f}m, elapsed: {elapsed:.1f}s"
+                f"(reason: orientation) Distance to goal: {distance:.2f}m, elapsed: {elapsed:.1f}s"
+            )
+            return
+
+        # Check for impulse health depletion (requires physical assistance)
+        if self._impulse_health <= 0.0:
+            self._mission_end_time = self._get_current_time_seconds()
+            if self.mission_config.food.enabled:
+                self._final_food_piece_count = self._count_food_pieces_in_bucket()
+            self._last_mission_result = MissionResult.FAILURE_PHYSICALASSISTANCE
+            self._last_mission_result_reason = "impulse_health_depletion"
+            self._last_mission_distance = distance if distance is not None else -1.0
+            self._last_elapsed_time = elapsed
+            self._last_traveled_distance = self._traveled_distance
+            self._last_contact_count = self._contact_count
+            self._last_total_impulse = self._total_impulse
+            self._state = MissionState.WAITING_FOR_START
+            logger.info(
+                f"[FAILURE_PHYSICALASSISTANCE] Mission {self._current_mission} failed - impulse health depleted! "
+                f"(reason: impulse_health_depletion) Distance to goal: {distance:.2f}m, elapsed: {elapsed:.1f}s"
             )
             return
 
@@ -1214,6 +1427,8 @@ class MissionManager:
             self._last_mission_distance = distance if distance is not None else -1.0
             self._last_elapsed_time = elapsed
             self._last_traveled_distance = self._traveled_distance
+            self._last_contact_count = self._contact_count
+            self._last_total_impulse = self._total_impulse
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_TIMEOUT] Mission {self._current_mission} timed out! "
@@ -1242,6 +1457,8 @@ class MissionManager:
                 self._marker_publisher.destroy_node()
         except Exception:
             pass
+        if self._contact_report_subscription is not None:
+            self._contact_report_subscription = None
         try:
             import rclpy
 

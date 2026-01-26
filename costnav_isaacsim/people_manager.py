@@ -310,8 +310,7 @@ class PeopleManager:
             logger.info(f"Generated {len(positions)} positions: {positions[:5]}{'...' if len(positions) > 5 else ''}")
 
             # Load characters in batches to prevent animation system crashes
-            # OPTIMIZED: Increased batch size from 3 to 10, reduced wait cycles
-            batch_size = 10  # Load 10 characters at a time (was 3)
+            batch_size = 3
             self.character_names = []
 
             for batch_start in range(0, len(positions), batch_size):
@@ -327,15 +326,13 @@ class PeopleManager:
                 self.character_names.extend(batch_names)
 
                 # Wait for batch assets to load before loading next batch
-                # OPTIMIZED: Reduced from 60 to 30 max wait cycles
                 logger.info(f"Waiting for batch {batch_start // batch_size + 1} assets to load...")
-                for _ in range(30):
+                for _ in range(60):
                     if not is_stage_loading():
                         break
                     simulation_app.update()
 
-                # OPTIMIZED: Reduced stabilization time from 30 to 15 cycles
-                for _ in range(15):
+                for _ in range(30):
                     simulation_app.update()
 
             logger.info(f"All {len(self.character_names)} characters loaded successfully")
