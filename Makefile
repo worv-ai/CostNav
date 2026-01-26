@@ -11,7 +11,7 @@ COSTNAV_VERSION ?= 0.1.0
 # ROS configuration
 ROS_DISTRO ?= jazzy
 UBUNTU_VERSION ?= 24.04
-SIM_ROBOT ?= nova_carter
+SIM_ROBOT ?= segway_e1
 FOOD ?= True
 
 ISAAC_SIM_IMAGE ?= costnav-isaacsim-$(ISAAC_SIM_VERSION):$(COSTNAV_VERSION)
@@ -172,7 +172,7 @@ run-eval-nav2:
 	@echo "  Timeout per mission: $(TIMEOUT)s"
 	@echo "  Number of missions:  $(NUM_MISSIONS)"
 	@echo ""
-	@bash scripts/eval_nav2.sh $(TIMEOUT) $(NUM_MISSIONS)
+	@bash scripts/eval.sh nav2 $(TIMEOUT) $(NUM_MISSIONS)
 
 # Run Teleop evaluation (requires running teleop instance via make run-teleop)
 # Usage: make run-eval-teleop TIMEOUT=20 NUM_MISSIONS=10
@@ -192,4 +192,4 @@ run-eval-teleop:
 	@echo "  Timeout per mission: $(TIMEOUT)s"
 	@echo "  Number of missions:  $(NUM_MISSIONS)"
 	@echo ""
-	@bash scripts/eval_teleop.sh $(TIMEOUT) $(NUM_MISSIONS)
+	@bash scripts/eval.sh teleop $(TIMEOUT) $(NUM_MISSIONS)

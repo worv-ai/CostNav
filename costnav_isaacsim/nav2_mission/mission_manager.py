@@ -98,7 +98,9 @@ class MissionResult(Enum):
     PENDING = "pending"  # Mission not yet started or in progress
     SUCCESS = "success"  # Robot reached goal within tolerance
     FAILURE_TIMEOUT = "failure_timeout"  # Timeout reached before reaching goal
-    FAILURE_PHYSICALASSISTANCE = "failure_physicalassistance"  # Robot fell down (bad orientation)
+    FAILURE_PHYSICALASSISTANCE = (
+        "failure_physicalassistance"  # Robot fell down (bad orientation) or impulse health depleted
+    )
     FAILURE_FOODSPOILED = "failure_foodspoiled"  # Food spoiled during delivery
 
 
@@ -204,6 +206,9 @@ class MissionManager:
 
         # Mission result tracking
         self._last_mission_result = MissionResult.PENDING
+        self._last_mission_result_reason = (
+            None  # Specific reason for result (e.g., "orientation", "impulse_health_depletion")
+        )
         self._last_mission_distance = None  # Distance to goal at end
 
         # Mission metrics tracking
@@ -411,6 +416,7 @@ class MissionManager:
         self._mission_end_time = None
         self._settle_steps_remaining = 0
         self._last_mission_result = MissionResult.PENDING
+        self._last_mission_result_reason = None
         self._last_mission_distance = None
         self._traveled_distance = 0.0
         self._prev_robot_position = None
@@ -955,6 +961,7 @@ class MissionManager:
         # Reset mission result immediately to prevent race condition
         # where the eval script sees the previous mission's SUCCESS result
         self._last_mission_result = MissionResult.PENDING
+        self._last_mission_result_reason = None
         self._last_mission_distance = None
         self._last_elapsed_time = None
         self._last_traveled_distance = None
@@ -983,6 +990,7 @@ class MissionManager:
         Response format:
         {
             "result": "pending" | "success" | "failure",
+            "result_reason": str | null,  # specific reason (e.g., "orientation", "impulse_health_depletion")
             "mission_number": int,
             "distance_to_goal": float,
             "in_progress": bool,
@@ -1060,6 +1068,7 @@ class MissionManager:
 
         result_data = {
             "result": self._last_mission_result.value,
+            "result_reason": self._last_mission_result_reason,
             "mission_number": self._current_mission,
             "distance_to_goal": distance,
             "in_progress": in_progress,
@@ -1470,6 +1479,7 @@ class MissionManager:
             if self.mission_config.food.enabled:
                 self._final_food_piece_count = self._count_food_pieces_in_bucket()
             self._last_mission_result = MissionResult.FAILURE_PHYSICALASSISTANCE
+            self._last_mission_result_reason = "orientation"
             self._last_mission_distance = distance if distance is not None else -1.0
             self._last_elapsed_time = elapsed
             self._last_traveled_distance = self._traveled_distance
@@ -1479,7 +1489,7 @@ class MissionManager:
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_PHYSICALASSISTANCE] Mission {self._current_mission} failed - robot fell down! "
-                f"Distance to goal: {distance:.2f}m, elapsed: {elapsed:.1f}s"
+                f"(reason: orientation) Distance to goal: {distance:.2f}m, elapsed: {elapsed:.1f}s"
             )
             return
 
@@ -1489,6 +1499,7 @@ class MissionManager:
             if self.mission_config.food.enabled:
                 self._final_food_piece_count = self._count_food_pieces_in_bucket()
             self._last_mission_result = MissionResult.FAILURE_PHYSICALASSISTANCE
+            self._last_mission_result_reason = "impulse_health_depletion"
             self._last_mission_distance = distance if distance is not None else -1.0
             self._last_elapsed_time = elapsed
             self._last_traveled_distance = self._traveled_distance
@@ -1498,7 +1509,7 @@ class MissionManager:
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_PHYSICALASSISTANCE] Mission {self._current_mission} failed - impulse health depleted! "
-                f"Distance to goal: {distance:.2f}m, elapsed: {elapsed:.1f}s"
+                f"(reason: impulse_health_depletion) Distance to goal: {distance:.2f}m, elapsed: {elapsed:.1f}s"
             )
             return
 
