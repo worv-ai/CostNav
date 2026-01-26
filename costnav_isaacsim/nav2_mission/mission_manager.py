@@ -53,6 +53,7 @@ PROPERTY_PRIM_PATHS = {
     ],
     "bollard": [
         "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section77",
+        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section31"
     ],
     # Building prims are matched broadly via prefix; keep only explicit non-standard
     # building-related prims here (e.g., cubes that represent building parts).
