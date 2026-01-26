@@ -13,6 +13,7 @@ ROS_DISTRO ?= jazzy
 UBUNTU_VERSION ?= 24.04
 SIM_ROBOT ?= nova_carter
 FOOD ?= True
+TUNED ?= False
 
 ISAAC_SIM_IMAGE ?= costnav-isaacsim-$(ISAAC_SIM_VERSION):$(COSTNAV_VERSION)
 ISAAC_LAB_IMAGE ?= costnav-isaaclab-$(ISAAC_SIM_VERSION)-$(ISAAC_LAB_VERSION):$(COSTNAV_VERSION)
@@ -71,11 +72,11 @@ run-isaac-sim:
 	NUM_PEOPLE=$(NUM_PEOPLE) $(DOCKER_COMPOSE) --profile isaac-sim up
 
 # Run both Isaac Sim and ROS2 Nav2 navigation together (using combined 'nav2' profile)
-# Usage: make run-nav2 NUM_PEOPLE=5 SIM_ROBOT=nova_carter FOOD=1
+# Usage: make run-nav2 NUM_PEOPLE=5 SIM_ROBOT=nova_carter FOOD=1 TUNED=True
 run-nav2:
 	xhost +local:docker 2>/dev/null || true
 	SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile nav2 down
-	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) $(DOCKER_COMPOSE) --profile nav2 up
+	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) TUNED=$(TUNED) $(DOCKER_COMPOSE) --profile nav2 up
 
 # Trigger mission start (manual)
 start-mission:
