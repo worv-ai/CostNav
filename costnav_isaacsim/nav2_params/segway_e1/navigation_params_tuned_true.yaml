@@ -160,8 +160,8 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: "OPEN_LOOP"
-    max_velocity: [2.0, 0.0, 0.5]  # Cap angular velocity
-    min_velocity: [-2.0, 0.0, -0.5]
+    max_velocity: [2.0, 0.0, 1.2]  # Cap angular velocity
+    min_velocity: [-2.0, 0.0, -1.2]
     # deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0
     # max_accel: [1.0, 0.0, 1.25]
@@ -210,7 +210,7 @@ controller_server:
       angular_dist_threshold: 0.785  # 45 degrees in radians - rotate in place if heading error > this
       angular_disengage_threshold: 0.05  # ~3 degrees - very tight exit threshold to ensure robot stops before transitioning
       forward_sampling_distance: 0.5  # meters - distance to look ahead on path for rotation alignment
-      rotate_to_heading_angular_vel: 0.5  # rad/s - rotation speed during in-place rotation
+      rotate_to_heading_angular_vel: 1.2  # rad/s - rotation speed during in-place rotation
       max_angular_accel: 3.5  # rad/s^2 - max angular acceleration during rotation
       simulate_ahead_time: 2.0  # seconds - time to project robot motion for collision checking
       rotate_to_goal_heading: false  # Don't rotate to goal heading at the end
@@ -226,7 +226,7 @@ controller_server:
       min_vel_y: 0.0
       max_vel_x: 2.0
       max_vel_y: 0.0
-      max_vel_theta: 0.5  # Cap angular velocity
+      max_vel_theta: 1.2  # Cap angular velocity
       min_speed_xy: 0.0
       max_speed_xy: 2.0
       min_speed_theta: 0.3  # Minimum rotation speed when rotating
@@ -488,7 +488,7 @@ behavior_server:
     robot_base_frame: base_link
     transform_tolerance: 0.2
     simulate_ahead_time: 2.0
-    max_rotational_vel: 0.5  # Cap angular velocity
+    max_rotational_vel: 1.2  # Cap angular velocity
     min_rotational_vel: 0.3
     rotational_acc_lim: 3.5
 
