@@ -1479,6 +1479,9 @@ class MissionManager:
         # If clients weren't created (nav2_msgs missing, or init failed), continue.
         if self._clear_costmap_global_srv is None and self._clear_costmap_local_srv is None:
             logger.warning(f"[{self._state.name}] Costmap clear clients not available, continuing")
+            # Reset for next mission
+            self._costmap_clear_start_time = None
+            self._costmap_clear_futures = {}
             self._state = MissionState.PUBLISHING_GOAL
             return
 
@@ -1487,6 +1490,9 @@ class MissionManager:
             from nav2_msgs.srv import ClearEntireCostmap
         except Exception as exc:
             logger.warning(f"[{self._state.name}] nav2_msgs not available ({exc}); continuing without costmap clear")
+            # Reset for next mission
+            self._costmap_clear_start_time = None
+            self._costmap_clear_futures = {}
             self._state = MissionState.PUBLISHING_GOAL
             return
 
@@ -1495,6 +1501,9 @@ class MissionManager:
             logger.info(
                 f"[{self._state.name}] Timed out clearing costmaps after {self.config.costmap_clear_timeout_sec:.2f}s, continuing"
             )
+            # Reset for next mission
+            self._costmap_clear_start_time = None
+            self._costmap_clear_futures = {}
             self._state = MissionState.PUBLISHING_GOAL
             return
 
@@ -1518,6 +1527,9 @@ class MissionManager:
 
         if _complete("global", self._clear_costmap_global_srv) and _complete("local", self._clear_costmap_local_srv):
             logger.info(f"[{self._state.name}] Costmaps cleared")
+            # Reset for next mission
+            self._costmap_clear_start_time = None
+            self._costmap_clear_futures = {}
             self._state = MissionState.PUBLISHING_GOAL
 
     def _step_publishing_goal(self):
