@@ -70,6 +70,38 @@ class FoodConfig:
 
 
 @dataclass
+class InjuryCostConfig:
+    mais_0: float = 0.0
+    mais_1: float = 0.0
+    mais_2: float = 0.0
+    mais_3: float = 0.0
+    mais_4: float = 0.0
+    mais_5: float = 0.0
+    fatality: float = 0.0
+
+    def as_dict(self) -> dict:
+        return {
+            "mais_0": self.mais_0,
+            "mais_1": self.mais_1,
+            "mais_2": self.mais_2,
+            "mais_3": self.mais_3,
+            "mais_4": self.mais_4,
+            "mais_5": self.mais_5,
+            "fatality": self.fatality,
+        }
+
+
+@dataclass
+class InjuryConfig:
+    enabled: bool = True
+    method: str = "delta_v"
+    crash_mode: str = "all"
+    robot_height: Optional[float] = None
+    pedestrian_height: Optional[float] = None
+    costs: InjuryCostConfig = field(default_factory=InjuryCostConfig)
+
+
+@dataclass
 class MissionConfig:
     """Complete mission configuration."""
 
@@ -87,6 +119,7 @@ class MissionConfig:
     markers: MarkerConfig = field(default_factory=MarkerConfig)
     sampling: SamplingConfig = field(default_factory=SamplingConfig)
     food: FoodConfig = field(default_factory=FoodConfig)
+    injury: InjuryConfig = field(default_factory=InjuryConfig)
 
     @classmethod
     def from_dict(cls, data: dict) -> "MissionConfig":
@@ -98,6 +131,7 @@ class MissionConfig:
         markers_data = data.get("markers", {})
         sampling_data = data.get("sampling", {})
         food_data = data.get("food", {})
+        injury_data = data.get("injury", {})
 
         # Parse Nav2 config
         nav2_topics = nav2_data.get("topics", {})
@@ -149,6 +183,25 @@ class MissionConfig:
             spoilage_threshold=food_data.get("spoilage_threshold", 0.0),
         )
 
+        injury_costs_data = injury_data.get("costs", {})
+        injury_costs = InjuryCostConfig(
+            mais_0=injury_costs_data.get("mais_0", 0.0),
+            mais_1=injury_costs_data.get("mais_1", 0.0),
+            mais_2=injury_costs_data.get("mais_2", 0.0),
+            mais_3=injury_costs_data.get("mais_3", 0.0),
+            mais_4=injury_costs_data.get("mais_4", 0.0),
+            mais_5=injury_costs_data.get("mais_5", 0.0),
+            fatality=injury_costs_data.get("fatality", 0.0),
+        )
+        injury_config = InjuryConfig(
+            enabled=injury_data.get("enabled", True),
+            method=injury_data.get("method", "delta_v"),
+            crash_mode=injury_data.get("crash_mode", "all"),
+            robot_height=injury_data.get("robot_height"),
+            pedestrian_height=injury_data.get("pedestrian_height"),
+            costs=injury_costs,
+        )
+
         return cls(
             timeout=mission_data.get("timeout", 3600.0),
             goal_tolerance=mission_data.get("goal_tolerance", 1.0),
@@ -159,6 +212,7 @@ class MissionConfig:
             markers=markers_config,
             sampling=sampling_config,
             food=food_config,
+            injury=injury_config,
         )
 
     def to_dict(self) -> dict:
