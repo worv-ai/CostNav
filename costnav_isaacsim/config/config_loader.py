@@ -58,11 +58,24 @@ class SamplingConfig:
 
 
 @dataclass
+class FoodConfig:
+    """Food evaluation configuration for spoilage tracking."""
+
+    enabled: bool = False  # Whether food evaluation is enabled
+    usd_path: str = "omniverse://10.50.2.21/Users/worv/costnav/foods/popcorn/popcorn.usd"
+    prim_path: str = "/World/Food"  # Where the food USD is referenced in the stage
+    pieces_prim_path: str = "Popcorn/PopcornBucket/PopcornPieces"  # Relative path to pieces under food prim
+    bucket_prim_path: str = "Popcorn/PopcornBucket"  # Relative path to bucket/container under food prim
+    spoilage_threshold: float = 0.05  # Fraction of pieces that can be lost (0.0 = no loss allowed)
+
+
+@dataclass
 class MissionConfig:
     """Complete mission configuration."""
 
     # Mission execution
     timeout: float = 3600.0  # 1 hour
+    goal_tolerance: float = 1.0  # Distance to goal for success (meters)
 
     # Distance constraints
     min_distance: float = 5.0
@@ -73,6 +86,7 @@ class MissionConfig:
     teleport: TeleportConfig = field(default_factory=TeleportConfig)
     markers: MarkerConfig = field(default_factory=MarkerConfig)
     sampling: SamplingConfig = field(default_factory=SamplingConfig)
+    food: FoodConfig = field(default_factory=FoodConfig)
 
     @classmethod
     def from_dict(cls, data: dict) -> "MissionConfig":
@@ -83,6 +97,7 @@ class MissionConfig:
         teleport_data = data.get("teleport", {})
         markers_data = data.get("markers", {})
         sampling_data = data.get("sampling", {})
+        food_data = data.get("food", {})
 
         # Parse Nav2 config
         nav2_topics = nav2_data.get("topics", {})
@@ -124,14 +139,26 @@ class MissionConfig:
             edge_margin=sampling_data.get("edge_margin", 0.5),
         )
 
+        # Parse food config
+        food_config = FoodConfig(
+            enabled=food_data.get("enabled", False),
+            usd_path=food_data.get("usd_path", ""),
+            prim_path=food_data.get("prim_path", "/World/Food"),
+            pieces_prim_path=food_data.get("pieces_prim_path", "PopcornBucket/PopcornPieces"),
+            bucket_prim_path=food_data.get("bucket_prim_path", "PopcornBucket"),
+            spoilage_threshold=food_data.get("spoilage_threshold", 0.0),
+        )
+
         return cls(
             timeout=mission_data.get("timeout", 3600.0),
+            goal_tolerance=mission_data.get("goal_tolerance", 1.0),
             min_distance=distance_data.get("min", 5.0),
             max_distance=distance_data.get("max", 50.0),
             nav2=nav2_config,
             teleport=teleport_config,
             markers=markers_config,
             sampling=sampling_config,
+            food=food_config,
         )
 
     def to_dict(self) -> dict:

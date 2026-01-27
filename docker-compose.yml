@@ -6,21 +6,18 @@ x-ros2-service: &ros2-service
     context: .
     dockerfile: Dockerfile.ros
   image: costnav-ros2-jazzy:${COSTNAV_VERSION:-0.1.0}
-  environment:
-    - ROS_DISTRO=jazzy
-    - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-    - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
-    - DISPLAY=${DISPLAY:-:0}
-    - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
   volumes:
     - ./third_party/IsaacSim-ros_workspaces/build_ws/jazzy/isaac_sim_ros_ws:/workspace/build_ws:rw
     - ./costnav_isaacsim/nav2_params:/workspace/nav2_params:ro
     - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    - ${XAUTHORITY}:/tmp/.Xauthority:ro
   working_dir: /workspace
   command: >
-    bash -c "source /opt/ros/jazzy/setup.bash &&
-             source /workspace/build_ws/install/local_setup.sh &&
-             ros2 launch /workspace/nav2_params/carter_navigation.launch.py map:=/workspace/nav2_params/carter_sidewalk.yaml params_file:=/workspace/nav2_params/carter_navigation_params.yaml"
+    bash -c "
+      source /opt/ros/jazzy/setup.bash &&
+      source /workspace/build_ws/install/local_setup.sh &&
+      ros2 launch /workspace/nav2_params/carter_navigation.launch.py map:=/workspace/nav2_params/carter_sidewalk.yaml params_file:=/workspace/nav2_params/carter_navigation_params.yaml
+    "
   network_mode: host
   ipc: host
   stdin_open: true
@@ -57,23 +54,32 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
       - DISPLAY=${DISPLAY:-:0}
       - XAUTHORITY=${XAUTHORITY:-/tmp/.X11-unix}
+      - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
+      - ROBOT_PRIM_PATH=${ROBOT_PRIM_PATH:-}
       - ISAAC_PATH=${ISAAC_PATH:-/isaac-sim}
       - CARB_APP_PATH=${CARB_APP_PATH:-/isaac-sim/kit}
       - EXP_PATH=${EXP_PATH:-/isaac-sim/apps}
+      - NUM_PEOPLE=${NUM_PEOPLE:-0}
+      - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
+      - FOOD=${FOOD:-True}
     volumes:
       - .:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ~/omniverse_map:/omniverse_map:ro
-      - ${HOME}/docker/isaac-sim/cache/main:/isaac-sim/.cache:rw
-      - ${HOME}/docker/isaac-sim/cache/computecache:/isaac-sim/.nv/ComputeCache:rw
-      - ${HOME}/docker/isaac-sim/logs:/isaac-sim/.nvidia-omniverse/logs:rw
-      - ${HOME}/docker/isaac-sim/config:/isaac-sim/.nvidia-omniverse/config:rw
-      - ${HOME}/docker/isaac-sim/data:/isaac-sim/.local/share/ov/data:rw
-      - ${HOME}/docker/isaac-sim/pkg:/isaac-sim/.local/share/ov/pkg:rw
+      - /tmp/isaac-sim/cache/kit:/isaac-sim/kit/cache:rw
+      - /tmp/isaac-sim/cache/ov:/root/.cache/ov:rw
+      - /tmp/isaac-sim/cache/pip:/root/.cache/pip:rw
+      - /tmp/isaac-sim/cache/glcache:/root/.cache/nvidia/GLCache:rw
+      - /tmp/isaac-sim/cache/computecache:/root/.nv/ComputeCache:rw
+      - /tmp/isaac-sim/logs:/root/.nvidia-omniverse/logs:rw
+      - /tmp/isaac-sim/data:/root/.local/share/ov/data:rw
+      - /tmp/isaac-sim/documents:/root/Documents:rw
+      - ./third_party/PeopleAPI/exts:/isaac-sim/extsUser:rw
+      - ./third_party/FoodAssets/exts/worvai.assets.food:/isaac-sim/extsUser/worvai.assets.food:rw
     working_dir: /workspace
     command:
       - "-ic"
-      - "/workspace/costnav_isaacsim/launch.py"
+      - "/workspace/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-0} --robot $${SIM_ROBOT:-nova_carter} --food-enabled $${FOOD:-True}"
     healthcheck:
       test:
         [
@@ -128,12 +134,14 @@ services:
       - .:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ~/omniverse_map:/omniverse_map:ro
-      - ${HOME}/docker/isaac-sim/cache/main:/isaac-sim/.cache:rw
-      - ${HOME}/docker/isaac-sim/cache/computecache:/isaac-sim/.nv/ComputeCache:rw
-      - ${HOME}/docker/isaac-sim/logs:/isaac-sim/.nvidia-omniverse/logs:rw
-      - ${HOME}/docker/isaac-sim/config:/isaac-sim/.nvidia-omniverse/config:rw
-      - ${HOME}/docker/isaac-sim/data:/isaac-sim/.local/share/ov/data:rw
-      - ${HOME}/docker/isaac-sim/pkg:/isaac-sim/.local/share/ov/pkg:rw
+      - /tmp/isaac-sim/cache/kit:/isaac-sim/kit/cache:rw
+      - /tmp/isaac-sim/cache/ov:/root/.cache/ov:rw
+      - /tmp/isaac-sim/cache/pip:/root/.cache/pip:rw
+      - /tmp/isaac-sim/cache/glcache:/root/.cache/nvidia/GLCache:rw
+      - /tmp/isaac-sim/cache/computecache:/root/.nv/ComputeCache:rw
+      - /tmp/isaac-sim/logs:/root/.nvidia-omniverse/logs:rw
+      - /tmp/isaac-sim/data:/root/.local/share/ov/data:rw
+      - /tmp/isaac-sim/documents:/root/Documents:rw
     network_mode: host
     ipc: host
     stdin_open: true
@@ -161,32 +169,68 @@ services:
     <<: *ros2-service
     profiles: ["ros2"]
     container_name: costnav-ros2
+    environment:
+      - ROS_DISTRO=jazzy
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+      - DISPLAY=${DISPLAY:-:0}
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
 
   # ROS2 with Nav2 - waits for Isaac Sim to be healthy before starting
   ros2-nav2:
     <<: *ros2-service
     profiles: ["nav2"]
     container_name: costnav-ros2-nav2
+    environment:
+      - ROS_DISTRO=jazzy
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+      - DISPLAY=${DISPLAY:-:0}
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
+      - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
+      - TUNED=${TUNED:-False}
     depends_on:
       isaac-sim:
         condition: service_healthy
     command: >
-      bash -c "source /opt/ros/jazzy/setup.bash &&
-               source /workspace/build_ws/install/local_setup.sh &&
-               ros2 launch /workspace/nav2_params/nav2.launch.py"
+      bash -c "
+        source /opt/ros/jazzy/setup.bash &&
+        source /workspace/build_ws/install/local_setup.sh &&
+        if [ \"$${TUNED}\" = \"True\" ]; then
+          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_true.yaml
+        else
+          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_false.yaml
+        fi &&
+        ros2 launch /workspace/nav2_params/nav2.launch.py params_file:=$${PARAMS_FILE}
+      "
 
   # ROS2 with RViz - standalone visualization service that runs alongside Isaac Sim
-  ros2-rviz:
+  ros2-rviz-nav2:
     <<: *ros2-service
     profiles: ["isaac-sim", "nav2"]
-    container_name: costnav-ros2-rviz
+    container_name: costnav-ros2-rviz-nav2
+    environment:
+      - ROS_DISTRO=jazzy
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+      - DISPLAY=${DISPLAY:-:0}
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
+      - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
+      - TUNED=${TUNED:-False}
     depends_on:
       isaac-sim:
         condition: service_healthy
     command: >
-      bash -c "source /opt/ros/jazzy/setup.bash &&
-               source /workspace/build_ws/install/local_setup.sh &&
-               ros2 launch /workspace/nav2_params/rviz.launch.py"
+      bash -c "
+        source /opt/ros/jazzy/setup.bash &&
+        source /workspace/build_ws/install/local_setup.sh &&
+        if [ \"$${TUNED}\" = \"True\" ]; then
+          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_true.yaml
+        else
+          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_false.yaml
+        fi &&
+        ros2 launch /workspace/nav2_params/rviz.launch.py rviz_config:=/workspace/nav2_params/$${SIM_ROBOT}/navigation.rviz map:=/workspace/nav2_params/maps/sidewalk.yaml params_file:=$${PARAMS_FILE}
+      "
 
   # ROS2 with RViz (teleop profile) - hides TF/point clouds by default
   ros2-rviz-teleop:
@@ -203,10 +247,19 @@ services:
       - DISPLAY=${DISPLAY:-:0}
       - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
       - LIBGL_ALWAYS_SOFTWARE=1
+      - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
+      - TUNED=${TUNED:-False}
     command: >
-      bash -c "source /opt/ros/jazzy/setup.bash &&
-               source /workspace/build_ws/install/local_setup.sh &&
-               ros2 launch /workspace/nav2_params/rviz.launch.py rviz_config:=/workspace/nav2_params/carter_navigation_teleop.rviz"
+      bash -c "
+        source /opt/ros/jazzy/setup.bash &&
+        source /workspace/build_ws/install/local_setup.sh &&
+        if [ \"$${TUNED}\" = \"True\" ]; then
+          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_true.yaml
+        else
+          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_false.yaml
+        fi &&
+        ros2 launch /workspace/nav2_params/rviz.launch.py rviz_config:=/workspace/nav2_params/$${SIM_ROBOT}/navigation_teleop.rviz map:=/workspace/nav2_params/maps/sidewalk.yaml params_file:=$${PARAMS_FILE}
+      "
 
   # ROS2 with teleop - waits for Isaac Sim to be healthy before starting
   ros2-teleop:
@@ -222,7 +275,7 @@ services:
       - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
       - DISPLAY=${DISPLAY:-:0}
       - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
-      - SIM_ROBOT=nova_carter # NOTE: isaac_sim_teleop_ros2 Package requires SIM_ROBOT
+      - SIM_ROBOT=${SIM_ROBOT:-nova_carter} # NOTE: isaac_sim_teleop_ros2 Package requires SIM_ROBOT
     volumes:
       - ./third_party/IsaacSim-ros_workspaces/build_ws/jazzy/isaac_sim_ros_ws:/workspace/build_ws:rw
       - ./costnav_isaacsim/isaac_sim_teleop_ros2:/workspace/isaac_sim_teleop_ros2:rw
@@ -231,12 +284,14 @@ services:
       - /dev/input/by-id/usb-Microsoft_Controller_${XBOX_ID:-0}-event-joystick:/dev/input/event0
       - /dev/input/by-id/usb-Microsoft_Controller_${XBOX_ID:-0}-joystick:/dev/input/js0
     command: >
-      bash -c "source /opt/ros/jazzy/setup.bash &&
-               source /workspace/build_ws/install/local_setup.sh &&
-               cd /workspace/isaac_sim_teleop_ros2 &&
-               colcon build --packages-select isaac_sim_teleop_ros2 &&
-               source install/local_setup.sh &&
-               ros2 launch isaac_sim_teleop_ros2 teleop_isaac_sim.launch.py"
+      bash -c "
+        source /opt/ros/jazzy/setup.bash &&
+        source /workspace/build_ws/install/local_setup.sh &&
+        cd /workspace/isaac_sim_teleop_ros2 &&
+        colcon build --packages-select isaac_sim_teleop_ros2 &&
+        source install/local_setup.sh &&
+        ros2 launch isaac_sim_teleop_ros2 teleop_isaac_sim.launch.py
+      "
 
   # ROS2 bag recorder - records all ROS messages to a bag file
   ros2-bag-recorder:
@@ -247,14 +302,17 @@ services:
       - ROS_DISTRO=jazzy
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+      - DISPLAY=${DISPLAY:-:0}
       - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
     volumes:
       - ./rosbags:/workspace/rosbags:rw
     command: >
-      bash -c "source /opt/ros/jazzy/setup.bash &&
-               mkdir -p /workspace/rosbags &&
-               ros2 run image_transport republish --ros-args -p in_transport:=raw -p out_transport:=compressed --remap in:=/front_stereo_camera/left/image_raw --remap out/compressed:=/front_stereo_camera/left/image_raw/compressed &
-               ros2 bag record -a -o /workspace/rosbags/recording_$$(date +%Y%m%d_%H%M%S) --exclude-topics /front_stereo_camera/left/image_raw"
+      bash -c "
+        source /opt/ros/jazzy/setup.bash &&
+        mkdir -p /workspace/rosbags &&
+        ros2 run image_transport republish --ros-args -p in_transport:=raw -p out_transport:=compressed --remap in:=/front_stereo_camera/left/image_raw --remap out/compressed:=/front_stereo_camera/left/image_raw/compressed &
+        ros2 bag record -a -o /workspace/rosbags/recording_$$(date +%Y%m%d_%H%M%S) --exclude-topics /front_stereo_camera/left/image_raw
+      "
 
   # ROS2 with ViNT policy - IL baseline evaluation
   ros2-vint:

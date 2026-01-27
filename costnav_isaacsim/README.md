@@ -115,12 +115,16 @@ make build-ros2
 ```bash
 # Run both Isaac Sim and ROS2 Nav2 together
 make run-nav2
+
+# Run with animated people walking in the scene
+make run-nav2 NUM_PEOPLE=5
 ```
 
 This starts:
 
 - **Isaac Sim**: Street Sidewalk environment with Nova Carter robot
 - **ROS2 Nav2**: Carter navigation with pre-configured parameters
+- **People (optional)**: Animated people walking naturally in NavMesh areas
 
 You can also trigger missions while nav2 is running:
 
@@ -131,8 +135,15 @@ make start-mission
 ### 3. Run Teleop (Joystick Control)
 
 ```bash
-# Run Isaac Sim + teleop node
+# Run Isaac Sim + teleop node (defaults to nova_carter)
 make run-teleop
+
+# Run with animated people walking in the scene
+make run-teleop NUM_PEOPLE=5
+
+# Or select robot explicitly (optionally with people)
+make run-teleop SIM_ROBOT=nova_carter NUM_PEOPLE=5
+make run-teleop SIM_ROBOT=segway_e1 NUM_PEOPLE=5
 ```
 
 You can also trigger missions while teleop is running:
@@ -150,6 +161,81 @@ make run-isaac-sim
 # Terminal 2: ROS2 Nav2 only (after Isaac Sim is ready)
 make run-ros2
 ```
+
+---
+
+## Animated People (PeopleAPI Integration)
+
+CostNav supports spawning animated people that walk naturally in NavMesh-enabled areas using NVIDIA's PeopleAPI extension. This creates a more realistic simulation environment for testing navigation in crowded scenarios.
+
+### Features
+
+- **Natural Walking**: People use NavMesh for pathfinding and walk to random destinations
+- **Dynamic Avoidance**: People avoid each other and obstacles
+- **Configurable Count**: Spawn any number of people via `NUM_PEOPLE` environment variable
+- **Random Spawning**: People spawn at random valid NavMesh positions throughout the entire map
+- **RANDOM_GOTO Behavior**: People continuously walk to random destinations across the map
+- **Distributed Placement**: People are evenly distributed across all NavMesh-enabled areas
+
+### Usage
+
+Enable people by setting the `NUM_PEOPLE` environment variable:
+
+```bash
+# Run Nav2 with 5 people
+make run-nav2 NUM_PEOPLE=5
+
+# Run teleop with 10 people
+make run-teleop NUM_PEOPLE=10
+
+# Run without people (default)
+make run-nav2
+```
+
+### Command Line Arguments
+
+You can also pass the `--people` argument directly to `launch.py`:
+
+```bash
+python launch.py --people 5
+```
+
+### Requirements
+
+- **NavMesh**: The USD scene must have a baked NavMesh for people to navigate
+- **PeopleAPI Extension**: Automatically loaded from `third_party/PeopleAPI/exts`
+- **Character Assets**: Loaded from Isaac Sim's built-in character library
+
+### How It Works
+
+1. **Initialization**: After simulation warmup, the PeopleManager initializes
+2. **NavMesh Setup**: Checks if NavMesh is baked, if not, automatically creates NavMeshVolume and bakes it
+3. **Random Position Sampling**: Uses `navmesh.query_random_point()` to sample positions from NavMesh (same as robot spawning)
+4. **Minimum Distance Check**: Ensures people spawn at least 2 meters apart to avoid clustering
+5. **Character Spawning**: Spawns characters at the sampled NavMesh positions
+6. **Animation Setup**: Applies animation graphs and RANDOM_GOTO behavior scripts
+7. **Natural Walking**: People continuously walk to random NavMesh destinations throughout the map
+
+### Technical Details
+
+- **Module**: `costnav_isaacsim/people_manager.py`
+- **Behavior**: `CharacterBehavior.RANDOM_GOTO` (random destination walking)
+- **Character Root**: `/World/Characters`
+- **Spawn Method**: `navmesh.query_random_point()` with unique random IDs (same as robot spawning)
+- **Minimum Spacing**: 2.0 meters between spawned people
+- **Position Validation**: Rejects positions too close to existing people
+- **Max Attempts**: 20 attempts per person (num_people * 20 total)
+- **Dynamic Avoidance**: Enabled by default
+- **NavMesh**: Automatically created and baked if not present
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| People not spawning | Check that NavMesh is baked in the USD scene |
+| People not moving | Verify NavMesh is enabled and baked correctly |
+| Slow initialization | Character assets need to load; wait for completion |
+| People walking through walls | NavMesh may not be properly configured |
 
 ---
 
@@ -189,6 +275,7 @@ Main entry point for Isaac Sim simulation with Nav2 support.
 ```bash
 python launch.py                                    # Default: GUI mode
 python launch.py --headless                         # Headless mode (no GUI)
+python launch.py --robot segway_e1                  # Select robot preset
 python launch.py --usd_path omniverse://path/to.usd # Custom USD scene
 python launch.py --debug                            # Enable debug logging
 ```
@@ -197,11 +284,16 @@ python launch.py --debug                            # Enable debug logging
 
 | Argument         | Default                                                         | Description          |
 | ---------------- | --------------------------------------------------------------- | -------------------- |
-| `--usd_path`     | `omniverse://10.50.2.21/Users/worv/costnav/Street_sidewalk.usd` | USD scene path       |
+| `--usd_path`     | `None` (derived from `--robot`)                                 | USD scene path       |
+| `--robot`        | `nova_carter`                                                   | Robot preset (`nova_carter`, `segway_e1`) |
 | `--headless`     | `false`                                                         | Run without GUI      |
 | `--physics_dt`   | `1/60` (0.0167s)                                                | Physics timestep     |
 | `--rendering_dt` | `1/30` (0.0333s)                                                | Rendering timestep   |
 | `--debug`        | `false`                                                         | Enable debug logging |
+| `--people`       | `0`                                                             | Number of people to spawn |
+
+`--robot` defaults to `SIM_ROBOT` when set, otherwise `nova_carter`.
+If the Segway prim is not detected automatically, set `ROBOT_PRIM_PATH` to the robot base prim.
 
 **Key Features:**
 

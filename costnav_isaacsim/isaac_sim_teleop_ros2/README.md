@@ -41,7 +41,7 @@ source install/setup.bash
 Set the robot type via environment variable and launch:
 
 ```bash
-export SIM_ROBOT=nova_carter  # or aiden, gint_ss, gint_att, test_toro, coco, Isaac_Houndbot
+export SIM_ROBOT=nova_carter  # or segway_e1
 ros2 launch isaac_sim_teleop_ros2 teleop_isaac_sim.launch.py
 ```
 
@@ -59,12 +59,7 @@ ros2 launch isaac_sim_teleop_ros2 teleop_isaac_sim.launch.py
 ### Supported Robots
 
 - `nova_carter` - Nova Carter robot
-- `aiden` - Aiden robot
-- `gint_ss` - Gint SS robot
-- `gint_att` - Gint ATT robot
-- `test_toro` - Test Toro robot
-- `coco` - COCO robot
-- `Isaac_Houndbot` - Isaac Houndbot
+- `segway_e1` - Segway E1 robot
 
 ### Launch Arguments
 

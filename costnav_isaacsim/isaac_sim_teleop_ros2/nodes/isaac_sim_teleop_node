@@ -88,20 +88,14 @@ class TeleopNode(Node):
         sim_robot = os.environ.get("SIM_ROBOT")
         if sim_robot == "nova_carter":
             self.sim_robot = robot.NovaCarter()
-        elif sim_robot == "Isaac_Houndbot":
-            self.sim_robot = robot.IsaacHoundbot()
-        elif sim_robot == "aiden":
-            self.sim_robot = robot.Aiden()
-        elif sim_robot == "gint_ss":
-            self.sim_robot = robot.GintSS()
-        elif sim_robot == "gint_att":
-            self.sim_robot = robot.GintATT()
-        elif sim_robot == "test_toro":
-            self.sim_robot = robot.TestToro()
-        elif sim_robot == "coco":
-            self.sim_robot = robot.COCO()
+        elif sim_robot == "segway_e1":
+            self.sim_robot = robot.SegwayE1()
         else:
-            raise ValueError(f"Unknown robot: {sim_robot}")
+            raise ValueError(
+                "Unknown robot: {robot}. Set SIM_ROBOT to 'nova_carter' or 'segway_e1'.".format(
+                    robot=sim_robot
+                )
+            )
         
         self.control_state = ControlState()
         

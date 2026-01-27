@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 build-vint run-ros2 run-isaac-sim run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 build-vint run-ros2 run-isaac-sim run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop
 
 DOCKERFILE ?= Dockerfile
 DOCKER_BUILD ?= docker build
@@ -11,6 +11,9 @@ COSTNAV_VERSION ?= 0.1.0
 # ROS configuration
 ROS_DISTRO ?= jazzy
 UBUNTU_VERSION ?= 24.04
+SIM_ROBOT ?= segway_e1
+FOOD ?= True
+TUNED ?= False
 
 ISAAC_SIM_IMAGE ?= costnav-isaacsim-$(ISAAC_SIM_VERSION):$(COSTNAV_VERSION)
 ISAAC_LAB_IMAGE ?= costnav-isaaclab-$(ISAAC_SIM_VERSION)-$(ISAAC_LAB_VERSION):$(COSTNAV_VERSION)
@@ -62,16 +65,18 @@ run-ros2:
 # Run the Isaac Sim container with launch.py (includes RViz)
 # TODO: down and up every time takes a long time. Can we avoid it?
 # However, healthcheck does not work if we don't do this...
+# Usage: make run-isaac-sim NUM_PEOPLE=5
 run-isaac-sim:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile isaac-sim down
-	$(DOCKER_COMPOSE) --profile isaac-sim up
+	NUM_PEOPLE=$(NUM_PEOPLE) $(DOCKER_COMPOSE) --profile isaac-sim up
 
 # Run both Isaac Sim and ROS2 Nav2 navigation together (using combined 'nav2' profile)
+# Usage: make run-nav2 NUM_PEOPLE=5 SIM_ROBOT=nova_carter FOOD=1 TUNED=True
 run-nav2:
 	xhost +local:docker 2>/dev/null || true
-	$(DOCKER_COMPOSE) --profile nav2 down
-	$(DOCKER_COMPOSE) --profile nav2 up
+	SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile nav2 down
+	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) TUNED=$(TUNED) $(DOCKER_COMPOSE) --profile nav2 up
 
 # Trigger mission start (manual)
 start-mission:
@@ -101,11 +106,30 @@ start-mission-record:
 	$(MAKE) run-rosbag
 	$(MAKE) start-mission
 
+ifeq (run-teleop,$(firstword $(MAKECMDGOALS)))
+ifneq ($(word 2,$(MAKECMDGOALS)),)
+SIM_ROBOT := $(word 2,$(MAKECMDGOALS))
+$(eval $(word 2,$(MAKECMDGOALS)):;@:)
+endif
+SIM_ROBOT := $(subst -,_,$(SIM_ROBOT))
+ifeq ($(SIM_ROBOT),segwaye1)
+SIM_ROBOT := segway_e1
+endif
+ifeq ($(SIM_ROBOT),segway)
+SIM_ROBOT := segway_e1
+endif
+endif
+
 # Run both Isaac Sim and ROS2 teleop together (using combined 'teleop' profile)
+# Usage: make run-teleop NUM_PEOPLE=5 FOOD=1
 run-teleop:
+	@if [ "$(SIM_ROBOT)" != "nova_carter" ] && [ "$(SIM_ROBOT)" != "segway_e1" ]; then \
+		echo "Unsupported robot: $(SIM_ROBOT). Use nova_carter or segway_e1."; \
+		exit 1; \
+	fi
 	xhost +local:docker 2>/dev/null || true
-	$(DOCKER_COMPOSE) --profile teleop down
-	$(DOCKER_COMPOSE) --profile teleop up
+	SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile teleop down
+	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) $(DOCKER_COMPOSE) --profile teleop up
 
 # =============================================================================
 # IL Baselines (ViNT) Targets
@@ -139,3 +163,51 @@ run-rosbag:
 stop-rosbag:
 	$(DOCKER_COMPOSE) --profile rosbag down
 	@echo "ROS bag recording stopped. Check ./rosbags/ for recorded bag files."
+
+# =============================================================================
+# Nav2 Evaluation Targets
+# =============================================================================
+
+# Default evaluation parameters
+TIMEOUT ?= 169 # based on S_EvalTimeout
+NUM_MISSIONS ?= 3
+
+# Run Nav2 evaluation (requires running nav2 instance via make run-nav2)
+# Usage: make run-eval-nav2 TIMEOUT=20 NUM_MISSIONS=10
+# Output: ./logs/nav2_evaluation_<timestamp>.log
+run-eval-nav2:
+	@if ! docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-nav2"; then \
+		echo "ERROR: 'make run-nav2' is not running."; \
+		echo ""; \
+		echo "Please start nav2 first in a separate terminal:"; \
+		echo "  make run-nav2"; \
+		echo ""; \
+		echo "Then run this command again:"; \
+		echo "  make run-eval-nav2 TIMEOUT=$(TIMEOUT) NUM_MISSIONS=$(NUM_MISSIONS)"; \
+		exit 1; \
+	fi
+	@echo "Starting Nav2 evaluation..."
+	@echo "  Timeout per mission: $(TIMEOUT)s"
+	@echo "  Number of missions:  $(NUM_MISSIONS)"
+	@echo ""
+	@bash scripts/eval.sh nav2 $(TIMEOUT) $(NUM_MISSIONS)
+
+# Run Teleop evaluation (requires running teleop instance via make run-teleop)
+# Usage: make run-eval-teleop TIMEOUT=20 NUM_MISSIONS=10
+# Output: ./logs/teleop_evaluation_<timestamp>.log
+run-eval-teleop:
+	@if ! docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-teleop"; then \
+		echo "ERROR: 'make run-teleop' is not running."; \
+		echo ""; \
+		echo "Please start teleop first in a separate terminal:"; \
+		echo "  make run-teleop"; \
+		echo ""; \
+		echo "Then run this command again:"; \
+		echo "  make run-eval-teleop TIMEOUT=$(TIMEOUT) NUM_MISSIONS=$(NUM_MISSIONS)"; \
+		exit 1; \
+	fi
+	@echo "Starting Teleop evaluation..."
+	@echo "  Timeout per mission: $(TIMEOUT)s"
+	@echo "  Number of missions:  $(NUM_MISSIONS)"
+	@echo ""
+	@bash scripts/eval.sh teleop $(TIMEOUT) $(NUM_MISSIONS)
