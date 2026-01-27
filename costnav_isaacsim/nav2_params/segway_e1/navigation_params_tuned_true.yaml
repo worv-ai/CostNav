@@ -198,13 +198,13 @@ local_costmap:
     ros__parameters:
       use_sim_time: True
       footprint_padding: 0.03
-      update_frequency: 10.0  # Increased for more responsive obstacle detection
-      publish_frequency: 5.0  # Increased for better visualization and controller responsiveness
+      update_frequency: 20.0  # Increased for more responsive obstacle detection
+      publish_frequency: 10.0  # Increased for better visualization and controller responsiveness
       global_frame: odom
       robot_base_frame: base_link
       rolling_window: true
-      width: 6
-      height: 6
+      width: 12
+      height: 12
       resolution: 0.05
       transform_tolerance: 0.3
       footprint: "[ [0.14, 0.25], [0.14, -0.25], [-0.607, -0.25], [-0.607, 0.25] ]"
