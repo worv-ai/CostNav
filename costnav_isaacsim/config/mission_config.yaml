@@ -36,7 +36,7 @@ nav2:
 # Robot teleportation settings
 teleport:
   # Height offset when teleporting robot (meters)
-  height_offset: 0.5
+  height_offset: 0.1
 
   # Robot prim path in USD stage (chassis_link prim for direct teleportation)
   robot_prim: "/World/Nova_Carter_ROS/chassis_link"

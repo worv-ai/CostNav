@@ -89,6 +89,10 @@ class MissionManagerConfig:
     robot_prim_path: Optional[str] = None  # Robot prim path in Isaac Sim USD stage
     teleport_settle_steps: int = 30  # Number of simulation steps after teleportation for physics to settle
 
+    # Nav2 costmap clearing (useful when teleporting between missions)
+    clear_costmaps_on_mission_start: bool = True
+    costmap_clear_timeout_sec: float = 2.0  # Max time to wait for clear service responses before continuing
+
 
 class MissionState(Enum):
     """State machine for mission execution."""
@@ -100,6 +104,7 @@ class MissionState(Enum):
     TELEPORTING = "teleporting"
     SETTLING = "settling"  # Waiting for physics to settle after teleport
     PUBLISHING_INITIAL_POSE = "publishing_initial_pose"
+    CLEARING_COSTMAPS = "clearing_costmaps"
     PUBLISHING_GOAL = "publishing_goal"
     WAITING_FOR_COMPLETION = "waiting_for_completion"
     COMPLETED = "completed"
@@ -197,6 +202,12 @@ class MissionManager:
         self._result_service = None
         self._odom_sub = None
 
+        # Nav2 costmap clear service clients (initialized in _initialize)
+        self._clear_costmap_global_srv = None
+        self._clear_costmap_local_srv = None
+        self._costmap_clear_futures = {}
+        self._costmap_clear_start_time = None
+
         # State machine
         self._state = MissionState.INIT
         self._current_mission = 0
@@ -292,6 +303,8 @@ class MissionManager:
             self._step_settling()
         elif self._state == MissionState.PUBLISHING_INITIAL_POSE:
             self._step_publishing_initial_pose()
+        elif self._state == MissionState.CLEARING_COSTMAPS:
+            self._step_clearing_costmaps()
         elif self._state == MissionState.PUBLISHING_GOAL:
             self._step_publishing_goal()
         elif self._state == MissionState.WAITING_FOR_COMPLETION:
@@ -320,6 +333,22 @@ class MissionManager:
 
             # Create ROS2 node
             self._node = Node(self.node_name)
+
+            # Nav2 costmap clear services (best-effort; keep running even if nav2_msgs isn't available)
+            try:
+                from nav2_msgs.srv import ClearEntireCostmap
+
+                # Use the same service names as nav2_simple_commander (relative names)
+                self._clear_costmap_global_srv = self._node.create_client(
+                    ClearEntireCostmap, "global_costmap/clear_entirely_global_costmap"
+                )
+                self._clear_costmap_local_srv = self._node.create_client(
+                    ClearEntireCostmap, "local_costmap/clear_entirely_local_costmap"
+                )
+            except Exception as exc:
+                logger.warning(f"[INIT] Nav2 costmap clear services unavailable: {exc}")
+                self._clear_costmap_global_srv = None
+                self._clear_costmap_local_srv = None
 
             # Start mission service (manual trigger)
             self._start_service = self._node.create_service(Trigger, "/start_mission", self._handle_start_mission)
@@ -417,6 +446,7 @@ class MissionManager:
             MissionState.TELEPORTING,
             MissionState.SETTLING,
             MissionState.PUBLISHING_INITIAL_POSE,
+            MissionState.CLEARING_COSTMAPS,
             MissionState.PUBLISHING_GOAL,
             MissionState.WAITING_FOR_COMPLETION,
         }
@@ -441,6 +471,10 @@ class MissionManager:
         # Reset food tracking
         self._initial_food_piece_count = 0
         self._final_food_piece_count = None
+
+        # Reset costmap clear tracking
+        self._costmap_clear_futures = {}
+        self._costmap_clear_start_time = None
 
     def _odom_callback(self, msg) -> None:
         """Handle odometry messages for robot position and orientation tracking."""
@@ -1423,7 +1457,80 @@ class MissionManager:
         """Publish initial pose for AMCL."""
         self._publish_initial_pose(self._current_start)
         self._wait_start_time = self._get_current_time_seconds()
-        self._state = MissionState.PUBLISHING_GOAL
+        # If we teleported, it's useful to clear Nav2 costmaps before sending a new goal.
+        if self.config.clear_costmaps_on_mission_start:
+            self._state = MissionState.CLEARING_COSTMAPS
+        else:
+            self._state = MissionState.PUBLISHING_GOAL
+
+    def _step_clearing_costmaps(self):
+        """Clear Nav2 global/local costmaps (best-effort) before publishing a new goal."""
+
+        # Defensive: allow disabling at runtime.
+        if not self.config.clear_costmaps_on_mission_start:
+            self._state = MissionState.PUBLISHING_GOAL
+            return
+
+        if self._costmap_clear_start_time is None:
+            self._costmap_clear_start_time = self._get_current_time_seconds()
+            self._costmap_clear_futures = {}
+            logger.info(f"[{self._state.name}] Clearing Nav2 costmaps")
+
+        # If clients weren't created (nav2_msgs missing, or init failed), continue.
+        if self._clear_costmap_global_srv is None and self._clear_costmap_local_srv is None:
+            logger.warning(f"[{self._state.name}] Costmap clear clients not available, continuing")
+            # Reset for next mission
+            self._costmap_clear_start_time = None
+            self._costmap_clear_futures = {}
+            self._state = MissionState.PUBLISHING_GOAL
+            return
+
+        # Import locally so unit tests that don't run ROS2 don't require nav2_msgs.
+        try:
+            from nav2_msgs.srv import ClearEntireCostmap
+        except Exception as exc:
+            logger.warning(f"[{self._state.name}] nav2_msgs not available ({exc}); continuing without costmap clear")
+            # Reset for next mission
+            self._costmap_clear_start_time = None
+            self._costmap_clear_futures = {}
+            self._state = MissionState.PUBLISHING_GOAL
+            return
+
+        now = self._get_current_time_seconds()
+        if (now - self._costmap_clear_start_time) >= self.config.costmap_clear_timeout_sec:
+            logger.info(
+                f"[{self._state.name}] Timed out clearing costmaps after {self.config.costmap_clear_timeout_sec:.2f}s, continuing"
+            )
+            # Reset for next mission
+            self._costmap_clear_start_time = None
+            self._costmap_clear_futures = {}
+            self._state = MissionState.PUBLISHING_GOAL
+            return
+
+        def _kickoff(name: str, client) -> None:
+            if client is None or name in self._costmap_clear_futures:
+                return
+            # Non-blocking wait; we retry each sim step until timeout.
+            if not client.wait_for_service(timeout_sec=0.0):
+                return
+            req = ClearEntireCostmap.Request()
+            self._costmap_clear_futures[name] = client.call_async(req)
+
+        _kickoff("global", self._clear_costmap_global_srv)
+        _kickoff("local", self._clear_costmap_local_srv)
+
+        def _complete(name: str, client) -> bool:
+            if client is None:
+                return True
+            fut = self._costmap_clear_futures.get(name)
+            return fut is not None and fut.done()
+
+        if _complete("global", self._clear_costmap_global_srv) and _complete("local", self._clear_costmap_local_srv):
+            logger.info(f"[{self._state.name}] Costmaps cleared")
+            # Reset for next mission
+            self._costmap_clear_start_time = None
+            self._costmap_clear_futures = {}
+            self._state = MissionState.PUBLISHING_GOAL
 
     def _step_publishing_goal(self):
         """Publish goal pose to Nav2 after initial pose delay."""
