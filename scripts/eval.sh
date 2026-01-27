@@ -67,6 +67,10 @@ declare -a MISSION_PROPERTY_BOLLARD
 declare -a MISSION_PROPERTY_BUILDING
 declare -a MISSION_PROPERTY_TOTAL
 declare -a MISSION_RESULT_REASONS
+declare -a MISSION_DELTA_V_COUNTS
+declare -a MISSION_DELTA_V_AVG_MPS
+declare -a MISSION_DELTA_V_AVG_MPH
+declare -a MISSION_TOTAL_INJURY_COSTS
 
 # Mechanical energy constants
 ROLLING_RESISTANCE_FORCE=18.179  # Newtons
@@ -197,6 +201,10 @@ run_mission() {
     local property_building="0"
     local property_total="0"
     local result_reason=""
+    local delta_v_count="0"
+    local delta_v_avg_mps="0"
+    local delta_v_avg_mph="0"
+    local total_injury_cost="0"
     local was_skipped=false
 
     start_time=$(date +%s.%N)
@@ -269,6 +277,10 @@ run_mission() {
             property_bollard=$(parse_result_field "$result_response" "property_contact_bollard")
             property_building=$(parse_result_field "$result_response" "property_contact_building")
             property_total=$(parse_result_field "$result_response" "property_contact_total")
+            delta_v_count=$(parse_result_field "$result_response" "delta_v_count")
+            delta_v_avg_mps=$(parse_result_field "$result_response" "delta_v_avg_mps")
+            delta_v_avg_mph=$(parse_result_field "$result_response" "delta_v_avg_mph")
+            total_injury_cost=$(parse_result_field "$result_response" "total_injury_cost")
 
             if [ -z "$contact_count" ]; then
                 contact_count="0"
@@ -308,6 +320,18 @@ run_mission() {
             fi
             if [ -z "$property_total" ]; then
                 property_total="0"
+            fi
+            if [ -z "$delta_v_count" ]; then
+                delta_v_count="0"
+            fi
+            if [ -z "$delta_v_avg_mps" ]; then
+                delta_v_avg_mps="0"
+            fi
+            if [ -z "$delta_v_avg_mph" ]; then
+                delta_v_avg_mph="0"
+            fi
+            if [ -z "$total_injury_cost" ]; then
+                total_injury_cost="0"
             fi
             # Handle null result_reason (Python None becomes "null" in JSON)
             if [ -z "$result_reason" ] || [ "$result_reason" = "null" ]; then
@@ -384,6 +408,10 @@ run_mission() {
     MISSION_PROPERTY_BUILDING[$mission_num]="${property_building}"
     MISSION_PROPERTY_TOTAL[$mission_num]="${property_total}"
     MISSION_RESULT_REASONS[$mission_num]="${result_reason}"
+    MISSION_DELTA_V_COUNTS[$mission_num]="${delta_v_count}"
+    MISSION_DELTA_V_AVG_MPS[$mission_num]="${delta_v_avg_mps}"
+    MISSION_DELTA_V_AVG_MPH[$mission_num]="${delta_v_avg_mph}"
+    MISSION_TOTAL_INJURY_COSTS[$mission_num]="${total_injury_cost}"
 
     if [ "$mission_result" = "SUCCESS" ]; then
         SUCCESS_SLA=$((SUCCESS_SLA + 1))
@@ -426,6 +454,8 @@ run_mission() {
     log "  Contact count: ${contact_count}"
     log "  Property contacts total=${property_total} (hydrant=${property_fire_hydrant}, traffic_light=${property_traffic_light}, street_lamp=${property_street_lamp}, bollard=${property_bollard}, building=${property_building})"
     log "  Total impulse: ${total_impulse} N*s"
+    log "  Delta-v count: ${delta_v_count}, avg: ${delta_v_avg_mps} m/s (${delta_v_avg_mph} mph)"
+    log "  Total injury cost: ${total_injury_cost}"
     if [ "$food_enabled" = "true" ]; then
         log "  Food pieces: ${food_initial_pieces} -> ${food_final_pieces}"
         log "  Food loss fraction: ${food_loss_fraction}"
@@ -447,7 +477,7 @@ generate_summary() {
         success_rate="0"
     fi
 
-    # Calculate average distance, time, velocity, mechanical power, contact count, and impulse for completed (non-skipped) missions
+    # Calculate average distance, time, velocity, mechanical power, contact count, impulse, and injury for completed (non-skipped) missions
     local total_distance=0
     local total_time=0
     local total_velocity=0
@@ -460,6 +490,8 @@ generate_summary() {
     local total_prop_street_lamp=0
     local total_prop_bollard=0
     local total_prop_building=0
+    local total_delta_v_count=0
+    local total_injury_cost_sum=0
     local count=0
     for i in $(seq 1 $NUM_MISSIONS); do
         local result="${MISSION_RESULTS[$i]:-N/A}"
@@ -476,6 +508,8 @@ generate_summary() {
             local prop_street_lamp="${MISSION_PROPERTY_STREET_LAMP[$i]:-0}"
             local prop_bollard="${MISSION_PROPERTY_BOLLARD[$i]:-0}"
             local prop_building="${MISSION_PROPERTY_BUILDING[$i]:-0}"
+            local delta_v_cnt="${MISSION_DELTA_V_COUNTS[$i]:-0}"
+            local injury_cost="${MISSION_TOTAL_INJURY_COSTS[$i]:-0}"
             total_distance=$(echo "$total_distance + $dist" | bc)
             total_time=$(echo "$total_time + $time" | bc)
             total_velocity=$(echo "$total_velocity + $vel" | bc)
@@ -488,6 +522,8 @@ generate_summary() {
             total_prop_street_lamp=$(echo "$total_prop_street_lamp + $prop_street_lamp" | bc)
             total_prop_bollard=$(echo "$total_prop_bollard + $prop_bollard" | bc)
             total_prop_building=$(echo "$total_prop_building + $prop_building" | bc)
+            total_delta_v_count=$(echo "$total_delta_v_count + $delta_v_cnt" | bc)
+            total_injury_cost_sum=$(echo "$total_injury_cost_sum + $injury_cost" | bc)
             count=$((count + 1))
         fi
     done
@@ -504,6 +540,8 @@ generate_summary() {
     local avg_prop_street_lamp="0"
     local avg_prop_bollard="0"
     local avg_prop_building="0"
+    local avg_delta_v_count="0"
+    local avg_injury_cost="0"
     if [ "$count" -gt 0 ]; then
         avg_distance=$(echo "scale=2; $total_distance / $count" | bc)
         avg_time=$(echo "scale=2; $total_time / $count" | bc)
@@ -517,6 +555,8 @@ generate_summary() {
         avg_prop_street_lamp=$(echo "scale=2; $total_prop_street_lamp / $count" | bc)
         avg_prop_bollard=$(echo "scale=2; $total_prop_bollard / $count" | bc)
         avg_prop_building=$(echo "scale=2; $total_prop_building / $count" | bc)
+        avg_delta_v_count=$(echo "scale=2; $total_delta_v_count / $count" | bc)
+        avg_injury_cost=$(echo "scale=2; $total_injury_cost_sum / $count" | bc)
     fi
 
     log_file ""
@@ -546,6 +586,8 @@ generate_summary() {
     log_file "  - Average contact count: ${avg_contact_count}"
     log_file "  - Average property contact count: ${avg_property_count} (hydrant=${avg_prop_hydrant}, traffic_light=${avg_prop_traffic_light}, street_lamp=${avg_prop_street_lamp}, bollard=${avg_prop_bollard}, building=${avg_prop_building})"
     log_file "  - Average total impulse: ${avg_total_impulse} N*s"
+    log_file "  - Average delta-v count: ${avg_delta_v_count}"
+    log_file "  - Average total injury cost: ${avg_injury_cost}"
     log_file ""
     log_file "Per-Mission Results:"
     log_file "------------------------------------------------------------"
@@ -573,6 +615,10 @@ generate_summary() {
         local property_bollard="${MISSION_PROPERTY_BOLLARD[$i]:-0}"
         local property_building="${MISSION_PROPERTY_BUILDING[$i]:-0}"
         local property_total="${MISSION_PROPERTY_TOTAL[$i]:-0}"
+        local mission_delta_v_count="${MISSION_DELTA_V_COUNTS[$i]:-0}"
+        local mission_delta_v_avg_mps="${MISSION_DELTA_V_AVG_MPS[$i]:-0}"
+        local mission_delta_v_avg_mph="${MISSION_DELTA_V_AVG_MPH[$i]:-0}"
+        local mission_injury_cost="${MISSION_TOTAL_INJURY_COSTS[$i]:-0}"
 
         log_file "Mission $i:"
         log_file "  Status: $result"
@@ -587,6 +633,8 @@ generate_summary() {
         log_file "  Average mechanical power: ${mission_avg_power}kW"
         log_file "  Contact count: ${mission_contact_count}"
         log_file "  Total impulse: ${mission_total_impulse} N*s"
+        log_file "  Delta-v count: ${mission_delta_v_count}, avg: ${mission_delta_v_avg_mps} m/s (${mission_delta_v_avg_mph} mph)"
+        log_file "  Total injury cost: ${mission_injury_cost}"
         if [ "$food_enabled" = "true" ]; then
             log_file "  Food pieces: ${food_initial} -> ${food_final}"
             log_file "  Food loss fraction: ${food_loss}"
@@ -679,6 +727,8 @@ main() {
     local total_prop_street_lamp=0
     local total_prop_bollard=0
     local total_prop_building=0
+    local total_delta_v_count=0
+    local total_injury_cost_sum=0
     local count=0
     for i in $(seq 1 $NUM_MISSIONS); do
         local result="${MISSION_RESULTS[$i]:-N/A}"
@@ -695,6 +745,8 @@ main() {
             local prop_street_lamp="${MISSION_PROPERTY_STREET_LAMP[$i]:-0}"
             local prop_bollard="${MISSION_PROPERTY_BOLLARD[$i]:-0}"
             local prop_building="${MISSION_PROPERTY_BUILDING[$i]:-0}"
+            local delta_v_cnt="${MISSION_DELTA_V_COUNTS[$i]:-0}"
+            local injury_cost="${MISSION_TOTAL_INJURY_COSTS[$i]:-0}"
             total_distance=$(echo "$total_distance + $dist" | bc)
             total_time=$(echo "$total_time + $time" | bc)
             total_velocity=$(echo "$total_velocity + $vel" | bc)
@@ -707,6 +759,8 @@ main() {
             total_prop_street_lamp=$(echo "$total_prop_street_lamp + $prop_street_lamp" | bc)
             total_prop_bollard=$(echo "$total_prop_bollard + $prop_bollard" | bc)
             total_prop_building=$(echo "$total_prop_building + $prop_building" | bc)
+            total_delta_v_count=$(echo "$total_delta_v_count + $delta_v_cnt" | bc)
+            total_injury_cost_sum=$(echo "$total_injury_cost_sum + $injury_cost" | bc)
             count=$((count + 1))
         fi
     done
@@ -723,6 +777,8 @@ main() {
     local avg_prop_street_lamp="0"
     local avg_prop_bollard="0"
     local avg_prop_building="0"
+    local avg_delta_v_count="0"
+    local avg_injury_cost="0"
     if [ "$count" -gt 0 ]; then
         avg_distance=$(echo "scale=2; $total_distance / $count" | bc)
         avg_time=$(echo "scale=2; $total_time / $count" | bc)
@@ -736,6 +792,8 @@ main() {
         avg_prop_street_lamp=$(echo "scale=2; $total_prop_street_lamp / $count" | bc)
         avg_prop_bollard=$(echo "scale=2; $total_prop_bollard / $count" | bc)
         avg_prop_building=$(echo "scale=2; $total_prop_building / $count" | bc)
+        avg_delta_v_count=$(echo "scale=2; $total_delta_v_count / $count" | bc)
+        avg_injury_cost=$(echo "scale=2; $total_injury_cost_sum / $count" | bc)
     fi
 
     # Calculate averages including skipped
@@ -751,6 +809,8 @@ main() {
     local total_prop_street_lamp_all=0
     local total_prop_bollard_all=0
     local total_prop_building_all=0
+    local total_delta_v_count_all=0
+    local total_injury_cost_sum_all=0
     local count_all=0
     for i in $(seq 1 $NUM_MISSIONS); do
         local result="${MISSION_RESULTS[$i]:-N/A}"
@@ -767,6 +827,8 @@ main() {
             local prop_street_lamp="${MISSION_PROPERTY_STREET_LAMP[$i]:-0}"
             local prop_bollard="${MISSION_PROPERTY_BOLLARD[$i]:-0}"
             local prop_building="${MISSION_PROPERTY_BUILDING[$i]:-0}"
+            local delta_v_cnt="${MISSION_DELTA_V_COUNTS[$i]:-0}"
+            local injury_cost="${MISSION_TOTAL_INJURY_COSTS[$i]:-0}"
             total_distance_all=$(echo "$total_distance_all + $dist" | bc)
             total_time_all=$(echo "$total_time_all + $time" | bc)
             total_velocity_all=$(echo "$total_velocity_all + $vel" | bc)
@@ -779,6 +841,8 @@ main() {
             total_prop_street_lamp_all=$(echo "$total_prop_street_lamp_all + $prop_street_lamp" | bc)
             total_prop_bollard_all=$(echo "$total_prop_bollard_all + $prop_bollard" | bc)
             total_prop_building_all=$(echo "$total_prop_building_all + $prop_building" | bc)
+            total_delta_v_count_all=$(echo "$total_delta_v_count_all + $delta_v_cnt" | bc)
+            total_injury_cost_sum_all=$(echo "$total_injury_cost_sum_all + $injury_cost" | bc)
             count_all=$((count_all + 1))
         fi
     done
@@ -795,6 +859,8 @@ main() {
     local avg_prop_street_lamp_all="0"
     local avg_prop_bollard_all="0"
     local avg_prop_building_all="0"
+    local avg_delta_v_count_all="0"
+    local avg_injury_cost_all="0"
     if [ "$count_all" -gt 0 ]; then
         avg_distance_all=$(echo "scale=2; $total_distance_all / $count_all" | bc)
         avg_time_all=$(echo "scale=2; $total_time_all / $count_all" | bc)
@@ -808,6 +874,8 @@ main() {
         avg_prop_street_lamp_all=$(echo "scale=2; $total_prop_street_lamp_all / $count_all" | bc)
         avg_prop_bollard_all=$(echo "scale=2; $total_prop_bollard_all / $count_all" | bc)
         avg_prop_building_all=$(echo "scale=2; $total_prop_building_all / $count_all" | bc)
+        avg_delta_v_count_all=$(echo "scale=2; $total_delta_v_count_all / $count_all" | bc)
+        avg_injury_cost_all=$(echo "scale=2; $total_injury_cost_sum_all / $count_all" | bc)
     fi
 
     echo ""
@@ -827,6 +895,8 @@ main() {
     echo "  Avg Contact Count: ${avg_contact_count} (excluding skipped)"
     echo "  Avg Property Contact Count: ${avg_property_count} (hydrant=${avg_prop_hydrant}, traffic_light=${avg_prop_traffic_light}, street_lamp=${avg_prop_street_lamp}, bollard=${avg_prop_bollard}, building=${avg_prop_building}) (excluding skipped)"
     echo "  Avg Total Impulse: ${avg_total_impulse} N*s (excluding skipped)"
+    echo "  Avg Delta-v Count: ${avg_delta_v_count} (excluding skipped)"
+    echo "  Avg Injury Cost: ${avg_injury_cost} (excluding skipped)"
     echo "  Avg Distance: ${avg_distance_all}m (including skipped)"
     echo "  Avg Time:     ${avg_time_all}s (including skipped)"
     echo "  Avg Velocity: ${avg_velocity_all}m/s (including skipped)"
@@ -834,6 +904,8 @@ main() {
     echo "  Avg Contact Count: ${avg_contact_count_all} (including skipped)"
     echo "  Avg Property Contact Count: ${avg_property_count_all} (hydrant=${avg_prop_hydrant_all}, traffic_light=${avg_prop_traffic_light_all}, street_lamp=${avg_prop_street_lamp_all}, bollard=${avg_prop_bollard_all}, building=${avg_prop_building_all}) (including skipped)"
     echo "  Avg Total Impulse: ${avg_total_impulse_all} N*s (including skipped)"
+    echo "  Avg Delta-v Count: ${avg_delta_v_count_all} (including skipped)"
+    echo "  Avg Injury Cost: ${avg_injury_cost_all} (including skipped)"
     echo "  Log file:   $LOG_FILE"
     echo "=============================================="
 }

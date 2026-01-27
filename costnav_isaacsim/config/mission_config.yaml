@@ -100,6 +100,7 @@ injury:
   enabled: true
   method: "delta_v"
   crash_mode: "all"
+  robot_mass: 50.0  # Robot mass in kg for delta-v = impulse / mass calculation
   robot_height: null
   pedestrian_height: null
   costs:

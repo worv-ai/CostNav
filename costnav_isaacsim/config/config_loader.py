@@ -96,6 +96,7 @@ class InjuryConfig:
     enabled: bool = True
     method: str = "delta_v"
     crash_mode: str = "all"
+    robot_mass: float = 50.0  # Robot mass in kg for delta-v = impulse / mass calculation
     robot_height: Optional[float] = None
     pedestrian_height: Optional[float] = None
     costs: InjuryCostConfig = field(default_factory=InjuryCostConfig)
@@ -197,6 +198,7 @@ class MissionConfig:
             enabled=injury_data.get("enabled", True),
             method=injury_data.get("method", "delta_v"),
             crash_mode=injury_data.get("crash_mode", "all"),
+            robot_mass=injury_data.get("robot_mass", 50.0),
             robot_height=injury_data.get("robot_height"),
             pedestrian_height=injury_data.get("pedestrian_height"),
             costs=injury_costs,
