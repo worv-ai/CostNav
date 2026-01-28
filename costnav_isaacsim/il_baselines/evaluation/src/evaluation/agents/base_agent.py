@@ -1,4 +1,4 @@
-# Copyright (c) 2024 CostNav Authors
+# Copyright (c) 2026 CostNav Authors
 # Adapted from NavDP Framework (Fan Yang, ETH Zurich)
 # Licensed under the MIT License
 

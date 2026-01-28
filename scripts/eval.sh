@@ -1,13 +1,13 @@
 #!/bin/bash
-# Unified Evaluation Script for Teleop and Nav2
+# Unified Evaluation Script for Teleop, Nav2, and ViNT
 # Runs consecutive missions and generates comprehensive evaluation logs
 #
 # Usage: ./eval.sh <MODE> [TIMEOUT] [NUM_MISSIONS]
-#   MODE: Either 'teleop' or 'nav2'
+#   MODE: Either 'teleop', 'nav2', or 'vint'
 #   TIMEOUT: Mission timeout in seconds (default: 20)
 #   NUM_MISSIONS: Number of missions to run (default: 10)
 #
-# Requires: A running instance (make run-teleop or make run-nav2)
+# Requires: A running instance (make run-teleop, make run-nav2, or make run-vint)
 #
 # Controls:
 #   Right Arrow (→): Skip current mission
@@ -16,9 +16,9 @@ set -e
 
 # Mode validation
 MODE="${1:-}"
-if [ -z "$MODE" ] || { [ "$MODE" != "teleop" ] && [ "$MODE" != "nav2" ]; }; then
-    echo "ERROR: Mode must be 'teleop' or 'nav2'"
-    echo "Usage: $0 <teleop|nav2> [TIMEOUT] [NUM_MISSIONS]"
+if [ -z "$MODE" ] || { [ "$MODE" != "teleop" ] && [ "$MODE" != "nav2" ] && [ "$MODE" != "vint" ]; }; then
+    echo "ERROR: Mode must be 'teleop', 'nav2', or 'vint'"
+    echo "Usage: $0 <teleop|nav2|vint> [TIMEOUT] [NUM_MISSIONS]"
     exit 1
 fi
 
@@ -26,6 +26,9 @@ fi
 if [ "$MODE" = "teleop" ]; then
     CONTAINER_NAME="costnav-ros2-teleop"
     MODE_DISPLAY="Teleop"
+    elif [ "$MODE" = "vint" ]; then
+    CONTAINER_NAME="costnav-ros2-vint"
+    MODE_DISPLAY="ViNT"
 else
     CONTAINER_NAME="costnav-ros2-nav2"
     MODE_DISPLAY="Nav2"
@@ -343,7 +346,7 @@ run_mission() {
                 mission_result="SUCCESS"
                 log "Mission $mission_num: Goal reached! Goal Distance: ${distance_to_goal}m, Traveled: ${traveled_distance}m, Time: ${elapsed_time}s"
                 break
-            elif [[ "$result_status" == failure_* ]]; then
+                elif [[ "$result_status" == failure_* ]]; then
                 mission_result="FAILED"
                 if [ -n "$result_reason" ]; then
                     error_msg="${result_status} (reason: ${result_reason}) - distance to goal: ${distance_to_goal}m"
@@ -416,7 +419,7 @@ run_mission() {
     if [ "$mission_result" = "SUCCESS" ]; then
         SUCCESS_SLA=$((SUCCESS_SLA + 1))
         MISSION_RESULTS[$mission_num]="SUCCESS_SLA"
-    elif [ "$mission_result" = "SKIPPED" ]; then
+        elif [ "$mission_result" = "SKIPPED" ]; then
         SKIPPED=$((SKIPPED + 1))
         MISSION_RESULTS[$mission_num]="SKIPPED"
         MISSION_ERRORS[$mission_num]="Skipped by user"
@@ -425,10 +428,10 @@ run_mission() {
         if [ "$result_status" = "failure_timeout" ]; then
             FAILURE_TIMEOUT=$((FAILURE_TIMEOUT + 1))
             MISSION_RESULTS[$mission_num]="FAILURE_TIMEOUT"
-        elif [ "$result_status" = "failure_physicalassistance" ]; then
+            elif [ "$result_status" = "failure_physicalassistance" ]; then
             FAILURE_PHYSICALASSISTANCE=$((FAILURE_PHYSICALASSISTANCE + 1))
             MISSION_RESULTS[$mission_num]="FAILURE_PHYSICALASSISTANCE"
-        elif [ "$result_status" = "failure_foodspoiled" ]; then
+            elif [ "$result_status" = "failure_foodspoiled" ]; then
             FAILURE_FOODSPOILED=$((FAILURE_FOODSPOILED + 1))
             MISSION_RESULTS[$mission_num]="FAILURE_FOODSPOILED"
         else

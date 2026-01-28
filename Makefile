@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 build-vint run-ros2 run-isaac-sim run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 build-vint run-ros2 run-isaac-sim run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint
 
 DOCKERFILE ?= Dockerfile
 DOCKER_BUILD ?= docker build
@@ -86,13 +86,15 @@ start-mission:
 		container="costnav-ros2-nav2"; \
 	elif docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-teleop"; then \
 		container="costnav-ros2-teleop"; \
+	elif docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-vint"; then \
+		container="costnav-ros2-vint"; \
 	elif docker ps --format '{{.Names}}' | grep -qx "costnav-ros2"; then \
 		container="costnav-ros2"; \
 	elif docker ps --format '{{.Names}}' | grep -qx "costnav-isaac-sim"; then \
 		container="costnav-isaac-sim"; \
 	fi; \
 	if [ -z "$$container" ]; then \
-		echo "No ROS2 container running (expected costnav-ros2-nav2, costnav-ros2-teleop, costnav-ros2, or costnav-isaac-sim)."; \
+		echo "No ROS2 container running (expected costnav-ros2-nav2, costnav-ros2-teleop, costnav-ros2-vint, costnav-ros2, or costnav-isaac-sim)."; \
 		exit 1; \
 	fi; \
 	echo "Calling /start_mission via $$container"; \
@@ -212,3 +214,23 @@ run-eval-teleop:
 	@echo "  Number of missions:  $(NUM_MISSIONS)"
 	@echo ""
 	@bash scripts/eval.sh teleop $(TIMEOUT) $(NUM_MISSIONS)
+
+# Run ViNT evaluation (requires running vint instance via make run-vint)
+# Usage: make run-eval-vint TIMEOUT=20 NUM_MISSIONS=10
+# Output: ./logs/vint_evaluation_<timestamp>.log
+run-eval-vint:
+	@if ! docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-vint"; then \
+		echo "ERROR: 'make run-vint' is not running."; \
+		echo ""; \
+		echo "Please start vint first in a separate terminal:"; \
+		echo "  MODEL_CHECKPOINT=/path/to/model.pth make run-vint"; \
+		echo ""; \
+		echo "Then run this command again:"; \
+		echo "  make run-eval-vint TIMEOUT=$(TIMEOUT) NUM_MISSIONS=$(NUM_MISSIONS)"; \
+		exit 1; \
+	fi
+	@echo "Starting ViNT evaluation..."
+	@echo "  Timeout per mission: $(TIMEOUT)s"
+	@echo "  Number of missions:  $(NUM_MISSIONS)"
+	@echo ""
+	@bash scripts/eval.sh vint $(TIMEOUT) $(NUM_MISSIONS)

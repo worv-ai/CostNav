@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2024 CostNav Authors
+# Copyright (c) 2026 CostNav Authors
 # Licensed under the MIT License
 
 """ViNT ROS2 Policy Node for CostNav.
@@ -9,31 +9,27 @@ and publishes velocity commands to /cmd_vel_model which is picked up by
 the teleop node when model control is enabled.
 
 Usage:
-    ros2 run costnav_il_baselines vint_policy_node \
-        --ros-args \
-        -p checkpoint:=/path/to/model.pth \
-        -p model_config:=/path/to/config.yaml \
-        -p robot_config:=/path/to/robot.yaml
+    python3 vint_policy_node.py \
+        --checkpoint /path/to/model.pth \
+        --model_config /path/to/config.yaml \
+        --robot_config /path/to/robot.yaml
 """
 
+import argparse
 import os
 from typing import Optional
 
 import numpy as np
 import rclpy
-from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
+from rclpy.node import Node
+from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool
 
-# Import ViNT agent (relative import when used as package)
-try:
-    from costnav_isaacsim.il_baselines.evaluation.agents import ViNTAgent
-except ImportError:
-    from ..agents import ViNTAgent
+from evaluation.agents.vint_agent import ViNTAgent
 
 
 class ViNTPolicyNode(Node):
@@ -56,26 +52,21 @@ class ViNTPolicyNode(Node):
         - use_imagegoal: Whether to use image goal navigation (default: False)
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        checkpoint: str,
+        model_config: str,
+        robot_config: str,
+        inference_rate: float = 10.0,
+        image_topic: str = "/front_stereo_camera/left/image_raw",
+        use_imagegoal: bool = False,
+        device: str = "cuda:0",
+    ):
         super().__init__("vint_policy_node")
 
-        # Declare parameters
-        self.declare_parameter("checkpoint", "")
-        self.declare_parameter("model_config", "")
-        self.declare_parameter("robot_config", "")
-        self.declare_parameter("inference_rate", 10.0)
-        self.declare_parameter("image_topic", "/front_stereo_camera/left/image_raw")
-        self.declare_parameter("use_imagegoal", False)
-        self.declare_parameter("device", "cuda:0")
-
-        # Get parameters
-        checkpoint = self.get_parameter("checkpoint").value
-        model_config = self.get_parameter("model_config").value
-        robot_config = self.get_parameter("robot_config").value
-        self.inference_rate = self.get_parameter("inference_rate").value
-        image_topic = self.get_parameter("image_topic").value
-        self.use_imagegoal = self.get_parameter("use_imagegoal").value
-        device = self.get_parameter("device").value
+        # Store parameters
+        self.inference_rate = inference_rate
+        self.use_imagegoal = use_imagegoal
 
         # Validate parameters
         if not checkpoint or not os.path.exists(checkpoint):
@@ -235,12 +226,69 @@ class ViNTPolicyNode(Node):
         return twist
 
 
-def main(args=None):
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="ViNT ROS2 Policy Node for CostNav")
+    parser.add_argument(
+        "--checkpoint",
+        type=str,
+        required=True,
+        help="Path to trained model weights (.pth file)",
+    )
+    parser.add_argument(
+        "--model_config",
+        type=str,
+        required=True,
+        help="Path to model configuration YAML",
+    )
+    parser.add_argument(
+        "--robot_config",
+        type=str,
+        required=True,
+        help="Path to robot configuration YAML",
+    )
+    parser.add_argument(
+        "--inference_rate",
+        type=float,
+        default=10.0,
+        help="Inference frequency in Hz (default: 10.0)",
+    )
+    parser.add_argument(
+        "--image_topic",
+        type=str,
+        default="/front_stereo_camera/left/image_raw",
+        help="Camera image topic (default: /front_stereo_camera/left/image_raw)",
+    )
+    parser.add_argument(
+        "--use_imagegoal",
+        action="store_true",
+        help="Use image goal navigation mode",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda:0",
+        help="Device for inference (default: cuda:0)",
+    )
+    return parser.parse_args()
+
+
+def main():
     """Main entry point for the ViNT policy node."""
-    rclpy.init(args=args)
+    args = parse_args()
+
+    rclpy.init()
 
     try:
-        node = ViNTPolicyNode()
+        node = ViNTPolicyNode(
+            checkpoint=args.checkpoint,
+            model_config=args.model_config,
+            robot_config=args.robot_config,
+            inference_rate=args.inference_rate,
+            image_topic=args.image_topic,
+            use_imagegoal=args.use_imagegoal,
+            device=args.device,
+        )
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass

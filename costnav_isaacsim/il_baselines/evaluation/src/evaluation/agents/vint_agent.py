@@ -1,4 +1,4 @@
-# Copyright (c) 2024 CostNav Authors
+# Copyright (c) 2026 CostNav Authors
 # Adapted from NavDP Framework (Fan Yang, ETH Zurich)
 # Licensed under the MIT License
 
@@ -8,13 +8,13 @@ from typing import List, Tuple
 
 import numpy as np
 import torch
+import torchvision.transforms.functional as TF
 from PIL import Image as PILImage
 from torchvision import transforms
-import torchvision.transforms.functional as TF
 
-from .base_agent import BaseAgent
-from ..models.vint_network import ViNTPolicy, NoGoalViNTPolicy
-from ..models.traj_opt import TrajOpt
+from evaluation.agents.base_agent import BaseAgent
+from evaluation.models.traj_opt import TrajOpt
+from evaluation.models.vint_network import NoGoalViNTPolicy, ViNTPolicy
 
 IMAGE_ASPECT_RATIO = 4 / 3
 
@@ -94,7 +94,21 @@ class ViNTAgent(BaseAgent):
         # Initialize ViNT model
         self.vint_policy = ViNTPolicy(self.cfg)
         self.vint_policy.to(self.device)
-        self.vint_policy.model.load_state_dict(torch.load(self.model_path, map_location=self.device), strict=True)
+        # Load checkpoint - handle different checkpoint formats
+        checkpoint = torch.load(self.model_path, map_location=self.device, weights_only=False)
+        if isinstance(checkpoint, dict) and "model" in checkpoint:
+            # Training checkpoint - "model" may be state_dict or full model object
+            model_data = checkpoint["model"]
+            if hasattr(model_data, "state_dict"):
+                self.vint_policy.model.load_state_dict(model_data.state_dict(), strict=True)
+            else:
+                self.vint_policy.model.load_state_dict(model_data, strict=True)
+        elif hasattr(checkpoint, "state_dict"):
+            # Full model object from vint_train
+            self.vint_policy.model.load_state_dict(checkpoint.state_dict(), strict=True)
+        else:
+            # Already a state_dict
+            self.vint_policy.model.load_state_dict(checkpoint, strict=True)
         self.vint_policy.eval()
 
         # Trajectory optimizer for smooth paths
@@ -126,8 +140,7 @@ class ViNTAgent(BaseAgent):
 
             # Transform observation context
             input_image = [
-                transform_images(imgs, self.image_size, center_crop=False).to(self.device)
-                for imgs in self.memory_queue
+                transform_images(imgs, self.image_size, center_crop=False).to(self.device) for imgs in self.memory_queue
             ]
             input_image = torch.concat(input_image, dim=0)
 
@@ -161,8 +174,7 @@ class ViNTAgent(BaseAgent):
 
             # Transform observation context
             input_image = [
-                transform_images(imgs, self.image_size, center_crop=False).to(self.device)
-                for imgs in self.memory_queue
+                transform_images(imgs, self.image_size, center_crop=False).to(self.device) for imgs in self.memory_queue
             ]
             input_image = torch.concat(input_image, dim=0)
 
@@ -198,7 +210,21 @@ class NoGoalViNTAgent(BaseAgent):
         # Initialize NoGoal ViNT model
         self.vint_policy = NoGoalViNTPolicy(self.cfg)
         self.vint_policy.to(self.device)
-        self.vint_policy.model.load_state_dict(torch.load(self.model_path, map_location=self.device), strict=True)
+        # Load checkpoint - handle different checkpoint formats
+        checkpoint = torch.load(self.model_path, map_location=self.device, weights_only=False)
+        if isinstance(checkpoint, dict) and "model" in checkpoint:
+            # Training checkpoint - "model" may be state_dict or full model object
+            model_data = checkpoint["model"]
+            if hasattr(model_data, "state_dict"):
+                self.vint_policy.model.load_state_dict(model_data.state_dict(), strict=True)
+            else:
+                self.vint_policy.model.load_state_dict(model_data, strict=True)
+        elif hasattr(checkpoint, "state_dict"):
+            # Full model object from vint_train
+            self.vint_policy.model.load_state_dict(checkpoint.state_dict(), strict=True)
+        else:
+            # Already a state_dict
+            self.vint_policy.model.load_state_dict(checkpoint, strict=True)
         self.vint_policy.eval()
 
         # Trajectory optimizer
@@ -210,8 +236,7 @@ class NoGoalViNTAgent(BaseAgent):
             self.callback_obs(images)
 
             input_image = [
-                transform_images(imgs, self.image_size, center_crop=False).to(self.device)
-                for imgs in self.memory_queue
+                transform_images(imgs, self.image_size, center_crop=False).to(self.device) for imgs in self.memory_queue
             ]
             input_image = torch.concat(input_image, dim=0)
 

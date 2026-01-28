@@ -35,73 +35,182 @@ pip install torch torchvision efficientnet_pytorch opencv-python pyyaml pillow
 
 ## Usage
 
-### Launch ViNT Policy Node
+There are two main approaches for testing ViNT evaluation:
 
-```bash
-# Using launch file
-ros2 launch costnav_il_baselines vint_policy.launch.py \
-    checkpoint:=/path/to/vint_model.pth
+### Approach 1: Docker-Based Automated Testing (Recommended)
 
-# Or run directly with all options
-ros2 run costnav_il_baselines vint_policy_node \
-    --ros-args \
-    -p checkpoint:=/path/to/vint_model.pth \
-    -p model_config:=/path/to/vint_eval.yaml \
-    -p robot_config:=/path/to/robot_carter.yaml \
-    -p inference_rate:=10.0 \
-    -p use_imagegoal:=false
-```
+This approach runs the complete stack (Isaac Sim + ViNT policy) in Docker containers.
 
-### Integration with Isaac Sim
+1. **Start the ViNT stack** (in terminal 1):
 
-1. **Start Isaac Sim** with ROS2 bridge enabled:
    ```bash
-   make run-isaacsim
+   MODEL_CHECKPOINT=/path/to/vint_model.pth make run-vint
    ```
 
-2. **Start Teleop Node** (in a new terminal):
+   This starts both Isaac Sim and the ViNT policy node together.
+
+2. **Run automated evaluation** (in terminal 2):
+
    ```bash
-   make teleop
+   # Run evaluation with default settings (3 missions, 169s timeout)
+   make run-eval-vint
+
+   # Or customize the evaluation parameters
+   make run-eval-vint TIMEOUT=120 NUM_MISSIONS=10
    ```
 
-3. **Start ViNT Policy Node** (in a new terminal):
+   This will automatically run consecutive missions and generate evaluation logs in `./logs/vint_evaluation_<timestamp>.log`.
+
+3. **Manually trigger individual missions** (alternative to automated evaluation):
    ```bash
+   make start-mission
+   ```
+
+**Note:** The `MODEL_CHECKPOINT` environment variable must point to your trained ViNT model weights (`.pth` file).
+
+### Approach 2: Development/Manual Testing
+
+This approach is useful for development and debugging within the devcontainer.
+
+1. **Start Isaac Sim and Teleop** (in terminal 1):
+
+   ```bash
+   make run-teleop
+   ```
+
+   This starts both Isaac Sim and the teleop node together.
+
+2. **Launch ViNT Policy Node from devcontainer** (in terminal 2):
+
+   ```bash
+   # Inside the devcontainer
    ros2 launch costnav_il_baselines vint_policy.launch.py \
        checkpoint:=/path/to/vint_model.pth
+
+   # Or run directly with all options
+   ros2 run costnav_il_baselines vint_policy_node \
+       --ros-args \
+       -p checkpoint:=/path/to/vint_model.pth \
+       -p model_config:=/path/to/vint_eval.yaml \
+       -p robot_config:=/path/to/robot_carter.yaml \
+       -p inference_rate:=10.0 \
+       -p use_imagegoal:=false
    ```
 
-4. **Enable Model Control** in the teleop node:
+3. **Enable Model Control** in the teleop node:
    - Press the RT (Right Trigger) button on the joystick to switch to model control
    - The ViNT policy will now control the robot via `/cmd_vel_model`
+
+4. **Trigger missions manually**:
+   ```bash
+   make start-mission
+   ```
 
 ## Topics
 
 ### Subscribed Topics
 
-| Topic | Type | Description |
-|-------|------|-------------|
-| `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image` | Camera image input |
-| `/odom` | `nav_msgs/Odometry` | Robot odometry |
-| `/goal_image` | `sensor_msgs/Image` | Goal image (ImageGoal mode) |
-| `/vint_enable` | `std_msgs/Bool` | Enable/disable policy |
+| Topic                                 | Type                | Description                 |
+| ------------------------------------- | ------------------- | --------------------------- |
+| `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image` | Camera image input          |
+| `/odom`                               | `nav_msgs/Odometry` | Robot odometry              |
+| `/goal_image`                         | `sensor_msgs/Image` | Goal image (ImageGoal mode) |
+| `/vint_enable`                        | `std_msgs/Bool`     | Enable/disable policy       |
 
 ### Published Topics
 
-| Topic | Type | Description |
-|-------|------|-------------|
+| Topic            | Type                  | Description       |
+| ---------------- | --------------------- | ----------------- |
 | `/cmd_vel_model` | `geometry_msgs/Twist` | Velocity commands |
 
 ## Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `checkpoint` | string | (required) | Path to trained model weights |
-| `model_config` | string | `configs/vint_eval.yaml` | Path to model config |
-| `robot_config` | string | `configs/robot_carter.yaml` | Path to robot config |
-| `inference_rate` | float | 10.0 | Inference frequency (Hz) |
-| `image_topic` | string | `/front_stereo_camera/left/image_raw` | Camera topic |
-| `use_imagegoal` | bool | false | Use image goal navigation |
-| `device` | string | `cuda:0` | PyTorch device |
+| Parameter        | Type   | Default                               | Description                   |
+| ---------------- | ------ | ------------------------------------- | ----------------------------- |
+| `checkpoint`     | string | (required)                            | Path to trained model weights |
+| `model_config`   | string | `configs/vint_eval.yaml`              | Path to model config          |
+| `robot_config`   | string | `configs/robot_carter.yaml`           | Path to robot config          |
+| `inference_rate` | float  | 10.0                                  | Inference frequency (Hz)      |
+| `image_topic`    | string | `/front_stereo_camera/left/image_raw` | Camera topic                  |
+| `use_imagegoal`  | bool   | false                                 | Use image goal navigation     |
+| `device`         | string | `cuda:0`                              | PyTorch device                |
+
+## Evaluation
+
+### Automated Evaluation Workflow
+
+The evaluation system runs consecutive missions and collects comprehensive metrics including:
+
+- Success rate (goal reached within timeout)
+- Traveled distance and elapsed time
+- Average velocity and mechanical power
+- Contact counts and impulses
+- Property damage metrics
+- Delta-v (collision severity) metrics
+- Injury cost estimates
+
+**Running Automated Evaluation:**
+
+```bash
+# Terminal 1: Start the ViNT stack
+MODEL_CHECKPOINT=/path/to/vint_model.pth make run-vint
+
+# Terminal 2: Run evaluation
+make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
+```
+
+**Evaluation Parameters:**
+
+- `TIMEOUT`: Maximum time per mission in seconds (default: 169s)
+- `NUM_MISSIONS`: Number of consecutive missions to run (default: 3)
+
+**Output:**
+
+- Logs are saved to `./logs/vint_evaluation_<timestamp>.log`
+- Real-time progress is displayed in the terminal
+- Summary statistics are generated at the end
+
+**Interactive Controls:**
+
+- Press `→` (right arrow) during a mission to skip it
+
+### Manual Mission Triggering
+
+For development and debugging, you can manually trigger individual missions:
+
+```bash
+# After starting the ViNT stack (make run-vint)
+make start-mission
+```
+
+This calls the `/start_mission` ROS2 service to begin a new navigation task.
+
+### Evaluation Metrics
+
+The evaluation system tracks the following metrics per mission:
+
+**Navigation Metrics:**
+
+- Mission result (SUCCESS_SLA, FAILURE_TIMEOUT, FAILURE_PHYSICALASSISTANCE, FAILURE_FOODSPOILED)
+- Distance to goal (m)
+- Traveled distance (m)
+- Elapsed time (s)
+- Average velocity (m/s)
+- Average mechanical power (kW)
+
+**Safety Metrics:**
+
+- Contact count (total collisions)
+- Total impulse (N·s)
+- Property damage by type (fire hydrant, traffic light, street lamp, bollard, building)
+- Delta-v count and average (collision severity in m/s and mph)
+- Total injury cost estimate
+
+**Food Delivery Metrics** (if enabled):
+
+- Food pieces (initial → final)
+- Food loss fraction
+- Food spoiled status
 
 ## Package Structure
 

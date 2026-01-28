@@ -1,5 +1,5 @@
 # Copyright (c) 2023 Fan Yang, ETH Zurich
-# Copyright (c) 2024 CostNav Authors
+# Copyright (c) 2026 CostNav Authors
 # Licensed under the MIT License
 
 """Trajectory optimization utilities using cubic spline interpolation."""

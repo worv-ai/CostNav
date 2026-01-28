@@ -72,3 +72,8 @@ packages = ["src/costnav"]
 
 [tool.hatch.build.targets.sdist]
 include = ["src/costnav"]
+
+[tool.uv.workspace]
+members = [
+    "costnav_isaacsim/il_baselines/evaluation",
+]
