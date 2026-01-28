@@ -73,6 +73,18 @@ PROPERTY_PRIM_PATHS = {
         "/World/box/Cube_12",
         "/World/box/Cube_13",
     ],
+    "trash_bin": [
+        "/World/Environment/SM_Buidlng_032/SM_Buidlng_032/Section26",
+    ],
+    "mail_box": [
+        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section20",
+        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section85",
+        "/World/Environment/SM_StreetDetails_002/SM_StreetDetails_03/SM_StreetDetails_002/Section55",
+        "/World/Environment/SM_StreetDetails_002/SM_StreetDetails_03/SM_StreetDetails_002/Section18",
+        "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section18",
+        "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section18",
+        "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section57",
+    ],
 }
 
 
@@ -617,6 +629,9 @@ class MissionManager:
     def _classify_property_from_prim_path(self, prim_path: str) -> Optional[str]:
         if not prim_path:
             return None
+        # Exception in trash bin path.
+        if prim_path.startswith("/World/Environment/SM_Buidlng_032/SM_Buidlng_032/Section26"):
+            return 'trash_bin'
         # Broad match for any building prims (handle both SM_Buidlng_ and SM_Buildlng_)
         if prim_path.startswith("/World/Environment/SM_Buidlng_") or prim_path.startswith(
             "/World/Environment/SM_Buildlng_"
@@ -1181,6 +1196,8 @@ class MissionManager:
             "property_contact_street_lamp": int,
             "property_contact_bollard": int,
             "property_contact_building": int,
+            "property_contact_trash_bin": int,
+            "property_contact_mail_box": int,
             "property_contact_total": int,
             "food_enabled": bool,
             "food_initial_pieces": int,
@@ -1277,6 +1294,8 @@ class MissionManager:
             "property_contact_street_lamp": property_counts.get("street_lamp", 0),
             "property_contact_bollard": property_counts.get("bollard", 0),
             "property_contact_building": property_counts.get("building", 0),
+            "property_contact_trash_bin": property_counts.get("trash_bin", 0),
+            "property_contact_mail_box": property_counts.get("mail_box", 0),
             "property_contact_total": sum(property_counts.values()),
             "delta_v_count": delta_v_count,
             "delta_v_avg_mps": delta_v_avg_mps,
