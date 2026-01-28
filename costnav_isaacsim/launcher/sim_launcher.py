@@ -176,18 +176,9 @@ class CostNavSimLauncher:
 
     def _register_simulation_event_handlers(self) -> None:
         """Register stage event handlers for reinitialization."""
-        try:
-            import carb.eventdispatcher
-            import omni.usd
+        from .event_handlers import register_stage_open_handler
 
-            dispatcher = carb.eventdispatcher.get_eventdispatcher()
-            self._stage_open_subscription = dispatcher.observe_event(
-                event_name=omni.usd.get_context().stage_event_name(omni.usd.StageEventType.OPENED),
-                on_event=self._on_stage_open,
-                observer_name="costnav.launcher.stage_open",
-            )
-        except Exception as exc:
-            logger.warning("Failed to register simulation event handlers: %s", exc)
+        self._stage_open_subscription = register_stage_open_handler(self._on_stage_open)
 
     def _on_stage_open(self, _event) -> None:
         self._pending_stage_reload = True
@@ -225,73 +216,26 @@ class CostNavSimLauncher:
             self.people_manager.robot_prim_path = resolve_people_robot_prim(robot_prim_path)
 
     def _handle_pending_simulation_reinit(self, mission_manager=None) -> None:
+        from .event_handlers import handle_physics_reinit
+
         self._ensure_simulation_context()
 
-        try:
-            from isaacsim.core.utils.stage import is_stage_loading
-
-            if is_stage_loading():
-                return
-        except Exception as exc:
-            logger.warning("Failed to query stage loading state: %s", exc)
-
-        force_reset = False
-        sim_view = self.simulation_context.physics_sim_view
-        if sim_view is not None:
-            try:
-                if hasattr(sim_view, "is_valid") and not sim_view.is_valid:
-                    self._pending_physics_reinit = True
-                    force_reset = True
-                elif hasattr(sim_view, "check") and not sim_view.check():
-                    self._pending_physics_reinit = True
-                    force_reset = True
-            except Exception:
-                self._pending_physics_reinit = True
-                force_reset = True
-
-        if not self._pending_physics_reinit and not self._pending_stage_reload:
-            return
-
-        stage_reloaded = self._pending_stage_reload
-        needs_people_restart = stage_reloaded or force_reset
-        if stage_reloaded:
-            self._refresh_robot_prim_paths()
-
-        if force_reset:
-            now = time.perf_counter()
-            if self._last_physics_reset_time is None or (now - self._last_physics_reset_time) > 1.0:
-                self._last_physics_reset_time = now
-                try:
-                    self.simulation_context.reset()
-                except Exception as exc:
-                    logger.warning("Failed to reset simulation after view invalidation: %s", exc)
-
-        try:
-            self.simulation_context.initialize_physics()
-        except Exception as exc:
-            logger.warning("Failed to initialize physics after restart: %s", exc)
-
-        if mission_manager is not None:
-            try:
-                mission_manager.handle_simulation_restart(stage_reloaded=stage_reloaded)
-            except Exception as exc:
-                logger.warning("Failed to refresh mission manager after restart: %s", exc)
-
-        should_restart_people = (
-            needs_people_restart
-            and self.people_manager is not None
-            and (stage_reloaded or not self._people_initialized)
+        (
+            self._pending_physics_reinit,
+            self._pending_stage_reload,
+            self._last_physics_reset_time,
+            self._people_initialized,
+        ) = handle_physics_reinit(
+            simulation_context=self.simulation_context,
+            pending_physics_reinit=self._pending_physics_reinit,
+            pending_stage_reload=self._pending_stage_reload,
+            last_physics_reset_time=self._last_physics_reset_time,
+            mission_manager=mission_manager,
+            people_manager=self.people_manager,
+            people_initialized=self._people_initialized,
+            refresh_robot_callback=self._refresh_robot_prim_paths,
+            simulation_app=self.simulation_app,
         )
-        if should_restart_people:
-            try:
-                self.people_manager.shutdown()
-                self.people_manager.initialize(self.simulation_app, self.simulation_context)
-                self._people_initialized = True
-            except Exception as exc:
-                logger.warning("Failed to reinitialize PeopleManager after physics reset: %s", exc)
-
-        self._pending_physics_reinit = False
-        self._pending_stage_reload = False
 
     def _step_simulation(self, mission_manager=None, throttle: bool = False):
         """Advance simulation one tick with optional throttling.
