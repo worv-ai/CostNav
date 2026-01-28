@@ -11,8 +11,8 @@ ENV UV_LINK_MODE=copy
 # Install system packages
 RUN apt-get update && \
     apt-get install -y \
-        python3-pip \
-        git \
+    python3-pip \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Disable PEP 668 externally-managed-environment check for pip
@@ -27,7 +27,7 @@ WORKDIR /workspace
 # Copy the evaluation package and third_party dependencies
 COPY costnav_isaacsim/il_baselines/evaluation /workspace/costnav_isaacsim/il_baselines/evaluation
 COPY third_party/visualnav-transformer/train /workspace/third_party/visualnav-transformer/train
-COPY pyproject.toml uv.lock /workspace/
+COPY pyproject.toml uv.lock README.md /workspace/
 
 # Create virtual environment and install dependencies
 RUN --mount=type=cache,target=/root/.cache/uv \
