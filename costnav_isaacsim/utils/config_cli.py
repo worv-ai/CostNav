@@ -45,4 +45,3 @@ def load_and_override_config(args) -> "MissionConfig":
         config.food.spoilage_threshold = args.food_spoilage_threshold
 
     return config
-

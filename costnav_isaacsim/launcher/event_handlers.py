@@ -6,7 +6,6 @@
 """Simulation event handler utilities for stage and physics events."""
 
 import logging
-import os
 import time
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -121,9 +120,7 @@ def handle_physics_reinit(
 
     # Only restart people if the stage was reloaded OR if people haven't been initialized yet.
     should_restart_people = (
-        needs_people_restart
-        and people_manager is not None
-        and (stage_reloaded or not people_initialized)
+        needs_people_restart and people_manager is not None and (stage_reloaded or not people_initialized)
     )
     if should_restart_people and simulation_app is not None:
         try:
@@ -134,4 +131,3 @@ def handle_physics_reinit(
             logger.warning("Failed to reinitialize PeopleManager after physics reset: %s", exc)
 
     return False, False, last_physics_reset_time, people_initialized
-

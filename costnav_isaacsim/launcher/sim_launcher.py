@@ -391,4 +391,3 @@ class CostNavSimLauncher:
 
         self.simulation_context.stop()
         self.simulation_app.close()
-

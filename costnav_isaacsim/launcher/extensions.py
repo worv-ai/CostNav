@@ -23,7 +23,6 @@ def enable_isaac_sim_extensions(simulation_app: SimulationApp, num_people: int =
         True if all extensions enabled successfully, False if PeopleAPI failed.
     """
     from isaacsim.core.utils.extensions import enable_extension
-    import omni.kit.app
 
     # Navigation extensions (must be enabled before using navmesh)
     enable_extension("omni.anim.navigation.core")
@@ -100,4 +99,3 @@ def _enable_people_api(simulation_app: SimulationApp) -> bool:
         logger.error(f"Failed to enable PeopleAPI extension: {e}")
         logger.warning("People spawning will be disabled")
         return False
-

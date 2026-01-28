@@ -48,4 +48,3 @@ __all__ = [
     "resolve_robot_name",
     "resolve_usd_path",
 ]
-

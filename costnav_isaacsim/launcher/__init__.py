@@ -10,4 +10,3 @@ from .sim_launcher import CostNavSimLauncher
 __all__ = [
     "CostNavSimLauncher",
 ]
-

@@ -65,4 +65,3 @@ def resolve_usd_path(usd_path: Optional[str], robot_name: Optional[str]) -> str:
         raise ValueError(f"Unknown robot '{selected_robot}'. Supported: {supported}")
 
     return DEFAULT_USD_PATHS[selected_robot]
-
