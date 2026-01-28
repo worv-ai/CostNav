@@ -217,6 +217,7 @@ services:
       - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
       - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
       - TUNED=${TUNED:-False}
+      - AMCL=${AMCL:-True}
     depends_on:
       isaac-sim:
         condition: service_healthy
@@ -230,7 +231,9 @@ services:
           PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_false.yaml
         fi &&
         RVIZ_LAUNCH=/workspace/nav2_params/rviz.launch.py &&
-        if [ "$${SIM_ROBOT}" = "segway_e1" ]; then RVIZ_LAUNCH=/workspace/nav2_params/rviz_segway_e1.launch.py; fi &&
+        if [ \"$${AMCL}\" = \"False\" ]; then
+          RVIZ_LAUNCH=/workspace/nav2_params/rviz_no_amcl.launch.py
+        fi &&
         ros2 launch $${RVIZ_LAUNCH} rviz_config:=/workspace/nav2_params/$${SIM_ROBOT}/navigation.rviz map:=/workspace/nav2_params/maps/sidewalk.yaml params_file:=$${PARAMS_FILE}
       "
 
@@ -251,6 +254,7 @@ services:
       - LIBGL_ALWAYS_SOFTWARE=1
       - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
       - TUNED=${TUNED:-False}
+      - AMCL=${AMCL:-True}
     command: >
       bash -c "
         source /opt/ros/jazzy/setup.bash &&
@@ -261,7 +265,9 @@ services:
           PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_false.yaml
         fi &&
         RVIZ_LAUNCH=/workspace/nav2_params/rviz.launch.py &&
-        if [ "$${SIM_ROBOT}" = "segway_e1" ]; then RVIZ_LAUNCH=/workspace/nav2_params/rviz_segway_e1.launch.py; fi &&
+        if [ \"$${AMCL}\" = \"False\" ]; then
+          RVIZ_LAUNCH=/workspace/nav2_params/rviz_no_amcl.launch.py
+        fi &&
         ros2 launch $${RVIZ_LAUNCH} rviz_config:=/workspace/nav2_params/$${SIM_ROBOT}/navigation_teleop.rviz map:=/workspace/nav2_params/maps/sidewalk.yaml params_file:=$${PARAMS_FILE}
       "
 

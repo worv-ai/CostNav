@@ -53,63 +53,159 @@
 
 ---
 
-## Localization: Ground Truth Odometry
+## Localization: AMCL and Ground Truth Odometry
 
 ### Overview
 
-CostNav's Nav2 integration uses **ground truth odometry** from Isaac Sim instead of AMCL (Adaptive Monte Carlo Localization) for robot localization. This design choice provides several advantages for simulation-based evaluation and benchmarking.
+CostNav's Nav2 integration supports **two localization modes**:
+
+1. **AMCL Mode (Default)** - Uses Adaptive Monte Carlo Localization for realistic navigation
+2. **Ground Truth Mode** - Uses perfect odometry from Isaac Sim for benchmarking
+
+The localization mode can be controlled via the `AMCL` environment variable.
 
 ### Configuration
 
-The navigation parameters are configured to use odometry directly:
+#### AMCL Mode (AMCL=True, Default)
+
+**For all robots (nova_carter, segway_e1):**
+
+```bash
+# Default behavior - AMCL enabled
+SIM_ROBOT=nova_carter make run-nav2
+
+# Explicitly enable AMCL
+SIM_ROBOT=segway_e1 AMCL=True make run-nav2
+```
+
+**Launch file used:** `rviz.launch.py`
+
+This mode uses the standard Nav2 localization stack:
+
+- Map server provides the static map
+- AMCL estimates the `map -> odom` transform using particle filter
+- Robot localizes itself using laser scan matching
+
+**Navigation parameters include AMCL configuration:**
 
 ```yaml
-# AMCL disabled: use odometry (/chassis/odom) as ground-truth localization.
-# Nav2 is configured to use `odom` as the global frame, so no AMCL-provided
-# `map -> odom` transform is required.
+# AMCL Configuration
+# Note: These parameters are used when AMCL=True (default).
+# When AMCL=False, the rviz_no_amcl.launch.py is used instead, which provides
+# a static map->odom transform and does not launch AMCL. In that case, these
+# parameters are ignored.
+amcl:
+  ros__parameters:
+    use_sim_time: True
+    alpha1: 0.2
+    alpha2: 0.2
+    # ... (full AMCL parameters)
 
 bt_navigator:
   ros__parameters:
     global_frame: map
     robot_base_frame: base_link
     odom_topic: /chassis/odom
-
-controller_server:
-  ros__parameters:
-    odom_topic: /chassis/odom
-
-local_costmap:
-  local_costmap:
-    ros__parameters:
-      global_frame: odom # Use odom as global frame
-      robot_base_frame: base_link
-
-global_costmap:
-  global_costmap:
-    ros__parameters:
-      global_frame: map
-      robot_base_frame: base_link
 ```
+
+#### Ground Truth Mode (AMCL=False)
+
+**For all robots (nova_carter, segway_e1):**
+
+```bash
+# Disable AMCL for ground truth odometry
+SIM_ROBOT=nova_carter AMCL=False make run-nav2
+SIM_ROBOT=segway_e1 AMCL=False make run-nav2
+```
+
+**Launch file used:** `rviz_no_amcl.launch.py`
+
+This mode bypasses AMCL and uses perfect odometry:
+
+- Map server provides the static map
+- Static TF publisher provides identity `map -> odom` transform
+- Robot uses ground truth pose from Isaac Sim
+
+**Note:** AMCL parameters in the navigation YAML files are **ignored** in this mode since AMCL is not launched.
 
 ### TF Tree Structure
 
+#### AMCL Mode (Default)
+
 ```
 map
- └─ odom (from Isaac Sim ground truth)
-     └─ base_link
+ └─ odom (from AMCL particle filter estimation)
+     └─ base_link (from Isaac Sim odometry)
          └─ [sensor frames]
 ```
 
-The `map -> odom` transform is provided directly by Isaac Sim's ground truth pose, eliminating the need for AMCL's `map -> odom` transform estimation.
+#### Ground Truth Mode (AMCL=False)
 
-### Future Work
+```
+map
+ └─ odom (static identity transform)
+     └─ base_link (from Isaac Sim ground truth)
+         └─ [sensor frames]
+```
 
-For real-world deployment, AMCL or other localization methods (e.g., SLAM) would be required. The current configuration can be easily extended by:
+### Environment Variable Summary
 
-1. Enabling AMCL in the navigation parameters
-2. Configuring AMCL to subscribe to `/scan` or `/lidar` topics
-3. Setting `global_frame: map` in local_costmap
-4. Tuning AMCL parameters for the specific robot and environment
+| Variable    | Default       | Description                              |
+| ----------- | ------------- | ---------------------------------------- |
+| `AMCL`      | `True`        | Enable/disable AMCL localization         |
+| `SIM_ROBOT` | `nova_carter` | Robot selection (nova_carter, segway_e1) |
+| `TUNED`     | `False`       | Use tuned navigation parameters          |
+
+### Usage Examples
+
+```bash
+# Nova Carter with AMCL (default)
+SIM_ROBOT=nova_carter make run-nav2
+
+# Segway E1 with AMCL (default)
+SIM_ROBOT=segway_e1 make run-nav2
+
+# Nova Carter with ground truth odometry (no AMCL)
+SIM_ROBOT=nova_carter AMCL=False make run-nav2
+
+# Segway E1 with ground truth odometry (no AMCL)
+SIM_ROBOT=segway_e1 AMCL=False make run-nav2
+
+# Segway E1 with AMCL and tuned parameters
+SIM_ROBOT=segway_e1 AMCL=True TUNED=True make run-nav2
+```
+
+### When to Use Each Mode
+
+**AMCL Mode (AMCL=True):**
+
+- ✅ Realistic navigation testing
+- ✅ Evaluating localization robustness
+- ✅ Testing in environments with sensor noise
+- ✅ Preparing for real-world deployment
+- ✅ Default for all robots
+
+**Ground Truth Mode (AMCL=False):**
+
+- ✅ Pure navigation algorithm benchmarking
+- ✅ Isolating navigation performance from localization errors
+- ✅ Debugging navigation issues without localization uncertainty
+- ✅ Faster iteration during development
+- ✅ Available for both nova_carter and segway_e1
+
+### Real-World Deployment
+
+For real-world deployment, AMCL mode should always be used. The AMCL parameters can be tuned for specific robots and environments by modifying:
+
+- `costnav_isaacsim/nav2_params/nova_carter/navigation_params_tuned_true.yaml`
+- `costnav_isaacsim/nav2_params/segway_e1/navigation_params_tuned_true.yaml`
+
+Key AMCL parameters to tune:
+
+1. Particle filter parameters (`max_particles`, `min_particles`)
+2. Motion model parameters (`alpha1`-`alpha5`)
+3. Sensor model parameters (`z_hit`, `z_rand`, `z_max`, `z_short`)
+4. Update thresholds (`update_min_d`, `update_min_a`)
 
 ---
 
