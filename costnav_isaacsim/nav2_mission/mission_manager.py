@@ -743,10 +743,13 @@ class MissionManager:
             "fatality": fatality,
         }
 
+    # Injury cost adjustment factor to scale expected costs
+    _INJURY_COST_ADJUSTMENT_FACTOR = 0.0110
+
     def _compute_expected_injury_cost(self, probabilities: dict) -> float:
         """Compute expected injury cost from MAIS probabilities and configured costs."""
         costs = self.mission_config.injury.costs
-        return (
+        raw_cost = (
             probabilities.get("mais_0", 0.0) * costs.mais_0
             + probabilities.get("mais_1", 0.0) * costs.mais_1
             + probabilities.get("mais_2", 0.0) * costs.mais_2
@@ -755,6 +758,7 @@ class MissionManager:
             + probabilities.get("mais_5", 0.0) * costs.mais_5
             + probabilities.get("fatality", 0.0) * costs.fatality
         )
+        return raw_cost * self._INJURY_COST_ADJUSTMENT_FACTOR
 
     def _process_collision_injury(
         self, impulse_amount: float, is_character_collision: bool
