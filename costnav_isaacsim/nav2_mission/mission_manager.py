@@ -241,7 +241,7 @@ class MissionManager:
         self._last_elapsed_time = None  # Elapsed time for last mission (seconds)
 
         # Impulse health tracking (structural damage)
-        self._impulse_min_threshold = 10.0
+        self._impulse_min_threshold = 50.0
         self._impulse_health_max = 177.8
         self._impulse_health = self._impulse_health_max
         self._impulse_damage_accumulated = 0.0
@@ -255,6 +255,7 @@ class MissionManager:
         self._last_total_impulse = None  # Final total impulse for last mission
         self._property_contact_counts = {key: 0 for key in PROPERTY_PRIM_PATHS}
         self._last_property_contact_counts = None
+        self._property_contact_impulse_min_threshold = 100.0
 
         # Damager cooldown tracking
         self._last_damage_steps_remaining = 0
@@ -628,7 +629,16 @@ class MissionManager:
                     return category
         return None
 
-    def _record_property_contact_from_pair(self, actor0_path: str, actor1_path: str) -> Optional[str]:
+    def _record_property_contact_from_pair(
+        self,
+        actor0_path: str,
+        actor1_path: str,
+        impulse_amount: float,
+    ) -> Optional[str]:
+        """Record property contact from a pair of actor prim paths."""
+        if impulse_amount < self._property_contact_impulse_min_threshold:
+            return None
+
         target = next(iter(self._contact_report_targets), None)
         if target:
             if actor0_path == target or actor0_path.startswith(target + "/"):
@@ -647,6 +657,8 @@ class MissionManager:
 
         if category is None:
             return None
+
+        print(f"[CONTACT] Property contact: {category} {impulse_amount}")
 
         self._property_contact_counts[category] += 1
         return category
@@ -830,7 +842,7 @@ class MissionManager:
                 impulse_amount = (impulse.x * impulse.x + impulse.y * impulse.y + impulse.z * impulse.z) ** 0.5
                 if impulse_amount < self._impulse_min_threshold:
                     continue
-                self._record_property_contact_from_pair(actor0, actor1)
+                self._record_property_contact_from_pair(actor0, actor1, impulse_amount)
                 # Compute delta-v from impulse/mass and calculate injury cost
                 injury_info = self._process_collision_injury(impulse_amount, is_character_collision)
                 self._apply_impulse_damage(impulse_amount, injury_info)
