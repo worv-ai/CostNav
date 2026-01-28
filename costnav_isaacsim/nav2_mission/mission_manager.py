@@ -632,7 +632,7 @@ class MissionManager:
             return None
         # Exception in trash bin path.
         if prim_path.startswith("/World/Environment/SM_Buidlng_032/SM_Buidlng_032/Section26"):
-            return 'trash_bin'
+            return "trash_bin"
         # Broad match for any building prims (handle both SM_Buidlng_ and SM_Buildlng_)
         if prim_path.startswith("/World/Environment/SM_Buidlng_") or prim_path.startswith(
             "/World/Environment/SM_Buildlng_"
