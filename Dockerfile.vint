@@ -25,8 +25,11 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 WORKDIR /workspace
 
 # Copy the evaluation package and third_party dependencies
+# Only copy the vint_train package source, not logs/wandb artifacts (19GB+)
 COPY costnav_isaacsim/il_baselines/evaluation /workspace/costnav_isaacsim/il_baselines/evaluation
-COPY third_party/visualnav-transformer/train /workspace/third_party/visualnav-transformer/train
+COPY third_party/visualnav-transformer/train/vint_train /workspace/third_party/visualnav-transformer/train/vint_train
+COPY third_party/visualnav-transformer/train/setup.py /workspace/third_party/visualnav-transformer/train/
+COPY third_party/visualnav-transformer/train/README.md /workspace/third_party/visualnav-transformer/train/
 COPY pyproject.toml uv.lock README.md /workspace/
 
 # Create virtual environment and install dependencies
