@@ -54,13 +54,13 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
       - DISPLAY=${DISPLAY:-:0}
       - XAUTHORITY=${XAUTHORITY:-/tmp/.X11-unix}
-      - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
+      - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
       - ROBOT_PRIM_PATH=${ROBOT_PRIM_PATH:-}
       - ISAAC_PATH=${ISAAC_PATH:-/isaac-sim}
       - CARB_APP_PATH=${CARB_APP_PATH:-/isaac-sim/kit}
       - EXP_PATH=${EXP_PATH:-/isaac-sim/apps}
       - NUM_PEOPLE=${NUM_PEOPLE:-0}
-      - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
+      - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
       - FOOD=${FOOD:-True}
     volumes:
       - .:/workspace
@@ -79,7 +79,7 @@ services:
     working_dir: /workspace
     command:
       - "-ic"
-      - "/workspace/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-0} --robot $${SIM_ROBOT:-nova_carter} --food-enabled $${FOOD:-True}"
+      - "/workspace/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-0} --robot $${SIM_ROBOT:-segway_e1} --food-enabled $${FOOD:-True}"
     healthcheck:
       test:
         [
@@ -187,7 +187,7 @@ services:
       - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
       - DISPLAY=${DISPLAY:-:0}
       - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
-      - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
+      - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
       - TUNED=${TUNED:-False}
     depends_on:
       isaac-sim:
@@ -215,9 +215,9 @@ services:
       - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
       - DISPLAY=${DISPLAY:-:0}
       - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
-      - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
-      - TUNED=${TUNED:-False}
-      - AMCL=${AMCL:-True}
+      - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
+      - TUNED=${TUNED:-True}
+      - AMCL=${AMCL:-False}
     depends_on:
       isaac-sim:
         condition: service_healthy
@@ -252,9 +252,9 @@ services:
       - DISPLAY=${DISPLAY:-:0}
       - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
       - LIBGL_ALWAYS_SOFTWARE=1
-      - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
-      - TUNED=${TUNED:-False}
-      - AMCL=${AMCL:-True}
+      - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
+      - TUNED=${TUNED:-True}
+      - AMCL=${AMCL:-False}
     command: >
       bash -c "
         source /opt/ros/jazzy/setup.bash &&
@@ -285,7 +285,7 @@ services:
       - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
       - DISPLAY=${DISPLAY:-:0}
       - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
-      - SIM_ROBOT=${SIM_ROBOT:-nova_carter} # NOTE: isaac_sim_teleop_ros2 Package requires SIM_ROBOT
+      - SIM_ROBOT=${SIM_ROBOT:-segway_e1} # NOTE: isaac_sim_teleop_ros2 Package requires SIM_ROBOT
     volumes:
       - ./third_party/IsaacSim-ros_workspaces/build_ws/jazzy/isaac_sim_ros_ws:/workspace/build_ws:rw
       - ./costnav_isaacsim/isaac_sim_teleop_ros2:/workspace/isaac_sim_teleop_ros2:rw
