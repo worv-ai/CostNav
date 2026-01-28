@@ -1,14 +1,17 @@
+# AMCL Configuration
+# Note: These parameters are used when AMCL=True (default).
+# When AMCL=False, the rviz_no_amcl.launch.py is used instead, which provides
+# a static map->odom transform and does not launch AMCL. In that case, these
+# parameters are ignored.
 amcl:
   ros__parameters:
     use_sim_time: True
     alpha1: 0.03
     alpha2: 0.03
-    alpha3: 0.1
-    alpha4: 0.1
+    alpha3: 0.05
+    alpha4: 0.05
     alpha5: 0.05
     base_frame_id: "base_link"
-
-    # Laser Scan Parameters
     beam_skip_distance: 0.5
     beam_skip_error_threshold: 0.9
     beam_skip_threshold: 0.3
@@ -20,8 +23,6 @@ amcl:
     laser_min_range: -1.0
     laser_model_type: "likelihood_field"
     max_beams: 360
-
-    # Particle Filter Parameters
     max_particles: 2000
     min_particles: 500
     odom_frame_id: "odom"
@@ -29,32 +30,20 @@ amcl:
     pf_z: 0.99
     recovery_alpha_fast: 0.0
     recovery_alpha_slow: 0.0
-
-    # resample_interval: Number of filter updates before resampling
-    # Reduced to 2 for more frequent resampling with good odometry
-    # This helps particles converge faster when odometry is reliable
-    resample_interval: 2
-
-    # Motion Model Type - Differential drive model for wheel odometry
+    resample_interval: 3
     robot_model_type: "nav2_amcl::DifferentialMotionModel"
-
-    # Observation Model Parameters
     save_pose_rate: 0.5
     sigma_hit: 0.2
     tf_broadcast: true
-    transform_tolerance: 0.5
-    update_min_a: 0.15
-    update_min_d: 0.15
+    transform_tolerance: 1.0
+    update_min_a: 0.2
+    update_min_d: 0.25
     z_hit: 0.5
     z_max: 0.05
     z_rand: 0.5
     z_short: 0.05
-
-    # Topic Configuration
     scan_topic: scan
     map_topic: map
-
-    # Initial Pose Configuration
     set_initial_pose: true
     always_reset_initial_pose: false
     first_map_only: false
@@ -79,8 +68,8 @@ bt_navigator:
     robot_base_frame: base_link
     odom_topic: /chassis/odom
     bt_loop_duration: 10
-    default_server_timeout: 20
-    wait_for_service_timeout: 1000
+    default_server_timeout: 2000  # Increased from 20ms to 2000ms (2 seconds) to prevent timeout errors
+    wait_for_service_timeout: 5000  # Increased from 1000ms to 5000ms (5 seconds)
     action_server_result_timeout: 900.0
     navigators: ["navigate_to_pose", "navigate_through_poses"]
     navigate_to_pose:
@@ -160,24 +149,24 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: "OPEN_LOOP"
-    max_velocity: [2.0, 0.0, 0.5]  # Cap angular velocity
-    min_velocity: [-2.0, 0.0, -0.5]
+    max_velocity: [3.0, 0.0, 1.2]  # Cap angular velocity
+    min_velocity: [-3.0, 0.0, -1.2]
     # deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0
     # max_accel: [1.0, 0.0, 1.25]
     # max_decel: [-1.0, 0.0, -1.25]
-    odom_topic: "chassis/odom"
+    odom_topic: "/chassis/odom"
     odom_duration: 0.1
 
 controller_server:
   ros__parameters:
     use_sim_time: True
-    controller_frequency: 20.0
+    controller_frequency: 30.0  # Increased to 30Hz for faster reaction to obstacles
     # IMPORTANT: RotationShimController uses odometry feedback (closed_loop=true by default)
     # to enforce angular acceleration limits. If this is not set, Nav2 defaults to "odom",
     # which can leave the shim stuck at max_angular_accel*(1/controller_frequency).
     odom_topic: /chassis/odom
-    costmap_update_timeout: 0.30
+    costmap_update_timeout: 0.15  # Reduced timeout for faster costmap updates
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
     min_theta_velocity_threshold: 0.001
@@ -201,20 +190,20 @@ controller_server:
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.25
+      xy_goal_tolerance: 0.9  # Slightly smaller than mission_manager goal_tolerance (1.0m)
       yaw_goal_tolerance: 0.25
 
     # Rotation Shim Controller - wraps DWB to enforce rotate-in-place for differential drive
     FollowPath:
       plugin: "nav2_rotation_shim_controller::RotationShimController"
-      angular_dist_threshold: 0.785  # 45 degrees in radians - rotate in place if heading error > this
-      angular_disengage_threshold: 0.05  # ~3 degrees - very tight exit threshold to ensure robot stops before transitioning
-      forward_sampling_distance: 0.5  # meters - distance to look ahead on path for rotation alignment
-      rotate_to_heading_angular_vel: 0.5  # rad/s - rotation speed during in-place rotation
-      max_angular_accel: 3.5  # rad/s^2 - max angular acceleration during rotation
-      simulate_ahead_time: 2.0  # seconds - time to project robot motion for collision checking
+      angular_dist_threshold: 1.0472  # 60 deg in radians - rotate in place if heading error > this
+      angular_disengage_threshold: 0.1745  # ~10 deg in radians - exit threshold for leaving rotate-in-place
+      forward_sampling_distance: 1.0  # meters - look further ahead to reduce twitchy rotate decisions
+      rotate_to_heading_angular_vel: 1.0  # rad/s - slightly gentler rotate-in-place to reduce overshoot
+      max_angular_accel: 2.5  # rad/s^2 - smoother angular accel when closed_loop=true
+      simulate_ahead_time: 1.5  # seconds - less conservative lookahead for collision checking
       rotate_to_goal_heading: false  # Don't rotate to goal heading at the end
-      closed_loop: false  # Use commanded velocity instead of odometry for acceleration calculations (prevents low velocities)
+      closed_loop: false  # Use odometry feedback for acceleration limiting / rotation shim behavior
 
       # Primary controller (DWB)
       # Newer Nav2 versions expect the internal controller plugin under:
@@ -224,40 +213,40 @@ controller_server:
       debug_trajectory_details: True
       min_vel_x: 0.0
       min_vel_y: 0.0
-      max_vel_x: 2.0
+      max_vel_x: 3.0
       max_vel_y: 0.0
-      max_vel_theta: 0.5  # Cap angular velocity
+      max_vel_theta: 1.2  # Cap angular velocity
       min_speed_xy: 0.0
-      max_speed_xy: 2.0
+      max_speed_xy: 3.0
       min_speed_theta: 0.3  # Minimum rotation speed when rotating
-      # Acceleration limits
-      acc_lim_x: 2.5
+      # Acceleration limits - increased to allow reaching max_vel_x within sim_time
+      acc_lim_x: 4.0  # Increased from 2.5 to allow reaching 3.0 m/s within 1.0s sim_time
       acc_lim_y: 0.0
       acc_lim_theta: 3.5
-      decel_lim_x: -2.5
+      decel_lim_x: -4.0  # Increased from -2.5 to match acceleration
       decel_lim_y: 0.0
       decel_lim_theta: -3.5
       # Trajectory sampling
       vx_samples: 20
       vy_samples: 5
       vtheta_samples: 20
-      sim_time: 1.7
+      sim_time: 1.0  # Reduced from 2.0s to 1.0s - shorter lookahead allows higher velocities without path deviation penalty
       linear_granularity: 0.05
       angular_granularity: 0.025
       transform_tolerance: 0.2
-      xy_goal_tolerance: 0.25
+      xy_goal_tolerance: 0.9  # Slightly smaller than mission_manager goal_tolerance (1.0m)
       trans_stopped_velocity: 0.25
       short_circuit_trajectory_evaluation: True
       stateful: True
       # Critics configuration
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
-      BaseObstacle.scale: 0.02
-      PathAlign.scale: 32.0
+      BaseObstacle.scale: 0.05  # Increased for stronger obstacle avoidance (especially humans)
+      PathAlign.scale: 16.0  # Reduced from 32.0 to allow higher velocities (less penalty for path deviation)
       PathAlign.forward_point_distance: 0.1
-      GoalAlign.scale: 24.0
+      GoalAlign.scale: 12.0  # Reduced from 24.0 to allow higher velocities
       GoalAlign.forward_point_distance: 0.1
-      PathDist.scale: 32.0
-      GoalDist.scale: 24.0
+      PathDist.scale: 16.0  # Reduced from 32.0 to allow higher velocities
+      GoalDist.scale: 12.0  # Reduced from 24.0 to allow higher velocities
       RotateToGoal.scale: 32.0
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
@@ -268,13 +257,13 @@ local_costmap:
     ros__parameters:
       use_sim_time: True
       footprint_padding: 0.03
-      update_frequency: 5.0
-      publish_frequency: 2.0
+      update_frequency: 20.0  # Increased for more responsive obstacle detection
+      publish_frequency: 10.0  # Increased for better visualization and controller responsiveness
       global_frame: odom
       robot_base_frame: base_link
       rolling_window: true
-      width: 6
-      height: 6
+      width: 12
+      height: 12
       resolution: 0.05
       transform_tolerance: 0.3
       footprint: "[ [0.14, 0.25], [0.14, -0.25], [-0.607, -0.25], [-0.607, 0.25] ]"
@@ -288,8 +277,8 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         enabled: True
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.8
+        cost_scaling_factor: 5.0  # Higher cost scaling for stronger avoidance
+        inflation_radius: 1.2  # Larger safety buffer around humans (1.2m)
 
       front_2d_lidar_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
@@ -297,10 +286,15 @@ local_costmap:
         observation_sources: scan
         scan:
           topic: /front_2d_lidar/scan
-          max_obstacle_height: 2.0
           clearing: True
           marking: True
           data_type: "LaserScan"
+          obstacle_range: 5.0  # Detect obstacles up to 5m for early detection
+          raytrace_range: 6.0  # Clear space up to 6m
+          expected_update_rate: 0.2  # Expect updates at least every 200ms for fast response
+          observation_persistence: 0.0  # Use only latest data for immediate response
+          min_obstacle_height: 0.0  # Detect obstacles from ground level (humans)
+          max_obstacle_height: 2.0  # Up to 2m height (covers human height)
       back_2d_lidar_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -315,16 +309,16 @@ local_costmap:
       front_3d_lidar_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: true
-        voxel_decay: 15.0 # seconds if linear, e^n if exponential
+        voxel_decay: 2.0 # Faster decay for dynamic obstacles like humans (2 seconds)
         decay_model: 0 # 0=linear, 1=exponential, -1=persistent
         voxel_size: 0.05 # meters
         track_unknown_space: False # default space is known
-        mark_threshold: 2 # voxel height
+        mark_threshold: 1 # Lower threshold for faster marking (1 voxel height)
         update_footprint_enabled: true
         combination_method: 1 # 1=max, 0=override
         origin_z: 0.0 # meters
         publish_voxel_map: true # default off
-        transform_tolerance: 0.2 # seconds
+        transform_tolerance: 0.1 # Reduced to 100ms for faster updates
         # observation_sources: hesai_mark hesai_clear
         observation_sources: hesai_mark
         hesai_mark:
@@ -332,14 +326,14 @@ local_costmap:
           topic: /front_3d_lidar/lidar_points
           marking: true
           clearing: false
-          obstacle_range: 3.0 # meters
-          min_obstacle_height: -0.4 # default 0, meters
-          max_obstacle_height: 1.5 # default 3, meters
-          expected_update_rate: 0.0 # default 0, if not updating at this rate at least, remove from buffer
-          observation_persistence: 0.0 # default 0, use all measurements taken during now-value, 0=latest
+          obstacle_range: 5.0 # Increased to 5m for early human detection
+          min_obstacle_height: 0.0 # Start from ground level to detect human feet
+          max_obstacle_height: 2.0 # Increased to 2m to cover full human height
+          expected_update_rate: 0.1 # Expect updates every 100ms for fast response
+          observation_persistence: 0.0 # Use only latest data for immediate response to moving humans
           inf_is_valid: false # default false, for laser scans
           filter: "voxel" # default passthrough, apply "voxel", "passthrough", or no filter to sensor data, recommend on     voxel_min_points: 0          # default 0, minimum points per voxel for voxel filter
-          clear_after_reading: true # default false, clear the buffer after the layer gets readings from it
+          clear_after_reading: true # Clear buffer immediately after reading for fresh data
         # hesai_clear:
         #   enabled: true #default true, can be toggled on/off with associated service call
         #   data_type: PointCloud2
@@ -408,8 +402,8 @@ collision_monitor:
     cmd_vel_in_topic: "cmd_vel_smoothed"
     cmd_vel_out_topic: "cmd_vel"
     state_topic: "collision_monitor_state"
-    transform_tolerance: 0.2
-    source_timeout: 1.0
+    transform_tolerance: 0.1  # Reduced for faster transform updates
+    source_timeout: 0.5  # Faster timeout for more responsive detection
     base_shift_correction: True
     stop_pub_timeout: 2.0
     # Polygons represent zone around the robot for "stop", "slowdown" and "limit" action types,
@@ -419,8 +413,8 @@ collision_monitor:
       type: "polygon"
       action_type: "approach"
       footprint_topic: "/local_costmap/published_footprint"
-      time_before_collision: 1.2
-      simulation_time_step: 0.1
+      time_before_collision: 1.5  # Increased lookahead time for early human detection
+      simulation_time_step: 0.05  # Finer simulation steps for more accurate prediction
       min_points: 6000000000
       visualize: False
       enabled: True
@@ -447,7 +441,8 @@ map_saver:
 planner_server:
   ros__parameters:
     use_sim_time: True
-    expected_planner_frequency: 10.0
+    expected_planner_frequency: 5.0  # Reduced to prevent missed rate warnings
+    costmap_update_timeout: 0.5  # Timeout for waiting on costmap updates
     planner_plugins: ["GridBased"]
     GridBased:
       plugin: "nav2_navfn_planner::NavfnPlanner"
@@ -488,7 +483,7 @@ behavior_server:
     robot_base_frame: base_link
     transform_tolerance: 0.2
     simulate_ahead_time: 2.0
-    max_rotational_vel: 0.5  # Cap angular velocity
+    max_rotational_vel: 1.2  # Cap angular velocity
     min_rotational_vel: 0.3
     rotational_acc_lim: 3.5
 

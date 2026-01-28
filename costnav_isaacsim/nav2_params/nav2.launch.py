@@ -13,10 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Nav2 navigation launch file (navigation stack only, no localization).
+"""Nav2 navigation launch file (navigation stack only).
 
 This launch file only includes Nav2 navigation stack via navigation_launch.py.
-Localization (map_server + AMCL), lidar conversion, and RViz are in rviz.launch.py.
+Localization + RViz + lidar conversion are launched separately:
+- nova_carter: rviz.launch.py (map_server + AMCL)
+- segway_e1:  rviz_segway_e1.launch.py (map_server + static map->odom)
 
 Based on nav2_bringup/launch/bringup_launch.py structure:
 - rviz.launch.py: localization_launch.py + RViz + pointcloud_to_laserscan

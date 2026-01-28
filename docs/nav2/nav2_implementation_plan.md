@@ -2,9 +2,9 @@
 
 **Issue Reference:** [#5 - Support rule-based navigation with nav2](https://github.com/worv-ai/CostNav/issues/5)
 
-**Status:** ✅ Nav2 Integration Complete | ✅ Mission Orchestration Complete | ✅ Parameter Tuning Complete | ⏳ Cost Model Integration In Progress
+**Status:** ✅ Nav2 Integration Complete | ✅ Mission Orchestration Complete | ✅ Parameter Tuning Complete | ✅ Performance Optimization Complete | ⏳ Cost Model Integration In Progress
 **Target Version:** CostNav v0.2.0
-**Last Updated:** 2026-01-26
+**Last Updated:** 2026-01-27
 
 ---
 
@@ -23,6 +23,8 @@
 - **RViz Marker Visualization**: Start (green), goal (red), and robot (blue) markers
 - **Robot-Specific Configuration**: Separate parameter files for Nova Carter and Segway E1
 - **Parameter Tuning**: Nav2 parameters optimized for both Nova Carter and Segway E1
+- **Localization**: Using ground truth odometry (AMCL disabled) for accurate position tracking
+- **Performance Optimization**: High-speed navigation (2.0 m/s), fast human avoidance, responsive costmap updates
 
 ### ⏳ In Progress
 
@@ -48,6 +50,467 @@
    - **Root Cause Solution**: Changed the robot controller used in the USD Action Graph of Isaac Sim to properly support differential drive in-place rotation commands
    - **Navigation Enhancement**: Implemented `nav2_rotation_shim_controller::RotationShimController` wrapper around DWB controller as a complementary improvement for better in-place rotation behavior
    - **Details**: See "Parameter Tuning: RotationShimController" section below for the navigation enhancement configuration
+
+---
+
+## Localization: AMCL and Ground Truth Odometry
+
+### Overview
+
+CostNav's Nav2 integration supports **two localization modes**:
+
+1. **AMCL Mode (Default)** - Uses Adaptive Monte Carlo Localization for realistic navigation
+2. **Ground Truth Mode** - Uses perfect odometry from Isaac Sim for benchmarking
+
+The localization mode can be controlled via the `AMCL` environment variable.
+
+### Configuration
+
+#### AMCL Mode (AMCL=True, Default)
+
+**For all robots (nova_carter, segway_e1):**
+
+```bash
+# Default behavior - AMCL enabled
+SIM_ROBOT=nova_carter make run-nav2
+
+# Explicitly enable AMCL
+SIM_ROBOT=segway_e1 AMCL=True make run-nav2
+```
+
+**Launch file used:** `rviz.launch.py`
+
+This mode uses the standard Nav2 localization stack:
+
+- Map server provides the static map
+- AMCL estimates the `map -> odom` transform using particle filter
+- Robot localizes itself using laser scan matching
+
+**Navigation parameters include AMCL configuration:**
+
+```yaml
+# AMCL Configuration
+# Note: These parameters are used when AMCL=True (default).
+# When AMCL=False, the rviz_no_amcl.launch.py is used instead, which provides
+# a static map->odom transform and does not launch AMCL. In that case, these
+# parameters are ignored.
+amcl:
+  ros__parameters:
+    use_sim_time: True
+    alpha1: 0.2
+    alpha2: 0.2
+    # ... (full AMCL parameters)
+
+bt_navigator:
+  ros__parameters:
+    global_frame: map
+    robot_base_frame: base_link
+    odom_topic: /chassis/odom
+```
+
+#### Ground Truth Mode (AMCL=False)
+
+**For all robots (nova_carter, segway_e1):**
+
+```bash
+# Disable AMCL for ground truth odometry
+SIM_ROBOT=nova_carter AMCL=False make run-nav2
+SIM_ROBOT=segway_e1 AMCL=False make run-nav2
+```
+
+**Launch file used:** `rviz_no_amcl.launch.py`
+
+This mode bypasses AMCL and uses perfect odometry:
+
+- Map server provides the static map
+- Static TF publisher provides identity `map -> odom` transform
+- Robot uses ground truth pose from Isaac Sim
+
+**Note:** AMCL parameters in the navigation YAML files are **ignored** in this mode since AMCL is not launched.
+
+### TF Tree Structure
+
+#### AMCL Mode (Default)
+
+```
+map
+ └─ odom (from AMCL particle filter estimation)
+     └─ base_link (from Isaac Sim odometry)
+         └─ [sensor frames]
+```
+
+#### Ground Truth Mode (AMCL=False)
+
+```
+map
+ └─ odom (static identity transform)
+     └─ base_link (from Isaac Sim ground truth)
+         └─ [sensor frames]
+```
+
+### Environment Variable Summary
+
+| Variable    | Default       | Description                              |
+| ----------- | ------------- | ---------------------------------------- |
+| `AMCL`      | `True`        | Enable/disable AMCL localization         |
+| `SIM_ROBOT` | `nova_carter` | Robot selection (nova_carter, segway_e1) |
+| `TUNED`     | `False`       | Use tuned navigation parameters          |
+
+### Usage Examples
+
+```bash
+# Nova Carter with AMCL (default)
+SIM_ROBOT=nova_carter make run-nav2
+
+# Segway E1 with AMCL (default)
+SIM_ROBOT=segway_e1 make run-nav2
+
+# Nova Carter with ground truth odometry (no AMCL)
+SIM_ROBOT=nova_carter AMCL=False make run-nav2
+
+# Segway E1 with ground truth odometry (no AMCL)
+SIM_ROBOT=segway_e1 AMCL=False make run-nav2
+
+# Segway E1 with AMCL and tuned parameters
+SIM_ROBOT=segway_e1 AMCL=True TUNED=True make run-nav2
+```
+
+### When to Use Each Mode
+
+**AMCL Mode (AMCL=True):**
+
+- ✅ Realistic navigation testing
+- ✅ Evaluating localization robustness
+- ✅ Testing in environments with sensor noise
+- ✅ Preparing for real-world deployment
+- ✅ Default for all robots
+
+**Ground Truth Mode (AMCL=False):**
+
+- ✅ Pure navigation algorithm benchmarking
+- ✅ Isolating navigation performance from localization errors
+- ✅ Debugging navigation issues without localization uncertainty
+- ✅ Faster iteration during development
+- ✅ Available for both nova_carter and segway_e1
+
+### Real-World Deployment
+
+For real-world deployment, AMCL mode should always be used. The AMCL parameters can be tuned for specific robots and environments by modifying:
+
+- `costnav_isaacsim/nav2_params/nova_carter/navigation_params_tuned_true.yaml`
+- `costnav_isaacsim/nav2_params/segway_e1/navigation_params_tuned_true.yaml`
+
+Key AMCL parameters to tune:
+
+1. Particle filter parameters (`max_particles`, `min_particles`)
+2. Motion model parameters (`alpha1`-`alpha5`)
+3. Sensor model parameters (`z_hit`, `z_rand`, `z_max`, `z_short`)
+4. Update thresholds (`update_min_d`, `update_min_a`)
+
+---
+
+## Performance Optimization: High-Speed Navigation
+
+### Overview
+
+The Segway E1 navigation parameters have been optimized for **high-speed navigation** (2.0 m/s average speed) with **fast human avoidance** capabilities. These optimizations balance speed, safety, and responsiveness for delivery robot operations in dynamic environments.
+
+### Speed Optimization (2.0 m/s Target)
+
+#### Velocity Limits
+
+```yaml
+controller_server:
+  ros__parameters:
+    FollowPath:
+      plugin: "dwb_core::DWBLocalPlanner"
+      max_vel_x: 3.0 # Maximum forward velocity (increased from 2.0)
+      max_speed_xy: 3.0 # Maximum translational speed (increased from 2.0)
+      sim_time: 1.0 # Trajectory simulation time (reduced from 2.0s)
+      acc_lim_x: 4.0 # Acceleration limit (increased from 2.5)
+      decel_lim_x: -4.0 # Deceleration limit (increased from -2.5)
+```
+
+**Rationale:**
+
+- `max_vel_x: 3.0` sets the maximum forward speed (target: 2.0 m/s average)
+- `sim_time: 1.0` reduced to prevent path deviation penalties at high speeds
+- `acc_lim_x: 4.0` allows reaching 3.0 m/s within 1.0s simulation time
+- Shorter simulation time + higher acceleration = faster navigation without excessive path deviation
+
+#### Critical Insight: Acceleration Limits and Trajectory Scoring
+
+**The Problem:**
+DWB samples velocities up to `max_vel_x`, but **rejects trajectories that violate acceleration limits**. With the original settings:
+
+- `sim_time: 2.0` seconds
+- `acc_lim_x: 2.5` m/s²
+- Maximum reachable velocity = `2.5 × 2.0 = 5.0 m/s` ✅
+
+However, **faster trajectories travel farther** in simulation time, causing them to deviate more from the path and get heavily penalized by path-following critics (PathAlign, PathDist, GoalAlign, GoalDist).
+
+**Example:**
+
+- 3.0 m/s trajectory with `sim_time: 2.0` → travels 6 meters → high path deviation → rejected
+- 1.0 m/s trajectory with `sim_time: 2.0` → travels 2 meters → low path deviation → selected
+
+**The Solution:**
+
+1. **Reduce `sim_time` from 2.0s to 1.0s** - Shorter lookahead reduces path deviation penalty
+2. **Increase `acc_lim_x` from 2.5 to 4.0** - Ensures robot can reach max velocity within sim_time
+   - Maximum reachable velocity = `4.0 × 1.0 = 4.0 m/s` ✅ (exceeds `max_vel_x: 3.0`)
+3. **Reduce path-following critic scales by 50%** - Further reduces penalty for path deviation
+
+#### Trajectory Critic Tuning
+
+```yaml
+critics:
+  [
+    "RotateToGoal",
+    "Oscillation",
+    "BaseObstacle",
+    "GoalAlign",
+    "PathAlign",
+    "PathDist",
+    "GoalDist",
+  ]
+
+# Path-following critics (reduced by 50% to allow higher speeds)
+PathAlign.scale: 16.0 # Reduced from 32.0
+GoalAlign.scale: 12.0 # Reduced from 24.0
+PathDist.scale: 16.0 # Reduced from 32.0
+GoalDist.scale: 12.0 # Reduced from 24.0
+
+# Obstacle avoidance (unchanged - safety priority)
+BaseObstacle.scale: 0.05
+
+# Goal rotation behavior (unchanged)
+RotateToGoal.scale: 32.0
+RotateToGoal.slowing_factor: 5.0
+```
+
+**How DWB Trajectory Scoring Works:**
+
+DWB selects the trajectory with the **lowest total score**:
+
+```
+total_score = Σ (critic_raw_score × critic_scale)
+```
+
+**Benefits of Reduced Critic Scales:**
+
+- Faster trajectories (2.0-3.0 m/s) are no longer heavily penalized for path deviation
+- Robot maintains higher average speeds during navigation
+- Still follows the global path (just with more tolerance)
+- Obstacle avoidance remains unchanged (safety priority)
+
+### Responsive Costmap Updates
+
+#### Local Costmap Frequency
+
+```yaml
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      update_frequency: 10.0 # Increased from 5.0 Hz (2x faster)
+      publish_frequency: 5.0 # Increased from 2.0 Hz (2.5x faster)
+```
+
+**Benefits:**
+
+- Obstacles detected and incorporated into costmap **twice as fast**
+- More up-to-date information for the controller at high speeds
+- Better responsiveness to dynamic obstacles (humans, other robots)
+
+#### Controller Frequency
+
+```yaml
+controller_server:
+  ros__parameters:
+    controller_frequency: 30.0 # Increased from 20.0 Hz (50% faster)
+    costmap_update_timeout: 0.15 # Reduced from 0.30s (faster processing)
+```
+
+**Benefits:**
+
+- Robot reacts **50% faster** to obstacles and path changes
+- Smoother trajectory execution at high speeds
+- Reduced latency between perception and action
+
+### Fast Human Avoidance
+
+#### Front Lidar Optimization (2D Layer)
+
+```yaml
+front_2d_lidar_layer:
+  plugin: "nav2_costmap_2d::ObstacleLayer"
+  enabled: True
+  observation_sources: front_2d_lidar
+  front_2d_lidar:
+    topic: /front_2d_lidar/scan
+    max_obstacle_height: 2.0 # Increased from 1.5m (full human height)
+    clearing_range: 5.0 # Increased from 3.0m (67% farther detection)
+    obstacle_range: 5.0 # Increased from 3.0m
+    raytrace_max_range: 6.0 # Increased from 4.0m
+    raytrace_min_range: 0.0
+    expected_update_rate: 0.1 # Monitor for 10 Hz updates
+```
+
+**Benefits:**
+
+- Detects humans **67% farther** (5m vs 3m)
+- Covers full human height (2.0m)
+- Faster clearing of space as humans move away
+
+#### Front Lidar Optimization (3D Layer)
+
+```yaml
+front_3d_lidar_layer:
+  plugin: "nav2_costmap_2d::VoxelLayer"
+  enabled: True
+  publish_voxel_map: True
+  origin_z: 0.0
+  z_resolution: 0.2
+  z_voxels: 16
+  max_obstacle_height: 2.0 # Increased from 1.5m
+  mark_threshold: 0
+  observation_sources: front_3d_lidar
+  front_3d_lidar:
+    topic: /front_3d_lidar/point_cloud
+    max_obstacle_height: 2.0 # Full human height
+    min_obstacle_height: 0.0
+    obstacle_max_range: 5.0 # Increased from 3.0m
+    obstacle_min_range: 0.0
+    raytrace_max_range: 6.0 # Increased from 4.0m
+    raytrace_min_range: 0.0
+    clearing: True
+    marking: True
+    voxel_decay: 2.0 # Reduced from 15.0s (7.5x faster decay)
+    decay_model: 0 # Linear decay
+```
+
+**Benefits:**
+
+- 3D obstacle detection up to **5 meters** ahead
+- **7.5x faster voxel decay** (2s vs 15s) for dynamic obstacles
+- Quickly clears space as humans move, preventing "ghost obstacles"
+- Full 3D coverage of human body (0.0m to 2.0m height)
+
+#### Inflation Layer
+
+```yaml
+inflation_layer:
+  plugin: "nav2_costmap_2d::InflationLayer"
+  cost_scaling_factor: 5.0 # Increased from 3.0 (stronger gradient)
+  inflation_radius: 1.2 # Increased from 0.8m (50% larger buffer)
+```
+
+**Benefits:**
+
+- **1.2m safety buffer** around humans (was 0.8m)
+- Stronger cost gradient encourages earlier avoidance maneuvers
+- Safer navigation at 2.0 m/s speeds
+
+#### Obstacle Avoidance Critic
+
+```yaml
+BaseObstacle.scale: 0.05 # Increased from 0.02 (2.5x stronger)
+```
+
+**Benefits:**
+
+- **2.5x stronger penalty** for trajectories near obstacles
+- Robot avoids humans more aggressively
+- Maintains safe distances even at high speeds
+
+#### Collision Monitor
+
+```yaml
+collision_monitor:
+  ros__parameters:
+    transform_tolerance: 0.1 # Reduced from 0.2s
+    source_timeout: 0.5 # Reduced from 1.0s
+    polygons: ["FootprintApproach"]
+    FootprintApproach:
+      type: "polygon"
+      action_type: "approach"
+      footprint_topic: "/local_costmap/published_footprint"
+      time_before_collision: 1.5 # Increased from 1.2s (earlier prediction)
+      simulation_time_step: 0.05 # Reduced from 0.1s (finer simulation)
+      min_points: 6
+      visualize: True
+      enabled: True
+```
+
+**Benefits:**
+
+- Predicts collisions **1.5 seconds** ahead (was 1.2s)
+- **2x finer simulation** (0.05s vs 0.1s) for more accurate predictions
+- Earlier warnings allow smoother avoidance maneuvers
+
+### Planner Optimization
+
+```yaml
+planner_server:
+  ros__parameters:
+    expected_planner_frequency: 5.0 # Reduced from 10.0 Hz
+    costmap_update_timeout: 0.5 # Added for faster costmap handling
+```
+
+**Rationale:**
+
+- Reduced planner frequency prevents "missed rate" warnings
+- Controller runs at 30 Hz, planner at 5 Hz is sufficient
+- Allows more CPU resources for high-frequency controller
+
+### Performance Summary
+
+| Metric                          | Before   | After    | Improvement         |
+| ------------------------------- | -------- | -------- | ------------------- |
+| **Max Velocity**                | 2.0 m/s  | 3.0 m/s  | +50%                |
+| **Target Average Speed**        | 1.5 m/s  | 2.0 m/s  | +33%                |
+| **Acceleration Limit**          | 2.5 m/s² | 4.0 m/s² | +60%                |
+| **Trajectory Sim Time**         | 2.0s     | 1.0s     | -50% (faster react) |
+| **Path Critic Scales**          | 32/24    | 16/12    | -50% (less penalty) |
+| **Controller Frequency**        | 20 Hz    | 30 Hz    | +50%                |
+| **Costmap Update Rate**         | 5 Hz     | 10 Hz    | +100%               |
+| **Human Detection Range**       | 3.0m     | 5.0m     | +67%                |
+| **Safety Buffer**               | 0.8m     | 1.2m     | +50%                |
+| **Voxel Decay Time**            | 15s      | 2s       | -87% (7.5x faster)  |
+| **Collision Prediction**        | 1.2s     | 1.5s     | +25%                |
+| **Obstacle Avoidance Strength** | 0.02     | 0.05     | +150%               |
+
+### Expected Behavior
+
+With these optimizations, the Segway E1 should:
+
+- ✅ Maintain average speeds closer to **2.0 m/s** during navigation (up from ~0.95 m/s)
+- ✅ Reach maximum velocity of **3.0 m/s** on straight paths
+- ✅ Accelerate **60% faster** with 4.0 m/s² acceleration limit
+- ✅ React **50% faster** with 1.0s trajectory simulation time (down from 2.0s)
+- ✅ Follow paths with **50% less penalty** for minor deviations (critic scales reduced)
+- ✅ Detect humans up to **5 meters** ahead
+- ✅ React **50% faster** to obstacles with 30 Hz controller
+- ✅ Maintain a **1.2m safety buffer** around humans
+- ✅ Update obstacle information every **100ms** (10 Hz)
+- ✅ Avoid humans **2.5x more aggressively** with increased critic scale
+- ✅ Predict collisions **1.5 seconds** ahead for early avoidance
+- ✅ Clear dynamic obstacles **7.5x faster** with reduced voxel decay
+
+### Key Optimization Insights
+
+**Problem Solved:** The robot was stuck at ~0.95 m/s despite `max_vel_x: 3.0` because:
+
+1. **Acceleration Constraint:** With `acc_lim_x: 2.5` and `sim_time: 1.0`, maximum reachable velocity was only 2.5 m/s
+2. **Path Deviation Penalty:** Faster trajectories travel farther (e.g., 3.0 m/s × 2.0s = 6m), causing higher path deviation scores and rejection by DWB
+
+**Solution Applied:**
+
+1. **Increased `acc_lim_x` to 4.0 m/s²** - Robot can now reach 4.0 m/s within 1.0s simulation time (exceeds `max_vel_x: 3.0`)
+2. **Reduced `sim_time` to 1.0s** - Faster trajectories travel less distance (3.0 m/s × 1.0s = 3m), reducing path deviation
+3. **Halved path critic scales** - PathAlign, GoalAlign, PathDist, GoalDist reduced by 50% to further reduce penalty
+
+**Result:** Robot can now achieve 2.0-3.0 m/s speeds while maintaining safe obstacle avoidance and reasonable path following.
 
 ---
 

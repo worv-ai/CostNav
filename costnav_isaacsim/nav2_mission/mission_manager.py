@@ -89,6 +89,10 @@ class MissionManagerConfig:
     robot_prim_path: Optional[str] = None  # Robot prim path in Isaac Sim USD stage
     teleport_settle_steps: int = 30  # Number of simulation steps after teleportation for physics to settle
 
+    # Nav2 costmap clearing (useful when teleporting between missions)
+    clear_costmaps_on_mission_start: bool = True
+    costmap_clear_timeout_sec: float = 2.0  # Max time to wait for clear service responses before continuing
+
 
 class MissionState(Enum):
     """State machine for mission execution."""
@@ -100,6 +104,7 @@ class MissionState(Enum):
     TELEPORTING = "teleporting"
     SETTLING = "settling"  # Waiting for physics to settle after teleport
     PUBLISHING_INITIAL_POSE = "publishing_initial_pose"
+    CLEARING_COSTMAPS = "clearing_costmaps"
     PUBLISHING_GOAL = "publishing_goal"
     WAITING_FOR_COMPLETION = "waiting_for_completion"
     COMPLETED = "completed"
@@ -197,6 +202,12 @@ class MissionManager:
         self._result_service = None
         self._odom_sub = None
 
+        # Nav2 costmap clear service clients (initialized in _initialize)
+        self._clear_costmap_global_srv = None
+        self._clear_costmap_local_srv = None
+        self._costmap_clear_futures = {}
+        self._costmap_clear_start_time = None
+
         # State machine
         self._state = MissionState.INIT
         self._current_mission = 0
@@ -249,6 +260,14 @@ class MissionManager:
         self._last_damage_steps_remaining = 0
         self._damage_cooldown_steps = 30
 
+        # Delta-v and injury cost tracking (computed from impulse/mass)
+        self._delta_v_magnitudes_mps = []  # List of delta-v magnitudes in m/s per mission
+        self._last_delta_v_magnitudes_mps = None  # Final list for last mission
+        self._injury_costs = []  # List of MAIS-based injury costs per collision
+        self._total_injury_cost = 0.0  # Sum of all injury costs during mission
+        self._last_injury_costs = None  # Final list for last mission
+        self._last_total_injury_cost = None  # Final total for last mission
+
         # Food tracking for spoilage evaluation
         self._food_root_prim_path = None  # Root prim path for food assets
         self._food_prefix_path = None  # Pre-calculated prefix for startswith check
@@ -292,6 +311,8 @@ class MissionManager:
             self._step_settling()
         elif self._state == MissionState.PUBLISHING_INITIAL_POSE:
             self._step_publishing_initial_pose()
+        elif self._state == MissionState.CLEARING_COSTMAPS:
+            self._step_clearing_costmaps()
         elif self._state == MissionState.PUBLISHING_GOAL:
             self._step_publishing_goal()
         elif self._state == MissionState.WAITING_FOR_COMPLETION:
@@ -320,6 +341,22 @@ class MissionManager:
 
             # Create ROS2 node
             self._node = Node(self.node_name)
+
+            # Nav2 costmap clear services (best-effort; keep running even if nav2_msgs isn't available)
+            try:
+                from nav2_msgs.srv import ClearEntireCostmap
+
+                # Use the same service names as nav2_simple_commander (relative names)
+                self._clear_costmap_global_srv = self._node.create_client(
+                    ClearEntireCostmap, "global_costmap/clear_entirely_global_costmap"
+                )
+                self._clear_costmap_local_srv = self._node.create_client(
+                    ClearEntireCostmap, "local_costmap/clear_entirely_local_costmap"
+                )
+            except Exception as exc:
+                logger.warning(f"[INIT] Nav2 costmap clear services unavailable: {exc}")
+                self._clear_costmap_global_srv = None
+                self._clear_costmap_local_srv = None
 
             # Start mission service (manual trigger)
             self._start_service = self._node.create_service(Trigger, "/start_mission", self._handle_start_mission)
@@ -417,6 +454,7 @@ class MissionManager:
             MissionState.TELEPORTING,
             MissionState.SETTLING,
             MissionState.PUBLISHING_INITIAL_POSE,
+            MissionState.CLEARING_COSTMAPS,
             MissionState.PUBLISHING_GOAL,
             MissionState.WAITING_FOR_COMPLETION,
         }
@@ -441,6 +479,10 @@ class MissionManager:
         # Reset food tracking
         self._initial_food_piece_count = 0
         self._final_food_piece_count = None
+
+        # Reset costmap clear tracking
+        self._costmap_clear_futures = {}
+        self._costmap_clear_start_time = None
 
     def _odom_callback(self, msg) -> None:
         """Handle odometry messages for robot position and orientation tracking."""
@@ -517,6 +559,10 @@ class MissionManager:
         self._contact_count = 0
         self._total_impulse = 0.0
         self._property_contact_counts = {key: 0 for key in PROPERTY_PRIM_PATHS}
+        # Reset delta-v and injury cost tracking
+        self._delta_v_magnitudes_mps = []
+        self._injury_costs = []
+        self._total_injury_cost = 0.0
 
     def _setup_contact_reporting(self) -> None:
         food_root = self.mission_config.food.prim_path
@@ -605,10 +651,19 @@ class MissionManager:
         self._property_contact_counts[category] += 1
         return category
 
-    def _apply_impulse_damage(self, impulse_amount: float) -> None:
+    def _apply_impulse_damage(
+        self, impulse_amount: float, injury_info: "tuple[float, float, float] | None" = None
+    ) -> None:
         # Only calculate health damage when mission is active
         if not self._is_mission_active():
-            print(f"[CONTACT] Impulse: {impulse_amount:.2f}")
+            msg = f"[CONTACT] Impulse: {impulse_amount:.2f}"
+            if injury_info:
+                delta_v_mps, injury_cost, total_injury_cost = injury_info
+                msg += (
+                    f" | delta_v={delta_v_mps:.4f} m/s ({delta_v_mps * self._MPS_TO_MPH:.2f} mph), "
+                    f"{injury_cost=:.2f}, {total_injury_cost=:.2f}"
+                )
+            print(msg)
             return
 
         if self._impulse_health <= 0.0:
@@ -620,9 +675,113 @@ class MissionManager:
 
         self._impulse_damage_accumulated += impulse_amount
         self._impulse_health = max(0.0, self._impulse_health_max - self._impulse_damage_accumulated)
-        print(
-            f"[CONTACT] Impulse: {impulse_amount:.2f}, Health: {self._impulse_health:.2f}, Count: {self._contact_count}"
+        msg = (
+            f"[CONTACT] Impulse: {impulse_amount:.2f}, Health: {self._impulse_health:.2f}, "
+            f"Count: {self._contact_count}"
         )
+        if injury_info:
+            delta_v_mps, injury_cost, total_injury_cost = injury_info
+            msg += (
+                f" | delta_v={delta_v_mps:.4f} m/s ({delta_v_mps * self._MPS_TO_MPH:.2f} mph), "
+                f"cost={injury_cost:.2f}, total={total_injury_cost:.2f}"
+            )
+        print(msg)
+
+    # MAIS logistic regression coefficients from crash data
+    # Format: (intercept, slope) for P(MAIS >= level) = 1 / (1 + exp(-(intercept + slope * delta_v_mph)))
+    _MAIS_COEFFICIENTS = {
+        "all": {
+            "mais_1": (-1.3925, 0.0815),
+            "mais_2": (-5.1331, 0.1479),
+            "mais_3": (-6.9540, 0.1637),
+            "mais_4": (-8.2070, 0.1564),
+            "mais_5": (-8.7927, 0.1598),
+            "fatality": (-8.9819, 0.1603),
+        },
+    }
+    _MPS_TO_MPH = 2.23694
+    _MAIS_LEVELS = ("mais_0", "mais_1", "mais_2", "mais_3", "mais_4", "mais_5", "fatality")
+
+    @staticmethod
+    def _logistic_probability(intercept: float, slope: float, delta_v_mph: float) -> float:
+        """Compute logistic probability P(MAIS >= level)."""
+        exponent = intercept + slope * delta_v_mph
+        return math.exp(exponent) / (1.0 + math.exp(exponent))
+
+    def _compute_mais_probabilities(self, delta_v_mps: float) -> dict:
+        """Compute MAIS level probabilities from delta-v using logistic regression."""
+        if delta_v_mps <= 0.0:
+            return {level: 1.0 if level == "mais_0" else 0.0 for level in self._MAIS_LEVELS}
+
+        delta_v_mph = delta_v_mps * self._MPS_TO_MPH
+        crash_mode = self.mission_config.injury.crash_mode or "all"
+        coefficients = self._MAIS_COEFFICIENTS.get(crash_mode, self._MAIS_COEFFICIENTS["all"])
+
+        # Compute cumulative probabilities P(MAIS >= level)
+        mais_1_plus = self._logistic_probability(*coefficients["mais_1"], delta_v_mph)
+        mais_2_plus = self._logistic_probability(*coefficients["mais_2"], delta_v_mph)
+        mais_3_plus = self._logistic_probability(*coefficients["mais_3"], delta_v_mph)
+        mais_4_plus = self._logistic_probability(*coefficients["mais_4"], delta_v_mph)
+        mais_5_plus = self._logistic_probability(*coefficients["mais_5"], delta_v_mph)
+        fatality = self._logistic_probability(*coefficients["fatality"], delta_v_mph)
+
+        # Ensure monotonicity
+        mais_2_plus = min(mais_2_plus, mais_1_plus)
+        mais_3_plus = min(mais_3_plus, mais_2_plus)
+        mais_4_plus = min(mais_4_plus, mais_3_plus)
+        mais_5_plus = min(mais_5_plus, mais_4_plus)
+        fatality = min(fatality, mais_5_plus)
+
+        # Convert cumulative to individual level probabilities
+        return {
+            "mais_0": 1.0 - mais_1_plus,
+            "mais_1": mais_1_plus - mais_2_plus,
+            "mais_2": mais_2_plus - mais_3_plus,
+            "mais_3": mais_3_plus - mais_4_plus,
+            "mais_4": mais_4_plus - mais_5_plus,
+            "mais_5": mais_5_plus - fatality,
+            "fatality": fatality,
+        }
+
+    # Injury cost adjustment factor to scale expected costs
+    _INJURY_COST_ADJUSTMENT_FACTOR = 0.0110
+
+    def _compute_expected_injury_cost(self, probabilities: dict) -> float:
+        """Compute expected injury cost from MAIS probabilities and configured costs."""
+        costs = self.mission_config.injury.costs
+        raw_cost = (
+            probabilities.get("mais_0", 0.0) * costs.mais_0
+            + probabilities.get("mais_1", 0.0) * costs.mais_1
+            + probabilities.get("mais_2", 0.0) * costs.mais_2
+            + probabilities.get("mais_3", 0.0) * costs.mais_3
+            + probabilities.get("mais_4", 0.0) * costs.mais_4
+            + probabilities.get("mais_5", 0.0) * costs.mais_5
+            + probabilities.get("fatality", 0.0) * costs.fatality
+        )
+        return raw_cost * self._INJURY_COST_ADJUSTMENT_FACTOR
+
+    def _process_collision_injury(
+        self, impulse_amount: float, is_character_collision: bool
+    ) -> "tuple[float, float, float] | None":
+        """Compute delta-v from impulse/mass and calculate injury cost.
+
+        Returns:
+            A tuple of (delta_v_mps, injury_cost, total_injury_cost) if injury tracking
+            is enabled, otherwise None.
+        """
+        if not self.mission_config.injury.enabled or not is_character_collision:
+            return None
+
+        robot_mass = self.mission_config.injury.robot_mass
+        delta_v_mps = impulse_amount / robot_mass
+        self._delta_v_magnitudes_mps.append(delta_v_mps)
+
+        probabilities = self._compute_mais_probabilities(delta_v_mps)
+        injury_cost = self._compute_expected_injury_cost(probabilities)
+        self._injury_costs.append(injury_cost)
+        self._total_injury_cost += injury_cost
+
+        return (delta_v_mps, injury_cost, self._total_injury_cost)
 
     def _on_contact_report(self, contact_headers, contact_data) -> None:
         if not self._contact_report_targets:
@@ -658,6 +817,10 @@ class MissionManager:
             if header.num_contact_data == 0:
                 continue
 
+            is_character_collision = False
+            if "/World/Characters/" in actor0 or "/World/Characters/" in actor1:
+                is_character_collision = True
+
             contact_range = range(
                 header.contact_data_offset,
                 header.contact_data_offset + header.num_contact_data,
@@ -668,7 +831,9 @@ class MissionManager:
                 if impulse_amount < self._impulse_min_threshold:
                     continue
                 self._record_property_contact_from_pair(actor0, actor1)
-                self._apply_impulse_damage(impulse_amount)
+                # Compute delta-v from impulse/mass and calculate injury cost
+                injury_info = self._process_collision_injury(impulse_amount, is_character_collision)
+                self._apply_impulse_damage(impulse_amount, injury_info)
                 self._last_damage_steps_remaining = self._damage_cooldown_steps
                 return
 
@@ -1054,14 +1219,32 @@ class MissionManager:
             total_contact_count = self._contact_count
             total_impulse = self._total_impulse
             property_counts = dict(self._property_contact_counts)
+            delta_v_list = list(self._delta_v_magnitudes_mps)
+            injury_costs = list(self._injury_costs)
+            total_injury_cost = self._total_injury_cost
         elif self._last_contact_count is not None:
             total_contact_count = self._last_contact_count
             total_impulse = self._last_total_impulse if self._last_total_impulse is not None else 0.0
             property_counts = dict(self._last_property_contact_counts or {})
+            delta_v_list = list(self._last_delta_v_magnitudes_mps or [])
+            injury_costs = list(self._last_injury_costs or [])
+            total_injury_cost = self._last_total_injury_cost if self._last_total_injury_cost is not None else 0.0
         else:
             total_contact_count = self._contact_count
             total_impulse = self._total_impulse
             property_counts = dict(self._property_contact_counts)
+            delta_v_list = list(self._delta_v_magnitudes_mps)
+            injury_costs = list(self._injury_costs)
+            total_injury_cost = self._total_injury_cost
+
+        # Compute delta-v statistics
+        delta_v_count = len(delta_v_list)
+        if delta_v_count > 0:
+            delta_v_avg_mps = sum(delta_v_list) / delta_v_count
+            delta_v_avg_mph = delta_v_avg_mps * self._MPS_TO_MPH
+        else:
+            delta_v_avg_mps = 0.0
+            delta_v_avg_mph = 0.0
 
         # Food metrics
         food_enabled = bool(self.mission_config.food.enabled)
@@ -1095,6 +1278,11 @@ class MissionManager:
             "property_contact_bollard": property_counts.get("bollard", 0),
             "property_contact_building": property_counts.get("building", 0),
             "property_contact_total": sum(property_counts.values()),
+            "delta_v_count": delta_v_count,
+            "delta_v_avg_mps": delta_v_avg_mps,
+            "delta_v_avg_mph": delta_v_avg_mph,
+            "injury_costs": injury_costs,
+            "total_injury_cost": total_injury_cost,
             "food_enabled": food_enabled,
             "food_initial_pieces": food_initial_pieces,
             "food_final_pieces": food_final_pieces,
@@ -1423,7 +1611,80 @@ class MissionManager:
         """Publish initial pose for AMCL."""
         self._publish_initial_pose(self._current_start)
         self._wait_start_time = self._get_current_time_seconds()
-        self._state = MissionState.PUBLISHING_GOAL
+        # If we teleported, it's useful to clear Nav2 costmaps before sending a new goal.
+        if self.config.clear_costmaps_on_mission_start:
+            self._state = MissionState.CLEARING_COSTMAPS
+        else:
+            self._state = MissionState.PUBLISHING_GOAL
+
+    def _step_clearing_costmaps(self):
+        """Clear Nav2 global/local costmaps (best-effort) before publishing a new goal."""
+
+        # Defensive: allow disabling at runtime.
+        if not self.config.clear_costmaps_on_mission_start:
+            self._state = MissionState.PUBLISHING_GOAL
+            return
+
+        if self._costmap_clear_start_time is None:
+            self._costmap_clear_start_time = self._get_current_time_seconds()
+            self._costmap_clear_futures = {}
+            logger.info(f"[{self._state.name}] Clearing Nav2 costmaps")
+
+        # If clients weren't created (nav2_msgs missing, or init failed), continue.
+        if self._clear_costmap_global_srv is None and self._clear_costmap_local_srv is None:
+            logger.warning(f"[{self._state.name}] Costmap clear clients not available, continuing")
+            # Reset for next mission
+            self._costmap_clear_start_time = None
+            self._costmap_clear_futures = {}
+            self._state = MissionState.PUBLISHING_GOAL
+            return
+
+        # Import locally so unit tests that don't run ROS2 don't require nav2_msgs.
+        try:
+            from nav2_msgs.srv import ClearEntireCostmap
+        except Exception as exc:
+            logger.warning(f"[{self._state.name}] nav2_msgs not available ({exc}); continuing without costmap clear")
+            # Reset for next mission
+            self._costmap_clear_start_time = None
+            self._costmap_clear_futures = {}
+            self._state = MissionState.PUBLISHING_GOAL
+            return
+
+        now = self._get_current_time_seconds()
+        if (now - self._costmap_clear_start_time) >= self.config.costmap_clear_timeout_sec:
+            logger.info(
+                f"[{self._state.name}] Timed out clearing costmaps after {self.config.costmap_clear_timeout_sec:.2f}s, continuing"
+            )
+            # Reset for next mission
+            self._costmap_clear_start_time = None
+            self._costmap_clear_futures = {}
+            self._state = MissionState.PUBLISHING_GOAL
+            return
+
+        def _kickoff(name: str, client) -> None:
+            if client is None or name in self._costmap_clear_futures:
+                return
+            # Non-blocking wait; we retry each sim step until timeout.
+            if not client.wait_for_service(timeout_sec=0.0):
+                return
+            req = ClearEntireCostmap.Request()
+            self._costmap_clear_futures[name] = client.call_async(req)
+
+        _kickoff("global", self._clear_costmap_global_srv)
+        _kickoff("local", self._clear_costmap_local_srv)
+
+        def _complete(name: str, client) -> bool:
+            if client is None:
+                return True
+            fut = self._costmap_clear_futures.get(name)
+            return fut is not None and fut.done()
+
+        if _complete("global", self._clear_costmap_global_srv) and _complete("local", self._clear_costmap_local_srv):
+            logger.info(f"[{self._state.name}] Costmaps cleared")
+            # Reset for next mission
+            self._costmap_clear_start_time = None
+            self._costmap_clear_futures = {}
+            self._state = MissionState.PUBLISHING_GOAL
 
     def _step_publishing_goal(self):
         """Publish goal pose to Nav2 after initial pose delay."""
@@ -1465,6 +1726,9 @@ class MissionManager:
             self._last_contact_count = self._contact_count
             self._last_total_impulse = self._total_impulse
             self._last_property_contact_counts = dict(self._property_contact_counts)
+            self._last_delta_v_magnitudes_mps = list(self._delta_v_magnitudes_mps)
+            self._last_injury_costs = list(self._injury_costs)
+            self._last_total_injury_cost = self._total_injury_cost
 
             # Check for food spoilage before declaring success
             if self._check_food_spoilage():
@@ -1499,6 +1763,9 @@ class MissionManager:
             self._last_contact_count = self._contact_count
             self._last_total_impulse = self._total_impulse
             self._last_property_contact_counts = dict(self._property_contact_counts)
+            self._last_delta_v_magnitudes_mps = list(self._delta_v_magnitudes_mps)
+            self._last_injury_costs = list(self._injury_costs)
+            self._last_total_injury_cost = self._total_injury_cost
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_PHYSICALASSISTANCE] Mission {self._current_mission} failed - robot fell down! "
@@ -1519,6 +1786,9 @@ class MissionManager:
             self._last_contact_count = self._contact_count
             self._last_total_impulse = self._total_impulse
             self._last_property_contact_counts = dict(self._property_contact_counts)
+            self._last_delta_v_magnitudes_mps = list(self._delta_v_magnitudes_mps)
+            self._last_injury_costs = list(self._injury_costs)
+            self._last_total_injury_cost = self._total_injury_cost
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_PHYSICALASSISTANCE] Mission {self._current_mission} failed - impulse health depleted! "
@@ -1538,6 +1808,9 @@ class MissionManager:
             self._last_contact_count = self._contact_count
             self._last_total_impulse = self._total_impulse
             self._last_property_contact_counts = dict(self._property_contact_counts)
+            self._last_delta_v_magnitudes_mps = list(self._delta_v_magnitudes_mps)
+            self._last_injury_costs = list(self._injury_costs)
+            self._last_total_injury_cost = self._total_injury_cost
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_TIMEOUT] Mission {self._current_mission} timed out! "

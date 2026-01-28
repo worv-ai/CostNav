@@ -13,20 +13,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""RViz launch file for robots that use AMCL (e.g., nova_carter).
+"""RViz launch file for robots that do NOT use AMCL (ground-truth odometry mode).
 
-This launch file includes:
+This launch file is used when AMCL is disabled (AMCL=False).
+It includes:
 - RViz2 visualization
-- Localization via nav2_bringup's localization_launch.py (map_server + AMCL)
+- Map server (static map)
+- Static TF publisher for ground-truth `map -> odom` (identity transform)
 - Pointcloud to laserscan conversion
+
+Use this when the robot has perfect odometry (e.g., in simulation with ground-truth pose).
 """
 
 import os
 
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -39,7 +41,7 @@ def generate_launch_description():
 
     rviz_config = LaunchConfiguration(
         "rviz_config",
-        default=os.path.join(this_dir, "carter_navigation.rviz"),
+        default=os.path.join(this_dir, "segway_e1", "navigation.rviz"),
     )
 
     map_yaml_file = LaunchConfiguration(
@@ -49,12 +51,10 @@ def generate_launch_description():
 
     params_file = LaunchConfiguration(
         "params_file",
-        default=os.path.join(this_dir, "carter_navigation_params.yaml"),
+        default=os.path.join(this_dir, "segway_e1", "navigation_params_tuned_false.yaml"),
     )
 
     autostart = LaunchConfiguration("autostart", default="True")
-
-    nav2_bringup_launch_dir = os.path.join(get_package_share_directory("nav2_bringup"), "launch")
 
     return LaunchDescription(
         [
@@ -77,17 +77,39 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "autostart",
                 default_value="True",
-                description="Automatically startup the localization stack",
+                description="Automatically startup the map server lifecycle",
             ),
-            # Localization (map_server + AMCL)
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource([nav2_bringup_launch_dir, "/localization_launch.py"]),
-                launch_arguments={
-                    "map": map_yaml_file,
-                    "use_sim_time": use_sim_time,
-                    "params_file": params_file,
-                    "autostart": autostart,
-                }.items(),
+            # Map server only (no AMCL). We publish `map -> odom` separately as a static TF.
+            Node(
+                package="nav2_map_server",
+                executable="map_server",
+                name="map_server",
+                output="screen",
+                parameters=[
+                    params_file,
+                    {"yaml_filename": map_yaml_file},
+                    {"use_sim_time": use_sim_time},
+                ],
+            ),
+            Node(
+                package="nav2_lifecycle_manager",
+                executable="lifecycle_manager",
+                name="lifecycle_manager_localization",
+                output="screen",
+                parameters=[
+                    {"use_sim_time": use_sim_time},
+                    {"autostart": autostart},
+                    {"node_names": ["map_server"]},
+                ],
+            ),
+            # Provide `map -> odom` when using ground-truth odometry (identity transform).
+            Node(
+                package="tf2_ros",
+                executable="static_transform_publisher",
+                name="static_map_to_odom_tf",
+                arguments=["0", "0", "0", "0", "0", "0", "map", "odom"],
+                parameters=[{"use_sim_time": use_sim_time}],
+                output="screen",
             ),
             # Pointcloud to laserscan conversion
             Node(

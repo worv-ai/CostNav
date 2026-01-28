@@ -36,7 +36,7 @@ nav2:
 # Robot teleportation settings
 teleport:
   # Height offset when teleporting robot (meters)
-  height_offset: 0.5
+  height_offset: 0.1
 
   # Robot prim path in USD stage (chassis_link prim for direct teleportation)
   robot_prim: "/World/Nova_Carter_ROS/chassis_link"
@@ -95,3 +95,19 @@ food:
 
   # Fraction of pieces that can be lost before mission fails (0.0 = no loss, 0.05 = 5% loss allowed)
   spoilage_threshold: 0.05
+
+injury:
+  enabled: true
+  method: "delta_v"
+  crash_mode: "all"
+  robot_mass: 50.0  # Robot mass in kg for delta-v = impulse / mass calculation
+  robot_height: null
+  pedestrian_height: null
+  costs:
+    mais_0: 380.0
+    mais_1: 8487.0
+    mais_2: 60464.0
+    mais_3: 261200.0
+    mais_4: 0.0  # Delivery robot context: MAIS 4+ not modeled (report covers motor vehicles)
+    mais_5: 0.0  # Delivery robot context: MAIS 4+ not modeled (report covers motor vehicles)
+    fatality: 0.0  # Delivery robot context: MAIS 4+ not modeled (report covers motor vehicles)
