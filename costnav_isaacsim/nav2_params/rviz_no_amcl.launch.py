@@ -13,13 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""RViz launch file for robots that do NOT use AMCL (e.g., segway_e1).
+"""RViz launch file for robots that do NOT use AMCL (ground-truth odometry mode).
 
-This launch file includes:
+This launch file is used when AMCL is disabled (AMCL=False).
+It includes:
 - RViz2 visualization
 - Map server (static map)
 - Static TF publisher for ground-truth `map -> odom` (identity transform)
 - Pointcloud to laserscan conversion
+
+Use this when the robot has perfect odometry (e.g., in simulation with ground-truth pose).
 """
 
 import os

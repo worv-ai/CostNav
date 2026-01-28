@@ -1,3 +1,8 @@
+# AMCL Configuration
+# Note: These parameters are used when AMCL=True (default).
+# When AMCL=False, the rviz_no_amcl.launch.py is used instead, which provides
+# a static map->odom transform and does not launch AMCL. In that case, these
+# parameters are ignored.
 amcl:
   ros__parameters:
     use_sim_time: True
