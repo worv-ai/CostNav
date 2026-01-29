@@ -4,9 +4,8 @@
 
 """ViNT ROS2 Policy Node for CostNav.
 
-This node subscribes to camera images and odometry, runs ViNT inference,
-and publishes velocity commands to /cmd_vel_model which is picked up by
-the teleop node when model control is enabled.
+This node subscribes to camera images, runs ViNT inference,
+and publishes trajectory to /vint_trajectory for the trajectory follower node.
 
 Usage:
     python3 vint_policy_node.py \
@@ -22,12 +21,13 @@ from typing import Optional
 import numpy as np
 import rclpy
 from cv_bridge import CvBridge
-from geometry_msgs.msg import Twist
-from nav_msgs.msg import Odometry
+from geometry_msgs.msg import PoseStamped
+from nav_msgs.msg import Path
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool
+from transforms3d.euler import euler2quat
 
 from evaluation.agents.vint_agent import ViNTAgent
 
@@ -37,11 +37,11 @@ class ViNTPolicyNode(Node):
 
     Subscribes to:
         - /front_stereo_camera/left/image_raw (sensor_msgs/Image)
-        - /odom (nav_msgs/Odometry)
         - /goal_image (sensor_msgs/Image) - optional for ImageGoal mode
+        - /vint_enable (std_msgs/Bool) - enable/disable policy execution
 
     Publishes:
-        - /cmd_vel_model (geometry_msgs/Twist)
+        - /vint_trajectory (nav_msgs/Path) - full trajectory for trajectory follower node
 
     Parameters:
         - checkpoint: Path to trained model weights
@@ -96,7 +96,6 @@ class ViNTPolicyNode(Node):
         # State variables
         self.current_image: Optional[np.ndarray] = None
         self.goal_image: Optional[np.ndarray] = None
-        self.current_odom: Optional[Odometry] = None
         self.enabled = True  # Control enable flag
 
         # QoS profile for sensor data
@@ -108,7 +107,6 @@ class ViNTPolicyNode(Node):
 
         # Subscribers
         self.image_sub = self.create_subscription(Image, image_topic, self.image_callback, sensor_qos)
-        self.odom_sub = self.create_subscription(Odometry, "/odom", self.odom_callback, sensor_qos)
 
         if self.use_imagegoal:
             self.goal_sub = self.create_subscription(Image, "/goal_image", self.goal_image_callback, 10)
@@ -116,8 +114,8 @@ class ViNTPolicyNode(Node):
         # Enable/disable subscription
         self.enable_sub = self.create_subscription(Bool, "/vint_enable", self.enable_callback, 10)
 
-        # Publisher
-        self.cmd_vel_pub = self.create_publisher(Twist, "/cmd_vel_model", 10)
+        # Publishers
+        self.trajectory_pub = self.create_publisher(Path, "/vint_trajectory", 10)
 
         # Inference timer
         timer_period = 1.0 / self.inference_rate
@@ -125,7 +123,7 @@ class ViNTPolicyNode(Node):
 
         self.get_logger().info(f"ViNT policy node started. Inference rate: {self.inference_rate} Hz")
         self.get_logger().info(f"Subscribing to: {image_topic}")
-        self.get_logger().info("Publishing to: /cmd_vel_model")
+        self.get_logger().info("Publishing trajectory to: /vint_trajectory")
 
     def image_callback(self, msg: Image):
         """Process incoming camera image."""
@@ -142,10 +140,6 @@ class ViNTPolicyNode(Node):
         except Exception as e:
             self.get_logger().error(f"Failed to convert goal image: {e}")
 
-    def odom_callback(self, msg: Odometry):
-        """Process incoming odometry."""
-        self.current_odom = msg
-
     def enable_callback(self, msg: Bool):
         """Enable/disable policy execution."""
         self.enabled = msg.data
@@ -153,7 +147,7 @@ class ViNTPolicyNode(Node):
         self.get_logger().info(f"ViNT policy {status}")
 
     def inference_callback(self):
-        """Run ViNT inference and publish velocity command."""
+        """Run ViNT inference and publish trajectory."""
         if not self.enabled:
             return
 
@@ -163,67 +157,59 @@ class ViNTPolicyNode(Node):
         try:
             # Run inference based on mode
             if self.use_imagegoal and self.goal_image is not None:
-                waypoints, trajectory = self.agent.step_imagegoal([self.goal_image], [self.current_image])
+                _, trajectory = self.agent.step_imagegoal([self.goal_image], [self.current_image])
             else:
-                waypoints, trajectory = self.agent.step_nogoal([self.current_image])
+                _, trajectory = self.agent.step_nogoal([self.current_image])
 
-            # Convert trajectory to velocity command
-            cmd_vel = self.trajectory_to_twist(waypoints[0], trajectory[0])
-            self.cmd_vel_pub.publish(cmd_vel)
+            # Publish full trajectory for trajectory follower node
+            trajectory_msg = self.trajectory_to_path(trajectory[0])
+            self.trajectory_pub.publish(trajectory_msg)
 
         except Exception as e:
             self.get_logger().error(f"Inference error: {e}")
-            # Publish zero velocity on error
-            self.cmd_vel_pub.publish(Twist())
 
-    def trajectory_to_twist(self, waypoints: np.ndarray, trajectory: np.ndarray) -> Twist:
-        """Convert ViNT trajectory output to Twist velocity command.
+    def trajectory_to_path(self, trajectory: np.ndarray) -> Path:
+        """Convert ViNT trajectory output to nav_msgs/Path message.
 
-        Uses the first waypoint to compute desired velocity. This is a simple
-        proportional controller - can be replaced with MPC for better tracking.
+        The trajectory is in robot-local frame (x forward, y left). This is
+        published for the trajectory follower node to execute at higher rate.
 
         Args:
-            waypoints: Predicted waypoints [N, 3] (x, y, theta).
-            trajectory: Smoothed trajectory [M, 3].
+            trajectory: Smoothed trajectory [M, 3] (x, y, theta) in local frame.
 
         Returns:
-            Twist message with linear and angular velocities.
+            Path message with waypoints in robot-local frame.
         """
-        twist = Twist()
-
-        # Get first waypoint (closest target)
-        if len(waypoints) == 0:
-            return twist
-
         # Convert from torch tensor to numpy if needed
-        if hasattr(waypoints, "cpu"):
-            waypoints = waypoints.cpu().numpy()
+        if hasattr(trajectory, "cpu"):
+            trajectory = trajectory.cpu().numpy()
 
-        dx = float(waypoints[0, 0])  # Forward displacement
-        dy = float(waypoints[0, 1])  # Lateral displacement
+        path_msg = Path()
+        path_msg.header.stamp = self.get_clock().now().to_msg()
+        path_msg.header.frame_id = "base_link"  # Local frame
 
-        # Compute angle to first waypoint
-        target_angle = np.arctan2(dy, dx)
+        for i in range(len(trajectory)):
+            pose_stamped = PoseStamped()
+            pose_stamped.header = path_msg.header
+            pose_stamped.pose.position.x = float(trajectory[i, 0])
+            pose_stamped.pose.position.y = float(trajectory[i, 1])
+            pose_stamped.pose.position.z = 0.0
 
-        # Proportional control gains
-        KP_LINEAR = 2.0  # Linear velocity gain
-        KP_ANGULAR = 1.5  # Angular velocity gain
+            # Set orientation from theta (yaw) using transforms3d
+            # euler2quat returns (w, x, y, z) for given (ai, aj, ak) = (roll, pitch, yaw)
+            if trajectory.shape[1] > 2:
+                theta = float(trajectory[i, 2])
+                quat = euler2quat(0, 0, theta)  # roll=0, pitch=0, yaw=theta
+                pose_stamped.pose.orientation.w = quat[0]
+                pose_stamped.pose.orientation.x = quat[1]
+                pose_stamped.pose.orientation.y = quat[2]
+                pose_stamped.pose.orientation.z = quat[3]
+            else:
+                pose_stamped.pose.orientation.w = 1.0
 
-        # Compute velocities
-        distance = np.sqrt(dx**2 + dy**2)
-        linear_vel = KP_LINEAR * distance
-        angular_vel = KP_ANGULAR * target_angle
+            path_msg.poses.append(pose_stamped)
 
-        # Apply velocity limits
-        max_linear = self.agent.MAX_V
-        max_angular = self.agent.MAX_W
-        linear_vel = np.clip(linear_vel, -max_linear, max_linear)
-        angular_vel = np.clip(angular_vel, -max_angular, max_angular)
-
-        twist.linear.x = linear_vel
-        twist.angular.z = angular_vel
-
-        return twist
+        return path_msg
 
 
 def parse_args():

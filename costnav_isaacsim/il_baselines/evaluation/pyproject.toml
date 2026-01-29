@@ -15,20 +15,19 @@ dependencies = [
     "torch>=2.0.0",
     "torchvision>=0.15.0",
     "efficientnet-pytorch>=0.7.1",
-
     # Image processing
     "opencv-python>=4.8.0",
     "pillow>=10.0.0",
-
     # Data handling
     "numpy>=1.24.0,<2",  # cv_bridge from ROS2 requires numpy<2
     "pyyaml>=6.0.0",
-
     # vint_train for loading checkpoints trained with visualnav-transformer
     "vint_train",
-
     # Warmup scheduler (required by vint_train checkpoint)
     "warmup-scheduler",
+    "scipy>=1.15.3",
+    "casadi>=3.7.2",
+    "transforms3d>=0.4.2",
 ]
 
 [tool.uv.sources]
@@ -39,6 +38,9 @@ warmup-scheduler = { git = "https://github.com/ildoonet/pytorch-gradual-warmup-l
 # Main ViNT policy node entry point
 # Usage: vint_policy_node --checkpoint /path/to/model.pth --model_config /path/to/config.yaml --robot_config /path/to/robot.yaml
 vint_policy_node = "evaluation.nodes.vint_policy_node:main"
+# Trajectory follower node for executing trajectories at high rate
+# Usage: trajectory_follower_node --control_rate 20.0 --max_linear_vel 1.0 --max_angular_vel 1.0
+trajectory_follower_node = "evaluation.nodes.trajectory_follower_node:main"
 
 [project.urls]
 Repository = "https://github.com/worv-ai/CostNav"
