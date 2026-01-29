@@ -2,6 +2,19 @@
 
 ROS2 package for evaluating Imitation Learning (IL) baselines in Isaac Sim using the CostNav infrastructure.
 
+## References
+
+This evaluation framework is adapted from the [NavDP](https://github.com/InternRobotics/NavDP) benchmark:
+
+> **NavDP: Learning Sim-to-Real Navigation Diffusion Policy with Privileged Information Guidance**
+> Wenzhe Cai, Jiaqi Peng, Yuqiang Yang, Yujian Zhang, Meng Wei, Hanqing Wang, Yilun Chen, Tai Wang, Jiangmiao Pang
+> Shanghai AI Laboratory, Tsinghua University, Zhejiang University, The University of Hong Kong
+> [Paper](https://arxiv.org/abs/2505.08712) | [GitHub](https://github.com/InternRobotics/NavDP) | [Project Page](https://wzcai99.github.io/navigation-diffusion-policy.github.io/)
+
+The baseline implementations (ViNT, NoMaD, GNM) are derived from:
+- NavDP baselines: `third_party/NavDP/baselines/`
+- Original [visualnav-transformer](https://github.com/robodhruv/visualnav-transformer) repository
+
 ## Supported Baselines
 
 - **ViNT** (Visual Navigation Transformer) - ✅ Implemented
@@ -236,3 +249,16 @@ evaluation/
 
 See `costnav_isaacsim/il_baselines/training/` for training scripts and configs.
 See `docs/imitation_learning_baselines.md` for detailed documentation.
+
+## Citation
+
+If you use this evaluation framework, please cite NavDP:
+
+```bibtex
+@misc{navdp,
+    title = {NavDP: Learning Sim-to-Real Navigation Diffusion Policy with Privileged Information Guidance},
+    author = {Wenzhe Cai, Jiaqi Peng, Yuqiang Yang, Yujian Zhang, Meng Wei, Hanqing Wang, Yilun Chen, Tai Wang and Jiangmiao Pang},
+    year = {2025},
+    booktitle = {arXiv},
+}
+```

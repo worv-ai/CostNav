@@ -1,5 +1,6 @@
 # Copyright (c) 2026 CostNav Authors
-# Adapted from NavDP Framework (Fan Yang, ETH Zurich)
+# Adapted from NavDP Framework (https://github.com/InternRobotics/NavDP)
+# Reference: third_party/NavDP/baselines/vint/base_model.py
 # Licensed under the MIT License
 
 """Base Model class for IL baselines."""
