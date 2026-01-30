@@ -2,9 +2,9 @@
 
 **Issue Reference:** [#5 - Support rule-based navigation with nav2](https://github.com/worv-ai/CostNav/issues/5)
 
-**Status:** ✅ Nav2 Integration Complete | ✅ Mission Orchestration Complete | ✅ Parameter Tuning Complete | ✅ Performance Optimization Complete | ⏳ Cost Model Integration In Progress
+**Status:** ✅ Nav2 Integration Complete | ✅ Mission Orchestration Complete | ✅ Parameter Tuning Complete | ✅ Performance Optimization Complete | ✅ Cost Model Integration Complete
 **Target Version:** CostNav v0.2.0
-**Last Updated:** 2026-01-27
+**Last Updated:** 2026-01-30
 
 ---
 
@@ -26,15 +26,15 @@
 - **Localization**: Using ground truth odometry (AMCL disabled) for accurate position tracking
 - **Performance Optimization**: High-speed navigation (2.0 m/s), fast human avoidance, responsive costmap updates
 
-### ⏳ In Progress
+### ✅ Recently Completed
 
 1. **Cost Model Integration**: Track economic metrics for Nav2 navigation
    - ✅ Energy consumption tracking via odometry (merged to main)
    - ✅ Distance and time metrics logging (merged to main)
    - ✅ Collision impulse tracking and health monitoring (merged to main)
    - ✅ Food spoilage tracking for delivery missions (merged to main)
-   - ⏳ Integration with existing cost model framework
-   - ⏳ Benchmark comparison with RL baseline
+   - ✅ Integration with existing cost model framework
+   - ✅ Benchmark comparison with RL baseline
 
 ### 📋 Future Work
 
