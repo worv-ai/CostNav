@@ -248,7 +248,8 @@ local_costmap:
       footprint: "[ [0.14, 0.25], [0.14, -0.25], [-0.607, -0.25], [-0.607, 0.25] ]"
       mark_threshold: 2
       always_send_full_costmap: True
-      plugins: ["front_3d_lidar_layer", "front_2d_lidar_layer", "back_2d_lidar_layer", "inflation_layer", "static_map_layer"]
+      # Using only 3D lidar for obstacle detection
+      plugins: ["front_3d_lidar_layer", "inflation_layer", "static_map_layer"]
       static_map_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
@@ -258,27 +259,6 @@ local_costmap:
         enabled: True
         cost_scaling_factor: 3.0
         inflation_radius: 0.8
-
-      front_2d_lidar_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: True
-        observation_sources: scan
-        scan:
-          topic: /front_2d_lidar/scan
-          max_obstacle_height: 2.0
-          clearing: True
-          marking: True
-          data_type: "LaserScan"
-      back_2d_lidar_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: True
-        observation_sources: scan
-        scan:
-          topic: /back_2d_lidar/scan
-          max_obstacle_height: 2.0
-          clearing: True
-          marking: True
-          data_type: "LaserScan"
 
       front_3d_lidar_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
@@ -297,7 +277,7 @@ local_costmap:
         observation_sources: hesai_mark
         hesai_mark:
           data_type: PointCloud2
-          topic: /front_3d_lidar/lidar_points
+          topic: /front_3d_lidar/lidar_points_filtered
           marking: true
           clearing: false
           obstacle_range: 3.0 # meters
@@ -311,7 +291,7 @@ local_costmap:
         # hesai_clear:
         #   enabled: true #default true, can be toggled on/off with associated service call
         #   data_type: PointCloud2
-        #   topic: /front_3d_lidar/lidar_points
+        #   topic: /front_3d_lidar/lidar_points_filtered
         #   marking: false
         #   clearing: true
         #   max_z: 20.0 # default 0, meters
