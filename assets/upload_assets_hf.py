@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+"""
+Upload Omniverse assets to Hugging Face datasets.
+
+This script uploads the downloaded assets from ./assets/Users to
+https://huggingface.co/datasets/maum-ai/CostNav
+
+Usage:
+    # First, login to Hugging Face:
+    huggingface-cli login
+    
+    # Then run the upload:
+    python assets/upload_assets_hf.py
+"""
+
+import os
+import sys
+from pathlib import Path
+
+try:
+    from huggingface_hub import HfApi, login
+except ImportError:
+    print("ERROR: huggingface_hub not installed.")
+    print("Install with: pip install huggingface_hub")
+    sys.exit(1)
+
+# Configuration
+REPO_ID = "maum-ai/CostNav"
+REPO_TYPE = "dataset"
+ASSETS_DIR = Path(__file__).parent / "Users"
+
+
+def main():
+    print("=" * 60)
+    print("Hugging Face Asset Uploader")
+    print("=" * 60)
+    print(f"Repository: https://huggingface.co/datasets/{REPO_ID}")
+    print(f"Assets Dir: {ASSETS_DIR.absolute()}")
+    print("=" * 60)
+    
+    # Check if assets directory exists
+    if not ASSETS_DIR.exists():
+        print(f"ERROR: Assets directory not found: {ASSETS_DIR}")
+        print("Please run download_omniverse_assets.py first to download assets.")
+        sys.exit(1)
+    
+    # Collect all files to upload
+    files_to_upload = []
+    for file_path in ASSETS_DIR.rglob("*"):
+        if file_path.is_file():
+            # Path in repo should be relative to assets/ directory
+            path_in_repo = str(file_path.relative_to(ASSETS_DIR.parent))
+            files_to_upload.append((file_path, path_in_repo))
+    
+    if not files_to_upload:
+        print("ERROR: No files found to upload.")
+        sys.exit(1)
+    
+    print(f"\nFound {len(files_to_upload)} files to upload:")
+    for local_path, repo_path in files_to_upload:
+        size_mb = local_path.stat().st_size / (1024 * 1024)
+        print(f"  {repo_path} ({size_mb:.2f} MB)")
+    
+    print("\n" + "=" * 60)
+    
+    # Confirm upload
+    response = input("Proceed with upload? [y/N]: ").strip().lower()
+    if response != "y":
+        print("Upload cancelled.")
+        sys.exit(0)
+    
+    # Initialize Hugging Face API
+    api = HfApi()
+    
+    # Check authentication
+    try:
+        user_info = api.whoami()
+        print(f"\nLogged in as: {user_info['name']}")
+    except Exception:
+        print("\nNot logged in. Please login first:")
+        print("  huggingface-cli login")
+        sys.exit(1)
+    
+    # Upload files
+    print(f"\nUploading to {REPO_ID}...")
+    
+    for local_path, path_in_repo in files_to_upload:
+        print(f"\nUploading: {path_in_repo}")
+        try:
+            api.upload_file(
+                path_or_fileobj=str(local_path),
+                path_in_repo=path_in_repo,
+                repo_id=REPO_ID,
+                repo_type=REPO_TYPE,
+            )
+            print(f"  SUCCESS: {path_in_repo}")
+        except Exception as e:
+            print(f"  ERROR: {e}")
+    
+    print("\n" + "=" * 60)
+    print("Upload complete!")
+    print(f"View at: https://huggingface.co/datasets/{REPO_ID}")
+    print("=" * 60)
+    
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+

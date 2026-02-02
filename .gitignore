@@ -233,3 +233,6 @@ src/
 /nav2_params/
 /build_ws/
 data/
+
+# Ignore assets
+assets/Users/
