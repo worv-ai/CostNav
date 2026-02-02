@@ -1277,7 +1277,9 @@ class MissionManager:
         elif self._last_contact_count is not None:
             total_contact_count = self._last_contact_count
             total_impulse = self._last_total_impulse if self._last_total_impulse is not None else 0.0
-            people_contact_count = self._last_people_contact_count if self._last_people_contact_count is not None else 0
+            people_contact_count = (
+                self._last_people_contact_count if self._last_people_contact_count is not None else 0
+            )
             property_counts = dict(self._last_property_contact_counts or {})
             delta_v_list = list(self._last_delta_v_magnitudes_mps or [])
             injury_costs = list(self._last_injury_costs or [])
