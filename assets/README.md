@@ -14,12 +14,32 @@ This downloads all required assets to `assets/Users/`.
 
 ### 2. Start Local Nucleus Server
 
+**Prerequisites:**
+- Docker and Docker Compose installed
+- NGC account with Omniverse Enterprise access
+- Downloaded nucleus-stack from NGC
+
+**Step 1:** Download nucleus-stack from NGC (one-time setup):
 ```bash
-# Requires Docker and NGC access
+# Option A: Using NGC CLI
+ngc registry resource download-version "nvidia/omniverse/nucleus-stack:2023.2.9"
+
+# Option B: Manual download from
+# https://catalog.ngc.nvidia.com/orgs/nvidia/teams/omniverse/collections/nucleus
+```
+
+**Step 2:** Extract to /opt/ove:
+```bash
+sudo mkdir -p /opt/ove
+sudo tar xzvf nucleus-stack-*.tar.gz -C /opt/ove --strip-components=1
+```
+
+**Step 3:** Run the setup script:
+```bash
 ./assets/nucleus/start_nucleus.sh
 ```
 
-The Nucleus server will serve assets at `omniverse://localhost`.
+The script will configure Nucleus and copy assets. After starting, assets will be served at `omniverse://localhost`.
 
 ### 3. Update Codebase Paths
 
@@ -75,4 +95,3 @@ assets/
 | Street Sidewalk Map | `Users/worv/costnav/Street_sidewalk.usd` |
 | Segway E1 Map | `Users/worv/costnav/street_sidewalk_segwaye1_Corrected.usd` |
 | Popcorn Food Asset | `Users/worv/costnav/foods/popcorn/popcorn.usd` |
-
