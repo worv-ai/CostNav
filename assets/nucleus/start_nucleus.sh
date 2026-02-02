@@ -19,6 +19,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ASSETS_DIR="$(dirname "$SCRIPT_DIR")"
+REPO_ROOT="$(dirname "$ASSETS_DIR")"
 NUCLEUS_INSTALL_DIR="/opt/ove"
 NUCLEUS_DATA_DIR="/var/lib/omni/nucleus-data"
 
@@ -32,6 +33,36 @@ if [ "$EUID" -ne 0 ]; then
     echo "Re-running with sudo..."
     exec sudo "$0" "$@"
 fi
+
+# Load .env file for NGC credentials
+if [ -f "$REPO_ROOT/.env" ]; then
+    echo "Loading credentials from .env file..."
+    set -a
+    source "$REPO_ROOT/.env"
+    set +a
+else
+    echo "ERROR: .env file not found at $REPO_ROOT/.env"
+    echo ""
+    echo "Please create .env file with NGC credentials:"
+    echo "  cp .env.example .env"
+    echo "  # Edit .env and set NGC_PASS to your NGC API key"
+    exit 1
+fi
+
+# Check NGC credentials
+if [ -z "$NGC_PASS" ]; then
+    echo "ERROR: NGC_PASS not set in .env file"
+    echo ""
+    echo "Please set your NGC API key in .env:"
+    echo "  NGC_PASS=your_ngc_api_key_here"
+    echo ""
+    echo "Get your API key at: https://ngc.nvidia.com/setup/api-key"
+    exit 1
+fi
+
+NGC_USER="${NGC_USER:-\$oauthtoken}"
+echo "NGC User: $NGC_USER"
+echo ""
 
 # Check if assets exist
 if [ ! -d "$ASSETS_DIR/Users" ]; then
@@ -118,15 +149,15 @@ echo "Assets copied to $NUCLEUS_DATA_DIR/Users"
 # Check NGC login
 echo ""
 echo "Checking NGC authentication..."
-if ! docker pull nvcr.io/nvidia/omniverse/nucleus-api:2023.2.9 2>/dev/null; then
+echo "Logging into nvcr.io..."
+if ! echo "$NGC_PASS" | docker login nvcr.io -u "$NGC_USER" --password-stdin; then
     echo ""
-    echo "Please login to NGC first:"
-    echo "  docker login nvcr.io"
-    echo ""
+    echo "NGC login failed."
     echo "Use \$oauthtoken as username and your NGC API key as password."
     echo "Get your API key at: https://ngc.nvidia.com/setup/api-key"
     exit 1
 fi
+echo "Docker NGC login successful."
 
 # Pull all containers
 echo ""
@@ -156,4 +187,3 @@ echo "Commands:"
 echo "  Stop:  cd $NUCLEUS_INSTALL_DIR/base_stack && docker compose --env-file nucleus-stack.env -f nucleus-stack-no-ssl.yml down"
 echo "  Logs:  cd $NUCLEUS_INSTALL_DIR/base_stack && docker compose --env-file nucleus-stack.env -f nucleus-stack-no-ssl.yml logs -f"
 echo "============================================================"
-

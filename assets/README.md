@@ -16,14 +16,13 @@ This downloads all required assets to `assets/Users/`.
 
 **Prerequisites:**
 - Docker and Docker Compose installed
-- NGC account with Omniverse Enterprise access
 - `.env` file with NGC credentials
 
 **Step 1:** Set up NGC credentials in `.env`:
 ```bash
 cp .env.example .env
 # Edit .env and set NGC_PASS to your NGC API key
-# Get your API key at: https://ngc.nvidia.com/setup/api-key
+# Get your API key at: https://org.ngc.nvidia.com/setup/api-keys
 ```
 
 **Step 2:** Run the initialization script (installs NGC CLI, downloads nucleus-stack):
@@ -37,6 +36,12 @@ cp .env.example .env
 ```
 
 The script will configure Nucleus and copy assets. After starting, assets will be served at `omniverse://localhost`.
+
+Modify OMNI_USER and OMNI path into our default credentials
+
+Default credentials:
+  Username: omniverse
+  Password: costnav123
 
 ### 3. Update Codebase Paths
 
@@ -66,29 +71,3 @@ huggingface-cli login
 # Upload assets
 python assets/upload_assets_hf.py
 ```
-
-## Directory Structure
-
-```
-assets/
-├── README.md                      # This file
-├── download_assets_hf.py          # Download from Hugging Face
-├── upload_assets_hf.py            # Upload to Hugging Face
-├── download_omniverse_assets.py   # Download from internal Omniverse server
-├── update_asset_paths.py          # Update codebase paths
-├── nucleus/                       # Local Nucleus server setup
-│   ├── init_nucleus.sh            # Initialize NGC CLI and download nucleus-stack
-│   └── start_nucleus.sh           # Configure and start Nucleus server
-└── Users/                         # Downloaded assets (git-ignored)
-    └── worv/
-        └── costnav/
-            └── ...
-```
-
-## Asset Locations
-
-| Asset | Path |
-|-------|------|
-| Street Sidewalk Map | `Users/worv/costnav/Street_sidewalk.usd` |
-| Segway E1 Map | `Users/worv/costnav/street_sidewalk_segwaye1_Corrected.usd` |
-| Popcorn Food Asset | `Users/worv/costnav/foods/popcorn/popcorn.usd` |

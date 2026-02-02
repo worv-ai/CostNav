@@ -3,7 +3,7 @@
 #
 # This script automates:
 #   1. NGC CLI installation
-#   2. Nucleus-stack download from NGC
+#   2. nucleus-compose-stack download from NGC
 #   3. Extraction to /opt/ove
 #
 # Prerequisites:
@@ -68,7 +68,7 @@ echo "============================================================"
 echo "Step 1: NGC CLI Installation"
 echo "============================================================"
 
-if command -v ngc &> /dev/null; then
+if command -v ngc &> /dev/null && [ -x /usr/local/ngc-cli/ngc ]; then
     echo "NGC CLI already installed: $(ngc --version 2>/dev/null || echo 'unknown version')"
 else
     echo "Installing NGC CLI v${NGC_CLI_VERSION}..."
@@ -83,12 +83,22 @@ else
     # Unzip
     unzip -q -o ngccli_linux.zip
     
-    # Install
+    # Install full CLI bundle so libpython can be found
     chmod +x ngc-cli/ngc
-    cp ngc-cli/ngc /usr/local/bin/
+    rm -rf /usr/local/ngc-cli
+    mv ngc-cli /usr/local/ngc-cli
+
+    # Wrapper ensures the executable resolves from /usr/local/ngc-cli
+    cat > /usr/local/bin/ngc <<'EOF'
+#!/bin/bash
+NGC_CLI_DIR="/usr/local/ngc-cli"
+export LD_LIBRARY_PATH="${NGC_CLI_DIR}:${LD_LIBRARY_PATH:-}"
+exec "${NGC_CLI_DIR}/ngc" "$@"
+EOF
+    chmod +x /usr/local/bin/ngc
     
     # Clean up
-    rm -rf ngccli_linux.zip ngc-cli
+    rm -rf ngccli_linux.zip
     
     echo "NGC CLI installed successfully."
 fi
@@ -105,7 +115,7 @@ org = nvidia
 EOF
 echo "NGC CLI configured."
 
-# Step 2: Download nucleus-stack
+# Step 2: Download nucleus-compose-stack
 echo ""
 echo "============================================================"
 echo "Step 2: Download Nucleus Stack"
@@ -115,22 +125,30 @@ if [ -d "$NUCLEUS_INSTALL_DIR/base_stack" ]; then
     echo "Nucleus stack already exists at $NUCLEUS_INSTALL_DIR"
     echo "Skipping download. Delete $NUCLEUS_INSTALL_DIR to re-download."
 else
-    echo "Downloading nucleus-stack from NGC..."
+    echo "Downloading nucleus-compose-stack from NGC..."
     
     cd /tmp
     
     # Download using NGC CLI
-    ngc registry resource download-version "nvidia/omniverse/nucleus-stack:2023.2.9" --dest /tmp
+    ngc registry resource download-version "nvidia/omniverse/nucleus-compose-stack:2023.2.9" --dest /tmp
     
     # Create install directory
     mkdir -p "$NUCLEUS_INSTALL_DIR"
     
     # Extract
     echo "Extracting to $NUCLEUS_INSTALL_DIR..."
-    tar xzf /tmp/nucleus-stack_v2023.2.9/nucleus-stack-2023.2.9.tar.gz -C "$NUCLEUS_INSTALL_DIR" --strip-components=1
+    STACK_DIR="/tmp/nucleus-compose-stack_v2023.2.9"
+    TARBALL_PATH="$(find "$STACK_DIR" -maxdepth 2 -type f \( -name "*.tar.gz" -o -name "*.tgz" \) | head -n 1)"
+    if [ -z "$TARBALL_PATH" ]; then
+        echo "ERROR: Could not locate nucleus stack tarball in $STACK_DIR"
+        echo "Contents:"
+        ls -la "$STACK_DIR"
+        exit 1
+    fi
+    tar xzf "$TARBALL_PATH" -C "$NUCLEUS_INSTALL_DIR" --strip-components=1
     
     # Clean up
-    rm -rf /tmp/nucleus-stack_v2023.2.9
+    rm -rf /tmp/nucleus-compose-stack_v2023.2.9
     
     echo "Nucleus stack installed to $NUCLEUS_INSTALL_DIR"
 fi
@@ -154,4 +172,3 @@ echo "  1. Download assets:  python assets/download_assets_hf.py"
 echo "  2. Start Nucleus:    ./assets/nucleus/start_nucleus.sh"
 echo "  3. Update paths:     python assets/update_asset_paths.py --target localhost"
 echo ""
-
