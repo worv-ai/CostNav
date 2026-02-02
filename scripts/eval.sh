@@ -67,7 +67,10 @@ declare -a MISSION_PROPERTY_BOLLARD
 declare -a MISSION_PROPERTY_BUILDING
 declare -a MISSION_PROPERTY_TRASH_BIN
 declare -a MISSION_PROPERTY_MAIL_BOX
+declare -a MISSION_PROPERTY_NEWSPAPER_BOX
+declare -a MISSION_PROPERTY_BUS_STOP
 declare -a MISSION_PROPERTY_TOTAL
+declare -a MISSION_PEOPLE_CONTACT_COUNT
 declare -a MISSION_RESULT_REASONS
 declare -a MISSION_DELTA_V_COUNTS
 declare -a MISSION_DELTA_V_AVG_MPS
@@ -282,7 +285,10 @@ run_mission() {
             property_building=$(parse_result_field "$result_response" "property_contact_building")
             property_trash_bin=$(parse_result_field "$result_response" "property_contact_trash_bin")
             property_mail_box=$(parse_result_field "$result_response" "property_contact_mail_box")
+            property_newspaper_box=$(parse_result_field "$result_response" "property_contact_newspaper_box")
+            property_bus_stop=$(parse_result_field "$result_response" "property_contact_bus_stop")
             property_total=$(parse_result_field "$result_response" "property_contact_total")
+            people_contact_count=$(parse_result_field "$result_response" "people_contact_count")
             delta_v_count=$(parse_result_field "$result_response" "delta_v_count")
             delta_v_avg_mps=$(parse_result_field "$result_response" "delta_v_avg_mps")
             delta_v_avg_mph=$(parse_result_field "$result_response" "delta_v_avg_mph")
@@ -330,8 +336,17 @@ run_mission() {
             if [ -z "$property_mail_box" ]; then
                 property_mail_box="0"
             fi
+            if [ -z "$property_newspaper_box" ]; then
+                property_newspaper_box="0"
+            fi
+            if [ -z "$property_bus_stop" ]; then
+                property_bus_stop="0"
+            fi
             if [ -z "$property_total" ]; then
                 property_total="0"
+            fi
+            if [ -z "$people_contact_count" ]; then
+                people_contact_count="0"
             fi
             if [ -z "$delta_v_count" ]; then
                 delta_v_count="0"
@@ -420,7 +435,10 @@ run_mission() {
     MISSION_PROPERTY_BUILDING[$mission_num]="${property_building}"
     MISSION_PROPERTY_TRASH_BIN[$mission_num]="${property_trash_bin}"
     MISSION_PROPERTY_MAIL_BOX[$mission_num]="${property_mail_box}"
+    MISSION_PROPERTY_NEWSPAPER_BOX[$mission_num]="${property_newspaper_box}"
+    MISSION_PROPERTY_BUS_STOP[$mission_num]="${property_bus_stop}"
     MISSION_PROPERTY_TOTAL[$mission_num]="${property_total}"
+    MISSION_PEOPLE_CONTACT_COUNT[$mission_num]="${people_contact_count}"
     MISSION_RESULT_REASONS[$mission_num]="${result_reason}"
     MISSION_DELTA_V_COUNTS[$mission_num]="${delta_v_count}"
     MISSION_DELTA_V_AVG_MPS[$mission_num]="${delta_v_avg_mps}"
@@ -466,7 +484,8 @@ run_mission() {
     log "  Average velocity: ${avg_velocity}m/s"
     log "  Average mechanical power: ${avg_mech_power}kW"
     log "  Contact count: ${contact_count}"
-    log "  Property contacts total=${property_total} (hydrant=${property_fire_hydrant}, traffic_light=${property_traffic_light}, street_lamp=${property_street_lamp}, bollard=${property_bollard}, building=${property_building}, trash_bin=${property_trash_bin}, mail_box=${property_mail_box})"
+    log "  People contact count: ${people_contact_count}"
+    log "  Property contacts total=${property_total} (bollard=${property_bollard}, building=${property_building}, trash_bin=${property_trash_bin}, mail_box=${property_mail_box})"
     log "  Total impulse: ${total_impulse} N*s"
     log "  Delta-v count: ${delta_v_count}, avg: ${delta_v_avg_mps} m/s (${delta_v_avg_mph} mph)"
     log "  Total injury cost: ${total_injury_cost}"
@@ -506,6 +525,9 @@ generate_summary() {
     local total_prop_building=0
     local total_prop_trash_bin=0
     local total_prop_mail_box=0
+    local total_prop_newspaper_box=0
+    local total_prop_bus_stop=0
+    local total_people_contact_count=0
     local total_delta_v_count=0
     local total_injury_cost_sum=0
     local count=0
@@ -526,6 +548,9 @@ generate_summary() {
             local prop_building="${MISSION_PROPERTY_BUILDING[$i]:-0}"
             local prop_trash_bin="${MISSION_PROPERTY_TRASH_BIN[$i]:-0}"
             local prop_mail_box="${MISSION_PROPERTY_MAIL_BOX[$i]:-0}"
+            local prop_newspaper_box="${MISSION_PROPERTY_NEWSPAPER_BOX[$i]:-0}"
+            local prop_bus_stop="${MISSION_PROPERTY_BUS_STOP[$i]:-0}"
+            local people_contacts="${MISSION_PEOPLE_CONTACT_COUNT[$i]:-0}"
             local delta_v_cnt="${MISSION_DELTA_V_COUNTS[$i]:-0}"
             local injury_cost="${MISSION_TOTAL_INJURY_COSTS[$i]:-0}"
             total_distance=$(echo "$total_distance + $dist" | bc)
@@ -542,6 +567,9 @@ generate_summary() {
             total_prop_building=$(echo "$total_prop_building + $prop_building" | bc)
             total_prop_trash_bin=$(echo "$total_prop_trash_bin + $prop_trash_bin" | bc)
             total_prop_mail_box=$(echo "$total_prop_mail_box + $prop_mail_box" | bc)
+            total_prop_newspaper_box=$(echo "$total_prop_newspaper_box + $prop_newspaper_box" | bc)
+            total_prop_bus_stop=$(echo "$total_prop_bus_stop + $prop_bus_stop" | bc)
+            total_people_contact_count=$(echo "$total_people_contact_count + $people_contacts" | bc)
             total_delta_v_count=$(echo "$total_delta_v_count + $delta_v_cnt" | bc)
             total_injury_cost_sum=$(echo "$total_injury_cost_sum + $injury_cost" | bc)
             count=$((count + 1))
@@ -562,6 +590,9 @@ generate_summary() {
     local avg_prop_building="0"
     local avg_prop_trash_bin="0"
     local avg_prop_mail_box="0"
+    local avg_prop_newspaper_box="0"
+    local avg_prop_bus_stop="0"
+    local avg_people_contact_count="0"
     local avg_delta_v_count="0"
     local avg_injury_cost="0"
     if [ "$count" -gt 0 ]; then
@@ -579,6 +610,9 @@ generate_summary() {
         avg_prop_building=$(echo "scale=2; $total_prop_building / $count" | bc)
         avg_prop_trash_bin=$(echo "scale=2; $total_prop_trash_bin/ $count" | bc)
         avg_prop_mail_box=$(echo "scale=2; $total_prop_mail_box / $count" | bc)
+        avg_prop_newspaper_box=$(echo "scale=2; $total_prop_newspaper_box / $count" | bc)
+        avg_prop_bus_stop=$(echo "scale=2; $total_prop_bus_stop / $count" | bc)
+        avg_people_contact_count=$(echo "scale=2; $total_people_contact_count / $count" | bc)
         avg_delta_v_count=$(echo "scale=2; $total_delta_v_count / $count" | bc)
         avg_injury_cost=$(echo "scale=2; $total_injury_cost_sum / $count" | bc)
     fi
@@ -608,7 +642,8 @@ generate_summary() {
     log_file "  - Average velocity: ${avg_velocity}m/s"
     log_file "  - Average mechanical power: ${avg_mech_power}kW"
     log_file "  - Average contact count: ${avg_contact_count}"
-    log_file "  - Average property contact count: ${avg_property_count} (hydrant=${avg_prop_hydrant}, traffic_light=${avg_prop_traffic_light}, street_lamp=${avg_prop_street_lamp}, bollard=${avg_prop_bollard}, building=${avg_prop_building}, trash_bin=${avg_prop_trash_bin}, mail_box=${avg_prop_mail_box})"
+    log_file "  - Average people contact count: ${avg_people_contact_count}"
+    log_file "  - Average property contact count: ${avg_property_count} (bollard=${avg_prop_bollard}, building=${avg_prop_building}, trash_bin=${avg_prop_trash_bin}, mail_box=${avg_prop_mail_box})"
     log_file "  - Average total impulse: ${avg_total_impulse} N*s"
     log_file "  - Average delta-v count: ${avg_delta_v_count}"
     log_file "  - Average total injury cost: ${avg_injury_cost}"
@@ -640,6 +675,9 @@ generate_summary() {
         local property_building="${MISSION_PROPERTY_BUILDING[$i]:-0}"
         local property_trash_bin="${MISSION_PROPERTY_TRASH_BIN[$i]:-0}"
         local property_mail_box="${MISSION_PROPERTY_MAIL_BOX[$i]:-0}"
+        local property_newspaper_box="${MISSION_PROPERTY_NEWSPAPER_BOX[$i]:-0}"
+        local property_bus_stop="${MISSION_PROPERTY_BUS_STOP[$i]:-0}"
+        local people_contacts="${MISSION_PEOPLE_CONTACT_COUNT[$i]:-0}"
         local property_total="${MISSION_PROPERTY_TOTAL[$i]:-0}"
         local mission_delta_v_count="${MISSION_DELTA_V_COUNTS[$i]:-0}"
         local mission_delta_v_avg_mps="${MISSION_DELTA_V_AVG_MPS[$i]:-0}"
@@ -658,6 +696,7 @@ generate_summary() {
         log_file "  Average velocity: ${mission_avg_vel}m/s"
         log_file "  Average mechanical power: ${mission_avg_power}kW"
         log_file "  Contact count: ${mission_contact_count}"
+        log_file "  People contact count: ${people_contacts}"
         log_file "  Total impulse: ${mission_total_impulse} N*s"
         log_file "  Delta-v count: ${mission_delta_v_count}, avg: ${mission_delta_v_avg_mps} m/s (${mission_delta_v_avg_mph} mph)"
         log_file "  Total injury cost: ${mission_injury_cost}"
@@ -666,7 +705,7 @@ generate_summary() {
             log_file "  Food loss fraction: ${food_loss}"
             log_file "  Food spoiled: ${food_spoiled}"
         fi
-        log_file "  Property contacts: total=${property_total} (hydrant=${property_fire_hydrant}, traffic_light=${property_traffic_light}, street_lamp=${property_street_lamp}, bollard=${property_bollard}, building=${property_building}, trash_bin=${property_trash_bin}, mail_box=${property_mail_box})"
+        log_file "  Property contacts: total=${property_total} (bollard=${property_bollard}, building=${property_building}, trash_bin=${property_trash_bin}, mail_box=${property_mail_box})"
         if [ -n "$error" ]; then
             log_file "  Error:  $error"
         fi
@@ -755,6 +794,9 @@ main() {
     local total_prop_building=0
     local total_prop_trash_bin=0
     local total_prop_mail_box=0
+    local total_prop_newspaper_box=0
+    local total_prop_bus_stop=0
+    local total_people_contact_count=0
     local total_delta_v_count=0
     local total_injury_cost_sum=0
     local count=0
@@ -775,6 +817,9 @@ main() {
             local prop_building="${MISSION_PROPERTY_BUILDING[$i]:-0}"
             local prop_trash_bin="${MISSION_PROPERTY_TRASH_BIN[$i]:-0}"
             local prop_mail_box="${MISSION_PROPERTY_MAIL_BOX[$i]:-0}"
+            local prop_newspaper_box="${MISSION_PROPERTY_NEWSPAPER_BOX[$i]:-0}"
+            local prop_bus_stop="${MISSION_PROPERTY_BUS_STOP[$i]:-0}"
+            local people_contacts="${MISSION_PEOPLE_CONTACT_COUNT[$i]:-0}"
             local delta_v_cnt="${MISSION_DELTA_V_COUNTS[$i]:-0}"
             local injury_cost="${MISSION_TOTAL_INJURY_COSTS[$i]:-0}"
             total_distance=$(echo "$total_distance + $dist" | bc)
@@ -791,6 +836,9 @@ main() {
             total_prop_building=$(echo "$total_prop_building + $prop_building" | bc)
             total_prop_trash_bin=$(echo "$total_prop_trash_bin + $prop_trash_bin" | bc)
             total_prop_mail_box=$(echo "$total_prop_mail_box + $prop_mail_box" | bc)
+            total_prop_newspaper_box=$(echo "$total_prop_newspaper_box + $prop_newspaper_box" | bc)
+            total_prop_bus_stop=$(echo "$total_prop_bus_stop + $prop_bus_stop" | bc)
+            total_people_contact_count=$(echo "$total_people_contact_count + $people_contacts" | bc)
             total_delta_v_count=$(echo "$total_delta_v_count + $delta_v_cnt" | bc)
             total_injury_cost_sum=$(echo "$total_injury_cost_sum + $injury_cost" | bc)
             count=$((count + 1))
@@ -811,6 +859,9 @@ main() {
     local avg_prop_building="0"
     local avg_prop_trash_bin="0"
     local avg_prop_mail_box="0"
+    local avg_prop_newspaper_box="0"
+    local avg_prop_bus_stop="0"
+    local avg_people_contact_count="0"
     local avg_delta_v_count="0"
     local avg_injury_cost="0"
     if [ "$count" -gt 0 ]; then
@@ -828,6 +879,9 @@ main() {
         avg_prop_building=$(echo "scale=2; $total_prop_building / $count" | bc)
         avg_prop_trash_bin=$(echo "scale=2; $total_prop_trash_bin / $count" | bc)
         avg_prop_mail_box=$(echo "scale=2; $total_prop_mail_box / $count" | bc)
+        avg_prop_newspaper_box=$(echo "scale=2; $total_prop_newspaper_box / $count" | bc)
+        avg_prop_bus_stop=$(echo "scale=2; $total_prop_bus_stop / $count" | bc)
+        avg_people_contact_count=$(echo "scale=2; $total_people_contact_count / $count" | bc)
         avg_delta_v_count=$(echo "scale=2; $total_delta_v_count / $count" | bc)
         avg_injury_cost=$(echo "scale=2; $total_injury_cost_sum / $count" | bc)
     fi
@@ -847,6 +901,9 @@ main() {
     local total_prop_building_all=0
     local total_prop_trash_bin_all=0
     local total_prop_mail_box_all=0
+    local total_prop_newspaper_box_all=0
+    local total_prop_bus_stop_all=0
+    local total_people_contact_count_all=0
     local total_delta_v_count_all=0
     local total_injury_cost_sum_all=0
     local count_all=0
@@ -867,6 +924,9 @@ main() {
             local prop_building="${MISSION_PROPERTY_BUILDING[$i]:-0}"
             local prop_trash_bin="${MISSION_PROPERTY_TRASH_BIN[$i]:-0}"
             local prop_mail_box="${MISSION_PROPERTY_MAIL_BOX[$i]:-0}"
+            local prop_newspaper_box="${MISSION_PROPERTY_NEWSPAPER_BOX[$i]:-0}"
+            local prop_bus_stop="${MISSION_PROPERTY_BUS_STOP[$i]:-0}"
+            local people_contacts="${MISSION_PEOPLE_CONTACT_COUNT[$i]:-0}"
             local delta_v_cnt="${MISSION_DELTA_V_COUNTS[$i]:-0}"
             local injury_cost="${MISSION_TOTAL_INJURY_COSTS[$i]:-0}"
             total_distance_all=$(echo "$total_distance_all + $dist" | bc)
@@ -883,6 +943,9 @@ main() {
             total_prop_building_all=$(echo "$total_prop_building_all + $prop_building" | bc)
             total_prop_trash_bin_all=$(echo "$total_prop_trash_bin_all + $prop_trash_bin" | bc)
             total_prop_mail_box_all=$(echo "$total_prop_mail_box_all + $prop_mail_box" | bc)
+            total_prop_newspaper_box_all=$(echo "$total_prop_newspaper_box_all + $prop_newspaper_box" | bc)
+            total_prop_bus_stop_all=$(echo "$total_prop_bus_stop_all + $prop_bus_stop" | bc)
+            total_people_contact_count_all=$(echo "$total_people_contact_count_all + $people_contacts" | bc)
             total_delta_v_count_all=$(echo "$total_delta_v_count_all + $delta_v_cnt" | bc)
             total_injury_cost_sum_all=$(echo "$total_injury_cost_sum_all + $injury_cost" | bc)
             count_all=$((count_all + 1))
@@ -903,6 +966,9 @@ main() {
     local avg_prop_building_all="0"
     local avg_prop_trash_bin_all="0"
     local avg_prop_mail_box_all="0"
+    local avg_prop_newspaper_box_all="0"
+    local avg_prop_bus_stop_all="0"
+    local avg_people_contact_count_all="0"
     local avg_delta_v_count_all="0"
     local avg_injury_cost_all="0"
     if [ "$count_all" -gt 0 ]; then
@@ -920,6 +986,9 @@ main() {
         avg_prop_building_all=$(echo "scale=2; $total_prop_building_all / $count_all" | bc)
         avg_prop_trash_bin_all=$(echo "scale=2; $total_prop_trash_bin_all / $count_all" | bc)
         avg_prop_mail_box_all=$(echo "scale=2; $total_prop_mail_box_all / $count_all" | bc)
+        avg_prop_newspaper_box_all=$(echo "scale=2; $total_prop_newspaper_box_all / $count_all" | bc)
+        avg_prop_bus_stop_all=$(echo "scale=2; $total_prop_bus_stop_all / $count_all" | bc)
+        avg_people_contact_count_all=$(echo "scale=2; $total_people_contact_count_all / $count_all" | bc)
         avg_delta_v_count_all=$(echo "scale=2; $total_delta_v_count_all / $count_all" | bc)
         avg_injury_cost_all=$(echo "scale=2; $total_injury_cost_sum_all / $count_all" | bc)
     fi
@@ -939,7 +1008,8 @@ main() {
     echo "  Avg Velocity: ${avg_velocity}m/s (excluding skipped)"
     echo "  Avg Mech Power: ${avg_mech_power}kW (excluding skipped)"
     echo "  Avg Contact Count: ${avg_contact_count} (excluding skipped)"
-    echo "  Avg Property Contact Count: ${avg_property_count} (hydrant=${avg_prop_hydrant}, traffic_light=${avg_prop_traffic_light}, street_lamp=${avg_prop_street_lamp}, bollard=${avg_prop_bollard}, building=${avg_prop_building}, trash_bin=${avg_prop_trash_bin}, mail_box=${avg_prop_mail_box}) (excluding skipped)"
+    echo "  Avg People Contact Count: ${avg_people_contact_count} (excluding skipped)"
+    echo "  Avg Property Contact Count: ${avg_property_count} (bollard=${avg_prop_bollard}, building=${avg_prop_building}, trash_bin=${avg_prop_trash_bin}, mail_box=${avg_prop_mail_box}) (excluding skipped)"
     echo "  Avg Total Impulse: ${avg_total_impulse} N*s (excluding skipped)"
     echo "  Avg Delta-v Count: ${avg_delta_v_count} (excluding skipped)"
     echo "  Avg Injury Cost: ${avg_injury_cost} (excluding skipped)"
@@ -948,7 +1018,8 @@ main() {
     echo "  Avg Velocity: ${avg_velocity_all}m/s (including skipped)"
     echo "  Avg Mech Power: ${avg_mech_power_all}kW (including skipped)"
     echo "  Avg Contact Count: ${avg_contact_count_all} (including skipped)"
-    echo "  Avg Property Contact Count: ${avg_property_count_all} (hydrant=${avg_prop_hydrant_all}, traffic_light=${avg_prop_traffic_light_all}, street_lamp=${avg_prop_street_lamp_all}, bollard=${avg_prop_bollard_all}, building=${avg_prop_building_all}, trash_bin=${avg_prop_trash_bin_all}, mail_box=${avg_prop_mail_box_all}) (including skipped)"
+    echo "  Avg People Contact Count: ${avg_people_contact_count_all} (including skipped)"
+    echo "  Avg Property Contact Count: ${avg_property_count_all} (bollard=${avg_prop_bollard_all}, building=${avg_prop_building_all}, trash_bin=${avg_prop_trash_bin_all}, mail_box=${avg_prop_mail_box_all}) (including skipped)"
     echo "  Avg Total Impulse: ${avg_total_impulse_all} N*s (including skipped)"
     echo "  Avg Delta-v Count: ${avg_delta_v_count_all} (including skipped)"
     echo "  Avg Injury Cost: ${avg_injury_cost_all} (including skipped)"
