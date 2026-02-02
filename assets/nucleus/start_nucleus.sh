@@ -22,6 +22,38 @@ ASSETS_DIR="$(dirname "$SCRIPT_DIR")"
 REPO_ROOT="$(dirname "$ASSETS_DIR")"
 NUCLEUS_INSTALL_DIR="/opt/ove"
 NUCLEUS_DATA_DIR="/var/lib/omni/nucleus-data"
+NUCLEUS_WEB_PORT="${NUCLEUS_WEB_PORT:-8080}"
+NUCLEUS_PORT="${NUCLEUS_PORT:-3009}"
+
+wait_for_port() {
+    local host="$1"
+    local port="$2"
+    local timeout="$3"
+    local start_ts
+    start_ts="$(date +%s)"
+    while true; do
+        if (echo >"/dev/tcp/${host}/${port}") >/dev/null 2>&1; then
+            return 0
+        fi
+        if [ $(( "$(date +%s)" - start_ts )) -ge "$timeout" ]; then
+            return 1
+        fi
+        sleep 2
+    done
+}
+
+upsert_env_var() {
+    local file="$1"
+    local key="$2"
+    local value="$3"
+    if grep -qE "^${key}=" "$file"; then
+        sed -i "s/^${key}=.*/${key}=${value}/" "$file"
+    elif grep -qE "^#${key}=" "$file"; then
+        sed -i "s/^#${key}=.*/${key}=${value}/" "$file"
+    else
+        echo "${key}=${value}" >> "$file"
+    fi
+}
 
 echo "============================================================"
 echo "CostNav Local Nucleus Server Setup"
@@ -108,6 +140,12 @@ fi
 
 cd "$NUCLEUS_INSTALL_DIR/base_stack"
 
+# Stop any existing Nucleus containers before start
+if docker compose --env-file nucleus-stack.env -f nucleus-stack-no-ssl.yml ps -q | grep -q .; then
+    echo "Existing Nucleus containers detected. Stopping..."
+    docker compose --env-file nucleus-stack.env -f nucleus-stack-no-ssl.yml down
+fi
+
 # Check if already configured
 if [ ! -f "nucleus-stack.env.configured" ]; then
     echo "Configuring Nucleus stack..."
@@ -116,16 +154,12 @@ if [ ! -f "nucleus-stack.env.configured" ]; then
     cp nucleus-stack.env nucleus-stack.env.backup 2>/dev/null || true
 
     # Configure nucleus-stack.env
-    sed -i 's/^#ACCEPT_EULA=.*/ACCEPT_EULA=1/' nucleus-stack.env
-    sed -i 's/^#SECURITY_REVIEWED=.*/SECURITY_REVIEWED=1/' nucleus-stack.env
-    sed -i 's/^SERVER_IP_OR_HOST=.*/SERVER_IP_OR_HOST=localhost/' nucleus-stack.env
-    sed -i 's/^#SERVER_IP_OR_HOST=.*/SERVER_IP_OR_HOST=localhost/' nucleus-stack.env
-    sed -i 's/^DATA_ROOT=.*/DATA_ROOT=\/var\/lib\/omni\/nucleus-data/' nucleus-stack.env
-    sed -i 's/^#DATA_ROOT=.*/DATA_ROOT=\/var\/lib\/omni\/nucleus-data/' nucleus-stack.env
-    sed -i 's/^MASTER_PASSWORD=.*/MASTER_PASSWORD=costnav123/' nucleus-stack.env
-    sed -i 's/^#MASTER_PASSWORD=.*/MASTER_PASSWORD=costnav123/' nucleus-stack.env
-    sed -i 's/^SERVICE_PASSWORD=.*/SERVICE_PASSWORD=costnav123/' nucleus-stack.env
-    sed -i 's/^#SERVICE_PASSWORD=.*/SERVICE_PASSWORD=costnav123/' nucleus-stack.env
+    upsert_env_var nucleus-stack.env "ACCEPT_EULA" "1"
+    upsert_env_var nucleus-stack.env "SECURITY_REVIEWED" "1"
+    upsert_env_var nucleus-stack.env "SERVER_IP_OR_HOST" "localhost"
+    upsert_env_var nucleus-stack.env "DATA_ROOT" "/var/lib/omni/nucleus-data"
+    upsert_env_var nucleus-stack.env "MASTER_PASSWORD" "costnav123"
+    upsert_env_var nucleus-stack.env "SERVICE_PASSWORD" "costnav123"
 
     # Generate secrets if script exists
     if [ -f "generate-sample-insecure-secrets.sh" ]; then
@@ -136,6 +170,10 @@ if [ ! -f "nucleus-stack.env.configured" ]; then
     touch nucleus-stack.env.configured
     echo "Configuration complete."
 fi
+
+# Ensure required env vars even if already configured
+upsert_env_var nucleus-stack.env "ACCEPT_EULA" "1"
+upsert_env_var nucleus-stack.env "SECURITY_REVIEWED" "1"
 
 # Create data directory
 mkdir -p "$NUCLEUS_DATA_DIR"
@@ -170,10 +208,24 @@ echo "Starting Nucleus server..."
 docker compose --env-file nucleus-stack.env -f nucleus-stack-no-ssl.yml up -d
 
 echo ""
+echo "Waiting for Nucleus services to become available..."
+if ! wait_for_port "127.0.0.1" "$NUCLEUS_WEB_PORT" 120; then
+    echo "ERROR: Web UI did not become available on port ${NUCLEUS_WEB_PORT} within 120s."
+    echo "Try: cd $NUCLEUS_INSTALL_DIR/base_stack && docker compose --env-file nucleus-stack.env -f nucleus-stack-no-ssl.yml logs -f"
+    exit 1
+fi
+if ! wait_for_port "127.0.0.1" "$NUCLEUS_PORT" 120; then
+    echo "ERROR: Nucleus service did not become available on port ${NUCLEUS_PORT} within 120s."
+    echo "If your compose uses a different port, set NUCLEUS_PORT and re-run:"
+    echo "  NUCLEUS_PORT=3009 sudo ./assets/nucleus/start_nucleus.sh"
+    exit 1
+fi
+
+echo ""
 echo "============================================================"
 echo "Nucleus server started!"
 echo ""
-echo "Web UI:     http://localhost:8080"
+echo "Web UI:     http://localhost:${NUCLEUS_WEB_PORT}"
 echo "Omniverse:  omniverse://localhost"
 echo ""
 echo "Default credentials:"
@@ -186,4 +238,5 @@ echo ""
 echo "Commands:"
 echo "  Stop:  cd $NUCLEUS_INSTALL_DIR/base_stack && docker compose --env-file nucleus-stack.env -f nucleus-stack-no-ssl.yml down"
 echo "  Logs:  cd $NUCLEUS_INSTALL_DIR/base_stack && docker compose --env-file nucleus-stack.env -f nucleus-stack-no-ssl.yml logs -f"
+echo "  Test:  python assets/nucleus/test_nucleus_connection.py"
 echo "============================================================"
