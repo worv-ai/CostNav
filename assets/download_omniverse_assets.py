@@ -44,13 +44,9 @@ setup_isaac_sim()
 
 # List of all Omniverse assets used in the codebase
 OMNIVERSE_ASSETS = [
-    "omniverse://10.50.2.21/Users/worv/coco_one_fix_prim.usd",
     "omniverse://10.50.2.21/Users/worv/costnav/foods/popcorn/popcorn.usd",
     "omniverse://10.50.2.21/Users/worv/costnav/street_sidewalk_segwaye1_Corrected.usd",
     "omniverse://10.50.2.21/Users/worv/costnav/Street_sidewalk.usd",
-    "omniverse://10.50.2.21/Users/worv/map/Street_road.usd",
-    "omniverse://10.50.2.21/Users/worv/map/Street_sidewalk.usd",
-    "omniverse://10.50.2.21/Users/worv/map/temp.usd",
 ]
 
 OMNIVERSE_SERVER = "omniverse://10.50.2.21"
@@ -84,25 +80,25 @@ def download_asset(omni_client, url: str, output_dir: Path) -> bool:
     return True
 
 
-def download_asset_with_dependencies(omni_client, url: str, output_dir: Path, downloaded: set) -> bool:
-    """Download an asset and its dependencies (referenced USD files)."""
+def download_asset_with_dependencies(omni_client, url: str, output_dir: Path, downloaded: set, include_siblings: bool = True) -> bool:
+    """Download an asset and optionally its sibling files (textures, materials, etc.)."""
     if url in downloaded:
         return True
-    
+
     downloaded.add(url)
-    
+
     if not download_asset(omni_client, url, output_dir):
         return False
-    
-    # For USD files, try to find and download dependencies
-    if url.endswith((".usd", ".usda", ".usdc")):
+
+    # Optionally download sibling files for USD assets
+    if include_siblings and url.endswith((".usd", ".usda", ".usdc")):
         relative_path = url.replace(f"{OMNIVERSE_SERVER}/", "")
         local_path = output_dir / relative_path
-        
+
         # List directory to find related assets (textures, materials, etc.)
         parent_url = "/".join(url.split("/")[:-1])
         result, entries = omni_client.list(parent_url)
-        
+
         if result == omni_client.Result.OK:
             for entry in entries:
                 entry_url = f"{parent_url}/{entry.relative_path}"
@@ -110,7 +106,7 @@ def download_asset_with_dependencies(omni_client, url: str, output_dir: Path, do
                     # It's a file, download it
                     download_asset(omni_client, entry_url, output_dir)
                     downloaded.add(entry_url)
-    
+
     return True
 
 
