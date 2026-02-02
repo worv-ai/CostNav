@@ -8,14 +8,39 @@ omniverse://10.50.2.21/ to ./assets/ maintaining the same directory structure.
 Usage:
     # Inside Isaac Sim environment:
     python assets/download_omniverse_assets.py
-    
+
     # Or with Isaac Sim Python:
     /isaac-sim/python.sh assets/download_omniverse_assets.py
+
+    # Or using isaacsim module directly:
+    python -c "import isaacsim; exec(open('assets/download_omniverse_assets.py').read())"
 """
 
 import os
 import sys
 from pathlib import Path
+
+# Try to bootstrap Isaac Sim environment if not already done
+def setup_isaac_sim():
+    """Setup Isaac Sim environment for omni.client access."""
+    isaac_sim_path = os.environ.get("ISAAC_PATH", "/isaac-sim")
+
+    # Add Isaac Sim paths if not already present
+    paths_to_add = [
+        os.path.join(isaac_sim_path, "kit", "kernel", "py"),
+        os.path.join(isaac_sim_path, "kit", "plugins"),
+        os.path.join(isaac_sim_path, "kit", "exts"),
+        os.path.join(isaac_sim_path, "kit", "extscore"),
+        os.path.join(isaac_sim_path, "exts"),
+        os.path.join(isaac_sim_path, "extscache"),
+    ]
+
+    for p in paths_to_add:
+        if os.path.exists(p) and p not in sys.path:
+            sys.path.insert(0, p)
+
+
+setup_isaac_sim()
 
 # List of all Omniverse assets used in the codebase
 OMNIVERSE_ASSETS = [
@@ -89,20 +114,62 @@ def download_asset_with_dependencies(omni_client, url: str, output_dir: Path, do
     return True
 
 
-def main():
+def get_omni_client():
+    """Try multiple methods to import omni.client."""
+    # Method 1: Direct import (works if PYTHONPATH is set correctly)
     try:
         import omni.client as omni_client
+        return omni_client
     except ImportError:
+        pass
+
+    # Method 2: Try importing via isaacsim bootstrap
+    try:
+        import isaacsim
+        from omni.isaac.kit import SimulationApp
+        # Create a minimal simulation app to initialize omni
+        simulation_app = SimulationApp({"headless": True})
+        import omni.client as omni_client
+        return omni_client
+    except ImportError:
+        pass
+
+    # Method 3: Try importing carb first (lower-level approach)
+    try:
+        import carb
+        import omni.client as omni_client
+        return omni_client
+    except ImportError:
+        pass
+
+    return None
+
+
+def main():
+    omni_client = get_omni_client()
+
+    if omni_client is None:
         print("ERROR: omni.client not available.")
         print("This script must be run inside Isaac Sim environment.")
         print("")
-        print("Try running with:")
-        print("  /isaac-sim/python.sh assets/download_omniverse_assets.py")
+        print("Try one of these methods:")
         print("")
-        print("Or inside Docker:")
-        print("  docker exec -it costnav-isaac-lab /isaac-sim/python.sh assets/download_omniverse_assets.py")
+        print("  Method 1 - Using Isaac Sim python.sh:")
+        print("    /isaac-sim/python.sh assets/download_omniverse_assets.py")
+        print("")
+        print("  Method 2 - Using isaacsim module:")
+        print("    python -m isaacsim assets/download_omniverse_assets.py")
+        print("")
+        print("  Method 3 - Inside Docker with proper environment:")
+        print("    docker compose --profile isaac-lab run --rm isaac-lab bash")
+        print("    # Then inside container:")
+        print("    /isaac-sim/python.sh /workspace/assets/download_omniverse_assets.py")
+        print("")
+        print("  Method 4 - Source Isaac Sim environment first:")
+        print("    source /isaac-sim/setup_conda_env.sh")
+        print("    python assets/download_omniverse_assets.py")
         sys.exit(1)
-    
+
     # Initialize Omniverse client
     omni_client.initialize()
     
