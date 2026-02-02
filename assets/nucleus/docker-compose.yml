@@ -1,0 +1,58 @@
+# Local Omniverse Nucleus Server for CostNav Assets
+#
+# This docker-compose file sets up a local Nucleus server to serve
+# the downloaded Omniverse assets for users who cannot access the
+# internal server (omniverse://10.50.2.21).
+#
+# Usage:
+#   1. Download assets first:
+#      python assets/download_assets_hf.py
+#
+#   2. Start the Nucleus server:
+#      cd assets/nucleus
+#      docker compose up -d
+#
+#   3. Access Nucleus at: omniverse://localhost
+#
+# The assets will be available at the same paths, e.g.:
+#   omniverse://localhost/Users/worv/costnav/Street_sidewalk.usd
+#
+# Note: This requires NVIDIA NGC access to pull the Nucleus images.
+# See: https://docs.omniverse.nvidia.com/nucleus/latest/enterprise/installation/install-ove-nucleus.html
+
+services:
+  nucleus:
+    image: nvcr.io/nvidia/omniverse/nucleus:2023.2.9
+    container_name: costnav-nucleus
+    environment:
+      - ACCEPT_EULA=1
+      - SECURITY_REVIEWED=1
+      - DATA_ROOT=/data
+      - SERVER_IP_OR_HOST=localhost
+      - MASTER_PASSWORD=${NUCLEUS_PASSWORD:-costnav123}
+      - SERVICE_PASSWORD=${NUCLEUS_PASSWORD:-costnav123}
+    volumes:
+      # Mount the downloaded assets as the Nucleus data
+      - ../Users:/data/Users:ro
+      # Nucleus internal data
+      - nucleus-data:/var/lib/omni/nucleus-data
+    ports:
+      - "3009:3009"      # Nucleus API
+      - "3019:3019"      # Nucleus Auth
+      - "3020:3020"      # Nucleus Discovery
+      - "3030:3030"      # Nucleus Web
+      - "3100:3100"      # Nucleus LFT
+      - "3180:3180"      # Nucleus Search
+      - "3333:3333"      # Nucleus Tagging
+      - "8080:8080"      # Web UI
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3030/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  nucleus-data:
+
