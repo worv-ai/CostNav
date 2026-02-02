@@ -12,29 +12,26 @@ python assets/download_assets_hf.py
 
 This downloads all required assets to `assets/Users/`.
 
-### 2. Start Local Nucleus Server
+### 2. Initialize and Start Local Nucleus Server
 
 **Prerequisites:**
 - Docker and Docker Compose installed
 - NGC account with Omniverse Enterprise access
-- Downloaded nucleus-stack from NGC
+- `.env` file with NGC credentials
 
-**Step 1:** Download nucleus-stack from NGC (one-time setup):
+**Step 1:** Set up NGC credentials in `.env`:
 ```bash
-# Option A: Using NGC CLI
-ngc registry resource download-version "nvidia/omniverse/nucleus-stack:2023.2.9"
-
-# Option B: Manual download from
-# https://catalog.ngc.nvidia.com/orgs/nvidia/teams/omniverse/collections/nucleus
+cp .env.example .env
+# Edit .env and set NGC_PASS to your NGC API key
+# Get your API key at: https://ngc.nvidia.com/setup/api-key
 ```
 
-**Step 2:** Extract to /opt/ove:
+**Step 2:** Run the initialization script (installs NGC CLI, downloads nucleus-stack):
 ```bash
-sudo mkdir -p /opt/ove
-sudo tar xzvf nucleus-stack-*.tar.gz -C /opt/ove --strip-components=1
+./assets/nucleus/init_nucleus.sh
 ```
 
-**Step 3:** Run the setup script:
+**Step 3:** Start the Nucleus server:
 ```bash
 ./assets/nucleus/start_nucleus.sh
 ```
@@ -80,8 +77,8 @@ assets/
 ├── download_omniverse_assets.py   # Download from internal Omniverse server
 ├── update_asset_paths.py          # Update codebase paths
 ├── nucleus/                       # Local Nucleus server setup
-│   ├── docker-compose.yml
-│   └── start_nucleus.sh
+│   ├── init_nucleus.sh            # Initialize NGC CLI and download nucleus-stack
+│   └── start_nucleus.sh           # Configure and start Nucleus server
 └── Users/                         # Downloaded assets (git-ignored)
     └── worv/
         └── costnav/
