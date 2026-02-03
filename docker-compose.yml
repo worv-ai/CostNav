@@ -59,7 +59,7 @@ services:
       - ISAAC_PATH=${ISAAC_PATH:-/isaac-sim}
       - CARB_APP_PATH=${CARB_APP_PATH:-/isaac-sim/kit}
       - EXP_PATH=${EXP_PATH:-/isaac-sim/apps}
-      - NUM_PEOPLE=${NUM_PEOPLE:-0}
+      - NUM_PEOPLE=${NUM_PEOPLE:-20}
       - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
       - FOOD=${FOOD:-True}
     volumes:
@@ -79,7 +79,7 @@ services:
     working_dir: /workspace
     command:
       - "-ic"
-      - "/workspace/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-0} --robot $${SIM_ROBOT:-segway_e1} --food-enabled $${FOOD:-True}"
+      - "/workspace/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-20} --robot $${SIM_ROBOT:-segway_e1} --food-enabled $${FOOD:-True}"
     healthcheck:
       test:
         [
