@@ -33,8 +33,8 @@ sys.modules["visualization_msgs.msg"] = MagicMock()
 sys.modules["std_msgs"] = MagicMock()
 sys.modules["std_msgs.msg"] = MagicMock()
 
-from costnav_isaacsim.nav2_mission.mission_manager import MissionManagerConfig
-from costnav_isaacsim.nav2_mission.navmesh_sampler import SampledPosition
+from costnav_isaacsim.config import MissionManagerConfig  # noqa: E402
+from costnav_isaacsim.mission_manager.navmesh_sampler import SampledPosition  # noqa: E402
 
 
 class TestMissionManagerConfig:
@@ -192,7 +192,7 @@ class TestTeleportCallback:
         # Patch the imports and create the callback
         with patch.dict("sys.modules", {"pxr": MagicMock(Gf=mock_gf, UsdGeom=mock_usd_geom)}):
             # Import the mission manager to get access to the method
-            from costnav_isaacsim.nav2_mission.mission_manager import MissionManager
+            from costnav_isaacsim.mission_manager.mission_manager import MissionManager
 
             # Create instance without initializing (to avoid ROS2 dependencies)
             manager = object.__new__(MissionManager)

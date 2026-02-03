@@ -7,11 +7,20 @@
 This node subscribes to camera images, runs ViNT inference,
 and publishes trajectory to /vint_trajectory for the trajectory follower node.
 
+For ImageGoal mode, the node receives goal images via:
+1. /goal_image topic - Published by the mission manager when a new mission starts
+2. /set_goal_image service - Service to set the goal image programmatically
+
+Following the NavDP pattern, when a new goal image is received:
+- The agent's memory queue is reset (new mission = fresh start)
+- The new goal image is stored and used for subsequent inference
+
 Usage:
     python3 vint_policy_node.py \
         --checkpoint /path/to/model.pth \
         --model_config /path/to/config.yaml \
-        --robot_config /path/to/robot.yaml
+        --robot_config /path/to/robot.yaml \
+        --use_imagegoal
 """
 
 import argparse
@@ -24,9 +33,10 @@ from cv_bridge import CvBridge
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
 from rclpy.node import Node
-from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
+from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool
+from std_srvs.srv import Trigger
 from transforms3d.euler import euler2quat
 
 from evaluation.agents.vint_agent import ViNTAgent
@@ -37,8 +47,12 @@ class ViNTPolicyNode(Node):
 
     Subscribes to:
         - /front_stereo_camera/left/image_raw (sensor_msgs/Image)
-        - /goal_image (sensor_msgs/Image) - optional for ImageGoal mode
+        - /goal_image (sensor_msgs/Image) - for ImageGoal mode (latched/transient local QoS)
         - /vint_enable (std_msgs/Bool) - enable/disable policy execution
+
+    Services:
+        - /set_goal_image (std_srvs/SetGoalImage) - set goal image programmatically
+        - /reset_agent (std_srvs/Trigger) - reset agent memory queue for new mission
 
     Publishes:
         - /vint_trajectory (nav_msgs/Path) - full trajectory for trajectory follower node
@@ -61,12 +75,14 @@ class ViNTPolicyNode(Node):
         image_topic: str = "/front_stereo_camera/left/image_raw",
         use_imagegoal: bool = False,
         device: str = "cuda:0",
+        goal_image_topic: str = "/goal_image",
     ):
         super().__init__("vint_policy_node")
 
         # Store parameters
         self.inference_rate = inference_rate
         self.use_imagegoal = use_imagegoal
+        self.goal_image_topic = goal_image_topic
 
         # Validate parameters
         if not checkpoint or not os.path.exists(checkpoint):
@@ -97,22 +113,40 @@ class ViNTPolicyNode(Node):
         self.current_image: Optional[np.ndarray] = None
         self.goal_image: Optional[np.ndarray] = None
         self.enabled = True  # Control enable flag
+        self._goal_image_received = False  # Track if goal image was received for current mission
 
-        # QoS profile for sensor data
+        # QoS profile for sensor data (camera images)
         sensor_qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
             depth=1,
         )
 
+        # QoS profile for goal image with TRANSIENT_LOCAL durability
+        # This ensures the subscriber receives the last published goal image
+        # even if it was published before the subscription was created
+        goal_image_qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+
         # Subscribers
         self.image_sub = self.create_subscription(Image, image_topic, self.image_callback, sensor_qos)
 
         if self.use_imagegoal:
-            self.goal_sub = self.create_subscription(Image, "/goal_image", self.goal_image_callback, 10)
+            # Subscribe to goal image with transient local durability for reliable delivery
+            self.goal_sub = self.create_subscription(
+                Image, self.goal_image_topic, self.goal_image_callback, goal_image_qos
+            )
+            self.get_logger().info(f"ImageGoal mode enabled. Subscribing to: {self.goal_image_topic}")
 
         # Enable/disable subscription
         self.enable_sub = self.create_subscription(Bool, "/vint_enable", self.enable_callback, 10)
+
+        # Services for mission control
+        self._reset_service = self.create_service(Trigger, "/vint_reset_agent", self._handle_reset_agent)
 
         # Publishers
         self.trajectory_pub = self.create_publisher(Path, "/vint_trajectory", 10)
@@ -124,6 +158,8 @@ class ViNTPolicyNode(Node):
         self.get_logger().info(f"ViNT policy node started. Inference rate: {self.inference_rate} Hz")
         self.get_logger().info(f"Subscribing to: {image_topic}")
         self.get_logger().info("Publishing trajectory to: /vint_trajectory")
+        if self.use_imagegoal:
+            self.get_logger().info("Waiting for goal image to start image-goal navigation...")
 
     def image_callback(self, msg: Image):
         """Process incoming camera image."""
@@ -133,12 +169,55 @@ class ViNTPolicyNode(Node):
             self.get_logger().error(f"Failed to convert image: {e}")
 
     def goal_image_callback(self, msg: Image):
-        """Process incoming goal image (for ImageGoal mode)."""
+        """Process incoming goal image (for ImageGoal mode).
+
+        When a new goal image is received, this indicates the start of a new mission.
+        Following the NavDP pattern, we reset the agent's memory queue to ensure
+        a fresh start for the new navigation task.
+
+        The goal image is published by the mission manager (or goal image publisher)
+        at the beginning of each mission.
+        """
         try:
-            self.goal_image = self.bridge.imgmsg_to_cv2(msg, "rgb8")
-            self.get_logger().info("Received new goal image")
+            new_goal_image = self.bridge.imgmsg_to_cv2(msg, "rgb8")
+
+            # Reset agent memory queue for new mission (following NavDP pattern)
+            # This ensures the agent starts fresh with new goal context
+            self.agent.reset(batch_size=1)
+            self.get_logger().info("Agent memory queue reset for new mission")
+
+            # Store the new goal image
+            self.goal_image = new_goal_image
+            self._goal_image_received = True
+
+            self.get_logger().info(
+                f"Received new goal image (shape: {self.goal_image.shape}). Starting image-goal navigation."
+            )
         except Exception as e:
             self.get_logger().error(f"Failed to convert goal image: {e}")
+
+    def _handle_reset_agent(self, _request, response):
+        """Handle agent reset service request.
+
+        This service can be called by the mission manager to reset the agent's
+        memory queue without providing a new goal image. Useful for debugging
+        or when the goal image will be sent separately.
+
+        Returns:
+            Trigger response with success status and message.
+        """
+        try:
+            self.agent.reset(batch_size=1)
+            self.goal_image = None
+            self._goal_image_received = False
+            response.success = True
+            response.message = "ViNT agent memory queue reset successfully"
+            self.get_logger().info("Agent reset via service call")
+        except Exception as e:
+            response.success = False
+            response.message = f"Failed to reset agent: {e}"
+            self.get_logger().error(f"Agent reset failed: {e}")
+        return response
 
     def enable_callback(self, msg: Bool):
         """Enable/disable policy execution."""
@@ -152,6 +231,11 @@ class ViNTPolicyNode(Node):
             return
 
         if self.current_image is None:
+            return
+
+        # In imagegoal mode, wait for goal image before starting inference
+        if self.use_imagegoal and self.goal_image is None:
+            # Don't log every iteration, just skip silently
             return
 
         try:
@@ -251,6 +335,12 @@ def parse_args():
         help="Use image goal navigation mode",
     )
     parser.add_argument(
+        "--goal_image_topic",
+        type=str,
+        default="/goal_image",
+        help="Goal image topic for ImageGoal mode (default: /goal_image)",
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default="cuda:0",
@@ -274,6 +364,7 @@ def main():
             image_topic=args.image_topic,
             use_imagegoal=args.use_imagegoal,
             device=args.device,
+            goal_image_topic=args.goal_image_topic,
         )
         rclpy.spin(node)
     except KeyboardInterrupt:

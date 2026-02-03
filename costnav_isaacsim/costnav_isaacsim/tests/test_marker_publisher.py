@@ -23,7 +23,7 @@ sys.modules["visualization_msgs.msg"] = MagicMock()
 sys.modules["std_msgs"] = MagicMock()
 sys.modules["std_msgs.msg"] = MagicMock()
 
-from costnav_isaacsim.nav2_mission.marker_publisher import MarkerConfig
+from costnav_isaacsim.mission_manager.marker_publisher import MarkerConfig  # noqa: E402
 
 
 class TestMarkerConfig:
@@ -64,7 +64,7 @@ class TestMarkerPublisherConfig:
 
     def test_marker_publisher_uses_custom_scale(self):
         """Test that MarkerPublisher accepts and uses custom marker scales."""
-        from costnav_isaacsim.nav2_mission.marker_publisher import MarkerPublisher
+        from costnav_isaacsim.mission_manager.marker_publisher import MarkerPublisher
 
         # Create a marker publisher with custom scale
         custom_length = 5.0

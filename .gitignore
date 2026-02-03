@@ -228,11 +228,11 @@ costnav_isaaclab/source/costnav_isaaclab/20*/
 
 # Work-in-progress refactored source
 .vscode/.standalone_examples.env
+.vscode/.ros2_jazzy.env
 
 costnav_isaacsim/il_baselines/training/visualnav_transformer/checkpoints
 wandb/
 
-/nav2_params/
 /build_ws/
 data/
 checkpoints/

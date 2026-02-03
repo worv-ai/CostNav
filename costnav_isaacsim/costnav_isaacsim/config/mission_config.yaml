@@ -111,3 +111,44 @@ injury:
     mais_4: 0.0  # Delivery robot context: MAIS 4+ not modeled (report covers motor vehicles)
     mais_5: 0.0  # Delivery robot context: MAIS 4+ not modeled (report covers motor vehicles)
     fatality: 0.0  # Delivery robot context: MAIS 4+ not modeled (report covers motor vehicles)
+
+# Goal image settings (for ViNT ImageGoal mode)
+goal_image:
+  # Enable goal image publishing for ViNT ImageGoal mode
+  enabled: false
+
+  # Topic to publish goal images
+  topic: "/goal_image"
+
+  # Goal image dimensions (matches ViNT input)
+  width: 640
+  height: 360
+
+  # Camera height offset from ground (meters)
+  camera_height_offset: 0.3
+
+  # USD prim path for goal camera
+  camera_prim_path: "/World/goal_camera"
+
+# MissionManager runtime settings
+# These control the mission execution behavior
+manager:
+  # Distance constraints (if not specified, uses values from distance section)
+  # min_distance: 20.0
+  # max_distance: 1000.0
+
+  # Sampling margin from navmesh edges (if not specified, uses value from sampling.edge_margin)
+  # edge_margin: 1.0
+
+  # Delays for Nav2 pose initialization
+  # initial_pose_delay: 2.0  # Uses nav2.initial_pose_delay if not specified
+  goal_delay: 0.5  # Delay after publishing goal (seconds)
+
+  # Teleportation settings
+  # teleport_height: 0.1  # Uses teleport.height_offset if not specified
+  # robot_prim_path: "/World/Nova_Carter_ROS/chassis_link"  # Uses teleport.robot_prim if not specified
+  teleport_settle_steps: 30  # Number of simulation steps after teleportation for physics to settle
+
+  # Nav2 costmap clearing (useful when teleporting between missions)
+  clear_costmaps_on_mission_start: true
+  costmap_clear_timeout_sec: 2.0  # Max time to wait for clear service responses

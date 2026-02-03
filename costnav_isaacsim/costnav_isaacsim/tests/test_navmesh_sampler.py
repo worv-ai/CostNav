@@ -8,7 +8,7 @@
 import math
 
 # Import the module under test
-from costnav_isaacsim.nav2_mission.navmesh_sampler import (
+from costnav_isaacsim.mission_manager.navmesh_sampler import (
     NAVMESH_AVAILABLE,
     NavMeshSampler,
     SampledPosition,

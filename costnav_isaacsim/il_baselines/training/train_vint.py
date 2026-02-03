@@ -34,6 +34,7 @@ import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
+import wandb
 import yaml
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from dotenv import load_dotenv
@@ -41,8 +42,6 @@ from torch.optim import Adam, AdamW
 from torch.utils.data import ConcatDataset, DataLoader
 from torchvision import transforms
 from warmup_scheduler import GradualWarmupScheduler
-
-import wandb
 
 """
 IMPORT YOUR MODEL HERE
@@ -493,13 +492,7 @@ if __name__ == "__main__":
         "--config",
         "-c",
         default=str(
-            PROJECT_ROOT
-            / "costnav_isaacsim"
-            / "il_baselines"
-            / "training"
-            / "visualnav_transformer"
-            / "configs"
-            / "vint_costnav.yaml"
+            PROJECT_ROOT / "il_baselines" / "training" / "visualnav_transformer" / "configs" / "vint_costnav.yaml"
         ),
         type=str,
         help="Path to the config file",
@@ -508,13 +501,7 @@ if __name__ == "__main__":
 
     # Load defaults config
     defaults_path = str(
-        PROJECT_ROOT
-        / "costnav_isaacsim"
-        / "il_baselines"
-        / "training"
-        / "visualnav_transformer"
-        / "configs"
-        / "defaults.yaml"
+        PROJECT_ROOT / "il_baselines" / "training" / "visualnav_transformer" / "configs" / "defaults.yaml"
     )
     with open(defaults_path, "r") as f:
         default_config = yaml.safe_load(f)

@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Nav2 Mission Planning and Execution Package.
+"""Mission Planning and Execution Package.
 
 This package provides tools for:
 - NavMesh-based position sampling for navigation goals
@@ -12,7 +12,7 @@ This package provides tools for:
 - Mission execution via MissionManager (main loop integration)
 
 Usage:
-    from costnav_isaacsim.nav2_mission import MissionManager
+    from costnav_isaacsim.mission_manager import MissionManager
     from costnav_isaacsim.config import load_mission_config
 
     # Load configuration
@@ -45,14 +45,13 @@ except ImportError:
 
 if ROS2_AVAILABLE:
     from .marker_publisher import MarkerPublisher
-    from .mission_manager import MissionManager, MissionManagerConfig
+    from .mission_manager import MissionManager
 
     __all__ = [
         "NavMeshSampler",
         "SampledPosition",
         "MarkerPublisher",
         "MissionManager",
-        "MissionManagerConfig",
         "ROS2_AVAILABLE",
     ]
 else:

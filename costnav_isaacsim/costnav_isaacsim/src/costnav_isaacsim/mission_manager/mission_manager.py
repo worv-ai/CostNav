@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import logging
 import math
-from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Callable, Optional
 
@@ -88,24 +87,6 @@ PROPERTY_PRIM_PATHS = {
 }
 
 
-@dataclass
-class MissionManagerConfig:
-    """Configuration for MissionManager runtime settings."""
-
-    min_distance: float = 5.0  # Minimum distance between start and goal (meters)
-    max_distance: float = 100.0  # Maximum distance between start and goal (meters)
-    edge_margin: float = 0.5  # Minimum distance from navmesh edges (meters)
-    initial_pose_delay: float = 1.0  # Delay after setting initial pose (seconds)
-    goal_delay: float = 0.5  # Delay after publishing goal (seconds)
-    teleport_height: float = 0.1  # Height offset for teleportation (meters)
-    robot_prim_path: Optional[str] = None  # Robot prim path in Isaac Sim USD stage
-    teleport_settle_steps: int = 30  # Number of simulation steps after teleportation for physics to settle
-
-    # Nav2 costmap clearing (useful when teleporting between missions)
-    clear_costmaps_on_mission_start: bool = True
-    costmap_clear_timeout_sec: float = 2.0  # Max time to wait for clear service responses before continuing
-
-
 class MissionState(Enum):
     """State machine for mission execution."""
 
@@ -149,7 +130,7 @@ class MissionManager:
 
     Usage:
         from costnav_isaacsim.config import MissionConfig
-        from costnav_isaacsim.nav2_mission import MissionManager
+        from costnav_isaacsim.isaac_sim.mission_manager import MissionManager
 
         config = MissionConfig(timeout=3600.0)
         manager = MissionManager(config, simulation_context)
@@ -164,8 +145,7 @@ class MissionManager:
         self,
         mission_config: "MissionConfig",
         simulation_context,
-        node_name: str = "nav2_mission_manager",
-        manager_config: Optional[MissionManagerConfig] = None,
+        node_name: str = "mission_manager",
         teleport_callback: Optional[Callable[[object], bool]] = None,
     ):
         """Initialize mission manager.
@@ -174,30 +154,15 @@ class MissionManager:
             mission_config: Mission configuration object (timeout, distances, etc.).
             simulation_context: Isaac Sim SimulationContext for stepping physics.
             node_name: Name of the ROS2 node.
-            manager_config: Optional MissionManagerConfig for fine-tuning. If not provided,
-                          will be created from mission_config.
             teleport_callback: Optional callback for robot teleportation.
                              Signature: (position: SampledPosition) -> bool
-                             If not provided and manager_config.robot_prim_path is set,
+                             If not provided and mission_config.manager.robot_prim_path is set,
                              will attempt to auto-setup Isaac Sim teleportation.
         """
         self.mission_config = mission_config
         self.simulation_context = simulation_context
         self.node_name = node_name
-
-        # Create manager config from mission config if not provided
-        if manager_config is None:
-            manager_config = MissionManagerConfig(
-                min_distance=mission_config.min_distance,
-                max_distance=mission_config.max_distance,
-                edge_margin=mission_config.sampling.edge_margin,
-                initial_pose_delay=mission_config.nav2.initial_pose_delay,
-                teleport_height=mission_config.teleport.height_offset,
-                robot_prim_path=mission_config.teleport.robot_prim,
-                # Use default value of MissionManagerConfig (not in TeleportConfig)
-                teleport_settle_steps=MissionManagerConfig.teleport_settle_steps,
-            )
-        self.config = manager_config
+        self.config = mission_config.manager
 
         self._teleport_callback = teleport_callback
 
@@ -289,6 +254,12 @@ class MissionManager:
         self._initial_food_piece_count = 0  # Piece count at mission start
         self._final_food_piece_count = None  # Piece count at mission end
 
+        # Goal image capture for ViNT ImageGoal mode
+        self._goal_camera_prim = None  # USD camera prim for goal image capture
+        self._goal_render_product = None  # Omni replicator render product
+        self._goal_rgb_annotator = None  # RGB annotator for goal image capture
+        self._goal_image_pub = None  # ROS2 publisher for goal images
+
     def _get_current_time_seconds(self) -> float:
         """Get current time in seconds from ROS clock.
 
@@ -336,16 +307,16 @@ class MissionManager:
     def _initialize(self):
         """Initialize ROS2 node and all components (called once on first step)."""
         import rclpy
-        from rclpy.executors import SingleThreadedExecutor
         from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
         from nav_msgs.msg import Odometry
+        from rclpy.executors import SingleThreadedExecutor
         from rclpy.node import Node
         from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-        from std_srvs.srv import Trigger
         from std_msgs.msg import Float64
+        from std_srvs.srv import Trigger
 
-        from .mission_result_srv import GetMissionResult
         from .marker_publisher import MarkerPublisher
+        from .mission_result_srv import GetMissionResult
         from .navmesh_sampler import NavMeshSampler
 
         try:
@@ -437,6 +408,11 @@ class MissionManager:
             self._odom_sub = self._node.create_subscription(
                 Odometry, self.mission_config.nav2.odom_topic, self._odom_callback, 10
             )
+
+            # Setup goal image capture if enabled
+            if self.mission_config.goal_image.enabled:
+                self._setup_goal_image_publisher(pose_qos)
+                self._setup_goal_camera()
 
             # Setup food tracking if enabled
             self._setup_food_tracking()
@@ -626,6 +602,175 @@ class MissionManager:
             logger.warning(f"[CONTACT] Isaac Sim modules not available: {exc}")
         except Exception as exc:
             logger.error(f"[CONTACT] Failed to setup contact reporting: {exc}")
+
+    def _setup_goal_image_publisher(self, qos_profile) -> None:
+        """Setup ROS2 publisher for goal images.
+
+        Args:
+            qos_profile: QoS profile with TRANSIENT_LOCAL durability for reliable delivery.
+        """
+        from sensor_msgs.msg import Image
+
+        self._goal_image_pub = self._node.create_publisher(Image, self.mission_config.goal_image.topic, qos_profile)
+        logger.info(f"[GOAL_IMAGE] Goal image publisher initialized on {self.mission_config.goal_image.topic}")
+
+    def _setup_goal_camera(self) -> None:
+        """Setup Isaac Sim camera at goal location for goal image capture.
+
+        Creates a camera prim at the configured path and sets up replicator
+        render product and RGB annotator for image capture.
+        """
+        try:
+            import omni.replicator.core as rep
+            from isaacsim.core.utils import prims as prim_utils
+            from pxr import Gf, UsdGeom
+
+            goal_image_cfg = self.mission_config.goal_image
+            cam_prim_path = goal_image_cfg.camera_prim_path
+            resolution = (goal_image_cfg.width, goal_image_cfg.height)
+
+            # Create camera prim if it doesn't exist
+            stage = self._stage
+            if stage is None:
+                import omni.usd
+
+                stage = omni.usd.get_context().get_stage()
+                self._stage = stage
+
+            existing_prim = stage.GetPrimAtPath(cam_prim_path)
+            if existing_prim.IsValid():
+                logger.info(f"[GOAL_IMAGE] Reusing existing camera at {cam_prim_path}")
+                self._goal_camera_prim = existing_prim
+            else:
+                # Create camera prim at a default position (will be moved to goal pose)
+                self._goal_camera_prim = prim_utils.create_prim(
+                    cam_prim_path,
+                    prim_type="Camera",
+                    translation=(0.0, 0.0, goal_image_cfg.camera_height_offset),
+                    orientation=(0.5, -0.5, 0.5, -0.5),  # ROS convention: looking forward
+                )
+                # Configure camera properties
+                camera_geom = UsdGeom.Camera(self._goal_camera_prim)
+                camera_geom.GetFocalLengthAttr().Set(1.4)
+                camera_geom.GetFocusDistanceAttr().Set(0.205)
+                camera_geom.GetHorizontalApertureAttr().Set(1.88)
+                camera_geom.GetClippingRangeAttr().Set(Gf.Vec2f(0.01, 100.0))
+                logger.info(f"[GOAL_IMAGE] Created goal camera at {cam_prim_path}")
+
+            # Create render product for the camera
+            self._goal_render_product = rep.create.render_product(cam_prim_path, resolution=resolution)
+
+            # Create RGB annotator and attach to render product
+            self._goal_rgb_annotator = rep.AnnotatorRegistry.get_annotator("rgb", device="cpu")
+            self._goal_rgb_annotator.attach(self._goal_render_product)
+
+            logger.info(f"[GOAL_IMAGE] Goal camera setup complete: {resolution[0]}x{resolution[1]} @ {cam_prim_path}")
+
+        except ImportError as exc:
+            logger.warning(f"[GOAL_IMAGE] Isaac Sim modules not available: {exc}")
+            self.mission_config.goal_image.enabled = False
+        except Exception as exc:
+            logger.error(f"[GOAL_IMAGE] Failed to setup goal camera: {exc}")
+            import traceback
+
+            logger.error(f"[GOAL_IMAGE] {traceback.format_exc()}")
+            self.mission_config.goal_image.enabled = False
+
+    def _capture_and_publish_goal_image(self, goal_position) -> bool:
+        """Capture goal image from camera at goal position and publish to ROS2.
+
+        Positions the goal camera at the goal location, renders the scene,
+        captures the RGB image, and publishes it to the goal image topic.
+
+        Args:
+            goal_position: SampledPosition with x, y, yaw for goal pose.
+
+        Returns:
+            True if goal image was captured and published successfully, False otherwise.
+        """
+        if not self.mission_config.goal_image.enabled:
+            return False
+
+        if self._goal_camera_prim is None or self._goal_rgb_annotator is None:
+            logger.warning("[GOAL_IMAGE] Goal camera not initialized")
+            return False
+
+        try:
+            import numpy as np
+            from pxr import Gf, UsdGeom
+
+            # Position camera at goal location
+            xform = UsdGeom.Xformable(self._goal_camera_prim)
+
+            # Get or create translate operation
+            translate_ops = [op for op in xform.GetOrderedXformOps() if op.GetOpType() == UsdGeom.XformOp.TypeTranslate]
+            translate_op = translate_ops[0] if translate_ops else xform.AddTranslateOp()
+
+            # Get or create orient operation
+            orient_ops = [op for op in xform.GetOrderedXformOps() if op.GetOpType() == UsdGeom.XformOp.TypeOrient]
+            orient_op = orient_ops[0] if orient_ops else xform.AddOrientOp()
+
+            # Set camera position (goal x, y with height offset)
+            camera_pos = Gf.Vec3d(goal_position.x, goal_position.y, self.mission_config.goal_image.camera_height_offset)
+            translate_op.Set(camera_pos)
+
+            # Set camera orientation based on goal heading using _yaw_to_quaternion
+            # Convert heading to quaternion and apply to camera
+            quat_xyzw = self._yaw_to_quaternion(goal_position.heading)
+            # _yaw_to_quaternion returns (x, y, z, w), Gf.Quatd expects (w, x, y, z)
+            yaw_quat = Gf.Quatd(quat_xyzw[3], Gf.Vec3d(quat_xyzw[0], quat_xyzw[1], quat_xyzw[2]))
+            # Base camera orientation (looking forward along X in ROS)
+            # ROS camera looking forward: (0.5, -0.5, 0.5, -0.5) applies 90deg rotations
+            base_quat = Gf.Quatd(0.5, Gf.Vec3d(-0.5, 0.5, -0.5))
+            final_quat = yaw_quat * base_quat
+            orient_op.Set(final_quat)
+
+            # Render the scene to update camera view
+            self.simulation_context.render()
+
+            # Capture image from annotator
+            rgb_data = self._goal_rgb_annotator.get_data()
+
+            if rgb_data is None:
+                logger.warning("[GOAL_IMAGE] No image data from annotator")
+                return False
+
+            # Convert to numpy array if needed and ensure RGB format (drop alpha if present)
+            if isinstance(rgb_data, np.ndarray):
+                if rgb_data.ndim == 3 and rgb_data.shape[2] == 4:
+                    rgb_data = rgb_data[:, :, :3]  # Drop alpha channel
+                # Fix 180-degree rotation from Isaac Sim camera
+                rgb_data = np.ascontiguousarray(rgb_data[::-1, ::-1])
+            else:
+                logger.warning(f"[GOAL_IMAGE] Unexpected data type: {type(rgb_data)}")
+                return False
+
+            # Convert to ROS Image message and publish (without cv_bridge)
+            from sensor_msgs.msg import Image
+
+            img_msg = Image()
+            img_msg.height = rgb_data.shape[0]
+            img_msg.width = rgb_data.shape[1]
+            img_msg.encoding = "rgb8"
+            img_msg.is_bigendian = False
+            img_msg.step = rgb_data.shape[1] * 3  # 3 bytes per pixel for RGB
+            img_msg.data = rgb_data.astype(np.uint8).tobytes()
+            img_msg.header.stamp = self._node.get_clock().now().to_msg()
+            img_msg.header.frame_id = "goal_camera"
+            self._goal_image_pub.publish(img_msg)
+
+            logger.info(
+                f"[GOAL_IMAGE] Published goal image ({rgb_data.shape[1]}x{rgb_data.shape[0]}) "
+                f"from position ({goal_position.x:.2f}, {goal_position.y:.2f}, yaw={goal_position.heading:.2f})"
+            )
+            return True
+
+        except Exception as exc:
+            logger.error(f"[GOAL_IMAGE] Failed to capture/publish goal image: {exc}")
+            import traceback
+
+            logger.error(f"[GOAL_IMAGE] {traceback.format_exc()}")
+            return False
 
     def _classify_property_from_prim_path(self, prim_path: str) -> Optional[str]:
         if not prim_path:
@@ -892,8 +1037,8 @@ class MissionManager:
 
         try:
             import omni.usd
-            from pxr import UsdGeom
             from isaacsim.core.utils import bounds as bounds_utils
+            from pxr import UsdGeom
 
             stage = omni.usd.get_context().get_stage()
 
@@ -1344,6 +1489,11 @@ class MissionManager:
         If any step fails, logs a warning and continues without teleportation.
         """
         if not self.config.robot_prim_path:
+            logger.warning(
+                f"[{self._state.name}] robot_prim_path not set in config.manager. "
+                f"Teleport callback will not be registered. "
+                f"config.robot_prim_path={self.config.robot_prim_path!r}"
+            )
             return
 
         robot_prim_path = self.config.robot_prim_path
@@ -1722,6 +1872,10 @@ class MissionManager:
         elapsed = self._get_current_time_seconds() - self._wait_start_time
         if elapsed >= self.config.initial_pose_delay:
             self._publish_goal_pose(self._current_goal)
+
+            # Capture and publish goal image for ViNT ImageGoal mode
+            if self.mission_config.goal_image.enabled:
+                self._capture_and_publish_goal_image(self._current_goal)
 
             # Update RViz markers
             self._marker_publisher.publish_start_goal_from_sampled(self._current_start, self._current_goal)

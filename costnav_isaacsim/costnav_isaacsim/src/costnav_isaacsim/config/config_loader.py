@@ -10,7 +10,7 @@ import yaml
 logger = logging.getLogger("costnav_config")
 
 # Default config file path (relative to this module)
-DEFAULT_CONFIG_PATH = Path(__file__).parent / "mission_config.yaml"
+DEFAULT_CONFIG_PATH = Path(__file__).parents[3] / "config" / "mission_config.yaml"
 
 
 @dataclass
@@ -103,6 +103,36 @@ class InjuryConfig:
 
 
 @dataclass
+class GoalImageConfig:
+    """Goal image configuration for ViNT ImageGoal mode."""
+
+    enabled: bool = False  # Enable goal image publishing for ViNT ImageGoal mode
+    topic: str = "/goal_image"  # Topic to publish goal images
+    width: int = 640  # Goal image width (matches ViNT input)
+    height: int = 360  # Goal image height (matches ViNT input)
+    camera_height_offset: float = 0.3  # Camera height offset from ground (meters)
+    camera_prim_path: str = "/World/goal_camera"  # USD prim path for goal camera
+
+
+@dataclass
+class MissionManagerConfig:
+    """Configuration for MissionManager runtime settings."""
+
+    min_distance: float = 5.0  # Minimum distance between start and goal (meters)
+    max_distance: float = 100.0  # Maximum distance between start and goal (meters)
+    edge_margin: float = 0.5  # Minimum distance from navmesh edges (meters)
+    initial_pose_delay: float = 1.0  # Delay after setting initial pose (seconds)
+    goal_delay: float = 0.5  # Delay after publishing goal (seconds)
+    teleport_height: float = 0.1  # Height offset for teleportation (meters)
+    robot_prim_path: Optional[str] = None  # Robot prim path in Isaac Sim USD stage
+    teleport_settle_steps: int = 30  # Number of simulation steps after teleportation for physics to settle
+
+    # Nav2 costmap clearing (useful when teleporting between missions)
+    clear_costmaps_on_mission_start: bool = True
+    costmap_clear_timeout_sec: float = 2.0  # Max time to wait for clear service responses before continuing
+
+
+@dataclass
 class MissionConfig:
     """Complete mission configuration."""
 
@@ -121,6 +151,8 @@ class MissionConfig:
     sampling: SamplingConfig = field(default_factory=SamplingConfig)
     food: FoodConfig = field(default_factory=FoodConfig)
     injury: InjuryConfig = field(default_factory=InjuryConfig)
+    goal_image: GoalImageConfig = field(default_factory=GoalImageConfig)
+    manager: MissionManagerConfig = field(default_factory=MissionManagerConfig)
 
     @classmethod
     def from_dict(cls, data: dict) -> "MissionConfig":
@@ -204,6 +236,32 @@ class MissionConfig:
             costs=injury_costs,
         )
 
+        # Parse goal image config (for ViNT ImageGoal mode)
+        goal_image_data = data.get("goal_image", {})
+        goal_image_config = GoalImageConfig(
+            enabled=goal_image_data.get("enabled", False),
+            topic=goal_image_data.get("topic", "/goal_image"),
+            width=goal_image_data.get("width", 640),
+            height=goal_image_data.get("height", 360),
+            camera_height_offset=goal_image_data.get("camera_height_offset", 0.3),
+            camera_prim_path=goal_image_data.get("camera_prim_path", "/World/goal_camera"),
+        )
+
+        # Parse manager config (MissionManager runtime settings)
+        manager_data = data.get("manager", {})
+        manager_config = MissionManagerConfig(
+            min_distance=manager_data.get("min_distance", distance_data.get("min", 5.0)),
+            max_distance=manager_data.get("max_distance", distance_data.get("max", 100.0)),
+            edge_margin=manager_data.get("edge_margin", sampling_data.get("edge_margin", 0.5)),
+            initial_pose_delay=manager_data.get("initial_pose_delay", nav2_data.get("initial_pose_delay", 1.0)),
+            goal_delay=manager_data.get("goal_delay", 0.5),
+            teleport_height=manager_data.get("teleport_height", teleport_data.get("height_offset", 0.1)),
+            robot_prim_path=manager_data.get("robot_prim_path", teleport_data.get("robot_prim")),
+            teleport_settle_steps=manager_data.get("teleport_settle_steps", 30),
+            clear_costmaps_on_mission_start=manager_data.get("clear_costmaps_on_mission_start", True),
+            costmap_clear_timeout_sec=manager_data.get("costmap_clear_timeout_sec", 2.0),
+        )
+
         return cls(
             timeout=mission_data.get("timeout", 3600.0),
             goal_tolerance=mission_data.get("goal_tolerance", 1.0),
@@ -215,6 +273,8 @@ class MissionConfig:
             sampling=sampling_config,
             food=food_config,
             injury=injury_config,
+            goal_image=goal_image_config,
+            manager=manager_config,
         )
 
     def to_dict(self) -> dict:

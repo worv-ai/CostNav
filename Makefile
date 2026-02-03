@@ -15,6 +15,7 @@ SIM_ROBOT ?= segway_e1
 FOOD ?= True
 TUNED ?= True
 AMCL ?= False
+GOAL_IMAGE ?= False
 
 ISAAC_SIM_IMAGE ?= costnav-isaacsim-$(ISAAC_SIM_VERSION):$(COSTNAV_VERSION)
 ISAAC_LAB_IMAGE ?= costnav-isaaclab-$(ISAAC_SIM_VERSION)-$(ISAAC_LAB_VERSION):$(COSTNAV_VERSION)
@@ -66,11 +67,11 @@ run-ros2:
 # Run the Isaac Sim container with launch.py (includes RViz)
 # TODO: down and up every time takes a long time. Can we avoid it?
 # However, healthcheck does not work if we don't do this...
-# Usage: make run-isaac-sim NUM_PEOPLE=5
+# Usage: make run-isaac-sim NUM_PEOPLE=5 SIM_ROBOT=nova_carter FOOD=True GOAL_IMAGE=True
 run-isaac-sim:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile isaac-sim down
-	NUM_PEOPLE=$(NUM_PEOPLE) $(DOCKER_COMPOSE) --profile isaac-sim up
+	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) GOAL_IMAGE=$(GOAL_IMAGE) $(DOCKER_COMPOSE) --profile isaac-sim up
 
 # Run both Isaac Sim and ROS2 Nav2 navigation together (using combined 'nav2' profile)
 # Usage: make run-nav2 NUM_PEOPLE=5 SIM_ROBOT=nova_carter FOOD=1 TUNED=True AMCL=False
@@ -90,8 +91,6 @@ start-mission:
 		container="costnav-ros2-vint"; \
 	elif docker ps --format '{{.Names}}' | grep -qx "costnav-ros2"; then \
 		container="costnav-ros2"; \
-	elif docker ps --format '{{.Names}}' | grep -qx "costnav-isaac-sim"; then \
-		container="costnav-isaac-sim"; \
 	fi; \
 	if [ -z "$$container" ]; then \
 		echo "No ROS2 container running (expected costnav-ros2-nav2, costnav-ros2-teleop, costnav-ros2-vint, costnav-ros2, or costnav-isaac-sim)."; \
@@ -124,7 +123,7 @@ endif
 endif
 
 # Run both Isaac Sim and ROS2 teleop together (using combined 'teleop' profile)
-# Usage: make run-teleop NUM_PEOPLE=5 FOOD=1
+# Usage: make run-teleop NUM_PEOPLE=5 FOOD=1 GOAL_IMAGE=True
 run-teleop:
 	@if [ "$(SIM_ROBOT)" != "nova_carter" ] && [ "$(SIM_ROBOT)" != "segway_e1" ]; then \
 		echo "Unsupported robot: $(SIM_ROBOT). Use nova_carter or segway_e1."; \
@@ -132,7 +131,7 @@ run-teleop:
 	fi
 	xhost +local:docker 2>/dev/null || true
 	SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile teleop down
-	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) $(DOCKER_COMPOSE) --profile teleop up
+	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) GOAL_IMAGE=$(GOAL_IMAGE) $(DOCKER_COMPOSE) --profile teleop up
 
 # =============================================================================
 # IL Baselines (ViNT) Targets
@@ -144,11 +143,12 @@ build-vint:
 
 # Run Isaac Sim with ViNT policy node for IL baseline evaluation
 # Set MODEL_CHECKPOINT environment variable to specify model weights
+# Goal image publishing is enabled by default for ViNT ImageGoal mode
 # Example: MODEL_CHECKPOINT=/path/to/model.pth make run-vint
 run-vint:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile vint down
-	$(DOCKER_COMPOSE) --profile vint up
+	GOAL_IMAGE=True $(DOCKER_COMPOSE) --profile vint up
 
 # =============================================================================
 # ROS Bag Recording Targets

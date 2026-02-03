@@ -8,7 +8,7 @@ x-ros2-service: &ros2-service
   image: costnav-ros2-jazzy:${COSTNAV_VERSION:-0.1.0}
   volumes:
     - ./third_party/IsaacSim-ros_workspaces/build_ws/jazzy/isaac_sim_ros_ws:/workspace/build_ws:rw
-    - ./costnav_isaacsim/nav2_params:/workspace/nav2_params:ro
+    - ./costnav_isaacsim/nav2_params:/workspace/costnav_isaacsim/nav2_params
     - /tmp/.X11-unix:/tmp/.X11-unix:rw
     - ${XAUTHORITY}:/tmp/.Xauthority:ro
   working_dir: /workspace
@@ -56,6 +56,7 @@ services:
       - NUM_PEOPLE=${NUM_PEOPLE:-0}
       - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
       - FOOD=${FOOD:-True}
+      - GOAL_IMAGE=${GOAL_IMAGE:-False}
     volumes:
       - .:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -73,7 +74,7 @@ services:
     working_dir: /workspace
     command:
       - "-ic"
-      - "/workspace/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-0} --robot $${SIM_ROBOT:-segway_e1} --food-enabled $${FOOD:-True}"
+      - "/workspace/costnav_isaacsim/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-0} --robot $${SIM_ROBOT:-segway_e1} --food-enabled $${FOOD:-True} --goal-image-enabled $${GOAL_IMAGE:-False}"
     healthcheck:
       test:
         [
@@ -171,7 +172,7 @@ services:
       - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
     volumes:
       - ./third_party/IsaacSim-ros_workspaces/build_ws/jazzy/isaac_sim_ros_ws:/workspace/build_ws
-      - ./costnav_isaacsim/nav2_params:/workspace/nav2_params
+      - ./costnav_isaacsim/nav2_params:/workspace/costnav_isaacsim/nav2_params
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${XAUTHORITY}:/tmp/.Xauthority:ro
       - .:/workspace
@@ -198,11 +199,11 @@ services:
         source /opt/ros/jazzy/setup.bash &&
         source /workspace/build_ws/install/local_setup.sh &&
         if [ \"$${TUNED}\" = \"True\" ]; then
-          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_true.yaml
+          PARAMS_FILE=/workspace/costnav_isaacsim/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_true.yaml
         else
-          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_false.yaml
+          PARAMS_FILE=/workspace/costnav_isaacsim/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_false.yaml
         fi &&
-        ros2 launch /workspace/nav2_params/nav2.launch.py params_file:=$${PARAMS_FILE}
+        ros2 launch /workspace/costnav_isaacsim/nav2_params/nav2.launch.py params_file:=$${PARAMS_FILE}
       "
 
   # ROS2 with RViz - standalone visualization service that runs alongside Isaac Sim
@@ -227,15 +228,15 @@ services:
         source /opt/ros/jazzy/setup.bash &&
         source /workspace/build_ws/install/local_setup.sh &&
         if [ \"$${TUNED}\" = \"True\" ]; then
-          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_true.yaml
+          PARAMS_FILE=/workspace/costnav_isaacsim/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_true.yaml
         else
-          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_false.yaml
+          PARAMS_FILE=/workspace/costnav_isaacsim/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_false.yaml
         fi &&
-        RVIZ_LAUNCH=/workspace/nav2_params/rviz.launch.py &&
+        RVIZ_LAUNCH=/workspace/costnav_isaacsim/nav2_params/rviz.launch.py &&
         if [ \"$${AMCL}\" = \"False\" ]; then
-          RVIZ_LAUNCH=/workspace/nav2_params/rviz_no_amcl.launch.py
+          RVIZ_LAUNCH=/workspace/costnav_isaacsim/nav2_params/rviz_no_amcl.launch.py
         fi &&
-        ros2 launch $${RVIZ_LAUNCH} rviz_config:=/workspace/nav2_params/$${SIM_ROBOT}/navigation.rviz map:=/workspace/nav2_params/maps/sidewalk.yaml params_file:=$${PARAMS_FILE}
+        ros2 launch $${RVIZ_LAUNCH} rviz_config:=/workspace/costnav_isaacsim/nav2_params/$${SIM_ROBOT}/navigation.rviz map:=/workspace/costnav_isaacsim/nav2_params/maps/sidewalk.yaml params_file:=$${PARAMS_FILE}
       "
 
   # ROS2 with RViz (teleop profile) - hides TF/point clouds by default
@@ -261,15 +262,15 @@ services:
         source /opt/ros/jazzy/setup.bash &&
         source /workspace/build_ws/install/local_setup.sh &&
         if [ \"$${TUNED}\" = \"True\" ]; then
-          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_true.yaml
+          PARAMS_FILE=/workspace/costnav_isaacsim/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_true.yaml
         else
-          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_false.yaml
+          PARAMS_FILE=/workspace/costnav_isaacsim/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_false.yaml
         fi &&
-        RVIZ_LAUNCH=/workspace/nav2_params/rviz.launch.py &&
+        RVIZ_LAUNCH=/workspace/costnav_isaacsim/nav2_params/rviz.launch.py &&
         if [ \"$${AMCL}\" = \"False\" ]; then
-          RVIZ_LAUNCH=/workspace/nav2_params/rviz_no_amcl.launch.py
+          RVIZ_LAUNCH=/workspace/costnav_isaacsim/nav2_params/rviz_no_amcl.launch.py
         fi &&
-        ros2 launch $${RVIZ_LAUNCH} rviz_config:=/workspace/nav2_params/$${SIM_ROBOT}/navigation_teleop.rviz map:=/workspace/nav2_params/maps/sidewalk.yaml params_file:=$${PARAMS_FILE}
+        ros2 launch $${RVIZ_LAUNCH} rviz_config:=/workspace/costnav_isaacsim/nav2_params/$${SIM_ROBOT}/navigation_teleop.rviz map:=/workspace/costnav_isaacsim/nav2_params/maps/sidewalk.yaml params_file:=$${PARAMS_FILE}
       "
 
   # ROS2 with teleop - waits for Isaac Sim to be healthy before starting
@@ -355,7 +356,7 @@ services:
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ./checkpoints:/workspace/checkpoints:ro
-      - ./costnav_isaacsim/il_baselines/evaluation/configs:/workspace/configs:ro
+      - ./il_baselines/evaluation/configs:/workspace/configs:ro
     working_dir: /workspace
     command: >
       bash -c "source /opt/ros/jazzy/setup.bash &&

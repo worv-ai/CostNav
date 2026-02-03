@@ -231,8 +231,8 @@ class PeopleManager:
 
             # Import PeopleAPI modules
             try:
+                from omni.anim.people_api.scripts.character_setup import CharacterBehavior, CharacterSetup
                 from omni.anim.people_api.settings import PeopleSettings
-                from omni.anim.people_api.scripts.character_setup import CharacterSetup, CharacterBehavior
 
                 logger.info("PeopleAPI modules imported successfully")
             except ImportError as e:
@@ -395,6 +395,7 @@ class PeopleManager:
         Returns a list of (x, y) tuples that will be converted to (x, y, z) by CharacterSetup.
         """
         import random
+
         import omni.anim.navigation.core as nav
 
         logger.info(f"Sampling {num_positions} random positions from NavMesh (optimized)...")
@@ -491,9 +492,9 @@ class PeopleManager:
     def _ensure_navmesh_volume(self):
         """Ensure a NavMeshVolume exists in the scene."""
         try:
-            import omni.kit.commands
             import NavSchema
-            from pxr import Sdf, Gf, UsdGeom
+            import omni.kit.commands
+            from pxr import Gf, Sdf, UsdGeom
 
             stage = omni.usd.get_context().get_stage()
 

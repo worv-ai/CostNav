@@ -11,7 +11,7 @@ Example:
     python process_mediaref_bags.py \
         --input-dir data/sample_rosbags/ \
         --output-dir data/vint_format/ \
-        --config costnav_isaacsim/il_baselines/data_processing/configs/vint_processing_config.yaml
+        --config il_baselines/data_processing/configs/vint_processing_config.yaml
 
 Expected Input Structure (MediaRef format):
     input_dir/

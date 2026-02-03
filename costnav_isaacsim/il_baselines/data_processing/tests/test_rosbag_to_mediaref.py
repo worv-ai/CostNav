@@ -29,7 +29,7 @@ class TestDetectFormat:
 
     def test_detect_mcap_file(self, tmp_path: Path):
         """Test validation passes for MCAP file format."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.rosbag_to_mediaref import detect_format
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import detect_format
 
         mcap_file = tmp_path / "test.mcap"
         mcap_file.touch()
@@ -37,7 +37,7 @@ class TestDetectFormat:
 
     def test_detect_rosbag2_directory(self, tmp_path: Path):
         """Test validation passes for rosbag2 directory format."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.rosbag_to_mediaref import detect_format
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import detect_format
 
         bag_dir = tmp_path / "test_bag"
         bag_dir.mkdir()
@@ -46,7 +46,7 @@ class TestDetectFormat:
 
     def test_detect_unknown_format(self, tmp_path: Path):
         """Test that unknown format raises ValueError."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.rosbag_to_mediaref import detect_format
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import detect_format
 
         unknown_dir = tmp_path / "unknown"
         unknown_dir.mkdir()
@@ -55,7 +55,7 @@ class TestDetectFormat:
 
     def test_detect_invalid_file_extension(self, tmp_path: Path):
         """Test that non-MCAP files are rejected."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.rosbag_to_mediaref import detect_format
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import detect_format
 
         invalid_file = tmp_path / "test.txt"
         invalid_file.touch()
@@ -71,7 +71,7 @@ class TestDecodeImageMsg:
 
     def test_decode_compressed_image_returns_rgb(self):
         """Test decoding of CompressedImage messages returns RGB."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.rosbag_to_mediaref import decode_image_msg
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import decode_image_msg
         import cv2
 
         # Create a simple BGR test image and encode it (OpenCV uses BGR)
@@ -93,7 +93,7 @@ class TestDecodeImageMsg:
 
     def test_decode_raw_rgb8_image_unchanged(self):
         """Test decoding of raw RGB8 Image messages (already RGB)."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.rosbag_to_mediaref import decode_image_msg
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import decode_image_msg
 
         h, w = 100, 150
         # Create RGB image with known red pixel
@@ -117,7 +117,7 @@ class TestDecodeImageMsg:
 
     def test_decode_raw_bgr8_image_converted_to_rgb(self):
         """Test decoding of raw BGR8 Image messages converts to RGB."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.rosbag_to_mediaref import decode_image_msg
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import decode_image_msg
 
         h, w = 80, 120
         # Create BGR image with known red pixel (BGR order: B=0, G=0, R=255)
@@ -140,7 +140,7 @@ class TestDecodeImageMsg:
 
     def test_decode_mono8_image(self):
         """Test decoding of mono8 grayscale Image messages."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.rosbag_to_mediaref import decode_image_msg
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import decode_image_msg
 
         h, w = 50, 60
         test_data = np.full((h, w), 128, dtype=np.uint8)
@@ -159,7 +159,7 @@ class TestDecodeImageMsg:
 
     def test_decode_rgba8_image(self):
         """Test decoding of RGBA8 Image messages (alpha channel stripped)."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.rosbag_to_mediaref import decode_image_msg
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import decode_image_msg
 
         h, w = 40, 50
         test_data = np.zeros((h, w, 4), dtype=np.uint8)
@@ -180,7 +180,7 @@ class TestDecodeImageMsg:
 
     def test_decode_unknown_encoding_raises_error(self):
         """Test that unknown image encoding raises ImageFormatError."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.rosbag_to_mediaref import decode_image_msg
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import decode_image_msg
         from rosbags.image import ImageFormatError
         import pytest
 
@@ -200,14 +200,14 @@ class TestLoadConfig:
 
     def test_load_config_none_returns_empty(self):
         """Test that None config returns empty dict."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.rosbag_to_mediaref import load_config
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import load_config
 
         result = load_config(None)
         assert result == {}
 
     def test_load_config_valid_yaml(self, tmp_path: Path):
         """Test loading a valid YAML config file."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.rosbag_to_mediaref import load_config
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import load_config
 
         config_file = tmp_path / "config.yaml"
         config_file.write_text("""
@@ -229,7 +229,7 @@ class TestVideoWriter:
 
     def test_video_writer_initialization(self, tmp_path: Path):
         """Test VideoWriter initialization."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.rosbag_to_mediaref import VideoWriter
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import VideoWriter
 
         output_path = tmp_path / "test.mp4"
         writer = VideoWriter(output_path, fps=30.0)
@@ -242,7 +242,7 @@ class TestVideoWriter:
 
     def test_video_writer_lossless_mode(self, tmp_path: Path):
         """Test VideoWriter lossless mode initialization."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.rosbag_to_mediaref import VideoWriter
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import VideoWriter
 
         output_path = tmp_path / "test_lossless.mp4"
         writer = VideoWriter(output_path, fps=30.0, lossless=True)
@@ -251,7 +251,7 @@ class TestVideoWriter:
 
     def test_video_writer_add_frame_none_returns_false(self, tmp_path: Path):
         """Test that adding None frame returns False."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.rosbag_to_mediaref import VideoWriter
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import VideoWriter
 
         output_path = tmp_path / "test.mp4"
         writer = VideoWriter(output_path)
@@ -261,7 +261,7 @@ class TestVideoWriter:
 
     def test_video_writer_add_frame_empty_returns_false(self, tmp_path: Path):
         """Test that adding empty frame returns False."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.rosbag_to_mediaref import VideoWriter
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import VideoWriter
 
         output_path = tmp_path / "test.mp4"
         writer = VideoWriter(output_path)
@@ -272,7 +272,7 @@ class TestVideoWriter:
 
     def test_video_writer_add_valid_frame(self, tmp_path: Path):
         """Test adding a valid frame to VideoWriter."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.rosbag_to_mediaref import VideoWriter
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import VideoWriter
 
         output_path = tmp_path / "output" / "test.mp4"
         writer = VideoWriter(output_path, fps=30.0)
@@ -287,7 +287,7 @@ class TestVideoWriter:
 
     def test_video_writer_close_idempotent(self, tmp_path: Path):
         """Test that closing VideoWriter multiple times is safe."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.rosbag_to_mediaref import VideoWriter
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import VideoWriter
 
         output_path = tmp_path / "test.mp4"
         writer = VideoWriter(output_path)

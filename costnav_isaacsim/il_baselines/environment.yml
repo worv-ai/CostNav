@@ -6,7 +6,7 @@
 #
 # Setup:
 #   cd CostNav
-#   conda env create -f costnav_isaacsim/il_baselines/environment.yml
+#   conda env create -f il_baselines/environment.yml
 #   conda activate costnav_il
 #
 #   # Install visualnav-transformer

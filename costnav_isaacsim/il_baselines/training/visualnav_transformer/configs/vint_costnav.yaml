@@ -9,7 +9,7 @@ run_name: vint-costnav-finetune
 use_wandb: True  # Set to True if you want to log to wandb
 wandb_entity: maumai  # Your wandb entity/team name
 train: True
-pretrained_checkpoint: ${COSTNAV_ROOT}/costnav_isaacsim/il_baselines/training/visualnav_transformer/checkpoints/vint.pth
+pretrained_checkpoint: ${COSTNAV_ROOT}/il_baselines/training/visualnav_transformer/checkpoints/vint.pth
 batch_size: 64  # Reduced for small dataset
 epochs: 50
 gpu_ids: [0]

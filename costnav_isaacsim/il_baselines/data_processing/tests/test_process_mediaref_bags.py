@@ -23,7 +23,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from costnav_isaacsim.il_baselines.data_processing.process_data.process_mediaref_bags import (
+from il_baselines.data_processing.process_data.process_mediaref_bags import (
     IMAGE_SIZE,
     filter_backwards,
     find_mediaref_bags,
@@ -291,7 +291,7 @@ class TestIntegrationWithSampleData:
 
     def test_extract_images_and_odom(self, sample_data_dir: Path):
         """Test image and odometry extraction from sample data."""
-        from costnav_isaacsim.il_baselines.data_processing.process_data.process_mediaref_bags import (
+        from il_baselines.data_processing.process_data.process_mediaref_bags import (
             get_images_and_odom_from_mediaref,
         )
 
@@ -320,7 +320,7 @@ class TestIntegrationWithSampleData:
 
     def test_full_pipeline_creates_output(self, sample_data_dir: Path, tmp_path: Path):
         """Test full processing pipeline creates expected output structure."""
-        from costnav_isaacsim.il_baselines.data_processing.process_data.process_mediaref_bags import (
+        from il_baselines.data_processing.process_data.process_mediaref_bags import (
             process_mediaref_bag,
         )
 
@@ -361,7 +361,7 @@ class TestIntegrationWithSampleData:
 
     def test_output_matches_vint_format(self, sample_data_dir: Path, tmp_path: Path):
         """Test output format matches ViNT training data requirements."""
-        from costnav_isaacsim.il_baselines.data_processing.process_data.process_mediaref_bags import (
+        from il_baselines.data_processing.process_data.process_mediaref_bags import (
             process_mediaref_bag,
         )
 

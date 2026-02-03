@@ -23,14 +23,14 @@ class TestFindBags:
 
     def test_find_bags_empty_directory(self, tmp_path: Path):
         """Test find_bags returns empty list for empty directory."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.ray_batch_convert import find_bags
+        from il_baselines.data_processing.converters.ray_batch_convert import find_bags
 
         result = find_bags(tmp_path)
         assert result == []
 
     def test_find_bags_with_valid_bags(self, tmp_path: Path):
         """Test find_bags discovers valid rosbag2 directories."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.ray_batch_convert import find_bags
+        from il_baselines.data_processing.converters.ray_batch_convert import find_bags
 
         # Create valid bag directories
         bag1 = tmp_path / "bag_001"
@@ -48,7 +48,7 @@ class TestFindBags:
 
     def test_find_bags_ignores_invalid_dirs(self, tmp_path: Path):
         """Test find_bags ignores directories without metadata.yaml."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.ray_batch_convert import find_bags
+        from il_baselines.data_processing.converters.ray_batch_convert import find_bags
 
         # Create valid bag
         valid_bag = tmp_path / "valid_bag"
@@ -67,7 +67,7 @@ class TestFindBags:
 
     def test_find_bags_sorted_output(self, tmp_path: Path):
         """Test find_bags returns sorted list of bags."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.ray_batch_convert import find_bags
+        from il_baselines.data_processing.converters.ray_batch_convert import find_bags
 
         # Create bags with names that should be sorted
         for name in ["c_bag", "a_bag", "b_bag"]:
@@ -81,7 +81,7 @@ class TestFindBags:
 
     def test_find_specific_bags(self, tmp_path: Path):
         """Test find_bags with specific bag names filter."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.ray_batch_convert import find_bags
+        from il_baselines.data_processing.converters.ray_batch_convert import find_bags
 
         # Create multiple bags
         for name in ["bag_001", "bag_002", "bag_003"]:
@@ -98,7 +98,7 @@ class TestFindBags:
 
     def test_find_bags_warns_on_invalid_specific_bag(self, tmp_path: Path, capsys):
         """Test find_bags handles invalid specific bag names gracefully."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.ray_batch_convert import find_bags
+        from il_baselines.data_processing.converters.ray_batch_convert import find_bags
 
         # Create only one valid bag
         valid_bag = tmp_path / "valid_bag"
@@ -120,14 +120,14 @@ class TestLoadConfig:
 
     def test_load_config_none_returns_empty(self):
         """Test that None config returns empty dict."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.ray_batch_convert import load_config
+        from il_baselines.data_processing.converters.ray_batch_convert import load_config
 
         result = load_config(None)
         assert result == {}
 
     def test_load_config_valid_yaml(self, tmp_path: Path):
         """Test loading valid YAML config."""
-        from costnav_isaacsim.il_baselines.data_processing.converters.ray_batch_convert import load_config
+        from il_baselines.data_processing.converters.ray_batch_convert import load_config
 
         config_file = tmp_path / "config.yaml"
         config_file.write_text("""

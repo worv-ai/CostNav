@@ -60,25 +60,19 @@ The `costnav_isaacsim` module serves as:
 
 ```
 costnav_isaacsim/
-├── README.md                              # This file
-├── launch.py                              # Isaac Sim launcher script (main simulation + missions)
-├── config/                                # Configuration files
-│   ├── __init__.py                        # Config module exports
-│   ├── config_loader.py                   # YAML config loader with MissionConfig dataclass
-│   └── mission_config.yaml                # Default mission parameters
-├── nav2_params/                           # Nav2 navigation stack configuration
-│   ├── carter_navigation_params.yaml      # Full Nav2 stack parameters
-│   ├── carter_sidewalk.yaml               # Map metadata (origin, resolution)
-│   └── carter_sidewalk.png                # Occupancy grid image
-└── nav2_mission/                          # Nav2 mission orchestration module
-    ├── __init__.py                        # Package exports (conditional ROS2 imports)
-    ├── navmesh_sampler.py                 # NavMesh-based position sampling
-    ├── marker_publisher.py                # RViz marker visualization
-    ├── mission_manager.py                 # State machine-based mission execution (main loop)
-    └── tests/                             # Unit tests
-        ├── test_navmesh_sampler.py
-        ├── test_marker_publisher.py
-        └── test_mission_manager.py        # Tests for MissionManager
+├── costnav/                  # CostNav Python package (pip install -e)
+│   ├── launch.py             # Isaac Sim launcher script
+│   ├── config/               # YAML configuration files
+│   └── src/costnav/          # Installable modules (config, mission_manager, people_manager)
+├── nav2_params/              # Nav2 navigation stack configuration
+│   ├── maps/                 # Occupancy grid maps
+│   ├── nova_carter/          # Nova Carter robot config
+│   └── segway_e1/            # Segway E1 robot config
+├── il_baselines/             # Imitation learning baselines
+│   ├── data_processing/      # ROS bag to training data conversion
+│   ├── evaluation/           # ViNT evaluation package (pip install -e)
+│   └── training/             # Model training scripts
+└── isaac_sim_teleop_ros2/    # ROS2 teleop package
 ```
 
 ---
@@ -218,7 +212,7 @@ python launch.py --people 5
 
 ### Technical Details
 
-- **Module**: `costnav_isaacsim/people_manager.py`
+- **Module**: `costnav.people_manager` (from `costnav_isaacsim/costnav/src/costnav/people_manager.py`)
 - **Behavior**: `CharacterBehavior.RANDOM_GOTO` (random destination walking)
 - **Character Root**: `/World/Characters`
 - **Spawn Method**: `navmesh.query_random_point()` with unique random IDs (same as robot spawning)
@@ -424,9 +418,9 @@ navigator.waitUntilTaskComplete()
 
 ---
 
-## Nav2 Mission Module
+## Mission Manager Module
 
-The `nav2_mission` module provides automated navigation mission orchestration with NavMesh-based position sampling and RViz visualization. It uses a **state machine-based approach** integrated directly into the main simulation loop for proper synchronization.
+The `costnav.mission_manager` module provides automated navigation mission orchestration with NavMesh-based position sampling and RViz visualization. It uses a **state machine-based approach** integrated directly into the main simulation loop for proper synchronization.
 
 ### Container Architecture
 
@@ -453,7 +447,7 @@ The `nav2_mission` module provides automated navigation mission orchestration wi
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Important**: The `nav2_mission` module runs **inside the Isaac Sim container** because it:
+**Important**: The `costnav.mission_manager` module runs **inside the Isaac Sim container** because it:
 1. Uses Isaac Sim's NavMesh API (`omni.anim.navigation.core`)
 2. Teleports the robot using Isaac Sim's physics engine
 3. Integrates with the main simulation loop for proper physics synchronization
@@ -591,8 +585,8 @@ docker exec -it costnav-isaac-sim /isaac-sim/python.sh
 **Basic Usage:**
 
 ```python
-from costnav_isaacsim.nav2_mission import MissionManager
-from costnav_isaacsim.config import MissionConfig
+from costnav.mission_manager import MissionManager
+from costnav.config import MissionConfig
 
 # Load mission configuration
 mission_config = MissionConfig(timeout=3600.0)
@@ -609,8 +603,8 @@ while running:
 **Advanced Usage with MissionManagerConfig:**
 
 ```python
-from costnav_isaacsim.nav2_mission import MissionManager, MissionManagerConfig
-from costnav_isaacsim.config import MissionConfig
+from costnav.mission_manager import MissionManager
+from costnav.config import MissionConfig, MissionManagerConfig
 
 # Load mission configuration
 mission_config = MissionConfig(timeout=3600.0)
@@ -700,19 +694,20 @@ The MissionManager publishes visualization markers for debugging and monitoring:
 
 ### Running Tests
 
-The `nav2_mission` module includes unit tests for all components.
+The `costnav.mission_manager` module includes unit tests for all components.
 
 **Test Coverage:**
 - `test_navmesh_sampler.py`: NavMesh sampling and distance calculations
 - `test_marker_publisher.py`: RViz marker publishing
 - `test_mission_manager.py`: State machine and mission execution
+- `test_config_loader.py`: Configuration loading and validation
 
 **Run tests on the host** (NavMesh-independent tests):
 
 ```bash
 cd /path/to/CostNav
 python3 -c "
-from costnav_isaacsim.nav2_mission.navmesh_sampler import SampledPosition
+from costnav.mission_manager import SampledPosition
 
 # Test distance calculation
 pos1 = SampledPosition(x=0, y=0, z=0)
@@ -725,14 +720,14 @@ print(f'Distance: {pos1.distance_to(pos2)}')  # Should print 5.0
 
 ```bash
 docker exec -it costnav-isaac-sim /isaac-sim/python.sh -m pytest \
-    /workspace/costnav_isaacsim/nav2_mission/tests/ -v
+    /workspace/costnav_isaacsim/costnav/tests/ -v
 ```
 
 **Run specific test file:**
 
 ```bash
 docker exec -it costnav-isaac-sim /isaac-sim/python.sh -m pytest \
-    /workspace/costnav_isaacsim/nav2_mission/tests/test_mission_manager.py -v
+    /workspace/costnav_isaacsim/costnav/tests/test_mission_manager.py -v
 ```
 
 ---

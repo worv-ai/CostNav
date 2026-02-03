@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Optional
 from isaacsim import SimulationApp
 
 if TYPE_CHECKING:
-    from config import MissionConfig
+    from costnav_isaacsim.config import MissionConfig
 
 logger = logging.getLogger("costnav_launch")
 
@@ -160,6 +160,15 @@ def parse_args():
         help="Number of people to spawn in the scene (default: 0, disabled)",
     )
 
+    # Goal image arguments (for ViNT ImageGoal mode)
+    goal_image_group = parser.add_argument_group("Goal Image")
+    goal_image_group.add_argument(
+        "--goal-image-enabled",
+        type=str,
+        default=None,
+        help="Enable goal image publishing for ViNT ImageGoal mode (True/False or 1/0)",
+    )
+
     return parser.parse_args()
 
 
@@ -223,7 +232,7 @@ class CostNavSimLauncher:
         self.people_manager = None
         self._people_initialized = False  # Track if people have been initialized this session
         if self.num_people > 0:
-            from people_manager import PeopleManager
+            from costnav_isaacsim.people_manager import PeopleManager
 
             people_robot_prim_path = self._resolve_people_robot_prim(robot_prim_path)
             self.people_manager = PeopleManager(
@@ -258,8 +267,8 @@ class CostNavSimLauncher:
 
     def _enable_extensions(self):
         """Enable required Isaac Sim extensions."""
-        from isaacsim.core.utils.extensions import enable_extension
         import omni.kit.app
+        from isaacsim.core.utils.extensions import enable_extension
 
         # Navigation extensions (must be enabled before using navmesh)
         enable_extension("omni.anim.navigation.core")
@@ -650,7 +659,7 @@ class CostNavSimLauncher:
             return None
 
         # Import here to avoid circular imports and only when needed
-        from nav2_mission import MissionManager
+        from costnav_isaacsim.mission_manager import MissionManager
 
         mission_manager = MissionManager(
             mission_config=self.mission_config,
@@ -722,7 +731,7 @@ def load_and_override_config(args) -> "MissionConfig":
     Returns:
         MissionConfig instance with loaded settings.
     """
-    from config import load_mission_config
+    from costnav_isaacsim.config import load_mission_config
 
     # Load from config file (or default)
     config = load_mission_config(args.config)
@@ -745,6 +754,10 @@ def load_and_override_config(args) -> "MissionConfig":
         config.food.prim_path = args.food_prim_path
     if args.food_spoilage_threshold is not None:
         config.food.spoilage_threshold = args.food_spoilage_threshold
+
+    # Goal image overrides (for ViNT ImageGoal mode)
+    if args.goal_image_enabled is not None:
+        config.goal_image.enabled = args.goal_image_enabled.lower() in ("true", "1")
 
     return config
 

@@ -42,7 +42,7 @@ from rich.table import Table
 
 try:
     # When run as a module
-    from costnav_isaacsim.il_baselines.data_processing.converters.rosbag_to_mediaref import (
+    from il_baselines.data_processing.converters.rosbag_to_mediaref import (
         convert_bag,
         detect_format,
         load_config,

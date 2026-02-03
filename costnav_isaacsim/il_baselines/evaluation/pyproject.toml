@@ -31,7 +31,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-vint_train = { path = "../../../third_party/visualnav-transformer/train", editable = true }
+vint_train = { path = "../../third_party/visualnav-transformer/train", editable = true }
 warmup-scheduler = { git = "https://github.com/ildoonet/pytorch-gradual-warmup-lr.git" }
 
 [project.scripts]
