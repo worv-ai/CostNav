@@ -73,6 +73,18 @@ PROPERTY_PRIM_PATHS = {
         "/World/box/Cube_12",
         "/World/box/Cube_13",
     ],
+    "trash_bin": [
+        "/World/Environment/SM_Buidlng_032/SM_Buidlng_032/Section26",
+    ],
+    "mail_box": [
+        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section20",
+        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section85",
+        "/World/Environment/SM_StreetDetails_002/SM_StreetDetails_03/SM_StreetDetails_002/Section55",
+        "/World/Environment/SM_StreetDetails_002/SM_StreetDetails_03/SM_StreetDetails_002/Section18",
+        "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section18",
+        "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section18",
+        "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section57",
+    ],
 }
 
 
@@ -241,7 +253,7 @@ class MissionManager:
         self._last_elapsed_time = None  # Elapsed time for last mission (seconds)
 
         # Impulse health tracking (structural damage)
-        self._impulse_min_threshold = 10.0
+        self._impulse_min_threshold = 50.0
         self._impulse_health_max = 177.8
         self._impulse_health = self._impulse_health_max
         self._impulse_damage_accumulated = 0.0
@@ -255,6 +267,7 @@ class MissionManager:
         self._last_total_impulse = None  # Final total impulse for last mission
         self._property_contact_counts = {key: 0 for key in PROPERTY_PRIM_PATHS}
         self._last_property_contact_counts = None
+        self._property_contact_impulse_min_threshold = 100.0
 
         # Damager cooldown tracking
         self._last_damage_steps_remaining = 0
@@ -617,6 +630,9 @@ class MissionManager:
     def _classify_property_from_prim_path(self, prim_path: str) -> Optional[str]:
         if not prim_path:
             return None
+        # Exception in trash bin path.
+        if prim_path.startswith("/World/Environment/SM_Buidlng_032/SM_Buidlng_032/Section26"):
+            return "trash_bin"
         # Broad match for any building prims (handle both SM_Buidlng_ and SM_Buildlng_)
         if prim_path.startswith("/World/Environment/SM_Buidlng_") or prim_path.startswith(
             "/World/Environment/SM_Buildlng_"
@@ -628,7 +644,16 @@ class MissionManager:
                     return category
         return None
 
-    def _record_property_contact_from_pair(self, actor0_path: str, actor1_path: str) -> Optional[str]:
+    def _record_property_contact_from_pair(
+        self,
+        actor0_path: str,
+        actor1_path: str,
+        impulse_amount: float,
+    ) -> Optional[str]:
+        """Record property contact from a pair of actor prim paths."""
+        if impulse_amount < self._property_contact_impulse_min_threshold:
+            return None
+
         target = next(iter(self._contact_report_targets), None)
         if target:
             if actor0_path == target or actor0_path.startswith(target + "/"):
@@ -647,6 +672,8 @@ class MissionManager:
 
         if category is None:
             return None
+
+        print(f"[CONTACT] Property contact: {category} {impulse_amount}")
 
         self._property_contact_counts[category] += 1
         return category
@@ -830,7 +857,7 @@ class MissionManager:
                 impulse_amount = (impulse.x * impulse.x + impulse.y * impulse.y + impulse.z * impulse.z) ** 0.5
                 if impulse_amount < self._impulse_min_threshold:
                     continue
-                self._record_property_contact_from_pair(actor0, actor1)
+                self._record_property_contact_from_pair(actor0, actor1, impulse_amount)
                 # Compute delta-v from impulse/mass and calculate injury cost
                 injury_info = self._process_collision_injury(impulse_amount, is_character_collision)
                 self._apply_impulse_damage(impulse_amount, injury_info)
@@ -1181,6 +1208,8 @@ class MissionManager:
             "property_contact_street_lamp": int,
             "property_contact_bollard": int,
             "property_contact_building": int,
+            "property_contact_trash_bin": int,
+            "property_contact_mail_box": int,
             "property_contact_total": int,
             "food_enabled": bool,
             "food_initial_pieces": int,
@@ -1277,6 +1306,8 @@ class MissionManager:
             "property_contact_street_lamp": property_counts.get("street_lamp", 0),
             "property_contact_bollard": property_counts.get("bollard", 0),
             "property_contact_building": property_counts.get("building", 0),
+            "property_contact_trash_bin": property_counts.get("trash_bin", 0),
+            "property_contact_mail_box": property_counts.get("mail_box", 0),
             "property_contact_total": sum(property_counts.values()),
             "delta_v_count": delta_v_count,
             "delta_v_avg_mps": delta_v_avg_mps,
