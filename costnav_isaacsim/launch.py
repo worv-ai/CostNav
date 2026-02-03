@@ -29,30 +29,20 @@ import time
 from typing import TYPE_CHECKING, Optional
 
 from isaacsim import SimulationApp
+from utils.config_utils import load_and_override_config
+from utils.launch_constants import DEFAULT_PHYSICS_DT, DEFAULT_RENDERING_DT, WARMUP_STEPS
+from utils.robot_utils import (
+    resolve_people_robot_prim,
+    resolve_robot_name,
+    resolve_robot_prim_path,
+    resolve_usd_path,
+)
+from utils.stage_utils import open_stage
 
 if TYPE_CHECKING:
     from config import MissionConfig
 
 logger = logging.getLogger("costnav_launch")
-
-# Default constants
-DEFAULT_PHYSICS_DT = 1.0 / 120.0
-DEFAULT_RENDERING_DT = 1.0 / 30.0
-WARMUP_STEPS = 100
-DEFAULT_ROBOT_NAME = "nova_carter"
-DEFAULT_USD_PATHS = {
-    "nova_carter": "omniverse://10.50.2.21/Users/worv/costnav/Street_sidewalk.usd",
-    "segway_e1": "omniverse://10.50.2.21/Users/worv/costnav/street_sidewalk_segwaye1_Corrected.usd",
-}
-DEFAULT_ROBOT_PRIM_PATHS = {
-    "nova_carter": "/World/Nova_Carter_ROS/chassis_link",
-    "segway_e1": "/World/Segway_E1_ROS2/base_link",
-}
-ROBOT_NAME_ALIASES = {
-    "segway": "segway_e1",
-    "segway-e1": "segway_e1",
-    "segwaye1": "segway_e1",
-}
 
 
 def parse_args():
@@ -208,7 +198,7 @@ class CostNavSimLauncher:
             import omni.usd
 
             stage = omni.usd.get_context().get_stage()
-            robot_prim_path = self._resolve_robot_prim_path(stage)
+            robot_prim_path = resolve_robot_prim_path(stage, self.robot_name)
         except Exception as exc:
             logger.warning("Failed to resolve robot prim path: %s", exc)
 
@@ -225,7 +215,7 @@ class CostNavSimLauncher:
         if self.num_people > 0:
             from people_manager import PeopleManager
 
-            people_robot_prim_path = self._resolve_people_robot_prim(robot_prim_path)
+            people_robot_prim_path = resolve_people_robot_prim(robot_prim_path)
             self.people_manager = PeopleManager(
                 num_people=self.num_people,
                 robot_prim_path=people_robot_prim_path,
@@ -329,22 +319,7 @@ class CostNavSimLauncher:
 
     def _load_stage(self):
         """Load the USD stage."""
-        import omni.usd
-
-        logger.info(f"Loading: {self.usd_path}")
-
-        usd_context = omni.usd.get_context()
-        result = usd_context.open_stage(self.usd_path)
-
-        if not result:
-            raise RuntimeError(f"Failed to open USD file: {self.usd_path}")
-
-        from isaacsim.core.utils.stage import is_stage_loading
-
-        while is_stage_loading():
-            self.simulation_app.update()
-
-        logger.info("Stage loaded successfully")
+        open_stage(self.simulation_app, self.usd_path)
 
     def _setup_simulation_context(self):
         """Setup SimulationContext with proper physics timing."""
@@ -391,7 +366,7 @@ class CostNavSimLauncher:
             import omni.usd
 
             stage = omni.usd.get_context().get_stage()
-            robot_prim_path = self._resolve_robot_prim_path(stage)
+            robot_prim_path = resolve_robot_prim_path(stage, self.robot_name)
         except Exception as exc:
             logger.warning("Failed to resolve robot prim path after stage reload: %s", exc)
             return
@@ -404,7 +379,7 @@ class CostNavSimLauncher:
             logger.warning("Robot prim path could not be resolved after stage reload")
 
         if self.people_manager is not None:
-            self.people_manager.robot_prim_path = self._resolve_people_robot_prim(robot_prim_path)
+            self.people_manager.robot_prim_path = resolve_people_robot_prim(robot_prim_path)
 
     def _handle_pending_simulation_reinit(self, mission_manager=None) -> None:
         self._ensure_simulation_context()
@@ -477,81 +452,6 @@ class CostNavSimLauncher:
 
         self._pending_physics_reinit = False
         self._pending_stage_reload = False
-
-    def _resolve_robot_prim_path(self, stage) -> Optional[str]:
-        """Resolve a robot prim path for pose lookups."""
-        env_override = os.environ.get("ROBOT_PRIM_PATH")
-        if env_override:
-            prim = stage.GetPrimAtPath(env_override)
-            if prim.IsValid():
-                return env_override
-            logger.warning("ROBOT_PRIM_PATH not found on stage: %s", env_override)
-
-        default_path = DEFAULT_ROBOT_PRIM_PATHS.get(self.robot_name)
-        if default_path:
-            prim = stage.GetPrimAtPath(default_path)
-            if prim.IsValid():
-                return default_path
-            logger.warning("Default robot prim path not found: %s", default_path)
-
-        if self.robot_name == "segway_e1":
-            return self._find_robot_prim_by_tokens(stage, ("Segway", "segway"))
-
-        return None
-
-    def _resolve_people_robot_prim(self, robot_prim_path: Optional[str]) -> str:
-        """Resolve robot prim path for PeopleAPI usage."""
-        if not robot_prim_path:
-            return "/World/Nova_Carter_ROS"
-
-        if robot_prim_path.endswith("/chassis_link"):
-            return robot_prim_path.rsplit("/", 1)[0]
-
-        return robot_prim_path
-
-    def _find_robot_prim_by_tokens(self, stage, tokens: tuple[str, ...]) -> Optional[str]:
-        """Find a prim path containing any of the supplied tokens."""
-        from pxr import UsdGeom
-
-        for prim in stage.Traverse():
-            name = prim.GetName()
-            if not name:
-                continue
-            if not any(token in name for token in tokens):
-                continue
-            if not (prim.IsA(UsdGeom.Xform) or prim.IsA(UsdGeom.Xformable)):
-                continue
-            return prim.GetPath().pathString
-
-        return None
-
-    def _get_prim_world_translation(self, stage, prim_path: str) -> Optional[tuple[float, float, float]]:
-        """Return the world translation for a prim path."""
-        from pxr import UsdGeom
-
-        prim = stage.GetPrimAtPath(prim_path)
-        if not prim.IsValid():
-            logger.warning("Prim not found for translation lookup: %s", prim_path)
-            return None
-
-        xform_cache = UsdGeom.XformCache()
-        transform = xform_cache.GetLocalToWorldTransform(prim)
-        translation = transform.ExtractTranslation()
-        return (float(translation[0]), float(translation[1]), float(translation[2]))
-
-    def _set_prim_world_translation(self, stage, prim_path: str, position: tuple[float, float, float]) -> None:
-        """Set the world translation for a prim path."""
-        from pxr import Gf, UsdGeom
-
-        prim = stage.GetPrimAtPath(prim_path)
-        if not prim.IsValid():
-            logger.warning("Prim not found for translation update: %s", prim_path)
-            return
-
-        xform = UsdGeom.Xformable(prim)
-        translate_ops = [op for op in xform.GetOrderedXformOps() if op.GetOpType() == UsdGeom.XformOp.TypeTranslate]
-        translate_op = translate_ops[0] if translate_ops else xform.AddTranslateOp()
-        translate_op.Set(Gf.Vec3d(position[0], position[1], position[2]))
 
     def _update_mission_robot_prim(self, robot_prim_path: Optional[str]) -> None:
         """Update mission config robot prim for teleportation."""
@@ -677,76 +577,6 @@ class CostNavSimLauncher:
 
         self.simulation_context.stop()
         self.simulation_app.close()
-
-
-def resolve_robot_name(robot_name: Optional[str]) -> str:
-    """Resolve the robot name from CLI or environment.
-
-    Args:
-        robot_name: Optional robot name override.
-
-    Returns:
-        Normalized robot name.
-    """
-    selected_robot = robot_name or os.environ.get("SIM_ROBOT") or DEFAULT_ROBOT_NAME
-    return ROBOT_NAME_ALIASES.get(selected_robot, selected_robot)
-
-
-def resolve_usd_path(usd_path: Optional[str], robot_name: Optional[str]) -> str:
-    """Resolve the USD path based on CLI or robot selection.
-
-    Args:
-        usd_path: Optional USD path override.
-        robot_name: Optional robot name for default selection.
-
-    Returns:
-        Resolved USD path string.
-    """
-    if usd_path:
-        return usd_path
-
-    selected_robot = resolve_robot_name(robot_name)
-    if selected_robot not in DEFAULT_USD_PATHS:
-        supported = ", ".join(sorted(DEFAULT_USD_PATHS.keys()))
-        raise ValueError(f"Unknown robot '{selected_robot}'. Supported: {supported}")
-
-    return DEFAULT_USD_PATHS[selected_robot]
-
-
-def load_and_override_config(args) -> "MissionConfig":
-    """Load mission config from file and apply CLI overrides.
-
-    Args:
-        args: Parsed command line arguments.
-
-    Returns:
-        MissionConfig instance with loaded settings.
-    """
-    from config import load_mission_config
-
-    # Load from config file (or default)
-    config = load_mission_config(args.config)
-
-    # Apply CLI overrides (only if explicitly provided)
-    if args.mission_timeout is not None:
-        config.timeout = args.mission_timeout
-    if args.min_distance is not None:
-        config.min_distance = args.min_distance
-    if args.max_distance is not None:
-        config.max_distance = args.max_distance
-    if args.nav2_wait is not None:
-        config.nav2.wait_time = args.nav2_wait
-
-    # Food evaluation overrides
-    # CLI flag takes priority, then config default
-    if args.food_enabled is not None:
-        config.food.enabled = args.food_enabled.lower() in ("true", "1")
-    if args.food_prim_path is not None:
-        config.food.prim_path = args.food_prim_path
-    if args.food_spoilage_threshold is not None:
-        config.food.spoilage_threshold = args.food_spoilage_threshold
-
-    return config
 
 
 def main():
