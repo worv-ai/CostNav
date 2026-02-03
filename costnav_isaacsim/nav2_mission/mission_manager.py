@@ -508,7 +508,6 @@ class MissionManager:
 
         metrics.apply_impulse_damage(self._eval, impulse_amount, self._is_mission_active, injury_info)
 
-
     @staticmethod
     def _logistic_probability(intercept: float, slope: float, delta_v_mph: float) -> float:
         """Compute logistic probability P(MAIS >= level)."""
@@ -756,7 +755,9 @@ class MissionManager:
             property_counts = dict(self._eval.last_property_contact_counts or {})
             delta_v_list = list(self._eval.last_delta_v_magnitudes_mps or [])
             injury_costs = list(self._eval.last_injury_costs or [])
-            total_injury_cost = self._eval.last_total_injury_cost if self._eval.last_total_injury_cost is not None else 0.0
+            total_injury_cost = (
+                self._eval.last_total_injury_cost if self._eval.last_total_injury_cost is not None else 0.0
+            )
         else:
             total_contact_count = self._eval.contact_count
             total_impulse = self._eval.total_impulse

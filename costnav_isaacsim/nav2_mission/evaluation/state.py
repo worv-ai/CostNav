@@ -67,9 +67,7 @@ class EvaluationManager:
 
     def setup_contact_reporting(self) -> None:
         food.update_food_root_prefix(self.state, self._mission_config)
-        metrics.setup_contact_reporting(
-            self.state, self._mission_config, self._manager_config, self.on_contact_report
-        )
+        metrics.setup_contact_reporting(self.state, self._mission_config, self._manager_config, self.on_contact_report)
 
     def on_contact_report(self, contact_headers, contact_data) -> None:
         metrics.on_contact_report(

@@ -79,7 +79,13 @@ def _get_robot_z_offset(mission_config, manager_config) -> Optional[float]:
 
 
 def _spawn_food_at_position(
-    state, mission_config, manager_config, x: float = 0.0, y: float = 0.0, z: float = 0.0, remove_existing: bool = False
+    state,
+    mission_config,
+    manager_config,
+    x: float = 0.0,
+    y: float = 0.0,
+    z: float = 0.0,
+    remove_existing: bool = False,
 ) -> bool:
     food_config = mission_config.food
     base_path = food_config.prim_path.rstrip("/")
@@ -193,9 +199,7 @@ def reset_food_for_teleport(state, mission_config, manager_config) -> bool:
         world_transform = xformable.ComputeLocalToWorldTransform(0)
         robot_pos = world_transform.ExtractTranslation()
 
-        logger.info(
-            f"[FOOD] Robot position from prim: ({robot_pos[0]:.2f}, {robot_pos[1]:.2f}, {robot_pos[2]:.2f})"
-        )
+        logger.info(f"[FOOD] Robot position from prim: ({robot_pos[0]:.2f}, {robot_pos[1]:.2f}, {robot_pos[2]:.2f})")
 
         return _spawn_food_at_position(
             state,

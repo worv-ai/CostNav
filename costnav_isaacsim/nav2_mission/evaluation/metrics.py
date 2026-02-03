@@ -160,7 +160,9 @@ def classify_property_from_prim_path(prim_path: str) -> Optional[str]:
     return None
 
 
-def record_property_contact_from_pair(state, actor0_path: str, actor1_path: str, impulse_amount: float) -> Optional[str]:
+def record_property_contact_from_pair(
+    state, actor0_path: str, actor1_path: str, impulse_amount: float
+) -> Optional[str]:
     if impulse_amount < state.property_contact_impulse_min_threshold:
         return None
 
@@ -192,7 +194,10 @@ def record_property_contact_from_pair(state, actor0_path: str, actor1_path: str,
 
 
 def apply_impulse_damage(
-    state, impulse_amount: float, is_mission_active: Callable[[], bool], injury_info: Optional[tuple[float, float, float]]
+    state,
+    impulse_amount: float,
+    is_mission_active: Callable[[], bool],
+    injury_info: Optional[tuple[float, float, float]],
 ) -> None:
     if not is_mission_active():
         msg = f"[CONTACT] Impulse: {impulse_amount:.2f}"
@@ -213,10 +218,7 @@ def apply_impulse_damage(
 
     state.impulse_damage_accumulated += impulse_amount
     state.impulse_health = max(0.0, state.impulse_health_max - state.impulse_damage_accumulated)
-    msg = (
-        f"[CONTACT] Impulse: {impulse_amount:.2f}, Health: {state.impulse_health:.2f}, "
-        f"Count: {state.contact_count}"
-    )
+    msg = f"[CONTACT] Impulse: {impulse_amount:.2f}, Health: {state.impulse_health:.2f}, Count: {state.contact_count}"
     if injury_info:
         delta_v_mps, injury_cost, total_injury_cost = injury_info
         msg += (
@@ -226,7 +228,9 @@ def apply_impulse_damage(
     print(msg)
 
 
-def on_contact_report(state, contact_headers, contact_data, mission_config, is_mission_active: Callable[[], bool]) -> None:
+def on_contact_report(
+    state, contact_headers, contact_data, mission_config, is_mission_active: Callable[[], bool]
+) -> None:
     if not state.contact_report_targets:
         return
 
@@ -276,7 +280,9 @@ def on_contact_report(state, contact_headers, contact_data, mission_config, is_m
             if is_character_collision:
                 state.people_contact_count += 1
             record_property_contact_from_pair(state, actor0, actor1, impulse_amount)
-            injury_info = injury.process_collision_injury(state, mission_config, impulse_amount, is_character_collision)
+            injury_info = injury.process_collision_injury(
+                state, mission_config, impulse_amount, is_character_collision
+            )
             apply_impulse_damage(state, impulse_amount, is_mission_active, injury_info)
             state.last_damage_steps_remaining = state.damage_cooldown_steps
             return
