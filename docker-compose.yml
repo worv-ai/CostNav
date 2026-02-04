@@ -209,7 +209,7 @@ services:
   # ROS2 with RViz - standalone visualization service that runs alongside Isaac Sim
   ros2-rviz-nav2:
     <<: *ros2-service
-    profiles: ["isaac-sim", "nav2"]
+    profiles: ["isaac-sim", "nav2", "vint"]
     container_name: costnav-ros2-rviz-nav2
     environment:
       - ROS_DISTRO=jazzy
@@ -242,7 +242,7 @@ services:
   # ROS2 with RViz (teleop profile) - hides TF/point clouds by default
   ros2-rviz-teleop:
     <<: *ros2-service
-    profiles: ["teleop", "vint"]
+    profiles: ["teleop"]
     container_name: costnav-ros2-rviz-teleop
     depends_on:
       isaac-sim:
@@ -276,7 +276,7 @@ services:
   # ROS2 with teleop - waits for Isaac Sim to be healthy before starting
   ros2-teleop:
     <<: *ros2-service
-    profiles: ["teleop", "vint"]
+    profiles: ["teleop"]
     container_name: costnav-ros2-teleop
     depends_on:
       isaac-sim:

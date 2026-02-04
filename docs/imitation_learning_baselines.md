@@ -66,30 +66,17 @@ Imitation learning offers complementary advantages:
 ```
 CostNav/
 ├── costnav_isaacsim/
-│   ├── ...                                  # Existing IsaacSim modules
-│   │
 │   └── il_baselines/                        # Navigation Imitation Learning Module
-│       ├── README.md                        # Module documentation
-│       ├── __init__.py
-│       ├── Dockerfile                       # Reproduces visualnav-transformer
-│       ├── docker-compose.yml
-│       ├── training/                        # Training Framework (via Docker)
-│       │   ├── __init__.py
-│       │   ├── visualnav_transformer/       # ViNT/NoMaD/GNM
-│       │   │   └── configs/
-│       │   │       ├── vint_costnav.yaml
-│       │   │       ├── nomad_costnav.yaml
-│       │   │       └── gnm_costnav.yaml
-│       │   ├── process_data/
-│       │   │   ├── rosbag_to_mediaref.py    # ROS2 mcaps → MediaRef
-│       │   │   └── mediaref_to_vint.py      # MediaRef → ViNT format
-│       │   ├── data_split.py
-│       │   └── configs/
-│       │       └── processing_config.yaml
-│       │
-│       ├── evaluation/                      # Evaluation & Deployment
-│       │   └── __init__.py
+│       ├── data_processing/                 # ROS2 bag → ViNT format conversion
+│       ├── training/                        # Model training scripts and configs
+│       └── evaluation/                      # ROS2 policy nodes for Isaac Sim evaluation
+│
+├── Dockerfile.vint                          # ViNT evaluation Docker image
+└── third_party/
+    └── visualnav-transformer/               # ViNT/NoMaD/GNM training code (submodule)
 ```
+
+See [il_baselines/README.md](../costnav_isaacsim/il_baselines/README.md) for detailed directory structure.
 
 ---
 
@@ -265,100 +252,127 @@ services:
 
 ### Phase 3: Evaluation & Comparison 🔄 (In Progress)
 
-- [ ] Create Isaac Sim policy evaluation script (using NavDP framework)
-- [ ] Integrate CostNav economic metrics
-- [ ] Build Nav2 baseline comparison pipeline
-- [ ] Create visualization and reporting tools
+**Current Status:**
+- ✅ ViNT model (trained on Nova Carter data) runs successfully in Isaac Sim
+- ✅ Two-node architecture implemented (policy node + trajectory follower)
+- ⚠️ Performance is limited without topological graph guidance
+
+**Remaining Tasks:**
+- [ ] Deploy training Docker + Slurm setup
+- [ ] Train and compare with Segway E1 data (2h, 4h, 6h training runs)
+- [ ] **(Critical)** Implement topological graph navigation
+  - Current ImageGoal-only approach has poor performance (robot needs to memorize entire map)
+  - Need to implement sequential subgoal images along the path to goal
+  - Reference: Original ViNT paper's topological graph approach
 
 ---
 
-## NavDP Framework-Based Implementation Plan
+## Implementation Details
 
 ### Strategy Overview
 
-The key objective is **not** to implement NavDP in isolation. Instead, we first implement **ViNT (Visual Navigation Transformer)** using the NavDP baseline framework's communication architecture and simulation interface.
+The key objective is **not** to implement NavDP in isolation. Instead, we first implement **ViNT (Visual Navigation Transformer)** using a ROS2-native architecture for open-source usability.
 
 **Why this approach?**
 
-1. **Leverage proven infrastructure**: NavDP's HTTP-based decoupled architecture is battle-tested for simulator communication
-2. **Unified evaluation framework**: All baselines share the same API endpoints, enabling fair comparison
-3. **Dual-threaded execution**: Async planning (~10Hz) + control loop (simulation rate) pattern works well
+1. **ROS2 native communication**: Uses standard ROS2 topics instead of HTTP for better open-source compatibility and integration with existing robotics stacks
+2. **Unified evaluation framework**: All baselines share the same ROS2 interface, enabling fair comparison
+3. **Two-node architecture**: Decoupled policy inference (~10Hz) + MPC trajectory follower (~20Hz) as separate ROS2 nodes
 4. **Easy baseline addition**: Once ViNT works, adding NoMaD, GNM, and NavDP follows the same pattern
 
-### Communication Architecture Options
+### Communication Architecture
 
-CostNav uses **ROS2** as its communication layer. We have two options for integrating IL baselines:
-
-#### Option A: ROS2 Native (Recommended for CostNav)
+CostNav uses **ROS2** as its communication layer. The ViNT container runs two nodes that communicate with Isaac Sim:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                 CostNav ROS2 Communication Architecture                 │
+│                 CostNav IL Evaluation Architecture                       │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
-│  ┌───────────────┐      ROS2 Topics     ┌───────────────┐              │
-│  │ Isaac Sim     │◄────────────────────►│ IL Policy     │              │
-│  │ + Teleop Node │                      │ ROS2 Node     │              │
-│  └───────────────┘                      └───────┬───────┘              │
-│         │                                       │                      │
-│         │ /odom, /image, /depth                 │ Model Inference      │
-│         │                                       ▼                      │
-│         │                               ┌───────────────┐              │
-│         │◄──── /cmd_vel_model ──────────│ ViNT / NoMaD  │              │
-│         │                               │ / GNM Agent   │              │
-│         ▼                               └───────────────┘              │
-│  ┌───────────────┐                                                     │
-│  │ Robot Control │ ← Teleop node forwards /cmd_vel_model to /cmd_vel   │
-│  └───────────────┘   when model_input_switch is enabled                │
+│  Isaac Sim Container              ViNT Container (ROS2 Jazzy)           │
+│  ┌────────────────────┐          ┌────────────────────────────────┐    │
+│  │ launch.py          │          │ vint_policy_node (~10Hz)       │    │
+│  │ - Physics sim      │          │ trajectory_follower_node (~20Hz)│    │
+│  │ - Nova Carter      │          └────────────────────────────────┘    │
+│  │ - ROS2 Bridge      │                       │                        │
+│  └────────────────────┘                       │                        │
+│           │                                   │                        │
+│           │  ROS2 Topics (via ROS_DOMAIN_ID)  │                        │
+│           └───────────────────────────────────┘                        │
+│                                                                         │
+│  Isaac Sim → ViNT:     /front_stereo_camera/left/image_raw             │
+│                        /chassis/odom                                    │
+│                        /goal_image                                      │
+│                                                                         │
+│  ViNT → Isaac Sim:     /cmd_vel                                        │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key ROS2 Topics (already available in CostNav):**
+**Key ROS2 Topics (between containers):**
 
-| Topic              | Type                        | Direction | Description                       |
-| ------------------ | --------------------------- | --------- | --------------------------------- |
-| `/odom`            | `nav_msgs/Odometry`         | Subscribe | Robot odometry (pose + velocity)  |
-| `/front_*/image_*` | `sensor_msgs/Image`         | Subscribe | Camera images                     |
-| `/cmd_vel_model`   | `geometry_msgs/Twist`       | Publish   | Model velocity commands           |
-| `/is_model`        | `std_msgs/Bool`             | (teleop)  | Indicates model control is active |
-| `/goal_pose`       | `geometry_msgs/PoseStamped` | Subscribe | Navigation goal (ImageGoal mode)  |
+| Topic                                  | Type                  | Direction         | Description                      |
+| -------------------------------------- | --------------------- | ----------------- | -------------------------------- |
+| `/front_stereo_camera/left/image_raw`  | `sensor_msgs/Image`   | Isaac Sim → ViNT  | Camera images for policy         |
+| `/chassis/odom`                        | `nav_msgs/Odometry`   | Isaac Sim → ViNT  | Robot odometry for MPC           |
+| `/goal_image`                          | `sensor_msgs/Image`   | Isaac Sim → ViNT  | Goal image (ImageGoal mode)      |
+| `/cmd_vel`                             | `geometry_msgs/Twist` | ViNT → Isaac Sim  | Velocity commands to robot       |
+| `/vint_enable`                         | `std_msgs/Bool`       | Isaac Sim → ViNT  | Enable/disable policy execution  |
+| `/vint_trajectory`                     | `nav_msgs/Path`       | Internal (ViNT)   | Policy → Trajectory Follower     |
 
-#### Option B: HTTP-based (NavDP Framework Style)
+### ROS2 Node Interface (Abstract)
 
-For compatibility with NavDP's existing baselines, we can also use HTTP:
+The IL evaluation framework uses a two-node architecture that can be extended for other models:
 
-```
-Isaac Sim (ROS2) ←→ ROS2-HTTP Bridge ←→ Flask Policy Server
-```
-
-### ROS2 Policy Node Interface
+**1. Policy Node** - Runs model inference and publishes trajectory
 
 ```python
-class ILPolicyNode(Node):
-    """ROS2 node for IL policy inference."""
+class BasePolicyNode(Node):
+    """Abstract base class for IL policy nodes."""
 
-    def __init__(self, agent: BaseAgent):
-        super().__init__('il_policy_node')
-        self.agent = agent
-
+    def __init__(self, agent: BaseAgent, inference_rate: float = 10.0):
         # Subscribers
-        self.create_subscription(Image, '/front_stereo_camera/left/image_raw', self.image_callback, 10)
-        self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
-        self.create_subscription(PoseStamped, '/goal_pose', self.goal_callback, 10)  # For ImageGoal
+        self.create_subscription(Image, '/front_stereo_camera/left/image_raw', ...)
+        self.create_subscription(Image, '/goal_image', ...)  # ImageGoal mode
+        self.create_subscription(Bool, '/<model>_enable', ...)
 
         # Publishers
-        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel_model', 10)
+        self.trajectory_pub = self.create_publisher(Path, '/<model>_trajectory', 10)
 
-        # Inference timer (~10Hz)
-        self.create_timer(0.1, self.inference_callback)
+        # Inference timer
+        self.create_timer(1.0 / inference_rate, self.inference_callback)
 
     def inference_callback(self):
-        """Run policy inference and publish velocity command."""
-        trajectory = self.agent.step_imagegoal(self.goal_image, self.current_image, self.depth)
-        cmd_vel = self.trajectory_to_cmd_vel(trajectory)
-        self.cmd_vel_pub.publish(cmd_vel)
+        """Run policy inference and publish trajectory."""
+        trajectory = self.agent.step(self.current_image, self.goal_image)
+        self.trajectory_pub.publish(self.trajectory_to_path(trajectory))
 ```
+
+**2. Trajectory Follower Node** - MPC controller for trajectory tracking
+
+```python
+class TrajectoryFollowerNode(Node):
+    """MPC-based trajectory follower for IL policies."""
+
+    def __init__(self, control_rate: float = 20.0):
+        # Subscribers
+        self.create_subscription(Path, '/<model>_trajectory', ...)
+        self.create_subscription(Odometry, '/chassis/odom', ...)
+        self.create_subscription(Bool, '/trajectory_follower_enable', ...)
+
+        # Publishers
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+
+        # Control timer
+        self.create_timer(1.0 / control_rate, self.control_callback)
+
+    def control_callback(self):
+        """Run MPC and publish velocity command."""
+        v, w = self.mpc_controller.step(self.current_pose)
+        self.cmd_vel_pub.publish(self.create_twist(v, w))
+```
+
+See [evaluation/README.md](../costnav_isaacsim/il_baselines/evaluation/README.md) for implementation details.
 
 ---
 
@@ -412,93 +426,38 @@ ViNT (Visual Navigation Transformer) is being implemented as the reference basel
   - Location: `costnav_isaacsim/il_baselines/evaluation/agents/vint_agent.py`
 - [x] Create ROS2 policy node that:
   - Subscribes to `/front_stereo_camera/left/image_raw` (sensor_msgs/Image)
-  - Subscribes to `/odom` (nav_msgs/Odometry)
-  - Subscribes to `/goal_image` for ImageGoal mode (optional)
-  - Publishes `/cmd_vel_model` (geometry_msgs/Twist)
+  - Subscribes to `/goal_image` for ImageGoal mode
+  - Publishes `/vint_trajectory` (nav_msgs/Path)
   - Location: `costnav_isaacsim/il_baselines/evaluation/nodes/vint_policy_node.py`
-- [x] Implement trajectory → cmd_vel conversion (proportional controller)
-- [x] Model switch integration works via existing teleop node (`/cmd_vel_model`)
-- [ ] Test with CostNav mission manager for automated evaluation
+- [x] Implement MPC trajectory follower node
+  - Subscribes to `/vint_trajectory` and `/chassis/odom`
+  - Publishes `/cmd_vel` directly
+  - Location: `costnav_isaacsim/il_baselines/evaluation/nodes/trajectory_follower_node.py`
 
-#### 4.3 ViNT Model Configuration
+#### 4.3 CostNav ROS2 Integration ✅
 
-```yaml
-# configs/vint_costnav.yaml
-model:
-  image_size: 224
-  context_size: 5 # Temporal context frames
-  waypoint_spacing: 0.25 # Waypoint interval (meters)
-  num_images: 1 # Number of cameras
-  len_traj_pred: 8 # Trajectory prediction length
-  learn_angle: true # Predict heading angles
-
-encoder:
-  type: efficientnet_b0
-  pretrained: true
-  obs_encoding_size: 1024
-
-inference:
-  checkpoint: checkpoints/vint/vint.pth
-  device: cuda:0
-```
-
-#### 4.4 ViNT ROS2 Node Implementation (Implemented)
-
-The full implementation is at `costnav_isaacsim/il_baselines/evaluation/nodes/vint_policy_node.py`.
-
-Key features:
-
-- Subscribes to camera images and runs ViNT inference at configurable rate
-- Publishes to `/cmd_vel_model` which is picked up by teleop when model control is enabled
-- Supports both ImageGoal and NoGoal navigation modes
-- Includes proportional controller for trajectory → velocity conversion
-
-#### 4.5 CostNav ROS2 Integration (Implemented ✅)
-
-- [x] Create ROS2 launch file for ViNT policy node
-  - Location: `costnav_isaacsim/il_baselines/evaluation/launch/vint_policy.launch.py`
-- [x] Integrate with existing teleop node (`/cmd_vel_model` → `/cmd_vel`)
-- [ ] Add mission manager support for automated IL evaluation
-- [ ] Implement trajectory → velocity conversion (pure pursuit or MPC)
-
-**Integration with Existing CostNav Infrastructure:**
+**Running ViNT in Isaac Sim:**
 
 ```bash
-# Terminal 1: Isaac Sim with ROS2 bridge
-make run-isaacsim
-
-# Terminal 2: ViNT Policy Node (new)
-ros2 run costnav_il_baselines vint_policy_node --ros-args \
-    --param checkpoint:=/path/to/vint_costnav.pth
-
-# Terminal 3: Teleop node (enable model input)
-make teleop  # Press button to switch to model control
+# Start all containers (Isaac Sim + ViNT)
+make run-vint
 ```
+
+This launches:
+- Isaac Sim with Nova Carter robot and ROS2 bridge
+- ViNT policy node (`vint_policy_node`)
+- Trajectory follower node (`trajectory_follower_node`)
+
+See [evaluation/README.md](../costnav_isaacsim/il_baselines/evaluation/README.md) for detailed usage and configuration options.
 
 ---
 
 ### Phase 5: Additional Baselines
 
-After ViNT is working, add other baselines using the same infrastructure:
+Planned baselines using the same two-node architecture (see [ROS2 Node Interface](#ros2-node-interface-abstract) above):
 
-#### 5.1 NoMaD (Diffusion Model)
-
-- [ ] Port NoMaD agent from NavDP framework
-- [ ] Implement `NoMaD_Agent` with diffusion-based action generation
-- [ ] Support ImageGoal and NoGoal navigation modes
-
-#### 5.2 GNM (General Navigation Model)
-
-- [ ] Port GNM agent from NavDP framework
-- [ ] Implement distance prediction + temporal distance head
-- [ ] Support ImageGoal and NoGoal navigation modes
-
-#### 5.3 NavDP (Full Implementation)
-
-- [ ] Port NavDP agent with multi-goal support
-- [ ] Set up DepthAnything V2 + DINOv2 encoders
-- [ ] Implement diffusion policy with critic head
-- [ ] Support PointGoal, ImageGoal, PixelGoal, and NoGoal modes
+- [ ] **NoMaD** - Diffusion-based navigation policy
+- [ ] **GNM** - General Navigation Model
 
 ---
 

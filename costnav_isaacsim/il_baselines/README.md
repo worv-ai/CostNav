@@ -7,39 +7,13 @@ This module implements imitation learning baselines for CostNav sidewalk robot n
 ```
 il_baselines/
 ├── README.md                     # This file
-├── __init__.py
 ├── environment.yml               # Conda environment specification
-├── data_processing/              # Data conversion pipeline
-│   ├── __init__.py
-│   ├── configs/
-│   │   ├── processing_config.yaml
-│   │   └── vint_processing_config.yaml
-│   ├── converters/               # Format conversion scripts
-│   │   ├── __init__.py
-│   │   ├── rosbag_to_mediaref.py     # ROS2 mcaps → MediaRef
-│   │   └── ray_batch_convert.py      # Batch conversion with Ray
-│   ├── process_data/             # Data processing scripts
-│   │   ├── __init__.py
-│   │   └── process_mediaref_bags.py  # MediaRef → ViNT format
-│   └── tests/
-│       ├── __init__.py
-│       ├── test_rosbag_to_mediaref.py
-│       ├── test_ray_batch_convert.py
-│       └── test_process_mediaref_bags.py
-├── training/                     # Training framework
-│   ├── __init__.py
-│   ├── train_vint.py             # Main training script
-│   └── visualnav_transformer/    # ViNT/NoMaD/GNM
-│       ├── checkpoints/          # Pretrained model weights (download manually)
-│       │   ├── vint.pth
-│       │   ├── nomad.pth
-│       │   └── gnm.pth
-│       └── configs/
-│           ├── defaults.yaml     # Default training config
-│           └── vint_costnav.yaml # CostNav fine-tuning config
-└── evaluation/                   # Evaluation & deployment
-    └── __init__.py
+├── data_processing/              # ROS2 bag → ViNT format conversion
+├── training/                     # Model training scripts and configs
+└── evaluation/                   # ROS2 policy nodes for Isaac Sim evaluation
 ```
+
+See each subdirectory's README for detailed documentation.
 
 ## Data Format
 
@@ -212,39 +186,9 @@ export WANDB_MODE=disabled
 
 Checkpoints are saved to `logs/vint-costnav/`.
 
-## Installation
+## Evaluation
 
-```bash
-# Create conda environment from environment.yml
-cd CostNav
-conda env create -f costnav_isaacsim/il_baselines/environment.yml
-conda activate costnav_il
-
-# Initialize only the required submodules for IL baselines
-git submodule update --init third_party/visualnav-transformer
-git submodule update --init third_party/diffusion_policy
-
-# Install visualnav-transformer (ViNT/NoMaD/GNM training)
-pip install -e third_party/visualnav-transformer/train/
-
-# Install diffusion_policy (with workaround for upstream bug)
-# Note: The official diffusion_policy repository is missing __init__.py
-# We need to add it manually to make the package importable
-echo '# Diffusion Policy Package' > third_party/diffusion_policy/diffusion_policy/__init__.py
-cd third_party/diffusion_policy && pip install -e . && cd ../..
-
-# Configure environment variables
-# Create a .env file at the project root with:
-echo "PROJECT_ROOT=$(pwd)" > .env
-```
-
-### Known Issues
-
-**diffusion_policy Missing `__init__.py`**
-
-The official [diffusion_policy repository](https://github.com/real-stanford/diffusion_policy) is missing the `__init__.py` file in the `diffusion_policy/` directory, which prevents Python from recognizing it as a package. This causes `find_packages()` in `setup.py` to return an empty list.
-
-**Workaround:** We add a minimal `__init__.py` file before installation (see installation steps above). This is a necessary fix for a broken upstream dependency. Consider reporting this issue to the upstream repository.
+See [evaluation/README.md](evaluation/README.md) for detailed documentation on running trained IL policies in Isaac Sim.
 
 ## Dependencies
 

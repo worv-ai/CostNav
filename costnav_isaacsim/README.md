@@ -49,10 +49,9 @@ The `costnav_isaacsim` module serves as:
 | Nav2 Integration       | ✅ Complete    | Nova Carter navigates successfully |
 | Docker Setup           | ✅ Complete    | Multi-container architecture       |
 | Occupancy Map          | ✅ Complete    | Street_sidewalk environment        |
-| Parameter Tuning       | ⏳ In Progress | Optimizing for performance         |
-| Cost Model Integration | 📋 Planned     | Economic metrics tracking          |
-
-> **See Also**: [Nav2 Implementation Plan](../docs/nav2/nav2_implementation_plan.md) for detailed roadmap.
+| Parameter Tuning       | ✅ Complete    | Optimized for performance          |
+| Cost Model Integration | ✅ Complete    | Economic metrics tracking          |
+| **IL Baselines (ViNT)**| ✅ Complete    | Training + evaluation pipeline     |
 
 ---
 
@@ -60,10 +59,10 @@ The `costnav_isaacsim` module serves as:
 
 ```
 costnav_isaacsim/
-├── costnav/                  # CostNav Python package (pip install -e)
+├── costnav_isaacsim/         # CostNav Python package (pip install -e)
 │   ├── launch.py             # Isaac Sim launcher script
 │   ├── config/               # YAML configuration files
-│   └── src/costnav/          # Installable modules (config, mission_manager, people_manager)
+│   └── src/costnav_isaacsim/ # Installable modules (config, mission_manager, people_manager)
 ├── nav2_params/              # Nav2 navigation stack configuration
 │   ├── maps/                 # Occupancy grid maps
 │   ├── nova_carter/          # Nova Carter robot config
@@ -102,6 +101,9 @@ make build-ros-ws
 
 # Build ROS2 runtime image
 make build-ros2
+
+# Build ViNT image (for IL baseline evaluation)
+make build-vint
 ```
 
 ### 2. Run Nav2 Navigation (Recommended)
@@ -212,7 +214,7 @@ python launch.py --people 5
 
 ### Technical Details
 
-- **Module**: `costnav.people_manager` (from `costnav_isaacsim/costnav/src/costnav/people_manager.py`)
+- **Module**: `costnav_isaacsim.people_manager` (from `costnav_isaacsim/costnav_isaacsim/src/costnav_isaacsim/people_manager.py`)
 - **Behavior**: `CharacterBehavior.RANDOM_GOTO` (random destination walking)
 - **Character Root**: `/World/Characters`
 - **Spawn Method**: `navmesh.query_random_point()` with unique random IDs (same as robot spawning)
@@ -235,12 +237,13 @@ python launch.py --people 5
 
 ## Docker Compose Profiles
 
-| Profile     | Services              | Command              | Use Case                           |
-| ----------- | --------------------- | -------------------- | ---------------------------------- |
-| `nav2`      | Isaac Sim + ROS2 Nav2 | `make run-nav2`      | Full navigation stack              |
-| `isaac-sim` | Isaac Sim only        | `make run-isaac-sim` | Simulation development             |
-| `ros2`      | ROS2 Nav2 only        | `make run-ros2`      | Nav2 tuning (requires running sim) |
-| `teleop`    | Isaac Sim + Teleop    | `make run-teleop`    | Manual driving (joystick)          |
+| Profile     | Services                            | Command              | Use Case                           |
+| ----------- | ----------------------------------- | -------------------- | ---------------------------------- |
+| `nav2`      | Isaac Sim + ROS2 Nav2               | `make run-nav2`      | Full navigation stack              |
+| `isaac-sim` | Isaac Sim only                      | `make run-isaac-sim` | Simulation development             |
+| `ros2`      | ROS2 Nav2 only                      | `make run-ros2`      | Nav2 tuning (requires running sim) |
+| `teleop`    | Isaac Sim + Teleop                  | `make run-teleop`    | Manual driving (joystick)          |
+| `vint`      | Isaac Sim + ViNT Policy + Follower  | `make run-vint`      | ViNT IL baseline evaluation        |
 
 ### Using Profiles Directly
 
@@ -260,9 +263,11 @@ docker compose --profile nav2 down
 
 ## File Reference
 
-### `launch.py` - Isaac Sim Launcher
+### `costnav_isaacsim/launch.py` - Isaac Sim Launcher
 
 Main entry point for Isaac Sim simulation with Nav2 support.
+
+> **Note**: This file was moved from `costnav/launch.py` to `costnav_isaacsim/launch.py`.
 
 **Usage:**
 
@@ -276,17 +281,22 @@ python launch.py --debug                            # Enable debug logging
 
 **Command Line Arguments:**
 
-| Argument         | Default                                                         | Description          |
-| ---------------- | --------------------------------------------------------------- | -------------------- |
-| `--usd_path`     | `None` (derived from `--robot`)                                 | USD scene path       |
-| `--robot`        | `nova_carter`                                                   | Robot preset (`nova_carter`, `segway_e1`) |
-| `--headless`     | `false`                                                         | Run without GUI      |
-| `--physics_dt`   | `1/60` (0.0167s)                                                | Physics timestep     |
-| `--rendering_dt` | `1/30` (0.0333s)                                                | Rendering timestep   |
-| `--debug`        | `false`                                                         | Enable debug logging |
-| `--people`       | `0`                                                             | Number of people to spawn |
+| Argument         | Default                          | Description                                |
+| ---------------- | -------------------------------- | ------------------------------------------ |
+| `--usd_path`     | (derived from `--robot`)         | USD scene path                             |
+| `--robot`        | `nova_carter`                    | Robot preset (`nova_carter`, `segway_e1`)  |
+| `--headless`     | `false`                          | Run without GUI                            |
+| `--physics_dt`   | `1/60`                           | Physics timestep                           |
+| `--rendering_dt` | `1/30`                           | Rendering timestep                         |
+| `--debug`        | `false`                          | Enable debug logging                       |
+| `--people`       | `0`                              | Number of people to spawn                  |
+| `--config`       | `config/mission_config.yaml`     | Path to mission config file                |
+| `--mission-timeout` | (from config)                 | Override: Mission timeout                  |
+| `--min-distance` | (from config)                    | Override: Minimum start-goal distance      |
+| `--max-distance` | (from config)                    | Override: Maximum start-goal distance      |
+| `--nav2-wait`    | (from config)                    | Override: Nav2 wait time                   |
 
-`--robot` defaults to `SIM_ROBOT` when set, otherwise `nova_carter`.
+`--robot` defaults to `SIM_ROBOT` environment variable when set, otherwise `nova_carter`.
 If the Segway prim is not detected automatically, set `ROBOT_PRIM_PATH` to the robot base prim.
 
 **Key Features:**
@@ -420,7 +430,7 @@ navigator.waitUntilTaskComplete()
 
 ## Mission Manager Module
 
-The `costnav.mission_manager` module provides automated navigation mission orchestration with NavMesh-based position sampling and RViz visualization. It uses a **state machine-based approach** integrated directly into the main simulation loop for proper synchronization.
+The `costnav_isaacsim.mission_manager` module provides automated navigation mission orchestration with NavMesh-based position sampling and RViz visualization. It uses a **state machine-based approach** integrated directly into the main simulation loop for proper synchronization.
 
 ### Container Architecture
 
@@ -447,7 +457,7 @@ The `costnav.mission_manager` module provides automated navigation mission orche
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Important**: The `costnav.mission_manager` module runs **inside the Isaac Sim container** because it:
+**Important**: The `costnav_isaacsim.mission_manager` module runs **inside the Isaac Sim container** because it:
 1. Uses Isaac Sim's NavMesh API (`omni.anim.navigation.core`)
 2. Teleports the robot using Isaac Sim's physics engine
 3. Integrates with the main simulation loop for proper physics synchronization
@@ -535,44 +545,6 @@ markers:
 | `teleport` | `height_offset` | 0.5 | Teleportation height offset (meters) |
 | `teleport` | `robot_prim` | `/World/Nova_Carter_ROS` | Robot prim path in USD |
 
-### Command Line Options
-
-`launch.py` always loads the mission config and waits for `/start_mission`:
-
-```bash
-# Use default config (config/mission_config.yaml)
-python launch.py
-
-# Use custom config file
-python launch.py --config /path/to/custom.yaml
-
-# Override specific config values
-python launch.py --mission-timeout 600 --min-distance 10.0
-
-# Headless mode
-python launch.py --headless
-```
-
-#### Simulation Options
-
-| Option | Default | Description |
-| ------ | ------- | ----------- |
-| `--usd_path` | (internal) | Path to USD scene file |
-| `--headless` | false | Run without GUI |
-| `--physics_dt` | 1/60 | Physics time step |
-| `--rendering_dt` | 1/30 | Rendering time step |
-| `--debug` | false | Enable debug logging |
-
-#### Mission Options
-
-| Option | Default | Description |
-| ------ | ------- | ----------- |
-| `--config` | config/mission_config.yaml | Path to mission config file |
-| `--mission-timeout` | (from config) | Override: Mission timeout |
-| `--min-distance` | (from config) | Override: Minimum start-goal distance |
-| `--max-distance` | (from config) | Override: Maximum start-goal distance |
-| `--nav2-wait` | (from config) | Override: Nav2 wait time |
-
 ### Interactive Python Usage
 
 For interactive testing inside the Isaac Sim container:
@@ -585,8 +557,8 @@ docker exec -it costnav-isaac-sim /isaac-sim/python.sh
 **Basic Usage:**
 
 ```python
-from costnav.mission_manager import MissionManager
-from costnav.config import MissionConfig
+from costnav_isaacsim.mission_manager import MissionManager
+from costnav_isaacsim.config import MissionConfig
 
 # Load mission configuration
 mission_config = MissionConfig(timeout=3600.0)
@@ -603,8 +575,8 @@ while running:
 **Advanced Usage with MissionManagerConfig:**
 
 ```python
-from costnav.mission_manager import MissionManager
-from costnav.config import MissionConfig, MissionManagerConfig
+from costnav_isaacsim.mission_manager import MissionManager
+from costnav_isaacsim.config import MissionConfig, MissionManagerConfig
 
 # Load mission configuration
 mission_config = MissionConfig(timeout=3600.0)
@@ -694,7 +666,7 @@ The MissionManager publishes visualization markers for debugging and monitoring:
 
 ### Running Tests
 
-The `costnav.mission_manager` module includes unit tests for all components.
+The `costnav_isaacsim.mission_manager` module includes unit tests for all components.
 
 **Test Coverage:**
 - `test_navmesh_sampler.py`: NavMesh sampling and distance calculations
@@ -707,7 +679,7 @@ The `costnav.mission_manager` module includes unit tests for all components.
 ```bash
 cd /path/to/CostNav
 python3 -c "
-from costnav.mission_manager import SampledPosition
+from costnav_isaacsim.mission_manager import SampledPosition
 
 # Test distance calculation
 pos1 = SampledPosition(x=0, y=0, z=0)
@@ -720,14 +692,14 @@ print(f'Distance: {pos1.distance_to(pos2)}')  # Should print 5.0
 
 ```bash
 docker exec -it costnav-isaac-sim /isaac-sim/python.sh -m pytest \
-    /workspace/costnav_isaacsim/costnav/tests/ -v
+    /workspace/costnav_isaacsim/costnav_isaacsim/tests/ -v
 ```
 
 **Run specific test file:**
 
 ```bash
 docker exec -it costnav-isaac-sim /isaac-sim/python.sh -m pytest \
-    /workspace/costnav_isaacsim/costnav/tests/test_mission_manager.py -v
+    /workspace/costnav_isaacsim/costnav_isaacsim/tests/test_mission_manager.py -v
 ```
 
 ---
@@ -765,12 +737,86 @@ docker logs costnav-ros2
 
 ---
 
+## IL Baselines (Imitation Learning)
+
+CostNav includes an imitation learning (IL) baseline evaluation framework for comparing learned navigation policies against the rule-based Nav2 stack. The first implemented baseline is **ViNT (Visual Navigation Transformer)**.
+
+### Quick Start: Run ViNT Evaluation
+
+```bash
+# Build the ViNT Docker image (first time only)
+make build-vint
+
+# Run ViNT policy evaluation with Isaac Sim
+make run-vint
+```
+
+This starts:
+
+- **Isaac Sim**: Street Sidewalk environment with Nova Carter robot
+- **ViNT Policy Node**: Runs ViNT inference at ~10Hz, publishes trajectories
+- **Trajectory Follower Node**: MPC controller at ~20Hz, publishes cmd_vel
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    ViNT Evaluation Architecture                      │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Isaac Sim Container           ViNT Container (ROS2 Jazzy)          │
+│  ┌────────────────────┐       ┌────────────────────────────────┐   │
+│  │ launch.py          │       │ ViNT Policy Node (~10Hz)       │   │
+│  │ - Physics sim      │       │ - Camera → ViNT inference      │   │
+│  │ - Nova Carter      │       │ - Goal image navigation        │   │
+│  │ - ROS2 Bridge      │       │ - Publishes /vint_trajectory   │   │
+│  │                    │       └────────────┬───────────────────┘   │
+│  │ /front_*/image ────┼──────►             │                       │
+│  │                    │                    ▼                       │
+│  │                    │       ┌────────────────────────────────┐   │
+│  │                    │       │ Trajectory Follower (~20Hz)    │   │
+│  │                    │       │ - MPC controller (CasADi)      │   │
+│  │ /cmd_vel ◄─────────┼───────│ - Trajectory tracking          │   │
+│  │                    │       │ - Publishes /cmd_vel           │   │
+│  └────────────────────┘       └────────────────────────────────┘   │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### ROS2 Topics (ViNT)
+
+| Topic              | Type                | Direction | Description                      |
+| ------------------ | ------------------- | --------- | -------------------------------- |
+| `/vint_trajectory` | `nav_msgs/Path`     | Publish   | Predicted trajectory (8 waypoints) |
+| `/vint_enable`     | `std_msgs/Bool`     | Subscribe | Enable/disable policy execution  |
+| `/goal_image`      | `sensor_msgs/Image` | Subscribe | Goal image for ImageGoal mode    |
+
+### Makefile Targets (IL Baselines)
+
+| Target           | Description                                        |
+| ---------------- | -------------------------------------------------- |
+| `build-vint`     | Build ViNT Docker image with ROS2 Jazzy + PyTorch  |
+| `run-vint`       | Run Isaac Sim + ViNT policy + trajectory follower  |
+| `run-eval-vint`  | Run automated evaluation with metrics collection   |
+
+### Configuration Files
+
+- **Model config**: `il_baselines/evaluation/configs/vint_eval.yaml`
+- **Robot config**: `il_baselines/evaluation/configs/robot_segway.yaml`
+- **Training config**: `il_baselines/training/visualnav_transformer/configs/vint_costnav.yaml`
+
+> **See Also**: [IL Baselines Documentation](il_baselines/README.md) for detailed setup and usage.
+
+---
+
 ## Related Documentation
 
 - [Nav2 Implementation Plan](../docs/nav2/nav2_implementation_plan.md) - Detailed roadmap and architecture
 - [Isaac Sim Launch Details](../docs/nav2/isaac_sim_launch.md) - Launch script documentation
 - [Architecture Overview](../docs/architecture.md) - CostNav system architecture
 - [Cost Model](../docs/cost_model.md) - Economic metrics for navigation evaluation
+- [IL Baselines](il_baselines/README.md) - Imitation learning baselines documentation
+- [IL Baselines Design](../docs/imitation_learning_baselines.md) - Detailed IL design document
 
 ## External References
 
