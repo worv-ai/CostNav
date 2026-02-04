@@ -178,6 +178,10 @@ class MissionManager:
         self._result_service = None
         self._odom_sub = None
 
+        # IL baseline node control publishers
+        self._vint_enable_pub = None
+        self._trajectory_follower_enable_pub = None
+
         # Nav2 costmap clear service clients (initialized in _initialize)
         self._clear_costmap_global_srv = None
         self._clear_costmap_local_srv = None
@@ -400,6 +404,12 @@ class MissionManager:
                 PoseWithCovarianceStamped, self.config.nav2.initial_pose_topic, pose_qos
             )
             self._goal_pose_pub = self._node.create_publisher(PoseStamped, self.config.nav2.goal_pose_topic, pose_qos)
+
+            # IL baseline node control publishers (to disable ViNT and trajectory follower when mission starts)
+            from std_msgs.msg import Bool
+
+            self._vint_enable_pub = self._node.create_publisher(Bool, "/vint_enable", 10)
+            self._trajectory_follower_enable_pub = self._node.create_publisher(Bool, "/trajectory_follower_enable", 10)
 
             # Subscribe to odometry for robot position tracking
             self._odom_sub = self._node.create_subscription(
@@ -1309,6 +1319,10 @@ class MissionManager:
             response.message = "Missions already completed."
             return response
 
+        # Disable IL baseline nodes (ViNT and trajectory follower) when mission starts
+        # This stops the nodes from publishing trajectories and cmd_vel
+        self._disable_il_baseline_nodes()
+
         # Reset mission result immediately to prevent race condition
         # where the eval script sees the previous mission's SUCCESS result
         self._last_mission_result = MissionResult.PENDING
@@ -1333,6 +1347,25 @@ class MissionManager:
         response.success = True
         response.message = "Mission start requested."
         return response
+
+    def _disable_il_baseline_nodes(self) -> None:
+        """Disable IL baseline nodes (ViNT and trajectory follower).
+
+        Publishes False to /vint_enable and /trajectory_follower_enable topics
+        to stop the nodes from publishing trajectories and cmd_vel commands.
+        """
+        from std_msgs.msg import Bool
+
+        disable_msg = Bool()
+        disable_msg.data = False
+
+        if self._vint_enable_pub is not None:
+            self._vint_enable_pub.publish(disable_msg)
+            logger.info("[START_MISSION] Disabled ViNT policy node")
+
+        if self._trajectory_follower_enable_pub is not None:
+            self._trajectory_follower_enable_pub.publish(disable_msg)
+            logger.info("[START_MISSION] Disabled trajectory follower node")
 
     def _handle_get_mission_result(self, _request, response):
         """Handle mission result query service.

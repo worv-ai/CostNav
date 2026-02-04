@@ -96,12 +96,15 @@
                 "--model_config",
                 "${workspaceFolder}/costnav_isaacsim/il_baselines/evaluation/configs/vint_eval.yaml",
                 "--robot_config",
-                "${workspaceFolder}/costnav_isaacsim/il_baselines/evaluation/configs/robot_carter.yaml"
+                "${workspaceFolder}/costnav_isaacsim/il_baselines/evaluation/configs/robot_carter.yaml",
                 // Optional args (uncomment as needed):
                 // "--inference_rate", "10.0",
                 // "--image_topic", "/front_stereo_camera/left/image_raw",
-                // "--use_imagegoal",
+                "--use_imagegoal",
+                "--visualize_goal_image",
                 // "--device", "cuda"
+                "--log_level",
+                "debug"
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
@@ -116,12 +119,16 @@
             "program": "${workspaceFolder}/costnav_isaacsim/il_baselines/evaluation/src/evaluation/nodes/trajectory_follower_node.py",
             "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
+                "--robot_config",
+                "${workspaceFolder}/costnav_isaacsim/il_baselines/evaluation/configs/robot_carter.yaml",
                 "--control_rate",
                 "20.0",
                 "--max_linear_vel",
                 "1.0",
                 "--max_angular_vel",
-                "1.0"
+                "1.0",
+                "--log_level",
+                "debug"
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",

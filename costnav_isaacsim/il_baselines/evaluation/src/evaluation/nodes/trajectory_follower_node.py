@@ -40,6 +40,7 @@ from typing import Optional, Tuple
 import casadi as ca
 import numpy as np
 import rclpy
+import yaml
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry, Path
 from rclpy.node import Node
@@ -262,12 +263,20 @@ class TrajectoryFollowerNode(Node):
 
     def __init__(
         self,
+        robot_config: str,
         control_rate: float = 20.0,
         max_linear_vel: float = 0.5,
         max_angular_vel: float = 0.5,
         trajectory_timeout: float = 0.5,
     ):
         super().__init__("trajectory_follower_node")
+
+        # Load robot config
+        with open(robot_config, "r") as f:
+            robot_cfg = yaml.safe_load(f)
+
+        # Get odom topic from config (default: /chassis/odom)
+        self.odom_topic = robot_cfg.get("topics", {}).get("odom", "/chassis/odom")
 
         # Control parameters
         self.control_rate = control_rate
@@ -291,6 +300,11 @@ class TrajectoryFollowerNode(Node):
         # Thread lock for trajectory updates
         self.trajectory_lock = threading.Lock()
 
+        # Logging counters for interval-based logging
+        self._trajectory_receive_count = 0
+        self._cmd_vel_publish_count = 0
+        self._log_interval = 20  # Log every N events
+
         # QoS profiles
         sensor_qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -300,7 +314,7 @@ class TrajectoryFollowerNode(Node):
 
         # Subscribers
         self.trajectory_sub = self.create_subscription(Path, "/vint_trajectory", self.trajectory_callback, 10)
-        self.odom_sub = self.create_subscription(Odometry, "/odom", self.odom_callback, sensor_qos)
+        self.odom_sub = self.create_subscription(Odometry, self.odom_topic, self.odom_callback, sensor_qos)
         self.enable_sub = self.create_subscription(Bool, "/trajectory_follower_enable", self.enable_callback, 10)
 
         # Publisher
@@ -313,7 +327,7 @@ class TrajectoryFollowerNode(Node):
         self.get_logger().info(f"Trajectory follower node started. Control rate: {self.control_rate} Hz")
         self.get_logger().info("Controller: MPC (NavDP reference)")
         self.get_logger().info(f"Max velocities: linear={self.max_linear_vel}, angular={self.max_angular_vel}")
-        self.get_logger().info("Subscribing to: /vint_trajectory, /odom")
+        self.get_logger().info(f"Subscribing to: /vint_trajectory, {self.odom_topic}")
         self.get_logger().info("Publishing to: /cmd_vel")
 
     def trajectory_callback(self, msg: Path):
@@ -359,6 +373,19 @@ class TrajectoryFollowerNode(Node):
                     ref_gap=self.mpc_ref_gap,
                     dt=self.mpc_dt,
                 )
+
+                # Log trajectory receive at interval
+                self._trajectory_receive_count += 1
+                if self._trajectory_receive_count % self._log_interval == 0:
+                    # Calculate trajectory extent
+                    traj_start = world_trajectory[0]
+                    traj_end = world_trajectory[-1]
+                    traj_length = np.sum(np.linalg.norm(np.diff(world_trajectory, axis=0), axis=1))
+                    self.get_logger().info(
+                        f"[Follower] traj #{self._trajectory_receive_count}: "
+                        f"len={traj_length:.2f}m, start=({traj_start[0]:.2f}, {traj_start[1]:.2f}), "
+                        f"end=({traj_end[0]:.2f}, {traj_end[1]:.2f})"
+                    )
 
             self.get_logger().debug(f"Received trajectory with {len(waypoints)} waypoints in frame '{frame_id}'")
 
@@ -462,6 +489,18 @@ class TrajectoryFollowerNode(Node):
         cmd_vel = self._compute_mpc_command(mpc)
         self.cmd_vel_pub.publish(cmd_vel)
 
+        # Log cmd_vel publish at interval
+        self._cmd_vel_publish_count += 1
+        if self._cmd_vel_publish_count % self._log_interval == 0:
+            robot_state = self._get_robot_state()
+            robot_str = (
+                f"robot=({robot_state[0]:.2f}, {robot_state[1]:.2f})" if robot_state is not None else "robot=None"
+            )
+            self.get_logger().info(
+                f"[Follower] cmd_vel #{self._cmd_vel_publish_count}: "
+                f"v={cmd_vel.linear.x:.3f} m/s, w={cmd_vel.angular.z:.3f} rad/s, {robot_str}"
+            )
+
     def _compute_mpc_command(self, mpc: MPCController) -> Twist:
         """Compute velocity command using MPC controller.
 
@@ -504,6 +543,12 @@ class TrajectoryFollowerNode(Node):
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Trajectory Follower ROS2 Node (MPC Controller)")
+    parser.add_argument(
+        "--robot_config",
+        type=str,
+        required=True,
+        help="Path to robot configuration YAML (contains odom topic)",
+    )
     parser.add_argument("--control_rate", type=float, default=20.0, help="Control frequency in Hz (default: 20.0)")
     parser.add_argument(
         "--max_linear_vel",
@@ -523,6 +568,13 @@ def parse_args():
         default=0.5,
         help="Trajectory validity timeout in seconds (default: 0.5)",
     )
+    parser.add_argument(
+        "--log_level",
+        type=str,
+        default="info",
+        choices=["debug", "info", "warn", "error", "fatal"],
+        help="Log level (default: info)",
+    )
     return parser.parse_args()
 
 
@@ -534,11 +586,21 @@ def main():
 
     try:
         node = TrajectoryFollowerNode(
+            robot_config=args.robot_config,
             control_rate=args.control_rate,
             max_linear_vel=args.max_linear_vel,
             max_angular_vel=args.max_angular_vel,
             trajectory_timeout=args.trajectory_timeout,
         )
+        # Set log level
+        log_level_map = {
+            "debug": rclpy.logging.LoggingSeverity.DEBUG,
+            "info": rclpy.logging.LoggingSeverity.INFO,
+            "warn": rclpy.logging.LoggingSeverity.WARN,
+            "error": rclpy.logging.LoggingSeverity.ERROR,
+            "fatal": rclpy.logging.LoggingSeverity.FATAL,
+        }
+        node.get_logger().set_level(log_level_map[args.log_level])
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass

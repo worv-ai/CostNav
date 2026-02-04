@@ -141,7 +141,7 @@ run-teleop:
 build-vint:
 	$(DOCKER_COMPOSE) --profile vint build ros2-vint
 
-# Run Isaac Sim with ViNT policy node for IL baseline evaluation
+# Run Isaac Sim with ViNT policy node and trajectory follower for IL baseline evaluation
 # Set MODEL_CHECKPOINT environment variable to specify model weights
 # Goal image publishing is enabled by default for ViNT ImageGoal mode
 # Example: MODEL_CHECKPOINT=/path/to/model.pth make run-vint

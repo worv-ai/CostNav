@@ -352,19 +352,55 @@ services:
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
       - UV_LINK_MODE=copy
-      - SIM_ROBOT=${SIM_ROBOT:-nova_carter}
+      - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ./checkpoints:/workspace/checkpoints:ro
-      - ./il_baselines/evaluation/configs:/workspace/configs:ro
+      - ./checkpoints:/workspace/checkpoints
+      - ./costnav_isaacsim/il_baselines/evaluation/configs:/workspace/configs
     working_dir: /workspace
     command: >
       bash -c "source /opt/ros/jazzy/setup.bash &&
-               uv run vint_policy_node \
-                 --checkpoint /workspace/checkpoints/vint_nova_carter.pth \
-                 --model_config /workspace/configs/vint_eval.yaml \
-                 --robot_config /workspace/configs/robot_carter.yaml \
-                 --inference_rate 10.0"
+        if [ \"$${SIM_ROBOT}\" = \"nova_carter\" ]; then
+          ROBOT_CONFIG=/workspace/configs/robot_carter.yaml
+        else
+          ROBOT_CONFIG=/workspace/configs/robot_segway.yaml
+        fi &&
+        vint_policy_node --checkpoint /workspace/checkpoints/vint_nova_carter.pth --model_config /workspace/configs/vint_eval.yaml --robot_config $${ROBOT_CONFIG} --inference_rate 10.0 --use_imagegoal"
+    network_mode: host
+    ipc: host
+    stdin_open: true
+    tty: true
+
+  # ROS2 Trajectory Follower - MPC controller for executing ViNT trajectories
+  ros2-vint-trajectory-follower:
+    profiles: ["vint"]
+    build:
+      context: .
+      dockerfile: Dockerfile.vint
+    image: costnav-ros2-vint:${COSTNAV_VERSION:-0.1.0}
+    container_name: costnav-ros2-vint-trajectory-follower
+    depends_on:
+      isaac-sim:
+        condition: service_healthy
+    environment:
+      - ROS_DISTRO=jazzy
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+      - DISPLAY=${DISPLAY:-:0}
+      - UV_LINK_MODE=copy
+      - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ./costnav_isaacsim/il_baselines/evaluation/configs:/workspace/configs:ro
+    working_dir: /workspace
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+        if [ \"$${SIM_ROBOT}\" = \"nova_carter\" ]; then
+          ROBOT_CONFIG=/workspace/configs/robot_carter.yaml
+        else
+          ROBOT_CONFIG=/workspace/configs/robot_segway.yaml
+        fi &&
+        trajectory_follower_node --robot_config $${ROBOT_CONFIG} --control_rate 20.0 --max_linear_vel 0.5 --max_angular_vel 0.5"
     network_mode: host
     ipc: host
     stdin_open: true

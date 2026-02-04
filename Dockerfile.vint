@@ -30,12 +30,11 @@ COPY costnav_isaacsim/il_baselines/evaluation /workspace/costnav_isaacsim/il_bas
 COPY third_party/visualnav-transformer/train/vint_train /workspace/third_party/visualnav-transformer/train/vint_train
 COPY third_party/visualnav-transformer/train/setup.py /workspace/third_party/visualnav-transformer/train/
 COPY third_party/visualnav-transformer/train/README.md /workspace/third_party/visualnav-transformer/train/
-COPY pyproject.toml uv.lock README.md /workspace/
 
-# Create virtual environment and install dependencies
+# Install dependencies system-wide (bypassing PEP 668 externally-managed check)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    cd /workspace && \
-    uv sync --frozen
+    cd /workspace/costnav_isaacsim/il_baselines/evaluation && \
+    uv pip install --system --break-system-packages -e .
 
 COPY docker/ros_entrypoint.sh /ros_entrypoint.sh
 RUN chmod +x /ros_entrypoint.sh

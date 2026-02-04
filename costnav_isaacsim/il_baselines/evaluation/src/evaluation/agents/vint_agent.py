@@ -117,7 +117,7 @@ class ViNTAgent(BaseAgent):
 
     def step_imagegoal(
         self, goal_images: List[np.ndarray], images: List[np.ndarray]
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Generate trajectory towards goal image.
 
         Args:
@@ -125,9 +125,10 @@ class ViNTAgent(BaseAgent):
             images: List of current observation images (one per batch).
 
         Returns:
-            Tuple of (waypoints, trajectory).
+            Tuple of (waypoints, trajectory, distances).
                 waypoints: [B, num_waypoints, 3] (x, y, theta).
                 trajectory: [B, num_points, 3] smoothed trajectory.
+                distances: [B] predicted distance to goal.
         """
         with torch.no_grad():
             self.callback_obs(images)
@@ -156,7 +157,7 @@ class ViNTAgent(BaseAgent):
             stop_mask = (distances > 7.0).unsqueeze(1).float()
             trajectory = self.traj_generate.TrajGeneratorFromPFreeRot(waypoints[:, :, 0:3], step=0.1) * stop_mask
 
-            return waypoints[:, :, 0:3], trajectory
+            return waypoints[:, :, 0:3], trajectory, distances
 
     def step_nogoal(self, images: List[np.ndarray]) -> Tuple[torch.Tensor, torch.Tensor]:
         """Generate trajectory for exploration without goal.

@@ -76,6 +76,7 @@ class ViNTPolicyNode(Node):
         use_imagegoal: bool = False,
         device: str = "cuda:0",
         goal_image_topic: str = "/goal_image",
+        visualize_goal_image: bool = False,
     ):
         super().__init__("vint_policy_node")
 
@@ -83,6 +84,7 @@ class ViNTPolicyNode(Node):
         self.inference_rate = inference_rate
         self.use_imagegoal = use_imagegoal
         self.goal_image_topic = goal_image_topic
+        self.visualize_goal_image = visualize_goal_image
 
         # Validate parameters
         if not checkpoint or not os.path.exists(checkpoint):
@@ -114,6 +116,10 @@ class ViNTPolicyNode(Node):
         self.goal_image: Optional[np.ndarray] = None
         self.enabled = True  # Control enable flag
         self._goal_image_received = False  # Track if goal image was received for current mission
+
+        # Logging counters for interval-based logging
+        self._trajectory_publish_count = 0
+        self._log_interval = 10  # Log every N trajectory publishes
 
         # QoS profile for sensor data (camera images)
         sensor_qos = QoSProfile(
@@ -150,6 +156,12 @@ class ViNTPolicyNode(Node):
 
         # Publishers
         self.trajectory_pub = self.create_publisher(Path, "/vint_trajectory", 10)
+
+        # Debug publisher for visualizing received goal image
+        self._received_goal_image_pub = None
+        if self.visualize_goal_image:
+            self._received_goal_image_pub = self.create_publisher(Image, "/received_goal_image", 10)
+            self.get_logger().info("Goal image visualization enabled. Publishing to: /received_goal_image")
 
         # Inference timer
         timer_period = 1.0 / self.inference_rate
@@ -193,6 +205,17 @@ class ViNTPolicyNode(Node):
             self.get_logger().info(
                 f"Received new goal image (shape: {self.goal_image.shape}). Starting image-goal navigation."
             )
+
+            # Publish received goal image for debugging visualization
+            if self._received_goal_image_pub is not None:
+                try:
+                    debug_msg = self.bridge.cv2_to_imgmsg(new_goal_image, "rgb8")
+                    debug_msg.header.stamp = self.get_clock().now().to_msg()
+                    debug_msg.header.frame_id = "goal_image"
+                    self._received_goal_image_pub.publish(debug_msg)
+                    self.get_logger().info("Published received goal image to /received_goal_image")
+                except Exception as pub_err:
+                    self.get_logger().warn(f"Failed to publish debug goal image: {pub_err}")
         except Exception as e:
             self.get_logger().error(f"Failed to convert goal image: {e}")
 
@@ -241,13 +264,30 @@ class ViNTPolicyNode(Node):
         try:
             # Run inference based on mode
             if self.use_imagegoal and self.goal_image is not None:
-                _, trajectory = self.agent.step_imagegoal([self.goal_image], [self.current_image])
+                _, trajectory, distance = self.agent.step_imagegoal([self.goal_image], [self.current_image])
             else:
                 _, trajectory = self.agent.step_nogoal([self.current_image])
+                distance = None
 
             # Publish full trajectory for trajectory follower node
             trajectory_msg = self.trajectory_to_path(trajectory[0])
             self.trajectory_pub.publish(trajectory_msg)
+
+            # Log trajectory publish at interval
+            self._trajectory_publish_count += 1
+            if self._trajectory_publish_count % self._log_interval == 0:
+                traj = trajectory[0]
+                if hasattr(traj, "cpu"):
+                    traj = traj.cpu().numpy()
+                traj_len = len(traj)
+                # Get last waypoint from smoothed trajectory
+                last_wp = traj[-1] if traj_len > 0 else [0, 0]
+
+                dist_str = f", dist={float(distance[0]):.2f}" if distance is not None else ""
+                self.get_logger().info(
+                    f"[ViNT] #{self._trajectory_publish_count}: "
+                    f"traj_last=({last_wp[0]:.2f}, {last_wp[1]:.2f}){dist_str}"
+                )
 
         except Exception as e:
             self.get_logger().error(f"Inference error: {e}")
@@ -346,6 +386,18 @@ def parse_args():
         default="cuda:0",
         help="Device for inference (default: cuda:0)",
     )
+    parser.add_argument(
+        "--visualize_goal_image",
+        action="store_true",
+        help="Publish received goal image to /received_goal_image for debugging (default: False)",
+    )
+    parser.add_argument(
+        "--log_level",
+        type=str,
+        default="info",
+        choices=["debug", "info", "warn", "error", "fatal"],
+        help="Log level (default: info)",
+    )
     return parser.parse_args()
 
 
@@ -365,7 +417,17 @@ def main():
             use_imagegoal=args.use_imagegoal,
             device=args.device,
             goal_image_topic=args.goal_image_topic,
+            visualize_goal_image=args.visualize_goal_image,
         )
+        # Set log level
+        log_level_map = {
+            "debug": rclpy.logging.LoggingSeverity.DEBUG,
+            "info": rclpy.logging.LoggingSeverity.INFO,
+            "warn": rclpy.logging.LoggingSeverity.WARN,
+            "error": rclpy.logging.LoggingSeverity.ERROR,
+            "fatal": rclpy.logging.LoggingSeverity.FATAL,
+        }
+        node.get_logger().set_level(log_level_map[args.log_level])
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
