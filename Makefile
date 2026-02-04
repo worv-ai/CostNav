@@ -12,6 +12,7 @@ COSTNAV_VERSION ?= 0.1.0
 ROS_DISTRO ?= jazzy
 UBUNTU_VERSION ?= 24.04
 SIM_ROBOT ?= segway_e1
+NUM_PEOPLE ?= 20
 FOOD ?= True
 TUNED ?= True
 AMCL ?= False
