@@ -44,14 +44,14 @@ The `costnav_isaacsim` module serves as:
 
 ### Current Status
 
-| Component              | Status         | Notes                              |
-| ---------------------- | -------------- | ---------------------------------- |
-| Nav2 Integration       | ✅ Complete    | Nova Carter navigates successfully |
-| Docker Setup           | ✅ Complete    | Multi-container architecture       |
-| Occupancy Map          | ✅ Complete    | Street_sidewalk environment        |
-| Parameter Tuning       | ✅ Complete    | Optimized for performance          |
-| Cost Model Integration | ✅ Complete    | Economic metrics tracking          |
-| **IL Baselines (ViNT)**| ✅ Complete    | Training + evaluation pipeline     |
+| Component               | Status      | Notes                              |
+| ----------------------- | ----------- | ---------------------------------- |
+| Nav2 Integration        | ✅ Complete | Nova Carter navigates successfully |
+| Docker Setup            | ✅ Complete | Multi-container architecture       |
+| Occupancy Map           | ✅ Complete | Street_sidewalk environment        |
+| Parameter Tuning        | ✅ Complete | Optimized for performance          |
+| Cost Model Integration  | ✅ Complete | Economic metrics tracking          |
+| **IL Baselines (ViNT)** | ✅ Complete | Training + evaluation pipeline     |
 
 ---
 
@@ -112,8 +112,8 @@ make build-vint
 # Run both Isaac Sim and ROS2 Nav2 together
 make run-nav2
 
-# Run with animated people walking in the scene
-make run-nav2 NUM_PEOPLE=5
+# Run with animated people walking in the scene (default: 20 people)
+make run-nav2 NUM_PEOPLE=20
 ```
 
 This starts:
@@ -134,12 +134,12 @@ make start-mission
 # Run Isaac Sim + teleop node (defaults to nova_carter)
 make run-teleop
 
-# Run with animated people walking in the scene
-make run-teleop NUM_PEOPLE=5
+# Run with animated people walking in the scene (default: 20 people)
+make run-teleop NUM_PEOPLE=20
 
 # Or select robot explicitly (optionally with people)
-make run-teleop SIM_ROBOT=nova_carter NUM_PEOPLE=5
-make run-teleop SIM_ROBOT=segway_e1 NUM_PEOPLE=5
+make run-teleop SIM_ROBOT=nova_carter NUM_PEOPLE=20
+make run-teleop SIM_ROBOT=segway_e1 NUM_PEOPLE=20
 ```
 
 You can also trigger missions while teleop is running:
@@ -178,14 +178,15 @@ CostNav supports spawning animated people that walk naturally in NavMesh-enabled
 Enable people by setting the `NUM_PEOPLE` environment variable:
 
 ```bash
-# Run Nav2 with 5 people
-make run-nav2 NUM_PEOPLE=5
-
-# Run teleop with 10 people
-make run-teleop NUM_PEOPLE=10
-
-# Run without people (default)
+# Run Nav2 with 20 people (default)
 make run-nav2
+
+# Run teleop with 20 people (default)
+make run-teleop
+
+# Run with custom number of people
+make run-nav2 NUM_PEOPLE=10
+make run-teleop NUM_PEOPLE=5
 ```
 
 ### Command Line Arguments
@@ -220,30 +221,30 @@ python launch.py --people 5
 - **Spawn Method**: `navmesh.query_random_point()` with unique random IDs (same as robot spawning)
 - **Minimum Spacing**: 2.0 meters between spawned people
 - **Position Validation**: Rejects positions too close to existing people
-- **Max Attempts**: 20 attempts per person (num_people * 20 total)
+- **Max Attempts**: 20 attempts per person (num_people \* 20 total)
 - **Dynamic Avoidance**: Enabled by default
 - **NavMesh**: Automatically created and baked if not present
 
 ### Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| People not spawning | Check that NavMesh is baked in the USD scene |
-| People not moving | Verify NavMesh is enabled and baked correctly |
-| Slow initialization | Character assets need to load; wait for completion |
-| People walking through walls | NavMesh may not be properly configured |
+| Issue                        | Solution                                           |
+| ---------------------------- | -------------------------------------------------- |
+| People not spawning          | Check that NavMesh is baked in the USD scene       |
+| People not moving            | Verify NavMesh is enabled and baked correctly      |
+| Slow initialization          | Character assets need to load; wait for completion |
+| People walking through walls | NavMesh may not be properly configured             |
 
 ---
 
 ## Docker Compose Profiles
 
-| Profile     | Services                            | Command              | Use Case                           |
-| ----------- | ----------------------------------- | -------------------- | ---------------------------------- |
-| `nav2`      | Isaac Sim + ROS2 Nav2               | `make run-nav2`      | Full navigation stack              |
-| `isaac-sim` | Isaac Sim only                      | `make run-isaac-sim` | Simulation development             |
-| `ros2`      | ROS2 Nav2 only                      | `make run-ros2`      | Nav2 tuning (requires running sim) |
-| `teleop`    | Isaac Sim + Teleop                  | `make run-teleop`    | Manual driving (joystick)          |
-| `vint`      | Isaac Sim + ViNT Policy + Follower  | `make run-vint`      | ViNT IL baseline evaluation        |
+| Profile     | Services                           | Command              | Use Case                           |
+| ----------- | ---------------------------------- | -------------------- | ---------------------------------- |
+| `nav2`      | Isaac Sim + ROS2 Nav2              | `make run-nav2`      | Full navigation stack              |
+| `isaac-sim` | Isaac Sim only                     | `make run-isaac-sim` | Simulation development             |
+| `ros2`      | ROS2 Nav2 only                     | `make run-ros2`      | Nav2 tuning (requires running sim) |
+| `teleop`    | Isaac Sim + Teleop                 | `make run-teleop`    | Manual driving (joystick)          |
+| `vint`      | Isaac Sim + ViNT Policy + Follower | `make run-vint`      | ViNT IL baseline evaluation        |
 
 ### Using Profiles Directly
 
@@ -281,20 +282,20 @@ python launch.py --debug                            # Enable debug logging
 
 **Command Line Arguments:**
 
-| Argument         | Default                          | Description                                |
-| ---------------- | -------------------------------- | ------------------------------------------ |
-| `--usd_path`     | (derived from `--robot`)         | USD scene path                             |
-| `--robot`        | `nova_carter`                    | Robot preset (`nova_carter`, `segway_e1`)  |
-| `--headless`     | `false`                          | Run without GUI                            |
-| `--physics_dt`   | `1/60`                           | Physics timestep                           |
-| `--rendering_dt` | `1/30`                           | Rendering timestep                         |
-| `--debug`        | `false`                          | Enable debug logging                       |
-| `--people`       | `0`                              | Number of people to spawn                  |
-| `--config`       | `config/mission_config.yaml`     | Path to mission config file                |
-| `--mission-timeout` | (from config)                 | Override: Mission timeout                  |
-| `--min-distance` | (from config)                    | Override: Minimum start-goal distance      |
-| `--max-distance` | (from config)                    | Override: Maximum start-goal distance      |
-| `--nav2-wait`    | (from config)                    | Override: Nav2 wait time                   |
+| Argument            | Default                      | Description                               |
+| ------------------- | ---------------------------- | ----------------------------------------- |
+| `--usd_path`        | (derived from `--robot`)     | USD scene path                            |
+| `--robot`           | `nova_carter`                | Robot preset (`nova_carter`, `segway_e1`) |
+| `--headless`        | `false`                      | Run without GUI                           |
+| `--physics_dt`      | `1/60` (0.0167s)             | Physics timestep                          |
+| `--rendering_dt`    | `1/30` (0.0333s)             | Rendering timestep                        |
+| `--debug`           | `false`                      | Enable debug logging                      |
+| `--people`          | `20`                         | Number of people to spawn                 |
+| `--config`          | `config/mission_config.yaml` | Path to mission config file               |
+| `--mission-timeout` | (from config)                | Override: Mission timeout                 |
+| `--min-distance`    | (from config)                | Override: Minimum start-goal distance     |
+| `--max-distance`    | (from config)                | Override: Maximum start-goal distance     |
+| `--nav2-wait`       | (from config)                | Override: Nav2 wait time                  |
 
 `--robot` defaults to `SIM_ROBOT` environment variable when set, otherwise `nova_carter`.
 If the Segway prim is not detected automatically, set `ROBOT_PRIM_PATH` to the robot base prim.
@@ -458,6 +459,7 @@ The `costnav_isaacsim.mission_manager` module provides automated navigation miss
 ```
 
 **Important**: The `costnav_isaacsim.mission_manager` module runs **inside the Isaac Sim container** because it:
+
 1. Uses Isaac Sim's NavMesh API (`omni.anim.navigation.core`)
 2. Teleports the robot using Isaac Sim's physics engine
 3. Integrates with the main simulation loop for proper physics synchronization
@@ -490,21 +492,21 @@ Mission parameters are configured via YAML file at `config/mission_config.yaml`:
 ```yaml
 # Mission execution settings
 mission:
-  timeout: 3600.0   # Mission timeout (seconds)
+  timeout: 3600.0 # Mission timeout (seconds)
 
 # Distance constraints (meters)
 distance:
-  min: 5.0          # Minimum start-goal distance
-  max: 50.0         # Maximum start-goal distance
+  min: 5.0 # Minimum start-goal distance
+  max: 50.0 # Maximum start-goal distance
 
 # NavMesh sampling settings
 sampling:
-  max_attempts: 100      # Maximum attempts to sample valid positions
-  validate_path: true    # Validate path exists between start and goal
+  max_attempts: 100 # Maximum attempts to sample valid positions
+  validate_path: true # Validate path exists between start and goal
 
 # Nav2 integration
 nav2:
-  wait_time: 10.0   # Wait for Nav2 stack to initialize (seconds)
+  wait_time: 10.0 # Wait for Nav2 stack to initialize (seconds)
   topics:
     initial_pose: "/initialpose"
     goal_pose: "/goal_pose"
@@ -512,8 +514,8 @@ nav2:
 
 # Robot teleportation
 teleport:
-  height_offset: 0.5                    # Height offset for teleportation (meters)
-  robot_prim: "/World/Nova_Carter_ROS"  # Robot prim path in USD stage
+  height_offset: 0.5 # Height offset for teleportation (meters)
+  robot_prim: "/World/Nova_Carter_ROS" # Robot prim path in USD stage
 
 # RViz markers
 markers:
@@ -534,16 +536,54 @@ markers:
 
 **Key Configuration Parameters:**
 
-| Section | Parameter | Default | Description |
-|---------|-----------|---------|-------------|
-| `mission` | `timeout` | 3600.0 | Mission timeout (seconds) |
-| `distance` | `min` | 5.0 | Minimum start-goal distance (meters) |
-| `distance` | `max` | 50.0 | Maximum start-goal distance (meters) |
-| `sampling` | `max_attempts` | 100 | Max attempts to sample valid positions |
-| `sampling` | `validate_path` | true | Validate navigable path exists |
-| `nav2` | `wait_time` | 10.0 | Wait for Nav2 initialization (seconds) |
-| `teleport` | `height_offset` | 0.5 | Teleportation height offset (meters) |
-| `teleport` | `robot_prim` | `/World/Nova_Carter_ROS` | Robot prim path in USD |
+| Section    | Parameter       | Default                  | Description                            |
+| ---------- | --------------- | ------------------------ | -------------------------------------- |
+| `mission`  | `timeout`       | 3600.0                   | Mission timeout (seconds)              |
+| `distance` | `min`           | 5.0                      | Minimum start-goal distance (meters)   |
+| `distance` | `max`           | 50.0                     | Maximum start-goal distance (meters)   |
+| `sampling` | `max_attempts`  | 100                      | Max attempts to sample valid positions |
+| `sampling` | `validate_path` | true                     | Validate navigable path exists         |
+| `nav2`     | `wait_time`     | 10.0                     | Wait for Nav2 initialization (seconds) |
+| `teleport` | `height_offset` | 0.5                      | Teleportation height offset (meters)   |
+| `teleport` | `robot_prim`    | `/World/Nova_Carter_ROS` | Robot prim path in USD                 |
+
+### Command Line Options
+
+`launch.py` always loads the mission config and waits for `/start_mission`:
+
+```bash
+# Use default config (config/mission_config.yaml)
+python launch.py
+
+# Use custom config file
+python launch.py --config /path/to/custom.yaml
+
+# Override specific config values
+python launch.py --mission-timeout 600 --min-distance 10.0
+
+# Headless mode
+python launch.py --headless
+```
+
+#### Simulation Options
+
+| Option           | Default    | Description            |
+| ---------------- | ---------- | ---------------------- |
+| `--usd_path`     | (internal) | Path to USD scene file |
+| `--headless`     | false      | Run without GUI        |
+| `--physics_dt`   | 1/60       | Physics time step      |
+| `--rendering_dt` | 1/30       | Rendering time step    |
+| `--debug`        | false      | Enable debug logging   |
+
+#### Mission Options
+
+| Option              | Default                    | Description                           |
+| ------------------- | -------------------------- | ------------------------------------- |
+| `--config`          | config/mission_config.yaml | Path to mission config file           |
+| `--mission-timeout` | (from config)              | Override: Mission timeout             |
+| `--min-distance`    | (from config)              | Override: Minimum start-goal distance |
+| `--max-distance`    | (from config)              | Override: Maximum start-goal distance |
+| `--nav2-wait`       | (from config)              | Override: Nav2 wait time              |
 
 ### Interactive Python Usage
 
@@ -610,6 +650,7 @@ while running:
 The MissionManager uses a state machine to ensure proper synchronization between Isaac Sim physics and Nav2:
 
 **Mission States:**
+
 1. **INIT**: Initialize ROS2 node, NavMesh sampler, and marker publisher
 2. **WAITING_FOR_NAV2**: Wait for Nav2 stack to become ready
 3. **WAITING_FOR_START**: Wait for `/start_mission` trigger
@@ -622,6 +663,7 @@ The MissionManager uses a state machine to ensure proper synchronization between
 10. **COMPLETED**: All missions finished
 
 This state machine approach ensures:
+
 - Physics simulation steps occur between teleportation and pose publishing
 - Proper timing delays for AMCL initialization
 - Clean separation of concerns for each mission phase
@@ -642,13 +684,14 @@ This state machine approach ensures:
 
 The MissionManager publishes visualization markers for debugging and monitoring:
 
-| Topic          | Type | Color | Description                    |
-| -------------- | ---- | ----- | ------------------------------ |
-| `/start_marker`| `visualization_msgs/Marker` | Green (0, 1, 0) | Start position (ARROW marker)  |
-| `/goal_marker` | `visualization_msgs/Marker` | Red (1, 0, 0)   | Goal position (ARROW marker)   |
-| `/robot_marker`| `visualization_msgs/Marker` | Blue (0, 0, 1)  | Current robot position (10 Hz) |
+| Topic           | Type                        | Color           | Description                    |
+| --------------- | --------------------------- | --------------- | ------------------------------ |
+| `/start_marker` | `visualization_msgs/Marker` | Green (0, 1, 0) | Start position (ARROW marker)  |
+| `/goal_marker`  | `visualization_msgs/Marker` | Red (1, 0, 0)   | Goal position (ARROW marker)   |
+| `/robot_marker` | `visualization_msgs/Marker` | Blue (0, 0, 1)  | Current robot position (10 Hz) |
 
 **Marker Properties:**
+
 - **Type**: ARROW (0)
 - **Frame**: `map`
 - **Scale**: 1.0m length, 0.2m width, 0.2m height (configurable)
@@ -669,6 +712,7 @@ The MissionManager publishes visualization markers for debugging and monitoring:
 The `costnav_isaacsim.mission_manager` module includes unit tests for all components.
 
 **Test Coverage:**
+
 - `test_navmesh_sampler.py`: NavMesh sampling and distance calculations
 - `test_marker_publisher.py`: RViz marker publishing
 - `test_mission_manager.py`: State machine and mission execution
@@ -785,19 +829,19 @@ This starts:
 
 ### ROS2 Topics (ViNT)
 
-| Topic              | Type                | Direction | Description                      |
-| ------------------ | ------------------- | --------- | -------------------------------- |
+| Topic              | Type                | Direction | Description                        |
+| ------------------ | ------------------- | --------- | ---------------------------------- |
 | `/vint_trajectory` | `nav_msgs/Path`     | Publish   | Predicted trajectory (8 waypoints) |
-| `/vint_enable`     | `std_msgs/Bool`     | Subscribe | Enable/disable policy execution  |
-| `/goal_image`      | `sensor_msgs/Image` | Subscribe | Goal image for ImageGoal mode    |
+| `/vint_enable`     | `std_msgs/Bool`     | Subscribe | Enable/disable policy execution    |
+| `/goal_image`      | `sensor_msgs/Image` | Subscribe | Goal image for ImageGoal mode      |
 
 ### Makefile Targets (IL Baselines)
 
-| Target           | Description                                        |
-| ---------------- | -------------------------------------------------- |
-| `build-vint`     | Build ViNT Docker image with ROS2 Jazzy + PyTorch  |
-| `run-vint`       | Run Isaac Sim + ViNT policy + trajectory follower  |
-| `run-eval-vint`  | Run automated evaluation with metrics collection   |
+| Target          | Description                                       |
+| --------------- | ------------------------------------------------- |
+| `build-vint`    | Build ViNT Docker image with ROS2 Jazzy + PyTorch |
+| `run-vint`      | Run Isaac Sim + ViNT policy + trajectory follower |
+| `run-eval-vint` | Run automated evaluation with metrics collection  |
 
 ### Configuration Files
 
