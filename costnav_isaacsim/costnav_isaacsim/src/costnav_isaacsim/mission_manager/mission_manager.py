@@ -156,13 +156,12 @@ class MissionManager:
             node_name: Name of the ROS2 node.
             teleport_callback: Optional callback for robot teleportation.
                              Signature: (position: SampledPosition) -> bool
-                             If not provided and mission_config.manager.robot_prim_path is set,
+                             If not provided and config.manager.robot_prim_path is set,
                              will attempt to auto-setup Isaac Sim teleportation.
         """
-        self.mission_config = mission_config
+        self.config = mission_config
         self.simulation_context = simulation_context
         self.node_name = node_name
-        self.config = mission_config.manager
 
         self._teleport_callback = teleport_callback
 
@@ -357,27 +356,27 @@ class MissionManager:
 
             # Initialize NavMesh sampler with config values
             self._sampler = NavMeshSampler(
-                min_distance=self.config.min_distance,
-                max_distance=self.config.max_distance,
-                edge_margin=self.config.edge_margin,
-                max_sampling_attempts=self.mission_config.sampling.max_attempts,
-                validate_path=self.mission_config.sampling.validate_path,
+                min_distance=self.config.manager.min_distance,
+                max_distance=self.config.manager.max_distance,
+                edge_margin=self.config.manager.edge_margin,
+                max_sampling_attempts=self.config.sampling.max_attempts,
+                validate_path=self.config.sampling.validate_path,
             )
 
             # Initialize marker publisher (as a separate node) with config values
             self._marker_publisher = MarkerPublisher(
                 node_name=f"{self.node_name}_markers",
-                arrow_length=self.mission_config.markers.arrow_length,
-                arrow_width=self.mission_config.markers.arrow_width,
-                arrow_height=self.mission_config.markers.arrow_height,
-                robot_length=self.mission_config.markers.robot_length,
-                robot_width=self.mission_config.markers.robot_width,
-                robot_height=self.mission_config.markers.robot_height,
-                start_topic=self.mission_config.markers.start_topic,
-                goal_topic=self.mission_config.markers.goal_topic,
-                robot_topic=self.mission_config.markers.robot_topic,
-                odom_topic=self.mission_config.nav2.odom_topic,
-                enabled=self.mission_config.markers.enabled,
+                arrow_length=self.config.markers.arrow_length,
+                arrow_width=self.config.markers.arrow_width,
+                arrow_height=self.config.markers.arrow_height,
+                robot_length=self.config.markers.robot_length,
+                robot_width=self.config.markers.robot_width,
+                robot_height=self.config.markers.robot_height,
+                start_topic=self.config.markers.start_topic,
+                goal_topic=self.config.markers.goal_topic,
+                robot_topic=self.config.markers.robot_topic,
+                odom_topic=self.config.nav2.odom_topic,
+                enabled=self.config.markers.enabled,
             )
 
             # ROS2 executor to service timers/subscriptions without blocking the sim loop.
@@ -386,7 +385,7 @@ class MissionManager:
             self._executor.add_node(self._marker_publisher)
 
             # Auto-setup Isaac Sim teleport callback if robot_prim_path is provided
-            if self._teleport_callback is None and self.config.robot_prim_path:
+            if self._teleport_callback is None and self.config.manager.robot_prim_path:
                 self._setup_isaac_sim_teleport()
 
             # QoS for pose topics
@@ -398,19 +397,17 @@ class MissionManager:
 
             # Publishers (using topic names from config)
             self._initial_pose_pub = self._node.create_publisher(
-                PoseWithCovarianceStamped, self.mission_config.nav2.initial_pose_topic, pose_qos
+                PoseWithCovarianceStamped, self.config.nav2.initial_pose_topic, pose_qos
             )
-            self._goal_pose_pub = self._node.create_publisher(
-                PoseStamped, self.mission_config.nav2.goal_pose_topic, pose_qos
-            )
+            self._goal_pose_pub = self._node.create_publisher(PoseStamped, self.config.nav2.goal_pose_topic, pose_qos)
 
             # Subscribe to odometry for robot position tracking
             self._odom_sub = self._node.create_subscription(
-                Odometry, self.mission_config.nav2.odom_topic, self._odom_callback, 10
+                Odometry, self.config.nav2.odom_topic, self._odom_callback, 10
             )
 
             # Setup goal image capture if enabled
-            if self.mission_config.goal_image.enabled:
+            if self.config.goal_image.enabled:
                 self._setup_goal_image_publisher(pose_qos)
                 self._setup_goal_camera()
 
@@ -426,9 +423,9 @@ class MissionManager:
 
             logger.info(f"[{self._state.name}] Mission manager initialized")
             logger.info(
-                f"[{self._state.name}] Distance range: {self.config.min_distance}m - {self.config.max_distance}m"
+                f"[{self._state.name}] Distance range: {self.config.manager.min_distance}m - {self.config.manager.max_distance}m"
             )
-            logger.info(f"[{self._state.name}] Goal tolerance: {self.mission_config.goal_tolerance}m")
+            logger.info(f"[{self._state.name}] Goal tolerance: {self.config.goal_tolerance}m")
 
         except Exception as e:
             logger.error(f"[{self._state.name}] Failed to initialize mission manager: {e}")
@@ -554,7 +551,7 @@ class MissionManager:
         self._total_injury_cost = 0.0
 
     def _setup_contact_reporting(self) -> None:
-        food_root = self.mission_config.food.prim_path
+        food_root = self.config.food.prim_path
         if food_root:
             self._food_root_prim_path = food_root.rstrip("/")
             self._food_prefix_path = f"{self._food_root_prim_path}/"
@@ -562,7 +559,7 @@ class MissionManager:
             self._food_root_prim_path = None
             self._food_prefix_path = None
 
-        base_link_path = self.mission_config.teleport.robot_prim or self.config.robot_prim_path
+        base_link_path = self.config.teleport.robot_prim or self.config.manager.robot_prim_path
         if base_link_path:
             base_link_path = base_link_path.rstrip("/")
 
@@ -611,8 +608,8 @@ class MissionManager:
         """
         from sensor_msgs.msg import Image
 
-        self._goal_image_pub = self._node.create_publisher(Image, self.mission_config.goal_image.topic, qos_profile)
-        logger.info(f"[GOAL_IMAGE] Goal image publisher initialized on {self.mission_config.goal_image.topic}")
+        self._goal_image_pub = self._node.create_publisher(Image, self.config.goal_image.topic, qos_profile)
+        logger.info(f"[GOAL_IMAGE] Goal image publisher initialized on {self.config.goal_image.topic}")
 
     def _setup_goal_camera(self) -> None:
         """Setup Isaac Sim camera at goal location for goal image capture.
@@ -625,7 +622,7 @@ class MissionManager:
             from isaacsim.core.utils import prims as prim_utils
             from pxr import Gf, UsdGeom
 
-            goal_image_cfg = self.mission_config.goal_image
+            goal_image_cfg = self.config.goal_image
             cam_prim_path = goal_image_cfg.camera_prim_path
             resolution = (goal_image_cfg.width, goal_image_cfg.height)
 
@@ -643,18 +640,20 @@ class MissionManager:
                 self._goal_camera_prim = existing_prim
             else:
                 # Create camera prim at a default position (will be moved to goal pose)
+                # Orientation includes 180-degree rotation around viewing axis to match rgb_left camera
                 self._goal_camera_prim = prim_utils.create_prim(
                     cam_prim_path,
                     prim_type="Camera",
                     translation=(0.0, 0.0, goal_image_cfg.camera_height_offset),
-                    orientation=(0.5, -0.5, 0.5, -0.5),  # ROS convention: looking forward
+                    orientation=(0.5, 0.5, 0.5, 0.5),  # ROS convention + 180deg rotation
                 )
-                # Configure camera properties
+                # Configure camera properties (matching rgb_left.usda parameters)
                 camera_geom = UsdGeom.Camera(self._goal_camera_prim)
-                camera_geom.GetFocalLengthAttr().Set(1.4)
-                camera_geom.GetFocusDistanceAttr().Set(0.205)
-                camera_geom.GetHorizontalApertureAttr().Set(1.88)
-                camera_geom.GetClippingRangeAttr().Set(Gf.Vec2f(0.01, 100.0))
+                camera_geom.GetFocalLengthAttr().Set(2.87343)
+                camera_geom.GetFocusDistanceAttr().Set(0.6)
+                camera_geom.GetHorizontalApertureAttr().Set(5.76)
+                camera_geom.GetVerticalApertureAttr().Set(3.6)
+                camera_geom.GetClippingRangeAttr().Set(Gf.Vec2f(0.076, 100000.0))
                 logger.info(f"[GOAL_IMAGE] Created goal camera at {cam_prim_path}")
 
             # Create render product for the camera
@@ -668,13 +667,13 @@ class MissionManager:
 
         except ImportError as exc:
             logger.warning(f"[GOAL_IMAGE] Isaac Sim modules not available: {exc}")
-            self.mission_config.goal_image.enabled = False
+            self.config.goal_image.enabled = False
         except Exception as exc:
             logger.error(f"[GOAL_IMAGE] Failed to setup goal camera: {exc}")
             import traceback
 
             logger.error(f"[GOAL_IMAGE] {traceback.format_exc()}")
-            self.mission_config.goal_image.enabled = False
+            self.config.goal_image.enabled = False
 
     def _capture_and_publish_goal_image(self, goal_position) -> bool:
         """Capture goal image from camera at goal position and publish to ROS2.
@@ -688,7 +687,7 @@ class MissionManager:
         Returns:
             True if goal image was captured and published successfully, False otherwise.
         """
-        if not self.mission_config.goal_image.enabled:
+        if not self.config.goal_image.enabled:
             return False
 
         if self._goal_camera_prim is None or self._goal_rgb_annotator is None:
@@ -710,8 +709,8 @@ class MissionManager:
             orient_ops = [op for op in xform.GetOrderedXformOps() if op.GetOpType() == UsdGeom.XformOp.TypeOrient]
             orient_op = orient_ops[0] if orient_ops else xform.AddOrientOp()
 
-            # Set camera position (goal x, y with height offset)
-            camera_pos = Gf.Vec3d(goal_position.x, goal_position.y, self.mission_config.goal_image.camera_height_offset)
+            # Set camera position (goal x, y with configured height)
+            camera_pos = Gf.Vec3d(goal_position.x, goal_position.y, self.config.goal_image.camera_height_offset)
             translate_op.Set(camera_pos)
 
             # Set camera orientation based on goal heading using _yaw_to_quaternion
@@ -719,14 +718,17 @@ class MissionManager:
             quat_xyzw = self._yaw_to_quaternion(goal_position.heading)
             # _yaw_to_quaternion returns (x, y, z, w), Gf.Quatd expects (w, x, y, z)
             yaw_quat = Gf.Quatd(quat_xyzw[3], Gf.Vec3d(quat_xyzw[0], quat_xyzw[1], quat_xyzw[2]))
-            # Base camera orientation (looking forward along X in ROS)
-            # ROS camera looking forward: (0.5, -0.5, 0.5, -0.5) applies 90deg rotations
-            base_quat = Gf.Quatd(0.5, Gf.Vec3d(-0.5, 0.5, -0.5))
+            # Base camera orientation with 180-degree rotation to match rgb_left camera
+            # Original ROS convention (0.5, -0.5, 0.5, -0.5) + 180deg rotation = (0.5, 0.5, 0.5, 0.5)
+            base_quat = Gf.Quatd(0.5, Gf.Vec3d(0.5, 0.5, 0.5))
             final_quat = yaw_quat * base_quat
             orient_op.Set(final_quat)
 
-            # Render the scene to update camera view
-            self.simulation_context.render()
+            # Step simulation with rendering to ensure the annotator buffer is updated
+            # The render pipeline is asynchronous, so we need multiple steps to flush the pipeline
+            # Using step(render=True) instead of just render() to properly update annotator buffers
+            for _ in range(3):
+                self.simulation_context.step(render=True)
 
             # Capture image from annotator
             rgb_data = self._goal_rgb_annotator.get_data()
@@ -739,8 +741,7 @@ class MissionManager:
             if isinstance(rgb_data, np.ndarray):
                 if rgb_data.ndim == 3 and rgb_data.shape[2] == 4:
                     rgb_data = rgb_data[:, :, :3]  # Drop alpha channel
-                # Fix 180-degree rotation from Isaac Sim camera
-                rgb_data = np.ascontiguousarray(rgb_data[::-1, ::-1])
+                # Note: 180-degree rotation is now handled by camera orientation, no image flip needed
             else:
                 logger.warning(f"[GOAL_IMAGE] Unexpected data type: {type(rgb_data)}")
                 return False
@@ -886,7 +887,7 @@ class MissionManager:
             return {level: 1.0 if level == "mais_0" else 0.0 for level in self._MAIS_LEVELS}
 
         delta_v_mph = delta_v_mps * self._MPS_TO_MPH
-        crash_mode = self.mission_config.injury.crash_mode or "all"
+        crash_mode = self.config.injury.crash_mode or "all"
         coefficients = self._MAIS_COEFFICIENTS.get(crash_mode, self._MAIS_COEFFICIENTS["all"])
 
         # Compute cumulative probabilities P(MAIS >= level)
@@ -920,7 +921,7 @@ class MissionManager:
 
     def _compute_expected_injury_cost(self, probabilities: dict) -> float:
         """Compute expected injury cost from MAIS probabilities and configured costs."""
-        costs = self.mission_config.injury.costs
+        costs = self.config.injury.costs
         raw_cost = (
             probabilities.get("mais_0", 0.0) * costs.mais_0
             + probabilities.get("mais_1", 0.0) * costs.mais_1
@@ -941,10 +942,10 @@ class MissionManager:
             A tuple of (delta_v_mps, injury_cost, total_injury_cost) if injury tracking
             is enabled, otherwise None.
         """
-        if not self.mission_config.injury.enabled or not is_character_collision:
+        if not self.config.injury.enabled or not is_character_collision:
             return None
 
-        robot_mass = self.mission_config.injury.robot_mass
+        robot_mass = self.config.injury.robot_mass
         delta_v_mps = impulse_amount / robot_mass
         self._delta_v_magnitudes_mps.append(delta_v_mps)
 
@@ -1032,7 +1033,7 @@ class MissionManager:
         Returns:
             Number of pieces inside the bucket, or 0 if food tracking is disabled.
         """
-        if not self.mission_config.food.enabled or self._food_pieces_prim_path is None:
+        if not self.config.food.enabled or self._food_pieces_prim_path is None:
             return 0
 
         try:
@@ -1099,13 +1100,13 @@ class MissionManager:
         - nova_carter: Uses config teleport.height_offset (default behavior)
         - Other robots: Not yet implemented
         """
-        robot_prim = self.mission_config.teleport.robot_prim.lower()
+        robot_prim = self.config.teleport.robot_prim.lower()
 
         if "segway" in robot_prim:
             return 0.33  # Segway E1 height offset
         elif "nova_carter" in robot_prim:
             # Nova Carter uses the config teleport.height_offset
-            return self.config.teleport_height
+            return self.config.manager.teleport_height
         else:
             # Other robots: return None to indicate not supported for food
             # but teleportation can still use config value
@@ -1128,18 +1129,18 @@ class MissionManager:
         Returns:
             True if food was successfully spawned, False otherwise.
         """
-        food_config = self.mission_config.food
+        food_config = self.config.food
         base_path = food_config.prim_path.rstrip("/")
 
         z_offset = self._get_robot_z_offset()
         if z_offset is None:
             # Robot not supported for food spawning
-            robot_prim = self.mission_config.teleport.robot_prim.lower()
+            robot_prim = self.config.teleport.robot_prim.lower()
             logger.warning(
                 f"[FOOD] Food spawning not implemented for robot: {robot_prim}. "
                 f"Currently only segway_e1 is supported. Disabling food tracking."
             )
-            self.mission_config.food.enabled = False
+            self.config.food.enabled = False
             return False
 
         try:
@@ -1194,7 +1195,7 @@ class MissionManager:
         Spawns the food USD asset as a reference at the configured prim path,
         then constructs full prim paths for the food pieces and bucket.
         """
-        if not self.mission_config.food.enabled:
+        if not self.config.food.enabled:
             return
 
         # Spawn food at origin (will be repositioned on first teleport)
@@ -1202,7 +1203,7 @@ class MissionManager:
             return
 
         # Setup prim paths for tracking
-        food_config = self.mission_config.food
+        food_config = self.config.food
         base_path = food_config.prim_path.rstrip("/")
         self._food_pieces_prim_path = f"{base_path}/{food_config.pieces_prim_path}"
         self._food_bucket_prim_path = f"{base_path}/{food_config.bucket_prim_path}"
@@ -1220,7 +1221,7 @@ class MissionManager:
         Returns:
             True if food has spoiled (too many pieces lost), False otherwise.
         """
-        if not self.mission_config.food.enabled:
+        if not self.config.food.enabled:
             return False
 
         self._final_food_piece_count = self._count_food_pieces_in_bucket()
@@ -1236,7 +1237,7 @@ class MissionManager:
             f"final={self._final_food_piece_count}, lost={pieces_lost} ({loss_fraction:.1%})"
         )
 
-        return loss_fraction > self.mission_config.food.spoilage_threshold
+        return loss_fraction > self.config.food.spoilage_threshold
 
     def _reset_food_for_teleport(self) -> bool:
         """Reset food by removing and respawning at robot's current position.
@@ -1249,7 +1250,7 @@ class MissionManager:
         Returns:
             True if food was successfully reset, False otherwise.
         """
-        if not self.mission_config.food.enabled:
+        if not self.config.food.enabled:
             return True
 
         # Get robot's actual position from its prim after settling
@@ -1258,7 +1259,7 @@ class MissionManager:
             from pxr import UsdGeom
 
             stage = omni.usd.get_context().get_stage()
-            robot_prim_path = self.mission_config.teleport.robot_prim
+            robot_prim_path = self.config.teleport.robot_prim
             robot_prim = stage.GetPrimAtPath(robot_prim_path)
 
             if not robot_prim.IsValid():
@@ -1295,10 +1296,10 @@ class MissionManager:
         """
         timeout_value = msg.data
         if timeout_value <= 0:
-            self.mission_config.timeout = None
+            self.config.timeout = None
             logger.info("[CONFIG] Mission timeout disabled (infinite)")
         else:
-            self.mission_config.timeout = timeout_value
+            self.config.timeout = timeout_value
             logger.info(f"[CONFIG] Mission timeout set to {timeout_value}s")
 
     def _handle_start_mission(self, _request, response):
@@ -1421,7 +1422,7 @@ class MissionManager:
             delta_v_avg_mph = 0.0
 
         # Food metrics
-        food_enabled = bool(self.mission_config.food.enabled)
+        food_enabled = bool(self.config.food.enabled)
         food_initial_pieces = self._initial_food_piece_count if food_enabled else -1
         if food_enabled and self._final_food_piece_count is not None:
             food_final_pieces = self._final_food_piece_count
@@ -1488,15 +1489,15 @@ class MissionManager:
 
         If any step fails, logs a warning and continues without teleportation.
         """
-        if not self.config.robot_prim_path:
+        # Read robot_prim from teleport config (set by launch.py based on robot selection)
+        robot_prim_path = self.config.teleport.robot_prim
+        if not robot_prim_path:
             logger.warning(
-                f"[{self._state.name}] robot_prim_path not set in config.manager. "
+                f"[{self._state.name}] robot_prim not set in mission_config.teleport. "
                 f"Teleport callback will not be registered. "
-                f"config.robot_prim_path={self.config.robot_prim_path!r}"
+                f"teleport.robot_prim={robot_prim_path!r}"
             )
             return
-
-        robot_prim_path = self.config.robot_prim_path
         logger.info(f"[{self._state.name}] Setting up Isaac Sim teleport for robot at: {robot_prim_path}")
 
         try:
@@ -1627,7 +1628,7 @@ class MissionManager:
             # Get robot-specific z offset, fall back to config value if not supported
             z_offset = self._get_robot_z_offset()
             if z_offset is None:
-                z_offset = self.config.teleport_height
+                z_offset = self.config.manager.teleport_height
 
             # Add height offset for teleportation
             teleport_pos = SampledPosition(
@@ -1712,7 +1713,7 @@ class MissionManager:
     def _step_waiting_for_nav2(self):
         """Wait for Nav2 stack to be ready."""
         elapsed = self._get_current_time_seconds() - self._wait_start_time
-        if elapsed >= self.mission_config.nav2.wait_time:
+        if elapsed >= self.config.nav2.wait_time:
             if self._start_requested:
                 logger.info(f"[{self._state.name}] Nav2 wait time complete, starting missions")
                 self._state = MissionState.READY
@@ -1760,7 +1761,7 @@ class MissionManager:
             return
 
         # After teleportation, we need to settle physics before spawning food
-        self._settle_steps_remaining = self.config.teleport_settle_steps
+        self._settle_steps_remaining = self.config.manager.teleport_settle_steps
         self._state = MissionState.SETTLING
         logger.info(f"[SETTLING] Teleportation complete, settling physics for {self._settle_steps_remaining} steps")
 
@@ -1781,7 +1782,7 @@ class MissionManager:
                 logger.info(f"[{self._state.name}] Physics settled")
 
                 # Spawn food at robot's actual position after robot has settled
-                if self.mission_config.food.enabled:
+                if self.config.food.enabled:
                     if not self._reset_food_for_teleport():
                         logger.warning(f"[{self._state.name}] Food reset failed, continuing without food tracking")
 
@@ -1793,7 +1794,7 @@ class MissionManager:
         self._publish_initial_pose(self._current_start)
         self._wait_start_time = self._get_current_time_seconds()
         # If we teleported, it's useful to clear Nav2 costmaps before sending a new goal.
-        if self.config.clear_costmaps_on_mission_start:
+        if self.config.manager.clear_costmaps_on_mission_start:
             self._state = MissionState.CLEARING_COSTMAPS
         else:
             self._state = MissionState.PUBLISHING_GOAL
@@ -1802,7 +1803,7 @@ class MissionManager:
         """Clear Nav2 global/local costmaps (best-effort) before publishing a new goal."""
 
         # Defensive: allow disabling at runtime.
-        if not self.config.clear_costmaps_on_mission_start:
+        if not self.config.manager.clear_costmaps_on_mission_start:
             self._state = MissionState.PUBLISHING_GOAL
             return
 
@@ -1832,9 +1833,9 @@ class MissionManager:
             return
 
         now = self._get_current_time_seconds()
-        if (now - self._costmap_clear_start_time) >= self.config.costmap_clear_timeout_sec:
+        if (now - self._costmap_clear_start_time) >= self.config.manager.costmap_clear_timeout_sec:
             logger.info(
-                f"[{self._state.name}] Timed out clearing costmaps after {self.config.costmap_clear_timeout_sec:.2f}s, continuing"
+                f"[{self._state.name}] Timed out clearing costmaps after {self.config.manager.costmap_clear_timeout_sec:.2f}s, continuing"
             )
             # Reset for next mission
             self._costmap_clear_start_time = None
@@ -1870,18 +1871,18 @@ class MissionManager:
     def _step_publishing_goal(self):
         """Publish goal pose to Nav2 after initial pose delay."""
         elapsed = self._get_current_time_seconds() - self._wait_start_time
-        if elapsed >= self.config.initial_pose_delay:
+        if elapsed >= self.config.manager.initial_pose_delay:
             self._publish_goal_pose(self._current_goal)
 
             # Capture and publish goal image for ViNT ImageGoal mode
-            if self.mission_config.goal_image.enabled:
+            if self.config.goal_image.enabled:
                 self._capture_and_publish_goal_image(self._current_goal)
 
             # Update RViz markers
             self._marker_publisher.publish_start_goal_from_sampled(self._current_start, self._current_goal)
 
             # Record initial food piece count for spoilage evaluation
-            if self.mission_config.food.enabled:
+            if self.config.food.enabled:
                 self._initial_food_piece_count = self._count_food_pieces_in_bucket()
                 logger.info(f"[FOOD] Initial piece count: {self._initial_food_piece_count}")
 
@@ -1903,7 +1904,7 @@ class MissionManager:
         distance = self._get_distance_to_goal()
 
         # Check for goal completion (success or food spoiled)
-        if distance is not None and distance <= self.mission_config.goal_tolerance:
+        if distance is not None and distance <= self.config.goal_tolerance:
             self._mission_end_time = self._get_current_time_seconds()
             self._last_mission_distance = distance
             self._last_elapsed_time = elapsed
@@ -1930,7 +1931,7 @@ class MissionManager:
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[SUCCESS] Mission {self._current_mission} completed! "
-                f"Distance to goal: {distance:.2f}m (tolerance: {self.mission_config.goal_tolerance}m), "
+                f"Distance to goal: {distance:.2f}m (tolerance: {self.config.goal_tolerance}m), "
                 f"elapsed: {elapsed:.1f}s, traveled: {self._traveled_distance:.2f}m"
             )
             return
@@ -1938,7 +1939,7 @@ class MissionManager:
         # Check for robot fall (requires physical assistance)
         if self._is_robot_fallen():
             self._mission_end_time = self._get_current_time_seconds()
-            if self.mission_config.food.enabled:
+            if self.config.food.enabled:
                 self._final_food_piece_count = self._count_food_pieces_in_bucket()
             self._last_mission_result = MissionResult.FAILURE_PHYSICALASSISTANCE
             self._last_mission_result_reason = "orientation"
@@ -1961,7 +1962,7 @@ class MissionManager:
         # Check for impulse health depletion (requires physical assistance)
         if self._impulse_health <= 0.0:
             self._mission_end_time = self._get_current_time_seconds()
-            if self.mission_config.food.enabled:
+            if self.config.food.enabled:
                 self._final_food_piece_count = self._count_food_pieces_in_bucket()
             self._last_mission_result = MissionResult.FAILURE_PHYSICALASSISTANCE
             self._last_mission_result_reason = "impulse_health_depletion"
@@ -1982,9 +1983,9 @@ class MissionManager:
             return
 
         # Check for timeout (failure)
-        if self.mission_config.timeout is not None and elapsed >= self.mission_config.timeout:
+        if self.config.timeout is not None and elapsed >= self.config.timeout:
             self._mission_end_time = self._get_current_time_seconds()
-            if self.mission_config.food.enabled:
+            if self.config.food.enabled:
                 self._final_food_piece_count = self._count_food_pieces_in_bucket()
             self._last_mission_result = MissionResult.FAILURE_TIMEOUT
             self._last_mission_distance = distance if distance is not None else -1.0
@@ -1999,8 +2000,8 @@ class MissionManager:
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_TIMEOUT] Mission {self._current_mission} timed out! "
-                f"Distance to goal: {distance:.2f}m (needed: {self.mission_config.goal_tolerance}m), "
-                f"timeout: {self.mission_config.timeout}s, traveled: {self._traveled_distance:.2f}m"
+                f"Distance to goal: {distance:.2f}m (needed: {self.config.goal_tolerance}m), "
+                f"timeout: {self.config.timeout}s, traveled: {self._traveled_distance:.2f}m"
             )
 
     def _cleanup(self):

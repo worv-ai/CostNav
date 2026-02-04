@@ -48,6 +48,10 @@ DEFAULT_ROBOT_PRIM_PATHS = {
     "nova_carter": "/World/Nova_Carter_ROS/chassis_link",
     "segway_e1": "/World/Segway_E1_ROS2/base_link",
 }
+DEFAULT_GOAL_CAMERA_HEIGHTS = {
+    "nova_carter": 0.3,  # Nova Carter camera height
+    "segway_e1": 0.825,  # Segway E1 camera height
+}
 ROBOT_NAME_ALIASES = {
     "segway": "segway_e1",
     "segway-e1": "segway_e1",
@@ -569,8 +573,10 @@ class CostNavSimLauncher:
 
         if robot_prim_path:
             self.mission_config.teleport.robot_prim = robot_prim_path
+            self.mission_config.manager.robot_prim_path = robot_prim_path
         else:
             self.mission_config.teleport.robot_prim = ""
+            self.mission_config.manager.robot_prim_path = None
 
     def _step_simulation(self, mission_manager=None, throttle: bool = False):
         """Advance simulation one tick with optional throttling.
@@ -722,11 +728,12 @@ def resolve_usd_path(usd_path: Optional[str], robot_name: Optional[str]) -> str:
     return DEFAULT_USD_PATHS[selected_robot]
 
 
-def load_and_override_config(args) -> "MissionConfig":
+def load_and_override_config(args, robot_name: str) -> "MissionConfig":
     """Load mission config from file and apply CLI overrides.
 
     Args:
         args: Parsed command line arguments.
+        robot_name: Resolved robot name for robot-specific settings.
 
     Returns:
         MissionConfig instance with loaded settings.
@@ -759,6 +766,10 @@ def load_and_override_config(args) -> "MissionConfig":
     if args.goal_image_enabled is not None:
         config.goal_image.enabled = args.goal_image_enabled.lower() in ("true", "1")
 
+    # Set robot-specific goal camera height
+    if robot_name in DEFAULT_GOAL_CAMERA_HEIGHTS:
+        config.goal_image.camera_height_offset = DEFAULT_GOAL_CAMERA_HEIGHTS[robot_name]
+
     return config
 
 
@@ -769,17 +780,18 @@ def main():
     log_level = logging.DEBUG if args.debug else logging.INFO
     logging.basicConfig(level=log_level, format="%(levelname)s: %(message)s")
 
+    # Resolve robot name first (needed for robot-specific config settings)
+    robot_name = resolve_robot_name(args.robot)
+    usd_path = resolve_usd_path(args.usd_path, robot_name)
+
     # Load mission config (missions are triggered manually)
-    mission_config = load_and_override_config(args)
+    mission_config = load_and_override_config(args, robot_name)
 
     logger.info("Mission manager armed (manual start via /start_mission)")
     logger.info(f"  Config: {args.config or 'default'}")
     logger.info(f"  Timeout: {mission_config.timeout}s")
     logger.info(f"  Distance: {mission_config.min_distance}m - {mission_config.max_distance}m")
     logger.info(f"  Nav2 wait: {mission_config.nav2.wait_time}s")
-
-    robot_name = resolve_robot_name(args.robot)
-    usd_path = resolve_usd_path(args.usd_path, robot_name)
     logger.info(f"  Robot: {robot_name}")
     logger.info(f"  USD path: {usd_path}")
 
