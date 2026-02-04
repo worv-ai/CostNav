@@ -1367,6 +1367,26 @@ class MissionManager:
             self._trajectory_follower_enable_pub.publish(disable_msg)
             logger.info("[START_MISSION] Disabled trajectory follower node")
 
+    def _enable_il_baseline_nodes(self) -> None:
+        """Enable IL baseline nodes (ViNT and trajectory follower).
+
+        Publishes True to /vint_enable and /trajectory_follower_enable topics
+        to allow the nodes to resume publishing trajectories and cmd_vel commands.
+        Called after mission setup is complete (goal published, markers updated).
+        """
+        from std_msgs.msg import Bool
+
+        enable_msg = Bool()
+        enable_msg.data = True
+
+        if self._vint_enable_pub is not None:
+            self._vint_enable_pub.publish(enable_msg)
+            logger.info("[PUBLISHING_GOAL] Enabled ViNT policy node")
+
+        if self._trajectory_follower_enable_pub is not None:
+            self._trajectory_follower_enable_pub.publish(enable_msg)
+            logger.info("[PUBLISHING_GOAL] Enabled trajectory follower node")
+
     def _handle_get_mission_result(self, _request, response):
         """Handle mission result query service.
 
@@ -1918,6 +1938,9 @@ class MissionManager:
             if self.config.food.enabled:
                 self._initial_food_piece_count = self._count_food_pieces_in_bucket()
                 logger.info(f"[FOOD] Initial piece count: {self._initial_food_piece_count}")
+
+            # Enable IL baseline nodes now that mission setup is complete
+            self._enable_il_baseline_nodes()
 
             logger.info(f"[{self._state.name}] Mission {self._current_mission} initiated successfully")
             self._mission_start_time = self._get_current_time_seconds()
