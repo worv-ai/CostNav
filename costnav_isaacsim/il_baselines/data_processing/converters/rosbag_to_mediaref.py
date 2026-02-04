@@ -383,23 +383,24 @@ def convert_bag(
             # Update metadata.yaml to reference the correct filename
             if dst_metadata.exists():
                 import yaml
-                with open(dst_metadata, 'r') as f:
+
+                with open(dst_metadata, "r") as f:
                     metadata = yaml.safe_load(f)
 
                 # Update file paths in metadata
-                if 'rosbag2_bagfile_information' in metadata:
-                    info = metadata['rosbag2_bagfile_information']
+                if "rosbag2_bagfile_information" in metadata:
+                    info = metadata["rosbag2_bagfile_information"]
                     # Update files list
-                    if 'files' in info:
-                        for file_info in info['files']:
-                            if 'path' in file_info:
-                                file_info['path'] = f"{bag_name}.mcap"
+                    if "files" in info:
+                        for file_info in info["files"]:
+                            if "path" in file_info:
+                                file_info["path"] = f"{bag_name}.mcap"
                     # Update relative_file_paths
-                    if 'relative_file_paths' in info:
-                        info['relative_file_paths'] = [f"{bag_name}.mcap"]
+                    if "relative_file_paths" in info:
+                        info["relative_file_paths"] = [f"{bag_name}.mcap"]
 
                 # Write updated metadata
-                with open(dst_metadata, 'w') as f:
+                with open(dst_metadata, "w") as f:
                     yaml.dump(metadata, f, default_flow_style=False)
         else:
             # No MCAP files, just remove the directory

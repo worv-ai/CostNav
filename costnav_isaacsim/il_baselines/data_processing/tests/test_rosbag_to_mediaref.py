@@ -71,8 +71,9 @@ class TestDecodeImageMsg:
 
     def test_decode_compressed_image_returns_rgb(self):
         """Test decoding of CompressedImage messages returns RGB."""
-        from il_baselines.data_processing.converters.rosbag_to_mediaref import decode_image_msg
         import cv2
+
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import decode_image_msg
 
         # Create a simple BGR test image and encode it (OpenCV uses BGR)
         # Red pixel in BGR is (0, 0, 255)
@@ -180,9 +181,10 @@ class TestDecodeImageMsg:
 
     def test_decode_unknown_encoding_raises_error(self):
         """Test that unknown image encoding raises ImageFormatError."""
-        from il_baselines.data_processing.converters.rosbag_to_mediaref import decode_image_msg
-        from rosbags.image import ImageFormatError
         import pytest
+        from rosbags.image import ImageFormatError
+
+        from il_baselines.data_processing.converters.rosbag_to_mediaref import decode_image_msg
 
         mock_msg = MagicMock(spec=["encoding", "height", "width", "data", "is_bigendian"])
         mock_msg.encoding = "unknown_format"

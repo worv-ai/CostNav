@@ -859,8 +859,7 @@ class MissionManager:
         self._impulse_damage_accumulated += impulse_amount
         self._impulse_health = max(0.0, self._impulse_health_max - self._impulse_damage_accumulated)
         msg = (
-            f"[CONTACT] Impulse: {impulse_amount:.2f}, Health: {self._impulse_health:.2f}, "
-            f"Count: {self._contact_count}"
+            f"[CONTACT] Impulse: {impulse_amount:.2f}, Health: {self._impulse_health:.2f}, Count: {self._contact_count}"
         )
         if injury_info:
             delta_v_mps, injury_cost, total_injury_cost = injury_info

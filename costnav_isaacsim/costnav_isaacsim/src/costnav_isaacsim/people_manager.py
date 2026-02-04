@@ -100,8 +100,7 @@ class CharacterStuckTracker:
             time_since_last_recovery = current_time - last_recovery_time
             if time_since_last_recovery >= self.recovery_cooldown:
                 logger.warning(
-                    f"Character '{character_name}' stuck at {position} "
-                    f"for {time_stationary:.1f}s - triggering recovery"
+                    f"Character '{character_name}' stuck at {position} for {time_stationary:.1f}s - triggering recovery"
                 )
                 return True
 
