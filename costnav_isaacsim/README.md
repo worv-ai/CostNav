@@ -158,6 +158,47 @@ make run-isaac-sim
 make run-ros2
 ```
 
+### 5. Run ViNT IL Baseline
+
+Run the imitation learning baseline using ViNT (Visual Navigation Transformer):
+
+```bash
+# Build ViNT Docker image (first time only)
+make build-vint
+
+# Run ViNT evaluation with Isaac Sim
+# Optionally specify model checkpoint path
+MODEL_CHECKPOINT=/path/to/model.pth make run-vint
+
+# Or run with default model
+make run-vint
+```
+
+This starts:
+
+- **Isaac Sim**: Street Sidewalk environment with Nova Carter robot
+- **ViNT Policy Node**: Runs ViNT inference at ~10Hz, publishes trajectories
+- **Trajectory Follower Node**: MPC controller at ~20Hz, publishes `/cmd_vel`
+
+You can trigger missions while ViNT is running:
+
+```bash
+make start-mission
+```
+
+To run automated evaluation with metrics collection:
+
+```bash
+# In terminal 1: Start ViNT
+make run-vint
+
+# In terminal 2: Run evaluation (default: 20s timeout, 10 missions)
+make run-eval-vint
+
+# Or with custom parameters
+make run-eval-vint TIMEOUT=30 NUM_MISSIONS=20
+```
+
 ---
 
 ## Animated People (PeopleAPI Integration)

@@ -290,7 +290,7 @@ services:
       - SIM_ROBOT=${SIM_ROBOT:-segway_e1} # NOTE: isaac_sim_teleop_ros2 Package requires SIM_ROBOT
     volumes:
       - ./third_party/IsaacSim-ros_workspaces/build_ws/jazzy/isaac_sim_ros_ws:/workspace/build_ws:rw
-      - ./costnav_isaacsim/isaac_sim_teleop_ros2:/workspace/isaac_sim_teleop_ros2:rw
+      - .:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
     devices:
       - /dev/input/by-id/usb-Microsoft_Controller_${XBOX_ID:-0}-event-joystick:/dev/input/event0
@@ -355,17 +355,16 @@ services:
       - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ./checkpoints:/workspace/checkpoints
-      - ./costnav_isaacsim/il_baselines/evaluation/configs:/workspace/configs
+      - ./:/workspace
     working_dir: /workspace
     command: >
       bash -c "source /opt/ros/jazzy/setup.bash &&
         if [ \"$${SIM_ROBOT}\" = \"nova_carter\" ]; then
-          ROBOT_CONFIG=/workspace/configs/robot_carter.yaml
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_baselines/evaluation/configs/robot_carter.yaml
         else
-          ROBOT_CONFIG=/workspace/configs/robot_segway.yaml
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_baselines/evaluation/configs/robot_segway.yaml
         fi &&
-        vint_policy_node --checkpoint /workspace/checkpoints/vint_nova_carter.pth --model_config /workspace/configs/vint_eval.yaml --robot_config $${ROBOT_CONFIG} --inference_rate 10.0 --use_imagegoal"
+        vint_policy_node --checkpoint /workspace/checkpoints/vint_nova_carter.pth --model_config /workspace/costnav_isaacsim/il_baselines/evaluation/configs/vint_eval.yaml --robot_config $${ROBOT_CONFIG} --inference_rate 10.0 --use_imagegoal"
     network_mode: host
     ipc: host
     stdin_open: true
@@ -391,14 +390,14 @@ services:
       - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ./costnav_isaacsim/il_baselines/evaluation/configs:/workspace/configs:ro
+      - .:/workspace
     working_dir: /workspace
     command: >
       bash -c "source /opt/ros/jazzy/setup.bash &&
         if [ \"$${SIM_ROBOT}\" = \"nova_carter\" ]; then
-          ROBOT_CONFIG=/workspace/configs/robot_carter.yaml
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_baselines/evaluation/configs/robot_carter.yaml
         else
-          ROBOT_CONFIG=/workspace/configs/robot_segway.yaml
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_baselines/evaluation/configs/robot_segway.yaml
         fi &&
         trajectory_follower_node --robot_config $${ROBOT_CONFIG} --control_rate 20.0 --max_linear_vel 0.5 --max_angular_vel 0.5"
     network_mode: host
