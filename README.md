@@ -124,8 +124,7 @@ make run-nav2
 This starts Isaac Sim with the Street Sidewalk environment and Nova Carter robot, along with the ROS2 Nav2 stack for classical navigation.
 
 
-## Running Teleop (For Imitation Learning)
-
+## Running Teleop (For Data Collection)
 ```bash
 make run-teleop nova_carter
 make run-teleop segway_e1
@@ -133,6 +132,25 @@ make run-rosbag (start record)
 make stop-rosbag (stop record)
 ```
 
+## Running IL Baselines (ViNT)
+1. Download checkpoint or train a model
+Link is from [visualnav-transformer](https://github.com/robodhruv/visualnav-transformer)
+```
+gdown --folder https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHetz263--4_2FFggg
+```
+
+2. Build a docker image
+```bash
+make build-vint
+```
+4. Run the evaluation
+```bash
+# Terminal 1: Start the ViNT stack
+MODEL_CHECKPOINT=/path/to/vint_model.pth make run-vint
+
+# Terminal 2: Run evaluation
+make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
+```
 
 ## Running RL
 
