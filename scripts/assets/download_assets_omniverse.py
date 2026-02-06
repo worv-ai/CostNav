@@ -11,6 +11,7 @@ sublayers, payloads, and texture assets).
 """
 
 import os
+import posixpath
 import re
 import sys
 from pathlib import Path
@@ -238,6 +239,16 @@ SKIP_PATTERNS = [
 def resolve_asset_path(base_url: str, asset_path: str) -> str | None:
     """Resolve an asset path relative to a base URL.
 
+    Properly handles relative paths including:
+    - ./relative/path.usd
+    - ../parent/path.usd
+    - relative/path.usd (implicit ./ prefix)
+    - /absolute/path.usd
+    - omniverse://server/absolute/path.usd
+
+    Uses posixpath.normpath for proper path normalization to handle
+    complex relative paths like ./foo/../bar/texture.png
+
     Args:
         base_url: The URL of the file containing the reference
         asset_path: The path found in the USD file (may be relative or absolute)
@@ -260,36 +271,53 @@ def resolve_asset_path(base_url: str, asset_path: str) -> str | None:
             return None
         return asset_path
 
-    # Handle absolute omniverse paths
+    # Handle absolute omniverse paths (including other servers)
     if asset_path.startswith("omniverse://"):
         return asset_path
 
-    # Handle relative paths
-    if asset_path.startswith("./") or asset_path.startswith("../") or not asset_path.startswith("/"):
-        # Get the directory of the base file
-        base_dir = "/".join(base_url.split("/")[:-1])
-        # Resolve relative path
-        if asset_path.startswith("./"):
-            asset_path = asset_path[2:]
-
-        # Handle ../ by going up directories
-        parts = base_dir.split("/")
-        path_parts = asset_path.split("/")
-
-        for part in path_parts:
-            if part == "..":
-                if len(parts) > 3:  # Keep at least omniverse://server/
-                    parts.pop()
-            elif part and part != ".":
-                parts.append(part)
-
-        return "/".join(parts)
-
-    # Absolute path on the same server
+    # Handle absolute path on the same server
     if asset_path.startswith("/"):
         return f"{OMNIVERSE_SERVER}{asset_path}"
 
-    return None
+    # Handle relative paths (including implicit relative paths without ./ prefix)
+    # Extract the base directory from the base URL
+    # base_url: omniverse://10.50.2.21/Users/worv/costnav/foods/popcorn/popcorn.usd
+    # base_dir: omniverse://10.50.2.21/Users/worv/costnav/foods/popcorn
+
+    # Split URL into scheme+server and path parts
+    # Find the position after "omniverse://server"
+    if base_url.startswith("omniverse://"):
+        # Extract server part: omniverse://10.50.2.21
+        url_parts = base_url.split("/")
+        # url_parts = ['omniverse:', '', '10.50.2.21', 'Users', 'worv', ...]
+        if len(url_parts) >= 3:
+            server_prefix = "/".join(url_parts[:3])  # omniverse://10.50.2.21
+            path_part = "/".join(url_parts[3:])      # Users/worv/costnav/foods/popcorn/popcorn.usd
+
+            # Get the directory containing the base file
+            base_dir_path = posixpath.dirname(path_part)  # Users/worv/costnav/foods/popcorn
+
+            # Join with the relative asset path and normalize
+            # This handles ./, ../, and normalizes the path
+            resolved_path = posixpath.normpath(posixpath.join(base_dir_path, asset_path))
+
+            # Ensure we don't go above the server root
+            if resolved_path.startswith(".."):
+                print(f"  WARNING: Relative path '{asset_path}' goes above server root, skipping")
+                return None
+
+            # Reconstruct the full URL
+            return f"{server_prefix}/{resolved_path}"
+
+    # Fallback: If base_url doesn't start with omniverse://, try simple join
+    base_dir = "/".join(base_url.split("/")[:-1])
+    resolved = posixpath.normpath(posixpath.join(base_dir, asset_path))
+
+    # Reconstruct as omniverse URL if it looks like a path
+    if not resolved.startswith("omniverse://"):
+        return f"{OMNIVERSE_SERVER}/{resolved}"
+
+    return resolved
 
 
 def extract_dependencies_with_pxr(local_path: Path, base_url: str) -> list[str]:
