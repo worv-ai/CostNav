@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 run-ros2 run-isaac-sim run-nav2 run-teleop start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop download-assets-omniverse download-assets-hf start-nucleus stop-nucleus
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 run-ros2 run-isaac-sim run-nav2 run-teleop start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
 
 DOCKERFILE ?= Dockerfile
 DOCKER_BUILD ?= docker build
@@ -214,6 +214,14 @@ download-assets-hf:
 	@echo "Downloading assets from Hugging Face..."
 	$(DOCKER_COMPOSE) --profile dev run --rm dev \
 		bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/scripts/assets/download_assets_hf.py"
+
+# Upload assets to Hugging Face dataset
+# Runs inside dev Docker container with huggingface_hub
+# Requires HF_TOKEN to be set in .env file
+upload-assets-hf:
+	@echo "Uploading assets to Hugging Face..."
+	$(DOCKER_COMPOSE) --profile dev run --rm dev \
+		bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/scripts/assets/upload_assets_hf.py"
 
 # =============================================================================
 # Nucleus Server Targets

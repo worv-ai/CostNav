@@ -6,11 +6,8 @@ This script uploads the downloaded assets from ./assets/Users to
 https://huggingface.co/datasets/maum-ai/CostNav
 
 Usage:
-    # First, login to Hugging Face:
-    huggingface-cli login
-    
-    # Then run the upload:
-    python scripts/assets/upload_assets_hf.py
+    # Set HF_TOKEN in .env file, then run via docker:
+    make upload-assets-hf
 """
 
 import os
@@ -39,13 +36,23 @@ def main():
     print(f"Repository: https://huggingface.co/datasets/{REPO_ID}")
     print(f"Assets Dir: {ASSETS_DIR.absolute()}")
     print("=" * 60)
-    
+
+    # Authenticate using HF_TOKEN from environment (loaded from .env)
+    hf_token = os.environ.get("HF_TOKEN")
+    if not hf_token:
+        print("ERROR: HF_TOKEN environment variable not set.")
+        print("Please set HF_TOKEN in your .env file.")
+        sys.exit(1)
+
+    # Login with token
+    login(token=hf_token)
+
     # Check if assets directory exists
     if not ASSETS_DIR.exists():
         print(f"ERROR: Assets directory not found: {ASSETS_DIR}")
         print("Please run `make download-assets-omniverse` first to download assets.")
         sys.exit(1)
-    
+
     # Collect all files to upload
     files_to_upload = []
     for file_path in ASSETS_DIR.rglob("*"):
@@ -53,34 +60,34 @@ def main():
             # Path in repo should be relative to assets/ directory
             path_in_repo = str(file_path.relative_to(ASSETS_DIR.parent))
             files_to_upload.append((file_path, path_in_repo))
-    
+
     if not files_to_upload:
         print("ERROR: No files found to upload.")
         sys.exit(1)
-    
+
     print(f"\nFound {len(files_to_upload)} files to upload:")
     for local_path, repo_path in files_to_upload:
         size_mb = local_path.stat().st_size / (1024 * 1024)
         print(f"  {repo_path} ({size_mb:.2f} MB)")
-    
+
     print("\n" + "=" * 60)
-    
+
     # Confirm upload
     response = input("Proceed with upload? [y/N]: ").strip().lower()
     if response != "y":
         print("Upload cancelled.")
         sys.exit(0)
-    
-    # Initialize Hugging Face API
-    api = HfApi()
-    
-    # Check authentication
+
+    # Initialize Hugging Face API with token
+    api = HfApi(token=hf_token)
+
+    # Verify authentication
     try:
         user_info = api.whoami()
         print(f"\nLogged in as: {user_info['name']}")
-    except Exception:
-        print("\nNot logged in. Please login first:")
-        print("  huggingface-cli login")
+    except Exception as e:
+        print(f"\nERROR: Authentication failed: {e}")
+        print("Please check your HF_TOKEN in .env file.")
         sys.exit(1)
     
     # Upload files
