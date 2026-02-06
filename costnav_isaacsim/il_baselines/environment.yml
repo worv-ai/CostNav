@@ -1,0 +1,78 @@
+# =============================================================================
+# CostNav IL Baselines Training Environment
+# =============================================================================
+# Based on: https://github.com/robodhruv/visualnav-transformer
+# Dependencies updated to latest versions
+#
+# Setup:
+#   cd CostNav
+#   conda env create -f il_baselines/environment.yml
+#   conda activate costnav_il
+#
+#   # Install visualnav-transformer
+#   pip install -e third_party/visualnav-transformer/train/
+# =============================================================================
+
+name: costnav_il
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11
+  - pytorch>=2.5
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=12.4
+  - numpy
+  - matplotlib
+  - ipykernel
+  - pip
+
+  - pip:
+      # Core ML dependencies
+      - tqdm
+      - opencv-python-headless
+      - h5py
+      - wandb
+      - prettytable
+      - lmdb
+      - python-dotenv
+
+      # Vision/Transformer dependencies
+      - efficientnet-pytorch
+      - vit-pytorch
+      - positional-encodings[pytorch]
+      - einops
+      - timm
+
+      # Warmup scheduler
+      - git+https://github.com/ildoonet/pytorch-gradual-warmup-lr.git
+
+      # ROS Bag Processing (ROS2 MCAP format)
+      - rosbags
+      - rosbags-image
+      - mcap
+      - mcap-ros2-support
+      - mediaref
+      - av
+      - pyyaml
+
+      # Training utilities
+      - hydra-core
+      - omegaconf
+      - tensorboard
+      - scipy
+      - scikit-learn
+      - pillow
+
+      # Ray for distributed processing
+      - ray[default]
+
+      # Development
+      - pytest
+      - ruff
+      - ipython
+      - rich

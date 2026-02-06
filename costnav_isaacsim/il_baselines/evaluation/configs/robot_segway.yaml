@@ -1,0 +1,19 @@
+# Robot Configuration for Nova Carter in Isaac Sim
+# Used by IL baseline agents for velocity limits and timing
+
+# Velocity limits
+max_v: 0.8        # Maximum linear velocity (m/s) - matches ViNT training config
+max_w: 0.8        # Maximum angular velocity (rad/s) - matches ViNT training config
+
+# Timing
+# IMPORTANT: frame_rate is used for waypoint normalization (MAX_V / RATE)
+# This must match the training config (3 Hz), NOT the inference rate
+frame_rate: 3     # Training frame rate (Hz) - used for waypoint scaling
+
+# Topic names (for reference - actual topics used in ROS2 node)
+# These are not directly used by the agent but documented for reference
+topics:
+  cmd_vel: /cmd_vel              # Main velocity command topic
+  cmd_vel_model: /cmd_vel_model  # Model output velocity topic
+  odom: /chassis/odom                    # Odometry topic
+  image: /front_stereo_camera/left/image_raw  # Camera image topic
