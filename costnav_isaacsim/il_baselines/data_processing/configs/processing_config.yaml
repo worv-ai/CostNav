@@ -1,6 +1,13 @@
 # CostNav Data Processing Configuration
 # Configuration for converting ROS bags to MediaRef format
 
+# Data paths (optional - can be overridden via command-line arguments)
+paths:
+  input_dir: # Enter your input directory here (ex. "/mnt/raid11/workspace/data")
+  output_dir: # Enter your input directory here (ex. "/mnt/raid11/workspace/mediaref")
+  bags: [] # Optional: specific bags to process (leave empty for all bags)
+  num_workers: 32  # Number of parallel workers
+
 # Video encoding settings
 video:
   fps: 30.0  # Target frames per second for video encoding
@@ -9,7 +16,7 @@ video:
 
 # Topics to extract as video
 image_topics:
-  - /front_stereo_camera/left/image_raw
+  - /front_stereo_camera/left/image_raw/compressed
 
 # Topics to remove from the dataset (to reduce storage)
 topics_to_remove:

@@ -14,12 +14,15 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COSTNAV_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-DIFFUSION_POLICY_INIT="$COSTNAV_ROOT/third_party/diffusion_policy/diffusion_policy/__init__.py"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+DIFFUSION_POLICY_INIT="$PROJECT_ROOT/third_party/diffusion_policy/diffusion_policy/__init__.py"
+
+# Export PROJECT_ROOT for use by Python scripts
+export PROJECT_ROOT
 
 # ── 1. git submodules (only the ones il_baselines needs) ─────────────────────
 echo "▸ Initialising git submodules …"
-git -C "$COSTNAV_ROOT" submodule update --init third_party/diffusion_policy third_party/visualnav-transformer
+git -C "$PROJECT_ROOT" submodule update --init third_party/diffusion_policy third_party/visualnav-transformer
 
 # ── 2. patch diffusion_policy ────────────────────────────────────────────────
 if [ ! -f "$DIFFUSION_POLICY_INIT" ]; then
@@ -35,5 +38,5 @@ fi
 # old build where it was missing).
 echo "▸ Running uv sync …"
 cd "$SCRIPT_DIR/.."
-uv sync --reinstall-package diffusion-policy
+uv sync --reinstall-package diffusion-policy --quiet
 echo "✔ Done"
