@@ -32,20 +32,13 @@ make start-nucleus
 
 The script will configure Nucleus and copy assets. After starting, assets will be served at `omniverse://localhost`.
 
-Modify OMNI_USER and OMNI path into our default credentials
 
-Default credentials:
-  Username: omniverse
-  Password: costnav123
-
-### 3. Update Codebase Paths
+### 3. Set OMNI_URL in dotenv
 
 ```bash
-# Update all code references to use localhost
-python scripts/assets/update_asset_paths.py --target localhost
-
-# Dry run to preview changes
-python scripts/assets/update_asset_paths.py --target localhost --dry-run
+OMNI_USER=omniverse
+OMNI_PASS=costnav123
+OMNI_URL=omniverse://localhost
 ```
 
 ## For Internal Developers
@@ -59,9 +52,5 @@ make download-assets-omniverse
 ### Upload to Hugging Face
 
 ```bash
-# Login to Hugging Face first
-huggingface-cli login
-
-# Upload assets
-python scripts/assets/upload_assets_hf.py
+make upload-assets-hf
 ```

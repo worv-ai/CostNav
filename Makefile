@@ -1,11 +1,19 @@
 .PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 build-vint run-ros2 run-isaac-sim run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
 
+# Load environment variables from .env file if it exists
+# Variables can still be overridden from command line
+ifneq (,$(wildcard .env))
+include .env
+export
+endif
+
 DOCKERFILE ?= Dockerfile
 DOCKER_BUILD ?= docker build
 DOCKER_COMPOSE ?= docker compose
 
+# Version defaults (can be overridden by .env or command line)
 ISAAC_SIM_VERSION ?= 5.1.0
-ISAAC_LAB_VERSION ?= 2.3.0
+ISAAC_LAB_VERSION ?= 2.2.0
 COSTNAV_VERSION ?= 0.1.0
 
 # ROS configuration
@@ -112,19 +120,6 @@ start-mission-record:
 	$(MAKE) run-rosbag
 	$(MAKE) start-mission
 
-ifeq (run-teleop,$(firstword $(MAKECMDGOALS)))
-ifneq ($(word 2,$(MAKECMDGOALS)),)
-SIM_ROBOT := $(word 2,$(MAKECMDGOALS))
-$(eval $(word 2,$(MAKECMDGOALS)):;@:)
-endif
-SIM_ROBOT := $(subst -,_,$(SIM_ROBOT))
-ifeq ($(SIM_ROBOT),segwaye1)
-SIM_ROBOT := segway_e1
-endif
-ifeq ($(SIM_ROBOT),segway)
-SIM_ROBOT := segway_e1
-endif
-endif
 
 # Run both Isaac Sim and ROS2 teleop together (using combined 'teleop' profile)
 # Usage: make run-teleop NUM_PEOPLE=5 FOOD=1 GOAL_IMAGE=True
@@ -274,6 +269,8 @@ upload-assets-hf:
 NUCLEUS_STACK_DIR ?= .nucleus-stack
 NUCLEUS_STACK_VERSION ?= 2023.2.9
 NGC_CLI_VERSION ?= 3.41.4
+OMNI_USER ?= omniverse
+OMNI_PASS ?= costnav123
 
 # Start local Omniverse Nucleus server in Docker
 # Automatically downloads Nucleus stack if not present
@@ -316,8 +313,8 @@ start-nucleus:
 			sed -i 's/^#*SECURITY_REVIEWED=.*/SECURITY_REVIEWED=1/' nucleus-stack.env; \
 			sed -i 's/^#*SERVER_IP_OR_HOST=.*/SERVER_IP_OR_HOST=localhost/' nucleus-stack.env; \
 			sed -i 's|^#*DATA_ROOT=.*|DATA_ROOT=$(PWD)/$(NUCLEUS_STACK_DIR)/data|' nucleus-stack.env; \
-			sed -i 's/^#*MASTER_PASSWORD=.*/MASTER_PASSWORD=costnav123/' nucleus-stack.env; \
-			sed -i 's/^#*SERVICE_PASSWORD=.*/SERVICE_PASSWORD=costnav123/' nucleus-stack.env; \
+			sed -i 's/^#*MASTER_PASSWORD=.*/MASTER_PASSWORD=$(OMNI_PASS)/' nucleus-stack.env; \
+			sed -i 's/^#*SERVICE_PASSWORD=.*/SERVICE_PASSWORD=$(OMNI_PASS)/' nucleus-stack.env; \
 			if [ -f generate-sample-insecure-secrets.sh ]; then ./generate-sample-insecure-secrets.sh; fi; \
 			touch nucleus-stack.env.configured; \
 		fi
@@ -334,8 +331,8 @@ start-nucleus:
 			--entrypoint /bin/bash \
 			-v $(PWD)/assets:/workspace/assets:ro \
 			-v $(PWD)/scripts:/workspace/scripts:ro \
-			-e "OMNI_USER=omniverse" \
-			-e "OMNI_PASS=costnav123" \
+			-e "OMNI_USER=$(OMNI_USER)" \
+			-e "OMNI_PASS=$(OMNI_PASS)" \
 			$(ISAAC_SIM_IMAGE) \
 			-c "PYTHONPATH=/isaac-sim/kit/extscore/omni.client.lib:\$$PYTHONPATH /isaac-sim/python.sh /workspace/scripts/assets/upload_assets_to_nucleus.py \
 				--local-path /workspace/assets \
@@ -348,7 +345,7 @@ start-nucleus:
 		echo ""; \
 		echo "For now, please upload assets manually:"; \
 		echo "  1. Open http://localhost:8080"; \
-		echo "  2. Login with: omniverse / costnav123"; \
+		echo "  2. Login with: $(OMNI_USER) / $(OMNI_PASS)"; \
 		echo "  3. Navigate to / and upload files from assets/"; \
 	fi
 	@echo ""
@@ -359,8 +356,8 @@ start-nucleus:
 	@echo "Omniverse:  omniverse://localhost"
 	@echo ""
 	@echo "Default credentials:"
-	@echo "  Username: omniverse"
-	@echo "  Password: costnav123"
+	@echo "  Username: $(OMNI_USER)"
+	@echo "  Password: $(OMNI_PASS)"
 	@echo ""
 	@echo "Main Assets available at:"
 	@echo "  omniverse://localhost/Users/worv/costnav/..."
