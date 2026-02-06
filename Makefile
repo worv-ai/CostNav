@@ -287,8 +287,8 @@ start-nucleus:
 			-e "OMNI_PASS=costnav123" \
 			$(ISAAC_SIM_IMAGE) \
 			-c "PYTHONPATH=/isaac-sim/kit/extscore/omni.client.lib:\$$PYTHONPATH /isaac-sim/python.sh /workspace/scripts/assets/upload_assets_to_nucleus.py \
-				--local-path /workspace/assets/Users \
-				--nucleus-url omniverse://localhost/Users \
+				--local-path /workspace/assets \
+				--nucleus-url omniverse://localhost \
 				--timeout 120"; \
 	else \
 		echo ""; \
@@ -298,7 +298,7 @@ start-nucleus:
 		echo "For now, please upload assets manually:"; \
 		echo "  1. Open http://localhost:8080"; \
 		echo "  2. Login with: omniverse / costnav123"; \
-		echo "  3. Navigate to /Users and upload files from assets/Users/"; \
+		echo "  3. Navigate to / and upload files from assets/"; \
 	fi
 	@echo ""
 	@echo "============================================================"
@@ -311,7 +311,7 @@ start-nucleus:
 	@echo "  Username: omniverse"
 	@echo "  Password: costnav123"
 	@echo ""
-	@echo "Assets available at:"
+	@echo "Main Assets available at:"
 	@echo "  omniverse://localhost/Users/worv/costnav/..."
 	@echo ""
 	@echo "To stop:    make stop-nucleus"

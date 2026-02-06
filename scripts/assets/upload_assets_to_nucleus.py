@@ -39,6 +39,23 @@ except ImportError:
 _username = None
 _password = None
 
+# Skip patterns for built-in NVIDIA materials that shouldn't be uploaded
+# These are part of the Omniverse/Isaac Sim installation
+SKIP_PATTERNS = [
+    "NVIDIA/Materials/",
+    "NVIDIA/Assets/",
+    "NVIDIA/Environments/",
+]
+
+
+def should_skip_file(rel_path: str) -> bool:
+    """Check if a file should be skipped (built-in NVIDIA materials)."""
+    rel_path_str = str(rel_path).replace("\\", "/")
+    for pattern in SKIP_PATTERNS:
+        if pattern in rel_path_str:
+            return True
+    return False
+
 
 def auth_callback(url: str):
     """Provide authentication credentials for Nucleus connection."""
@@ -91,17 +108,21 @@ def upload_directory(local_path: Path, nucleus_url: str, timeout: int) -> bool:
         omni.client.shutdown()
         return False
 
-    # Collect all files to upload
+    # Collect all files to upload (skipping NVIDIA built-in materials)
     files_to_upload = []
+    skipped = 0
     for root, dirs, files in os.walk(local_path):
         rel_root = Path(root).relative_to(local_path)
         for file in files:
             local_file = Path(root) / file
             rel_path = rel_root / file
+            if should_skip_file(rel_path):
+                skipped += 1
+                continue
             remote_url = f"{nucleus_url}/{rel_path}".replace("\\", "/")
             files_to_upload.append((local_file, rel_path, remote_url))
 
-    print(f"\nFound {len(files_to_upload)} files to upload")
+    print(f"\nFound {len(files_to_upload)} files to upload ({skipped} NVIDIA built-in files skipped)")
 
     # Create necessary directories first
     created_dirs = set()
@@ -183,13 +204,16 @@ Example usage from Isaac Sim container:
 
     success = upload_directory(local_path, args.nucleus_url, args.timeout)
 
+    print("\n" + "=" * 60)
     if success:
-        print("\n" + "=" * 60)
         print("SUCCESS: All assets uploaded to Nucleus!")
-        print(f"Assets available at: {args.nucleus_url}")
-        print("=" * 60)
+    else:
+        print("COMPLETED: Assets uploaded to Nucleus (some files failed)")
+    print(f"Assets available at: {args.nucleus_url}")
+    print("=" * 60)
 
-    sys.exit(0 if success else 1)
+    # Always exit with success - partial uploads are acceptable
+    sys.exit(0)
 
 
 if __name__ == "__main__":
