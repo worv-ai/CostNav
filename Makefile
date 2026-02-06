@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 run-ros2 run-isaac-sim run-nav2 run-teleop start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
-=======
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 build-vint run-ros2 run-isaac-sim run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint
->>>>>>> main
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 build-vint run-ros2 run-isaac-sim run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
 
 DOCKERFILE ?= Dockerfile
 DOCKER_BUILD ?= docker build
@@ -223,7 +219,27 @@ run-eval-teleop:
 	@echo ""
 	@bash scripts/eval.sh teleop $(TIMEOUT) $(NUM_MISSIONS)
 
-<<<<<<< HEAD
+# Run ViNT evaluation (requires running vint instance via make run-vint)
+# Usage: make run-eval-vint TIMEOUT=20 NUM_MISSIONS=10
+# Output: ./logs/vint_evaluation_<timestamp>.log
+run-eval-vint:
+	@if ! docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-vint"; then \
+		echo "ERROR: 'make run-vint' is not running."; \
+		echo ""; \
+		echo "Please start vint first in a separate terminal:"; \
+		echo "  MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint"; \
+		echo ""; \
+		echo "Then run this command again:"; \
+		echo "  make run-eval-vint TIMEOUT=$(TIMEOUT) NUM_MISSIONS=$(NUM_MISSIONS)"; \
+		exit 1; \
+	fi
+	@echo "Starting ViNT evaluation..."
+	@echo "  Timeout per mission: $(TIMEOUT)s"
+	@echo "  Number of missions:  $(NUM_MISSIONS)"
+	@echo ""
+	@bash scripts/eval.sh vint $(TIMEOUT) $(NUM_MISSIONS)
+
+
 # =============================================================================
 # Asset Download Targets
 # =============================================================================
@@ -362,24 +378,6 @@ stop-nucleus:
 	else \
 		echo "Nucleus stack not found at $(NUCLEUS_STACK_DIR)"; \
 	fi
-=======
-# Run ViNT evaluation (requires running vint instance via make run-vint)
-# Usage: make run-eval-vint TIMEOUT=20 NUM_MISSIONS=10
-# Output: ./logs/vint_evaluation_<timestamp>.log
-run-eval-vint:
-	@if ! docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-vint"; then \
-		echo "ERROR: 'make run-vint' is not running."; \
-		echo ""; \
-		echo "Please start vint first in a separate terminal:"; \
-		echo "  MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint"; \
-		echo ""; \
-		echo "Then run this command again:"; \
-		echo "  make run-eval-vint TIMEOUT=$(TIMEOUT) NUM_MISSIONS=$(NUM_MISSIONS)"; \
-		exit 1; \
-	fi
-	@echo "Starting ViNT evaluation..."
-	@echo "  Timeout per mission: $(TIMEOUT)s"
-	@echo "  Number of missions:  $(NUM_MISSIONS)"
-	@echo ""
-	@bash scripts/eval.sh vint $(TIMEOUT) $(NUM_MISSIONS)
->>>>>>> main
+
+
+

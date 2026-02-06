@@ -59,24 +59,24 @@ def download_asset(omni_client, url: str, output_dir: Path) -> bool:
     # Extract relative path from URL
     relative_path = url.replace(f"{OMNIVERSE_SERVER}/", "")
     local_path = output_dir / relative_path
-    
+
     # Create parent directories
     local_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     print(f"Downloading: {url}")
     print(f"        To: {local_path}")
-    
+
     # Read from Omniverse
     result, _, content = omni_client.read_file(url)
-    
+
     if result != omni_client.Result.OK:
         print(f"  ERROR: Failed to read {url} - {result}")
         return False
-    
+
     # Write to local file
     with open(local_path, "wb") as f:
         f.write(memoryview(content))
-    
+
     print(f"  SUCCESS: Downloaded {len(content)} bytes")
     return True
 
@@ -211,7 +211,7 @@ def rewrite_references_to_localhost(local_path: Path) -> bool:
                         print(f"  REWRITTEN: References updated to {LOCAL_SERVER} (binary)")
                         return True
                     else:
-                        print(f"  WARNING: Cannot rewrite binary USD - server URL lengths differ")
+                        print("  WARNING: Cannot rewrite binary USD - server URL lengths differ")
 
             except Exception as e:
                 print(f"  WARNING: Error rewriting references with pxr: {e}")
@@ -684,7 +684,7 @@ def main():
 
     # Initialize Omniverse client
     omni_client.initialize()
-    
+
     print("=" * 60)
     print("Omniverse Asset Downloader")
     print("=" * 60)
@@ -692,7 +692,7 @@ def main():
     print(f"Output: {OUTPUT_DIR.absolute()}")
     print(f"Assets: {len(OMNIVERSE_ASSETS)}")
     print("=" * 60)
-    
+
     # Create output directory
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
