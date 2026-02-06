@@ -27,8 +27,6 @@ REPO_TYPE = "dataset"
 # Get the repository root (parent of scripts directory)
 REPO_ROOT = Path(__file__).parent.parent.parent
 ASSETS_DIR = REPO_ROOT / "assets"
-# Asset subdirectories to upload
-ASSET_SUBDIRS = ["Game", "NVIDIA", "Projects", "Users"]
 
 
 def main():
@@ -37,7 +35,6 @@ def main():
     print("=" * 60)
     print(f"Repository: https://huggingface.co/datasets/{REPO_ID}")
     print(f"Assets Dir: {ASSETS_DIR.absolute()}")
-    print(f"Subdirs: {', '.join(ASSET_SUBDIRS)}")
     print("=" * 60)
 
     # Authenticate using HF_TOKEN from environment (loaded from .env)
@@ -56,18 +53,13 @@ def main():
         print("Please run `make download-assets-omniverse` first to download assets.")
         sys.exit(1)
 
-    # Collect all files to upload from each subdirectory
+    # Collect all files to upload
     files_to_upload = []
-    for subdir in ASSET_SUBDIRS:
-        subdir_path = ASSETS_DIR / subdir
-        if not subdir_path.exists():
-            print(f"WARNING: Subdirectory not found, skipping: {subdir}")
-            continue
-        for file_path in subdir_path.rglob("*"):
-            if file_path.is_file():
-                # Path in repo should be relative to assets/ directory
-                path_in_repo = str(file_path.relative_to(ASSETS_DIR))
-                files_to_upload.append((file_path, path_in_repo))
+    for file_path in ASSETS_DIR.rglob("*"):
+        if file_path.is_file():
+            # Path in repo should be relative to assets/ directory
+            path_in_repo = str(file_path.relative_to(ASSETS_DIR))
+            files_to_upload.append((file_path, path_in_repo))
 
     if not files_to_upload:
         print("ERROR: No files found to upload.")
@@ -97,28 +89,27 @@ def main():
         print(f"\nERROR: Authentication failed: {e}")
         print("Please check your HF_TOKEN in .env file.")
         sys.exit(1)
-    
-    # Upload files
+
+    # Upload using upload_large_folder to handle large folders and avoid rate limits
     print(f"\nUploading to {REPO_ID}...")
-    
-    for local_path, path_in_repo in files_to_upload:
-        print(f"\nUploading: {path_in_repo}")
-        try:
-            api.upload_file(
-                path_or_fileobj=str(local_path),
-                path_in_repo=path_in_repo,
-                repo_id=REPO_ID,
-                repo_type=REPO_TYPE,
-            )
-            print(f"  SUCCESS: {path_in_repo}")
-        except Exception as e:
-            print(f"  ERROR: {e}")
-    
+    print("Using large folder upload for better handling...")
+
+    try:
+        api.upload_large_folder(
+            folder_path=str(ASSETS_DIR),
+            repo_id=REPO_ID,
+            repo_type=REPO_TYPE,
+        )
+        print("\nSUCCESS: All files uploaded")
+    except Exception as e:
+        print(f"\nERROR: Upload failed: {e}")
+        return 1
+
     print("\n" + "=" * 60)
     print("Upload complete!")
     print(f"View at: https://huggingface.co/datasets/{REPO_ID}")
     print("=" * 60)
-    
+
     return 0
 
 
