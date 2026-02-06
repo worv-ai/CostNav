@@ -15,7 +15,7 @@ The robot is defined in `coco_robot_cfg.py` using Isaac Lab's `ArticulationCfg`:
 ```python
 COCO_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        usd_path="omniverse://10.50.2.21/Users/worv/coco_one_fix_prim.usd",
+        usd_path="omniverse://localhost/Users/worv/coco_one_fix_prim.usd",
         activate_contact_sensors=True,
     ),
     ...

@@ -235,4 +235,10 @@ wandb/
 
 /build_ws/
 data/
+
+# Ignore assets (but keep README)
+/assets/
+!assets/README.md
+
+.nucleus-stack/
 checkpoints/

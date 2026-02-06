@@ -40,9 +40,10 @@ DEFAULT_PHYSICS_DT = 1.0 / 120.0
 DEFAULT_RENDERING_DT = 1.0 / 30.0
 WARMUP_STEPS = 100
 DEFAULT_ROBOT_NAME = "nova_carter"
+OMNI_URL = os.environ.get("OMNI_URL", "omniverse://localhost")
 DEFAULT_USD_PATHS = {
-    "nova_carter": "omniverse://10.50.2.21/Users/worv/costnav/Street_sidewalk.usd",
-    "segway_e1": "omniverse://10.50.2.21/Users/worv/costnav/street_sidewalk_segwaye1_Corrected.usd",
+    "nova_carter": f"{OMNI_URL}/Users/worv/costnav/Street_sidewalk.usd",
+    "segway_e1": f"{OMNI_URL}/Users/worv/costnav/street_sidewalk_segwaye1_Corrected.usd",
 }
 DEFAULT_ROBOT_PRIM_PATHS = {
     "nova_carter": "/World/Nova_Carter_ROS/chassis_link",
