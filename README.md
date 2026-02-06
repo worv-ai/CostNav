@@ -138,6 +138,7 @@ Link is from [visualnav-transformer](https://github.com/robodhruv/visualnav-tran
 ```
 gdown --folder https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHetz263--4_2FFggg
 ```
+Place the downloaded model files (e.g., `vint.pth`, `gnm.pth`, `nomad.pth`) in the `checkpoints/` directory.
 
 2. Build a docker image
 ```bash
@@ -146,7 +147,7 @@ make build-vint
 4. Run the evaluation
 ```bash
 # Terminal 1: Start the ViNT stack
-MODEL_CHECKPOINT=/path/to/vint_model.pth make run-vint
+MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
 
 # Terminal 2: Run evaluation
 make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
