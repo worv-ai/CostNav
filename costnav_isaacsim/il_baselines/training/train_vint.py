@@ -166,8 +166,7 @@ def _generate_data_splits(
     folder_names = sorted(
         f
         for f in os.listdir(data_folder)
-        if os.path.isdir(os.path.join(data_folder, f))
-        and os.path.exists(os.path.join(data_folder, f, "traj_data.pkl"))
+        if os.path.isdir(os.path.join(data_folder, f)) and os.path.exists(os.path.join(data_folder, f, "traj_data.pkl"))
     )
     if not folder_names:
         raise FileNotFoundError(f"No trajectory folders (with traj_data.pkl) found in {data_folder}")
