@@ -18,6 +18,9 @@ TUNED ?= True
 AMCL ?= False
 GOAL_IMAGE ?= False
 
+# model checkpoint path
+MODEL_CHECKPOINT ?= checkpoints/vint.pth
+
 ISAAC_SIM_IMAGE ?= costnav-isaacsim-$(ISAAC_SIM_VERSION):$(COSTNAV_VERSION)
 ISAAC_LAB_IMAGE ?= costnav-isaaclab-$(ISAAC_SIM_VERSION)-$(ISAAC_LAB_VERSION):$(COSTNAV_VERSION)
 COSTNAV_DEV_IMAGE ?= costnav-dev:$(COSTNAV_VERSION)
@@ -143,13 +146,13 @@ build-vint:
 	$(DOCKER_COMPOSE) --profile vint build ros2-vint
 
 # Run Isaac Sim with ViNT policy node and trajectory follower for IL baseline evaluation
-# Set MODEL_CHECKPOINT environment variable to specify model weights
+# Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/vint.pth)
 # Goal image publishing is enabled by default for ViNT ImageGoal mode
-# Example: MODEL_CHECKPOINT=/path/to/model.pth make run-vint
+# Example: MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
 run-vint:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile vint down
-	GOAL_IMAGE=True $(DOCKER_COMPOSE) --profile vint up
+	GOAL_IMAGE=True MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile vint up
 
 # =============================================================================
 # ROS Bag Recording Targets
@@ -224,7 +227,7 @@ run-eval-vint:
 		echo "ERROR: 'make run-vint' is not running."; \
 		echo ""; \
 		echo "Please start vint first in a separate terminal:"; \
-		echo "  MODEL_CHECKPOINT=/path/to/model.pth make run-vint"; \
+		echo "  MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint"; \
 		echo ""; \
 		echo "Then run this command again:"; \
 		echo "  make run-eval-vint TIMEOUT=$(TIMEOUT) NUM_MISSIONS=$(NUM_MISSIONS)"; \

@@ -12,6 +12,7 @@ This evaluation framework is adapted from the [NavDP](https://github.com/InternR
 > [Paper](https://arxiv.org/abs/2505.08712) | [GitHub](https://github.com/InternRobotics/NavDP) | [Project Page](https://wzcai99.github.io/navigation-diffusion-policy.github.io/)
 
 The baseline implementations (ViNT, NoMaD, GNM) are derived from:
+
 - NavDP baselines: `third_party/NavDP/baselines/`
 - Original [visualnav-transformer](https://github.com/robodhruv/visualnav-transformer) repository
 
@@ -51,10 +52,16 @@ There are two main approaches for testing ViNT evaluation:
 
 This approach runs the complete stack (Isaac Sim + ViNT policy) in Docker containers.
 
+**Prerequisites:**
+Download the pretrained model weights from Google Drive or train your model and place it to `checkpoints/`
+See [Download Pretrained Checkpoints](../README.md#download-pretrained-checkpoints) for more information.
+
+**Note:** The `MODEL_CHECKPOINT` environment variable must point to your trained ViNT model weights (`.pth` file).
+
 1. **Start the ViNT stack** (in terminal 1):
 
    ```bash
-   MODEL_CHECKPOINT=/path/to/vint_model.pth make run-vint
+   MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
    ```
 
    This starts both Isaac Sim and the ViNT policy node together.
@@ -76,8 +83,6 @@ This approach runs the complete stack (Isaac Sim + ViNT policy) in Docker contai
    make start-mission
    ```
 
-**Note:** The `MODEL_CHECKPOINT` environment variable must point to your trained ViNT model weights (`.pth` file).
-
 ### Approach 2: Development/Manual Testing
 
 This approach is useful for development and debugging within the devcontainer.
@@ -91,7 +96,6 @@ This approach is useful for development and debugging within the devcontainer.
 2. **Launch ViNT Policy Node using VSCode Debugger** (recommended):
 
    Use the VSCode launch configurations in `.vscode/launch.json`:
-
    - **"Python: ViNT Policy Node (ROS2)"** - Runs ViNT inference node with debugger
    - **"Python: Trajectory Follower Node (ROS2)"** - Runs MPC trajectory follower with debugger
 
@@ -106,46 +110,46 @@ This approach is useful for development and debugging within the devcontainer.
 
 ### ViNT Policy Node
 
-| Direction | Topic                                 | Type                  | Description                                |
-| --------- | ------------------------------------- | --------------------- | ------------------------------------------ |
-| Subscribe | `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image`   | Camera image input                         |
-| Subscribe | `/goal_image`                         | `sensor_msgs/Image`   | Goal image (ImageGoal mode, transient local) |
-| Subscribe | `/vint_enable`                        | `std_msgs/Bool`       | Enable/disable policy execution            |
-| Publish   | `/vint_trajectory`                    | `nav_msgs/Path`       | Predicted trajectory (5 waypoints)         |
-| Service   | `/reset_agent`                        | `std_srvs/Trigger`    | Reset agent memory for new mission         |
+| Direction | Topic                                 | Type                | Description                                  |
+| --------- | ------------------------------------- | ------------------- | -------------------------------------------- |
+| Subscribe | `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image` | Camera image input                           |
+| Subscribe | `/goal_image`                         | `sensor_msgs/Image` | Goal image (ImageGoal mode, transient local) |
+| Subscribe | `/vint_enable`                        | `std_msgs/Bool`     | Enable/disable policy execution              |
+| Publish   | `/vint_trajectory`                    | `nav_msgs/Path`     | Predicted trajectory (5 waypoints)           |
+| Service   | `/reset_agent`                        | `std_srvs/Trigger`  | Reset agent memory for new mission           |
 
 ### Trajectory Follower Node
 
-| Direction | Topic                        | Type                  | Description                              |
-| --------- | ---------------------------- | --------------------- | ---------------------------------------- |
-| Subscribe | `/vint_trajectory`           | `nav_msgs/Path`       | Trajectory from ViNT policy node         |
-| Subscribe | `/chassis/odom`              | `nav_msgs/Odometry`   | Robot odometry (configurable via robot config) |
-| Subscribe | `/trajectory_follower_enable`| `std_msgs/Bool`       | Enable/disable trajectory following      |
-| Publish   | `/cmd_vel`                   | `geometry_msgs/Twist` | Velocity commands to robot               |
+| Direction | Topic                         | Type                  | Description                                    |
+| --------- | ----------------------------- | --------------------- | ---------------------------------------------- |
+| Subscribe | `/vint_trajectory`            | `nav_msgs/Path`       | Trajectory from ViNT policy node               |
+| Subscribe | `/chassis/odom`               | `nav_msgs/Odometry`   | Robot odometry (configurable via robot config) |
+| Subscribe | `/trajectory_follower_enable` | `std_msgs/Bool`       | Enable/disable trajectory following            |
+| Publish   | `/cmd_vel`                    | `geometry_msgs/Twist` | Velocity commands to robot                     |
 
 ## Parameters
 
 ### ViNT Policy Node
 
-| Parameter        | Type   | Default                               | Description                   |
-| ---------------- | ------ | ------------------------------------- | ----------------------------- |
-| `--checkpoint`   | string | (required)                            | Path to trained model weights |
-| `--model_config` | string | `configs/vint_eval.yaml`              | Path to model config          |
-| `--robot_config` | string | `configs/robot_carter.yaml`           | Path to robot config          |
-| `--inference_rate` | float | 10.0                                  | Inference frequency (Hz)      |
-| `--image_topic`  | string | `/front_stereo_camera/left/image_raw` | Camera topic                  |
-| `--use_imagegoal`| flag   | false                                 | Use image goal navigation     |
-| `--device`       | string | `cuda:0`                              | PyTorch device                |
+| Parameter          | Type   | Default                               | Description                   |
+| ------------------ | ------ | ------------------------------------- | ----------------------------- |
+| `--checkpoint`     | string | (required)                            | Path to trained model weights |
+| `--model_config`   | string | `configs/vint_eval.yaml`              | Path to model config          |
+| `--robot_config`   | string | `configs/robot_carter.yaml`           | Path to robot config          |
+| `--inference_rate` | float  | 10.0                                  | Inference frequency (Hz)      |
+| `--image_topic`    | string | `/front_stereo_camera/left/image_raw` | Camera topic                  |
+| `--use_imagegoal`  | flag   | false                                 | Use image goal navigation     |
+| `--device`         | string | `cuda:0`                              | PyTorch device                |
 
 ### Trajectory Follower Node
 
-| Parameter           | Type   | Default                    | Description                        |
-| ------------------- | ------ | -------------------------- | ---------------------------------- |
-| `--robot_config`    | string | `configs/robot_carter.yaml`| Path to robot config               |
-| `--control_rate`    | float  | 20.0                       | Control loop frequency (Hz)        |
-| `--max_linear_vel`  | float  | 0.5                        | Maximum linear velocity (m/s)      |
-| `--max_angular_vel` | float  | 0.5                        | Maximum angular velocity (rad/s)   |
-| `--trajectory_timeout` | float | 0.5                      | Trajectory timeout (s)             |
+| Parameter              | Type   | Default                     | Description                      |
+| ---------------------- | ------ | --------------------------- | -------------------------------- |
+| `--robot_config`       | string | `configs/robot_carter.yaml` | Path to robot config             |
+| `--control_rate`       | float  | 20.0                        | Control loop frequency (Hz)      |
+| `--max_linear_vel`     | float  | 0.5                         | Maximum linear velocity (m/s)    |
+| `--max_angular_vel`    | float  | 0.5                         | Maximum angular velocity (rad/s) |
+| `--trajectory_timeout` | float  | 0.5                         | Trajectory timeout (s)           |
 
 ## Evaluation
 
@@ -165,7 +169,7 @@ The evaluation system runs consecutive missions and collects comprehensive metri
 
 ```bash
 # Terminal 1: Start the ViNT stack
-MODEL_CHECKPOINT=/path/to/vint_model.pth make run-vint
+MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
 
 # Terminal 2: Run evaluation
 make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
@@ -254,14 +258,14 @@ The trajectory follower node uses a **Model Predictive Control (MPC)** controlle
 
 ### Controller Parameters
 
-| Parameter    | Default | Description                                |
-| ------------ | ------- | ------------------------------------------ |
-| `N`          | 15      | MPC horizon length                         |
-| `desired_v`  | 0.5     | Desired velocity for reference spacing     |
-| `v_max`      | 0.5     | Maximum linear velocity (m/s)              |
-| `w_max`      | 0.5     | Maximum angular velocity (rad/s)           |
-| `ref_gap`    | 3       | Gap between reference points in horizon    |
-| `dt`         | 0.1     | Time step for dynamics (s)                 |
+| Parameter   | Default | Description                             |
+| ----------- | ------- | --------------------------------------- |
+| `N`         | 15      | MPC horizon length                      |
+| `desired_v` | 0.5     | Desired velocity for reference spacing  |
+| `v_max`     | 0.5     | Maximum linear velocity (m/s)           |
+| `w_max`     | 0.5     | Maximum angular velocity (rad/s)        |
+| `ref_gap`   | 3       | Gap between reference points in horizon |
+| `dt`        | 0.1     | Time step for dynamics (s)              |
 
 ### Cost Matrices
 
@@ -300,43 +304,43 @@ dθ/dt = w
 
 ```yaml
 # Model architecture parameters
-context_size: 5                    # Number of past frames for temporal context
-len_traj_pred: 5                   # Number of waypoints to predict
-learn_angle: true                  # Predict heading angles
-obs_encoder: "efficientnet-b0"     # Image encoder backbone
-obs_encoding_size: 512             # Encoding dimension
-late_fusion: false                 # Early fusion of obs+goal
-mha_num_attention_heads: 4         # Transformer attention heads
-mha_num_attention_layers: 4        # Transformer layers
-mha_ff_dim_factor: 4               # Feedforward dimension factor
-image_size: [85, 64]               # [width, height] - matches training
-normalize: true                    # Normalize actions by max velocity
+context_size: 5 # Number of past frames for temporal context
+len_traj_pred: 5 # Number of waypoints to predict
+learn_angle: true # Predict heading angles
+obs_encoder: "efficientnet-b0" # Image encoder backbone
+obs_encoding_size: 512 # Encoding dimension
+late_fusion: false # Early fusion of obs+goal
+mha_num_attention_heads: 4 # Transformer attention heads
+mha_num_attention_layers: 4 # Transformer layers
+mha_ff_dim_factor: 4 # Feedforward dimension factor
+image_size: [85, 64] # [width, height] - matches training
+normalize: true # Normalize actions by max velocity
 ```
 
 ### robot_segway.yaml (Robot Parameters)
 
 ```yaml
 # Velocity limits
-max_v: 0.8        # Maximum linear velocity (m/s)
-max_w: 0.8        # Maximum angular velocity (rad/s)
+max_v: 0.8 # Maximum linear velocity (m/s)
+max_w: 0.8 # Maximum angular velocity (rad/s)
 
 # Timing - IMPORTANT: must match training config
-frame_rate: 3     # Training frame rate (Hz) - used for waypoint scaling
+frame_rate: 3 # Training frame rate (Hz) - used for waypoint scaling
 ```
 
 ## Troubleshooting
 
 ### Common Issues
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| **Model checkpoint not found** | Invalid path or missing file | Verify `checkpoint` parameter points to valid `.pth` file |
-| **CUDA out of memory** | GPU memory exhausted | Reduce `context_size` or use smaller batch during inference |
-| **No trajectory published** | Camera topic not connected | Check `/front_stereo_camera/left/image_raw` topic is publishing |
-| **Robot not moving** | Trajectory follower not receiving data | Verify `/vint_trajectory` and `/chassis/odom` topics |
-| **MPC solver fails** | Invalid trajectory or constraints | Check trajectory waypoints are valid; try increasing `dt` |
-| **Path not visible in RViz** | Transform or QoS mismatch | Set Fixed Frame to `base_link`; increase Transform Tolerance |
-| **Trajectory jumps** | Memory queue not reset on new mission | Call `/reset_agent` service when starting new mission |
+| Issue                          | Cause                                  | Solution                                                        |
+| ------------------------------ | -------------------------------------- | --------------------------------------------------------------- |
+| **Model checkpoint not found** | Invalid path or missing file           | Verify `checkpoint` parameter points to valid `.pth` file       |
+| **CUDA out of memory**         | GPU memory exhausted                   | Reduce `context_size` or use smaller batch during inference     |
+| **No trajectory published**    | Camera topic not connected             | Check `/front_stereo_camera/left/image_raw` topic is publishing |
+| **Robot not moving**           | Trajectory follower not receiving data | Verify `/vint_trajectory` and `/chassis/odom` topics            |
+| **MPC solver fails**           | Invalid trajectory or constraints      | Check trajectory waypoints are valid; try increasing `dt`       |
+| **Path not visible in RViz**   | Transform or QoS mismatch              | Set Fixed Frame to `base_link`; increase Transform Tolerance    |
+| **Trajectory jumps**           | Memory queue not reset on new mission  | Call `/reset_agent` service when starting new mission           |
 
 ### Debug Commands
 
