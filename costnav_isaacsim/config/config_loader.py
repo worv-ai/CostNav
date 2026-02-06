@@ -181,9 +181,11 @@ class MissionConfig:
         )
 
         # Parse food config
+        # Get default usd_path from FoodConfig dataclass to avoid empty string bug
+        default_food_config = FoodConfig()
         food_config = FoodConfig(
             enabled=food_data.get("enabled", False),
-            usd_path=food_data.get("usd_path", ""),
+            usd_path=food_data.get("usd_path", default_food_config.usd_path),
             prim_path=food_data.get("prim_path", "/World/Food"),
             pieces_prim_path=food_data.get("pieces_prim_path", "PopcornBucket/PopcornPieces"),
             bucket_prim_path=food_data.get("bucket_prim_path", "PopcornBucket"),
