@@ -2,8 +2,8 @@
 """
 Upload Omniverse assets to Hugging Face datasets.
 
-This script uploads the downloaded assets from ./assets/Users to
-https://huggingface.co/datasets/maum-ai/CostNav
+This script uploads all assets from ./assets/ (Game, NVIDIA, Projects, Users)
+to https://huggingface.co/datasets/maum-ai/CostNav
 
 Usage:
     # Set HF_TOKEN in .env file, then run via docker:
@@ -26,7 +26,9 @@ REPO_ID = "maum-ai/CostNav"
 REPO_TYPE = "dataset"
 # Get the repository root (parent of scripts directory)
 REPO_ROOT = Path(__file__).parent.parent.parent
-ASSETS_DIR = REPO_ROOT / "assets" / "Users"
+ASSETS_DIR = REPO_ROOT / "assets"
+# Asset subdirectories to upload
+ASSET_SUBDIRS = ["Game", "NVIDIA", "Projects", "Users"]
 
 
 def main():
@@ -35,6 +37,7 @@ def main():
     print("=" * 60)
     print(f"Repository: https://huggingface.co/datasets/{REPO_ID}")
     print(f"Assets Dir: {ASSETS_DIR.absolute()}")
+    print(f"Subdirs: {', '.join(ASSET_SUBDIRS)}")
     print("=" * 60)
 
     # Authenticate using HF_TOKEN from environment (loaded from .env)
@@ -53,13 +56,18 @@ def main():
         print("Please run `make download-assets-omniverse` first to download assets.")
         sys.exit(1)
 
-    # Collect all files to upload
+    # Collect all files to upload from each subdirectory
     files_to_upload = []
-    for file_path in ASSETS_DIR.rglob("*"):
-        if file_path.is_file():
-            # Path in repo should be relative to assets/ directory
-            path_in_repo = str(file_path.relative_to(ASSETS_DIR.parent))
-            files_to_upload.append((file_path, path_in_repo))
+    for subdir in ASSET_SUBDIRS:
+        subdir_path = ASSETS_DIR / subdir
+        if not subdir_path.exists():
+            print(f"WARNING: Subdirectory not found, skipping: {subdir}")
+            continue
+        for file_path in subdir_path.rglob("*"):
+            if file_path.is_file():
+                # Path in repo should be relative to assets/ directory
+                path_in_repo = str(file_path.relative_to(ASSETS_DIR))
+                files_to_upload.append((file_path, path_in_repo))
 
     if not files_to_upload:
         print("ERROR: No files found to upload.")
