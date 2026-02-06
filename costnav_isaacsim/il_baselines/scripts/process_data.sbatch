@@ -2,7 +2,7 @@
 #SBATCH --job-name=costnav-data
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --nodelist=DGX-H100-[11-12]
+#SBATCH --nodelist=DGX-H100-11
 #SBATCH --cpus-per-task=48
 #SBATCH --mem=500G
 #SBATCH --output=logs/slurm/process_data_%j.out

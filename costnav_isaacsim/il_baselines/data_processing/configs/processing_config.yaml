@@ -16,7 +16,7 @@ video:
 
 # Topics to extract as video
 image_topics:
-  - /front_stereo_camera/left/image_raw
+  - /front_stereo_camera/left/image_raw/compressed
 
 # Topics to remove from the dataset (to reduce storage)
 topics_to_remove:

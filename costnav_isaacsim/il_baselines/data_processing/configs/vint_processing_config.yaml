@@ -9,7 +9,7 @@ paths:
 # CostNav dataset configuration
 costnav:
   # Topic names in MediaRef bags
-  image_topic: "/front_stereo_camera/left/image_raw"  # MediaRef string topic
+  image_topic: "/front_stereo_camera/left/image_raw/compressed"  # MediaRef string topic
   odom_topic: "/chassis/odom"                         # nav_msgs/Odometry topic
 
   # Angle offset (radians) to apply to yaw values
@@ -28,6 +28,6 @@ processing:
   image_aspect_ratio: 1.333333  # 4/3
 
 # Default topic mappings (used when no config is provided)
-image_topic: "/front_stereo_camera/left/image_raw"
+image_topic: "/front_stereo_camera/left/image_raw/compressed"
 odom_topic: "/chassis/odom"
 ang_offset: 0.0
