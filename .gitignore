@@ -236,3 +236,5 @@ data/
 
 # Ignore assets
 assets/Users/
+
+.nucleus-stack/
