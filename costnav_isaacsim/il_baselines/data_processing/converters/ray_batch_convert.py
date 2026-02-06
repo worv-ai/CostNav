@@ -100,7 +100,7 @@ def convert_bag_task(
 
 
 def find_bags(input_dir: Path, bag_names: Optional[list[str]] = None) -> list[Path]:
-    """Find all valid ROS bags in directory."""
+    """Find all valid ROS bags in directory, recursing into subdirectories."""
     bags = []
 
     if bag_names:
@@ -114,14 +114,16 @@ def find_bags(input_dir: Path, bag_names: Optional[list[str]] = None) -> list[Pa
                 except ValueError:
                     console.print(f"[yellow]Warning: {name} is not a valid bag[/yellow]")
     else:
-        # Find all bags in directory
+        # Find all bags in directory, recursing into subdirectories
         for item in input_dir.iterdir():
             if item.is_dir():
                 try:
                     detect_format(item)
                     bags.append(item)
                 except ValueError:
-                    pass
+                    # Not a valid bag — recurse into it to find bags inside
+                    sub_bags = find_bags(item)
+                    bags.extend(sub_bags)
 
     return sorted(bags)
 
@@ -196,12 +198,18 @@ def main():
     console.print(f"[green]Ray initialized with {num_workers} workers[/green]")
 
     # Submit tasks - each bag gets its own _mediaref subdirectory
+    # Flat output: if names collide across subdirs, append _1, _2, etc.
     start_time = time.time()
     futures = []
+    used_names: dict[str, int] = {}  # base_name -> count of times seen
     for bag_path in bag_paths:
-        bag_output_dir = output_dir / f"{bag_path.name}_mediaref"
+        base_name = bag_path.name
+        count = used_names.get(base_name, 0)
+        used_names[base_name] = count + 1
+        suffix = f"_{count}" if count > 0 else ""
+        bag_output_dir = output_dir / f"{base_name}{suffix}_mediaref"
         future = convert_bag_task.remote(bag_path, bag_output_dir, fps, image_topics, topics_to_remove)
-        futures.append((bag_path.name, future))
+        futures.append((f"{base_name}{suffix}", future))
 
     # Collect results
     results = []
