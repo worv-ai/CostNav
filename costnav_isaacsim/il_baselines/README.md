@@ -5,15 +5,77 @@ This module implements imitation learning baselines for CostNav sidewalk robot n
 ## Directory Structure
 
 ```
-il_baselines/
-├── README.md                     # This file
-├── environment.yml               # Conda environment specification
-├── data_processing/              # ROS2 bag → ViNT format conversion
-├── training/                     # Model training scripts and configs
-└── evaluation/                   # ROS2 policy nodes for Isaac Sim evaluation
+costnav_isaacsim/
+├── pyproject.toml                    # uv project (data_processing + training)
+└── il_baselines/
+    ├── README.md                     # This file
+    ├── data_processing/              # ROS2 bag → ViNT format conversion
+    └── training/                     # Model training scripts and configs
 ```
 
-See each subdirectory's README for detailed documentation.
+**Evaluation** lives in a separate folder: [`costnav_isaacsim/il_baselines/evaluation/`](evaluation/)
+(Docker + ROS2 environment, has its own `pyproject.toml`, not managed by this uv project).
+
+## Environment Setup (uv)
+
+### Prerequisites
+
+- [uv](https://docs.astral.sh/uv/) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+- CUDA 12.4+ capable GPU and drivers
+
+### Install
+
+```bash
+cd CostNav/costnav_isaacsim
+uv sync          # creates .venv, installs all deps (PyTorch CUDA 12.4, etc.)
+```
+
+This installs `il_baselines` as an editable package so all imports
+(`from il_baselines.data_processing.converters...`, `from il_baselines.training...`) work.
+
+### Slurm
+
+```bash
+# From CostNav root
+sbatch costnav_isaacsim/scripts/train_vint.sbatch
+sbatch costnav_isaacsim/scripts/process_data.sbatch
+```
+
+The sbatch scripts use `uv run` — no manual venv activation needed.
+
+### pyproject.toml overview
+
+The `pyproject.toml` at `costnav_isaacsim/` defines:
+
+| Section               | Purpose                                                                                                          |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `[project]`           | `costnav-il-baselines`, Python ≥3.11, all runtime deps                                                           |
+| `[tool.uv.sources]`   | PyTorch CUDA index, `vint_train` (editable local), `warmup-scheduler` (git), `diffusion_policy` (editable local) |
+| `[tool.hatch.build]`  | Exposes `il_baselines` package (excludes `evaluation/`)                                                          |
+| `[dependency-groups]` | `dev` group for pytest, ruff, ipython                                                                            |
+
+### Key dependency decisions
+
+| Dep                                  | Source                                                          | Notes                              |
+| ------------------------------------ | --------------------------------------------------------------- | ---------------------------------- |
+| `torch`, `torchvision`, `torchaudio` | PyTorch CUDA 12.4 index via `[tool.uv]`                         | Replaces conda `pytorch` channel   |
+| `vint_train`                         | `third_party/visualnav-transformer/train` (editable)            | Local path source                  |
+| `diffusion_policy`                   | `third_party/visualnav-transformer/diffusion_policy` (editable) | Provides `ConditionalUnet1D`       |
+| `warmup-scheduler`                   | git+https://github.com/ildoonet/pytorch-gradual-warmup-lr.git   | No PyPI release                    |
+| `diffusers`                          | PyPI                                                            | `DDPMScheduler` for NoMaD training |
+
+### Why evaluation is separate
+
+| Concern    | data_processing + training | evaluation                          |
+| ---------- | -------------------------- | ----------------------------------- |
+| Runtime    | Slurm / bare-metal         | Docker + ROS2 Humble                |
+| Python     | 3.11                       | 3.10 (ROS2 constraint)              |
+| numpy      | ≥2.0 OK                    | <2 (cv_bridge)                      |
+| Extra deps | ray, wandb, hydra          | rclpy, cv_bridge, casadi            |
+| Install    | `uv sync`                  | `pip install -e .` inside container |
+
+Evaluation has its own `pyproject.toml` and lives in a separate folder
+(`costnav_isaacsim/il_baselines/evaluation/`) to decouple the Docker/ROS2 lifecycle.
 
 ## Data Format
 
@@ -45,16 +107,18 @@ dataset_name/
 
 ## Usage
 
+All commands below assume you have run `uv sync` from `costnav_isaacsim/`.
+
 ### Data Conversion
 
 **Step 1: ROS Bag → MediaRef Format** (parallel batch conversion)
 
 ```bash
-# Batch convert ROS bags to MediaRef format using Ray
-python costnav_isaacsim/il_baselines/data_processing/converters/ray_batch_convert.py \
-    --input_dir data/sample_rosbags/ \
-    --output_dir data/mediaref/ \
-    --config configs/processing_config.yaml \
+# From CostNav/costnav_isaacsim/
+uv run python -m il_baselines.data_processing.converters.ray_batch_convert \
+    --input_dir ../data/sample_rosbags/ \
+    --output_dir ../data/mediaref/ \
+    --config il_baselines/data_processing/configs/processing_config.yaml \
     --num_workers 8
 ```
 
@@ -63,11 +127,10 @@ python costnav_isaacsim/il_baselines/data_processing/converters/ray_batch_conver
 **Step 2: MediaRef → ViNT Training Format**
 
 ```bash
-# Convert MediaRef bags to ViNT training format
-python costnav_isaacsim/il_baselines/data_processing/process_data/process_mediaref_bags.py \
-    --input-dir data/mediaref/ \
-    --output-dir data/vint_format/ \
-    --config configs/vint_processing_config.yaml \
+uv run python -m il_baselines.data_processing.process_data.process_mediaref_bags \
+    --input-dir ../data/mediaref/ \
+    --output-dir ../data/vint_format/ \
+    --config il_baselines/data_processing/configs/vint_processing_config.yaml \
     --sample-rate 4.0
 ```
 
@@ -98,9 +161,9 @@ The `traj_data.pkl` file contains:
 **Single bag conversion (alternative):**
 
 ```bash
-python costnav_isaacsim/il_baselines/data_processing/converters/rosbag_to_mediaref.py \
-    --input data/sample_rosbags/recording_20260109_061808 \
-    --output data/processed/
+uv run python -m il_baselines.data_processing.converters.rosbag_to_mediaref \
+    --input ../data/sample_rosbags/recording_20260109_061808 \
+    --output ../data/processed/
 ```
 
 ### Training
@@ -129,19 +192,16 @@ Download pretrained model checkpoints from the [visualnav-transformer checkpoint
 **Option 2: Using gdown (Recommended)**
 
 ```bash
-# Install gdown
-pip install gdown
-
 # Create checkpoints directory
 mkdir -p costnav_isaacsim/il_baselines/training/visualnav_transformer/checkpoints
 cd costnav_isaacsim/il_baselines/training/visualnav_transformer/checkpoints
 
 # Download ViNT checkpoint (replace FILE_ID with actual Google Drive file ID)
 # You can get the file ID from the Google Drive share link
-gdown <FILE_ID>
+uv run gdown <FILE_ID>
 
 # Or download the entire folder
-gdown --folder https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHetz263--4_2FFggg
+uv run gdown --folder https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHetz263--4_2FFggg
 ```
 
 The expected checkpoints directory structure:
@@ -155,12 +215,10 @@ costnav_isaacsim/il_baselines/training/visualnav_transformer/checkpoints/
 
 #### Fine-tuning ViNT on CostNav Data
 
-**Using the standalone training script (recommended)**
-
 ```bash
-# Run fine-tuning from CostNav root directory
-python costnav_isaacsim/il_baselines/training/train_vint.py \
-    --config costnav_isaacsim/il_baselines/training/visualnav_transformer/configs/vint_costnav.yaml
+# From CostNav/costnav_isaacsim/
+uv run python -m il_baselines.training.train_vint \
+    --config il_baselines/training/visualnav_transformer/configs/vint_costnav.yaml
 ```
 
 #### Configuration Options
@@ -188,17 +246,17 @@ Checkpoints are saved to `logs/vint-costnav/`.
 
 ## Evaluation
 
-See [evaluation/README.md](evaluation/README.md) for detailed documentation on running trained IL policies in Isaac Sim.
+Evaluation runs in Docker with ROS2 and is maintained in a separate folder with its own `pyproject.toml`:
 
-## Dependencies
+See [`evaluation/README.md`](evaluation/README.md) for documentation on running trained IL policies in Isaac Sim.
 
-- Python 3.10+
-- PyTorch 2.x with CUDA 12.x
-- rosbags (ROS bag reading library)
-- mediaref (lightweight media references)
-- ray (distributed processing)
-- av (video encoding)
-- opencv-python
+## TODO
+
+- [ ] Create `costnav_isaacsim/pyproject.toml` with all deps from `environment.yml`
+- [ ] Create Slurm sbatch scripts (`scripts/train_vint.sbatch`, `scripts/process_data.sbatch`)
+- [x] Verify `evaluation/` works independently with its own `pyproject.toml`
+- [ ] Remove `environment.yml` after uv migration is verified
+- [ ] Test `uv sync` + `uv run` on Slurm cluster
 
 ## Sample Data
 
