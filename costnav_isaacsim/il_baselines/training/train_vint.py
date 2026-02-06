@@ -26,6 +26,7 @@ This code is adapted from https://github.com/robodhruv/visualnav-transformer
 
 import argparse
 import os
+import random
 import re
 import time
 from pathlib import Path
@@ -77,7 +78,7 @@ def resolve_env_variables(config: dict, project_root: str) -> dict:
 
     Args:
         config: Configuration dictionary with potential ${VAR} placeholders.
-        project_root: Project root path to use for ${COSTNAV_ROOT} resolution.
+        project_root: Project root path to use for ${PROJECT_ROOT} resolution.
 
     Returns:
         Config dictionary with all placeholders resolved.
@@ -89,7 +90,7 @@ def resolve_env_variables(config: dict, project_root: str) -> dict:
 
             def replace_match(match):
                 var_name = match.group(1)
-                if var_name == "COSTNAV_ROOT":
+                if var_name == "PROJECT_ROOT":
                     return project_root
                 elif var_name == "USERNAME":
                     # Get USERNAME from environment, fallback to USER if not set
@@ -148,6 +149,45 @@ def update_data_config_yaml(config):
         print(f"Successfully updated {data_config_path}")
 
 
+def _generate_data_splits(
+    data_folder: str,
+    train_dir: str,
+    test_dir: str,
+    split_ratio: float = 0.8,
+    seed: int = 42,
+) -> None:
+    """Auto-generate train/test split files (traj_names.txt).
+
+    Scans *data_folder* for sub-directories that contain ``traj_data.pkl``
+    and writes the trajectory names into ``train_dir/traj_names.txt`` and
+    ``test_dir/traj_names.txt``.  The split is deterministic for a given
+    *seed*.
+    """
+    folder_names = sorted(
+        f
+        for f in os.listdir(data_folder)
+        if os.path.isdir(os.path.join(data_folder, f))
+        and os.path.exists(os.path.join(data_folder, f, "traj_data.pkl"))
+    )
+    if not folder_names:
+        raise FileNotFoundError(f"No trajectory folders (with traj_data.pkl) found in {data_folder}")
+
+    rng = random.Random(seed)
+    rng.shuffle(folder_names)
+
+    split_idx = int(split_ratio * len(folder_names))
+    train_names = folder_names[:split_idx]
+    test_names = folder_names[split_idx:]
+
+    for dir_path, names in [(train_dir, train_names), (test_dir, test_names)]:
+        if not dir_path:
+            continue
+        os.makedirs(dir_path, exist_ok=True)
+        with open(os.path.join(dir_path, "traj_names.txt"), "w") as f:
+            f.write("\n".join(names) + "\n")
+        print(f"  Wrote {len(names)} trajectories to {dir_path}/traj_names.txt")
+
+
 def main(config):
     assert config["distance"]["min_dist_cat"] < config["distance"]["max_dist_cat"]
     assert config["action"]["min_dist_cat"] < config["action"]["max_dist_cat"]
@@ -192,6 +232,23 @@ def main(config):
 
     for dataset_name in config["datasets"]:
         data_config = config["datasets"][dataset_name]
+
+        # Auto-generate train/test splits if they don't exist
+        for split_key in ["train", "test"]:
+            if split_key in data_config:
+                split_dir = data_config[split_key]
+                traj_names_file = os.path.join(split_dir, "traj_names.txt")
+                if not os.path.exists(traj_names_file):
+                    print(f"Split file not found: {traj_names_file}")
+                    print(f"Auto-generating train/test splits from {data_config['data_folder']}...")
+                    _generate_data_splits(
+                        data_folder=data_config["data_folder"],
+                        train_dir=data_config.get("train", ""),
+                        test_dir=data_config.get("test", ""),
+                        split_ratio=data_config.get("split_ratio", 0.8),
+                        seed=config.get("seed", 42),
+                    )
+                    break  # both train and test are generated together
         if "negative_mining" not in data_config:
             data_config["negative_mining"] = True
         if "goals_per_obs" not in data_config:
@@ -492,7 +549,13 @@ if __name__ == "__main__":
         "--config",
         "-c",
         default=str(
-            PROJECT_ROOT / "il_baselines" / "training" / "visualnav_transformer" / "configs" / "vint_costnav.yaml"
+            PROJECT_ROOT
+            / "costnav_isaacsim"
+            / "il_baselines"
+            / "training"
+            / "visualnav_transformer"
+            / "configs"
+            / "vint_costnav.yaml"
         ),
         type=str,
         help="Path to the config file",
@@ -501,7 +564,13 @@ if __name__ == "__main__":
 
     # Load defaults config
     defaults_path = str(
-        PROJECT_ROOT / "il_baselines" / "training" / "visualnav_transformer" / "configs" / "defaults.yaml"
+        PROJECT_ROOT
+        / "costnav_isaacsim"
+        / "il_baselines"
+        / "training"
+        / "visualnav_transformer"
+        / "configs"
+        / "defaults.yaml"
     )
     with open(defaults_path, "r") as f:
         default_config = yaml.safe_load(f)
@@ -516,7 +585,7 @@ if __name__ == "__main__":
 
     config.update(user_config)
 
-    # Resolve ${COSTNAV_ROOT} and other environment variables in config
+    # Resolve ${PROJECT_ROOT} and other environment variables in config
     config = resolve_env_variables(config, str(PROJECT_ROOT))
 
     # Resolve relative paths in the config relative to the config file location

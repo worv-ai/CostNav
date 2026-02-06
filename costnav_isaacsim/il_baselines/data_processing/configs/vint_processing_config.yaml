@@ -1,6 +1,11 @@
 # ViNT Data Processing Configuration
 # Configuration for converting MediaRef bags to ViNT training format
 
+# Data paths (optional - can be overridden via command-line arguments)
+paths:
+  input_dir: # Enter your input directory here (ex. "/mnt/raid11/workspace/mediaref")
+  output_dir: # Enter your input directory here (ex. "/mnt/raid11/workspace/vint_training")
+
 # CostNav dataset configuration
 costnav:
   # Topic names in MediaRef bags

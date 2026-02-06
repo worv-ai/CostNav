@@ -5,16 +5,27 @@ This module implements imitation learning baselines for CostNav sidewalk robot n
 ## Directory Structure
 
 ```
-costnav_isaacsim/
-├── pyproject.toml                    # uv project (data_processing + training)
-└── il_baselines/
-    ├── README.md                     # This file
-    ├── data_processing/              # ROS2 bag → ViNT format conversion
-    └── training/                     # Model training scripts and configs
+il_baselines/
+├── pyproject.toml          # uv project root (data_processing + training)
+├── uv.lock
+├── README.md               # This file
+├── data_processing/        # ROS2 bag → ViNT format conversion
+├── training/               # Model training scripts and configs
+├── scripts/                # SLURM sbatch scripts
+└── evaluation/             # Separate package with its own pyproject.toml
 ```
 
-**Evaluation** lives in a separate folder: [`costnav_isaacsim/il_baselines/evaluation/`](evaluation/)
-(Docker + ROS2 environment, has its own `pyproject.toml`, not managed by this uv project).
+### Runtime environments
+
+| Component | Runtime | Python | Install |
+| --- | --- | --- | --- |
+| `data_processing/`, `training/` | SLURM cluster or bare-metal | ≥3.11 | `uv sync` from `il_baselines/` |
+| `evaluation/` | ROS2 Docker container (ROS2 Jazzy) | 3.10 | `uv sync` inside container (own `pyproject.toml`) |
+
+`evaluation/` is **independently installable** with its own `pyproject.toml` and a separate
+dependency set (numpy<2 for cv_bridge, casadi, ROS2 bindings). It is excluded from the main
+uv project build. You do not need the training/data-processing environment to run evaluation,
+and vice versa.
 
 ## Environment Setup (uv)
 
@@ -111,6 +122,52 @@ All commands below assume you have run `uv sync` from `costnav_isaacsim/`.
 
 ### Data Conversion
 
+#### Option 1: Using Configuration Files (Recommended)
+
+The easiest way to run the data processing pipeline is to configure paths in the YAML config files. This allows you to specify all paths and parameters once and reuse them.
+
+**1. Edit the configuration files:**
+
+Edit `data_processing/configs/processing_config.yaml` for Step 1 (ROS Bag → MediaRef):
+Edit `data_processing/configs/vint_processing_config.yaml` for Step 2 (MediaRef → ViNT):
+
+**2. Run the processing pipeline:**
+
+```bash
+# From CostNav/costnav_isaacsim/il_baselines/
+# Step 1: ROS Bag → MediaRef
+uv run python -m il_baselines.data_processing.converters.ray_batch_convert \
+    --config data_processing/configs/processing_config.yaml
+
+# Step 2: MediaRef → ViNT
+uv run python -m il_baselines.data_processing.process_data.process_mediaref_bags \
+    --config data_processing/configs/vint_processing_config.yaml
+```
+
+#### Option 2: SLURM Job Submission
+
+For running data processing on a SLURM cluster, use the provided sbatch script. This is for **job allocation only** and will submit the processing pipeline to the cluster's job queue.
+
+**1. Edit the configuration files:**
+
+Edit `data_processing/configs/processing_config.yaml` for Step 1 (ROS Bag → MediaRef):
+Edit `data_processing/configs/vint_processing_config.yaml` for Step 2 (MediaRef → ViNT):
+
+**2. Submit the job to the cluster:**
+
+```bash
+# From CostNav/costnav_isaacsim/il_baselines/
+sbatch scripts/process_data.sbatch
+```
+
+The sbatch script will automatically read paths from the config files and execute both processing steps (ROS Bag → MediaRef → ViNT) as a batch job.
+
+**Note:** This does not run the processing immediately like Options 1 and 3. Instead, it allocates resources and queues the job on the SLURM cluster.
+
+#### Option 3: Command-Line Arguments Override
+
+You can override config file paths with command-line arguments:
+
 **Step 1: ROS Bag → MediaRef Format** (parallel batch conversion)
 
 ```bash
@@ -118,11 +175,11 @@ All commands below assume you have run `uv sync` from `costnav_isaacsim/`.
 uv run python -m il_baselines.data_processing.converters.ray_batch_convert \
     --input_dir ../data/sample_rosbags/ \
     --output_dir ../data/mediaref/ \
-    --config il_baselines/data_processing/configs/processing_config.yaml \
+    --config data_processing/configs/processing_config.yaml \
     --num_workers 8
 ```
 
-`ray_batch_convert.py` extracts image topics from ROS2 bags and encodes them as MP4 videos with MediaRef pointers. This provides significant storage reduction while keeping odometry/cmd data in MCAP format. Supports skipping already-processed bags via `_SUCCESS` markers.
+Command-line arguments take precedence over config file settings. `ray_batch_convert.py` extracts image topics from ROS2 bags and encodes them as MP4 videos with MediaRef pointers. This provides significant storage reduction while keeping odometry/cmd data in MCAP format. Supports skipping already-processed bags via `_SUCCESS` markers.
 
 **Step 2: MediaRef → ViNT Training Format**
 
@@ -130,11 +187,11 @@ uv run python -m il_baselines.data_processing.converters.ray_batch_convert \
 uv run python -m il_baselines.data_processing.process_data.process_mediaref_bags \
     --input-dir ../data/mediaref/ \
     --output-dir ../data/vint_format/ \
-    --config il_baselines/data_processing/configs/vint_processing_config.yaml \
+    --config data_processing/configs/vint_processing_config.yaml \
     --sample-rate 4.0
 ```
 
-`process_mediaref_bags.py` reads MediaRef bags (video + MCAP), synchronizes images with odometry at a specified rate, filters out backward-moving segments, and outputs ViNT-format trajectory folders.
+Command-line arguments take precedence over config file settings. `process_mediaref_bags.py` reads MediaRef bags (video + MCAP), synchronizes images with odometry at a specified rate, filters out backward-moving segments, and outputs ViNT-format trajectory folders.
 
 **Output Format:**
 
@@ -187,14 +244,14 @@ Download pretrained model checkpoints from the [visualnav-transformer checkpoint
 
 1. Visit the [Google Drive folder](https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHetz263--4_2FFggg?usp=sharing)
 2. Download the desired checkpoint files (e.g., `vint.pth`)
-3. Place them in `costnav_isaacsim/il_baselines/training/visualnav_transformer/checkpoints/`
+3. Place them in `checkpoints/` at the repository root
 
 **Option 2: Using gdown (Recommended)**
 
 ```bash
-# Create checkpoints directory
-mkdir -p costnav_isaacsim/il_baselines/training/visualnav_transformer/checkpoints
-cd costnav_isaacsim/il_baselines/training/visualnav_transformer/checkpoints
+# Create checkpoints directory at repository root
+mkdir -p checkpoints
+cd checkpoints
 
 # Download ViNT checkpoint (replace FILE_ID with actual Google Drive file ID)
 # You can get the file ID from the Google Drive share link
@@ -207,7 +264,7 @@ uv run gdown --folder https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHet
 The expected checkpoints directory structure:
 
 ```
-costnav_isaacsim/il_baselines/training/visualnav_transformer/checkpoints/
+checkpoints/
 ├── vint.pth      # ViNT pretrained weights
 ├── nomad.pth     # NoMaD pretrained weights (optional)
 └── gnm.pth       # GNM pretrained weights (optional)
@@ -249,14 +306,6 @@ Checkpoints are saved to `logs/vint-costnav/`.
 Evaluation runs in Docker with ROS2 and is maintained in a separate folder with its own `pyproject.toml`:
 
 See [`evaluation/README.md`](evaluation/README.md) for documentation on running trained IL policies in Isaac Sim.
-
-## TODO
-
-- [ ] Create `costnav_isaacsim/pyproject.toml` with all deps from `environment.yml`
-- [ ] Create Slurm sbatch scripts (`scripts/train_vint.sbatch`, `scripts/process_data.sbatch`)
-- [x] Verify `evaluation/` works independently with its own `pyproject.toml`
-- [ ] Remove `environment.yml` after uv migration is verified
-- [ ] Test `uv sync` + `uv run` on Slurm cluster
 
 ## Sample Data
 

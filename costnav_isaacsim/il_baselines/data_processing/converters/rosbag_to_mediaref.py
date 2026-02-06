@@ -213,6 +213,7 @@ def convert_bag(
     fps: float = 30.0,
     image_topics: Optional[list[str]] = None,
     topics_to_remove: Optional[list[str]] = None,
+    quiet: bool = False,
 ) -> dict:
     """Convert CostNav ROS2 bag to MediaRef format.
 
@@ -223,6 +224,7 @@ def convert_bag(
         fps: Video frames per second
         image_topics: List of topics to extract as video (auto-detect if None)
         topics_to_remove: List of topics to exclude from output
+        quiet: If True, suppress progress bars and per-bag print output
 
     Returns:
         Dict with conversion statistics
@@ -274,6 +276,7 @@ def convert_bag(
             desc="Encoding videos",
             unit="s",
             bar_format="{l_bar}{bar}| {n:.2f}/{total:.2f}s [{elapsed}<{remaining}]",
+            disable=quiet,
         ) as pbar:
             last_time = bag_start_time_ns
             for connection, timestamp, rawdata in reader.messages():
@@ -311,7 +314,7 @@ def convert_bag(
                     conn = writer.add_connection(connection.topic, msgtype, typestore=typestore)
                     conn_map[connection.id] = conn
                 except TypesysError as e:
-                    print(f"Warning: Skipping topic '{connection.topic}': {e}", file=sys.stderr)
+                    print(f"Warning: Skipping topic '{connection.topic}': {e}")
                     continue
 
             with tqdm(
@@ -319,6 +322,7 @@ def convert_bag(
                 desc="Writing bag",
                 unit="s",
                 bar_format="{l_bar}{bar}| {n:.2f}/{total:.2f}s [{elapsed}<{remaining}]",
+                disable=quiet,
             ) as pbar:
                 last_time = bag_start_time_ns
                 for connection, timestamp, rawdata in reader.messages():
@@ -412,7 +416,8 @@ def convert_bag(
     # Calculate and print statistics
     size_stats = get_size_stats(input_path, output_path, media_dir)
     stats.update(size_stats)
-    print_stats(size_stats)
+    if not quiet:
+        print_stats(size_stats)
     return stats
 
 

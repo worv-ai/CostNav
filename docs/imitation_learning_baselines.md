@@ -92,6 +92,15 @@ make teleop
 
 ## Data Processing
 
+### Environment Setup
+
+Data processing uses **uv** for dependency management:
+
+```bash
+cd CostNav/costnav_isaacsim
+uv sync  # Creates .venv with all dependencies
+```
+
 ### Pipeline Overview
 
 ```
@@ -123,27 +132,34 @@ frames = batch_decode(refs)  # Opens video once, reuses handle
 ### Step 1: Convert ROS Bags to MediaRef
 
 ```bash
-python costnav_isaacsim/il_baselines/data_processing/converters/rosbag_to_mediaref.py \
-    --input_dir rosbags/ \
-    --output_dir datasets/processed/sidewalk_teleop/
+# From CostNav/costnav_isaacsim/il_baselines/
+uv run python -m il_baselines.data_processing.converters.ray_batch_convert \
+    --config data_processing/configs/processing_config.yaml
 ```
 
-This creates:
+This creates for each bag:
 
-- `trajectories.mcap` - Trajectory data with MediaRef columns
-- `trajectories.media/` - Source video files referenced by MediaRef
+- `bagfile_name.mcap` - Trajectory data with MediaRef pointers
+- `bagfile_name.media/` - Extracted video files (MP4)
 
 ### Step 2: Convert to ViNT Format
 
 ```bash
-python costnav_isaacsim/il_baselines/data_processing/converters/mediaref_to_vint.py \
-    --input datasets/processed/sidewalk_augmented/ \
-    --output datasets/vint_format/sidewalk/ \
-    --config costnav_isaacsim/il_baselines/data_processing/configs/processing_config.yaml \
-    --train_ratio 0.8 \
-    --val_ratio 0.1 \
-    --test_ratio 0.1
+# From CostNav/costnav_isaacsim/il_baselines/
+uv run python -m il_baselines.data_processing.process_data.process_mediaref_bags \
+    --config data_processing/configs/vint_processing_config.yaml
 ```
+
+### SLURM Batch Processing
+
+For large-scale processing on a cluster:
+
+```bash
+# From CostNav/costnav_isaacsim/il_baselines/
+sbatch scripts/process_data.sbatch
+```
+
+See [il_baselines/README.md](../costnav_isaacsim/il_baselines/README.md) for detailed configuration options.
 
 ---
 
@@ -174,48 +190,69 @@ dataset_name/
 
 ## Training Framework
 
-### Docker-based visualnav-transformer
+### uv-based Training Environment
 
-We use Docker to reproduce the [visualnav-transformer](https://github.com/robodhruv/visualnav-transformer) environment for training ViNT, NoMaD, and GNM models.
-
-#### Docker Setup
+Training uses **uv** for dependency management with PyTorch CUDA 12.4+ support:
 
 ```bash
-# Build the Docker image
-cd costnav_isaacsim/il_baselines/training/visualnav_transformer/
-docker-compose build
+cd CostNav/costnav_isaacsim
+uv sync  # Installs PyTorch, visualnav-transformer, and all dependencies
 ```
 
-#### Docker Compose Configuration
+#### Environment Setup
 
-```yaml
-# costnav_isaacsim/il_baselines/training/visualnav_transformer/docker-compose.yml
-version: "3.8"
-services:
-  vint-train:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    volumes:
-      - datasets-path:/data:ro
-      - outputs-path:/outputs
-    command: python train/train_vint.py
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+**Prerequisites:**
+- [uv](https://docs.astral.sh/uv/) package manager
+- CUDA 12.4+ capable GPU and drivers
 
-  nomad-train:
-    extends: vint-train
-    command: python train/train_nomad.py
+**Configuration:**
 
-  gnm-train:
-    extends: vint-train
-    command: python train/train_gnm.py
+Before training, configure the `.env` file at the project root:
+
+```bash
+# In CostNav/.env
+PROJECT_ROOT=/path/to/CostNav
 ```
+
+#### Download Pretrained Checkpoints
+
+Download pretrained models from [visualnav-transformer checkpoints](https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHetz263--4_2FFggg?usp=sharing):
+
+```bash
+# Create checkpoints directory at repository root
+mkdir -p checkpoints
+cd checkpoints
+
+# Download using gdown
+uv run gdown --folder https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHetz263--4_2FFggg
+```
+
+Expected structure:
+```
+checkpoints/
+├── vint.pth      # ViNT pretrained weights
+├── nomad.pth     # NoMaD pretrained weights
+└── gnm.pth       # GNM pretrained weights
+```
+
+#### Training ViNT
+
+```bash
+# From CostNav/costnav_isaacsim/
+uv run python -m il_baselines.training.train_vint \
+    --config il_baselines/training/visualnav_transformer/configs/vint_costnav.yaml
+```
+
+#### SLURM Training
+
+For cluster training:
+
+```bash
+# From CostNav root
+sbatch costnav_isaacsim/scripts/train_vint.sbatch
+```
+
+The sbatch script uses `uv run` — no manual venv activation needed.
 
 ---
 
@@ -238,9 +275,9 @@ services:
 
 ### Phase 1: Data Processing Pipeline ✅
 
-- [x] ~~Set up Docker-based visualnav-transformer environment~~ (Skipped - using conda for faster reproduction)
-- [x] Implement `rosbag_to_mediaref.py` converter (ROS bags → MediaRef)
-- [x] Add `mediaref_to_vint.py` for ViNT format conversion
+- [x] ~~Set up Docker-based visualnav-transformer environment~~ (Skipped - using **uv** for faster reproduction)
+- [x] Implement `ray_batch_convert.py` converter (ROS bags → MediaRef with parallel processing)
+- [x] Add `process_mediaref_bags.py` for ViNT format conversion
 
 ### Phase 2: Training Framework ✅
 
@@ -258,7 +295,7 @@ services:
 - ⚠️ Performance is limited without topological graph guidance
 
 **Remaining Tasks:**
-- [ ] Deploy training Docker + Slurm setup
+- [x] Setup uv environment + Slurm setup
 - [ ] Train and compare with Segway E1 data (2h, 4h, 6h training runs)
 - [ ] **(Critical)** Implement topological graph navigation
   - Current ImageGoal-only approach has poor performance (robot needs to memorize entire map)
