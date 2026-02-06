@@ -96,8 +96,8 @@ def upload_directory(local_path: Path, nucleus_url: str, timeout: int) -> bool:
     # Initialize omni.client
     omni.client.initialize()
 
-    # Register authentication callback
-    auth_subscription = omni.client.register_authentication_callback(auth_callback)
+    # Register authentication callback (subscription kept alive for duration)
+    _auth_subscription = omni.client.register_authentication_callback(auth_callback)  # noqa: F841
     print(f"Authentication callback registered (credentials: {_username})")
 
     # Extract server URL for connection check
@@ -175,18 +175,23 @@ Example usage from Isaac Sim container:
         --nucleus-url omniverse://localhost/Users \\
         --username omniverse \\
         --password costnav123
-        """
+        """,
     )
-    parser.add_argument("--local-path", default="assets/Users",
-                        help="Local path to upload (default: assets/Users)")
-    parser.add_argument("--nucleus-url", default="omniverse://localhost/Users",
-                        help="Nucleus destination URL (default: omniverse://localhost/Users)")
-    parser.add_argument("--timeout", type=int, default=120,
-                        help="Timeout waiting for Nucleus (default: 120s)")
-    parser.add_argument("--username", default=os.environ.get("OMNI_USER", "omniverse"),
-                        help="Nucleus username (default: omniverse or OMNI_USER env var)")
-    parser.add_argument("--password", default=os.environ.get("OMNI_PASS", ""),
-                        help="Nucleus password (default: OMNI_PASS env var)")
+    parser.add_argument("--local-path", default="assets/Users", help="Local path to upload (default: assets/Users)")
+    parser.add_argument(
+        "--nucleus-url",
+        default="omniverse://localhost/Users",
+        help="Nucleus destination URL (default: omniverse://localhost/Users)",
+    )
+    parser.add_argument("--timeout", type=int, default=120, help="Timeout waiting for Nucleus (default: 120s)")
+    parser.add_argument(
+        "--username",
+        default=os.environ.get("OMNI_USER", "omniverse"),
+        help="Nucleus username (default: omniverse or OMNI_USER env var)",
+    )
+    parser.add_argument(
+        "--password", default=os.environ.get("OMNI_PASS", ""), help="Nucleus password (default: OMNI_PASS env var)"
+    )
 
     args = parser.parse_args()
 
@@ -218,4 +223,3 @@ Example usage from Isaac Sim container:
 
 if __name__ == "__main__":
     main()
-

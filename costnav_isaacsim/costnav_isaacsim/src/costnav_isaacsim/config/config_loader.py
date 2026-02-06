@@ -60,6 +60,7 @@ class SamplingConfig:
 def _get_omni_url() -> str:
     """Get OMNI_URL from environment, defaulting to localhost."""
     import os
+
     return os.environ.get("OMNI_URL", "omniverse://localhost")
 
 

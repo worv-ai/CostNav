@@ -17,6 +17,7 @@ import re
 import sys
 from pathlib import Path
 
+
 # Try to bootstrap Isaac Sim environment if not already done
 def setup_isaac_sim():
     """Setup Isaac Sim environment for omni.client access."""
@@ -104,18 +105,18 @@ def rewrite_references_to_localhost(local_path: Path) -> bool:
         content = local_path.read_bytes()
 
         # Check if this is a text-based USD file (starts with #usda or contains readable text)
-        is_text_based = content.startswith(b'#usda') or suffix == '.usda'
+        is_text_based = content.startswith(b"#usda") or suffix == ".usda"
 
         if is_text_based:
             # Text-based USDA file - simple string replacement
-            text_content = content.decode('utf-8')
+            text_content = content.decode("utf-8")
             original_content = text_content
 
             # Replace the server URL with localhost
             text_content = text_content.replace(OMNIVERSE_SERVER, LOCAL_SERVER)
 
             if text_content != original_content:
-                local_path.write_text(text_content, encoding='utf-8')
+                local_path.write_text(text_content, encoding="utf-8")
                 print(f"  REWRITTEN: References updated to {LOCAL_SERVER}")
                 return True
         else:
@@ -152,9 +153,11 @@ def rewrite_references_to_localhost(local_path: Path) -> bool:
 
                     # Rewrite references
                     if prim_spec.hasReferences:
-                        for ref_list in [prim_spec.referenceList.prependedItems,
-                                         prim_spec.referenceList.appendedItems,
-                                         prim_spec.referenceList.explicitItems]:
+                        for ref_list in [
+                            prim_spec.referenceList.prependedItems,
+                            prim_spec.referenceList.appendedItems,
+                            prim_spec.referenceList.explicitItems,
+                        ]:
                             for i, ref in enumerate(ref_list):
                                 if ref.assetPath and OMNIVERSE_SERVER in ref.assetPath:
                                     new_path = rewrite_path(ref.assetPath)
@@ -164,9 +167,11 @@ def rewrite_references_to_localhost(local_path: Path) -> bool:
 
                     # Rewrite payloads
                     if prim_spec.hasPayloads:
-                        for payload_list in [prim_spec.payloadList.prependedItems,
-                                             prim_spec.payloadList.appendedItems,
-                                             prim_spec.payloadList.explicitItems]:
+                        for payload_list in [
+                            prim_spec.payloadList.prependedItems,
+                            prim_spec.payloadList.appendedItems,
+                            prim_spec.payloadList.explicitItems,
+                        ]:
                             for i, payload in enumerate(payload_list):
                                 if payload.assetPath and OMNIVERSE_SERVER in payload.assetPath:
                                     new_path = rewrite_path(payload.assetPath)
@@ -178,7 +183,7 @@ def rewrite_references_to_localhost(local_path: Path) -> bool:
                     for attr_spec in prim_spec.attributes:
                         if attr_spec.typeName == Sdf.ValueTypeNames.Asset:
                             default_val = attr_spec.default
-                            if default_val and hasattr(default_val, 'path') and default_val.path:
+                            if default_val and hasattr(default_val, "path") and default_val.path:
                                 if OMNIVERSE_SERVER in default_val.path:
                                     new_path = rewrite_path(default_val.path)
                                     attr_spec.default = Sdf.AssetPath(new_path)
@@ -203,10 +208,7 @@ def rewrite_references_to_localhost(local_path: Path) -> bool:
                     # Only do this if the server strings are the same length
                     # to avoid corrupting the binary file
                     if len(OMNIVERSE_SERVER) == len(LOCAL_SERVER):
-                        new_content = content.replace(
-                            OMNIVERSE_SERVER.encode(),
-                            LOCAL_SERVER.encode()
-                        )
+                        new_content = content.replace(OMNIVERSE_SERVER.encode(), LOCAL_SERVER.encode())
                         local_path.write_bytes(new_content)
                         print(f"  REWRITTEN: References updated to {LOCAL_SERVER} (binary)")
                         return True
@@ -294,7 +296,7 @@ def resolve_asset_path(base_url: str, asset_path: str) -> str | None:
         # url_parts = ['omniverse:', '', '<server>', 'Users', 'worv', ...]
         if len(url_parts) >= 3:
             server_prefix = "/".join(url_parts[:3])  # omniverse://<server>
-            path_part = "/".join(url_parts[3:])      # Users/worv/costnav/foods/popcorn/popcorn.usd
+            path_part = "/".join(url_parts[3:])  # Users/worv/costnav/foods/popcorn/popcorn.usd
 
             # Get the directory containing the base file
             base_dir_path = posixpath.dirname(path_part)  # Users/worv/costnav/foods/popcorn
@@ -393,14 +395,14 @@ def extract_dependencies_with_pxr(local_path: Path, base_url: str) -> list[str]:
                 for attr_spec in prim_spec.attributes:
                     if attr_spec.typeName == Sdf.ValueTypeNames.Asset:
                         default_val = attr_spec.default
-                        if default_val and hasattr(default_val, 'path') and default_val.path:
+                        if default_val and hasattr(default_val, "path") and default_val.path:
                             found_paths.add(default_val.path)
                             print(f"    [pxr] Found asset attr: {default_val.path}")
                     elif attr_spec.typeName == Sdf.ValueTypeNames.AssetArray:
                         default_val = attr_spec.default
                         if default_val:
                             for asset in default_val:
-                                if hasattr(asset, 'path') and asset.path:
+                                if hasattr(asset, "path") and asset.path:
                                     found_paths.add(asset.path)
                                     print(f"    [pxr] Found asset array item: {asset.path}")
 
@@ -423,6 +425,7 @@ def extract_dependencies_with_pxr(local_path: Path, base_url: str) -> list[str]:
     except Exception as e:
         print(f"  WARNING: Error extracting dependencies with pxr: {e}")
         import traceback
+
         traceback.print_exc()
 
     return dependencies
@@ -439,7 +442,7 @@ def extract_dependencies_with_regex(local_path: Path, base_url: str) -> list[str
     try:
         content = local_path.read_bytes()
         # Try to decode as text, but also search in binary
-        text_content = content.decode('utf-8', errors='ignore')
+        text_content = content.decode("utf-8", errors="ignore")
     except Exception as e:
         print(f"  WARNING: Could not read {local_path}: {e}")
         return dependencies
@@ -448,17 +451,17 @@ def extract_dependencies_with_regex(local_path: Path, base_url: str) -> list[str
     # These patterns capture various USD reference syntaxes
     patterns = [
         # References: @path/to/file.usd@
-        r'@([^@\x00]+\.(?:usd|usda|usdc|png|jpg|jpeg|exr|hdr|tex|dds|tga|bmp|tif|tiff))@',
+        r"@([^@\x00]+\.(?:usd|usda|usdc|png|jpg|jpeg|exr|hdr|tex|dds|tga|bmp|tif|tiff))@",
         # Asset paths in attributes: asset = @path@
-        r'asset\s*=\s*@([^@\x00]+)@',
+        r"asset\s*=\s*@([^@\x00]+)@",
         # prepend references: prepend references = [@path@]
-        r'prepend\s+references\s*=\s*@([^@\x00]+)@',
+        r"prepend\s+references\s*=\s*@([^@\x00]+)@",
         # sublayerPaths
-        r'subLayerPaths\s*=\s*\[\s*@([^@\x00]+)@',
+        r"subLayerPaths\s*=\s*\[\s*@([^@\x00]+)@",
         # Payload paths
-        r'payload\s*=\s*@([^@\x00]+)@',
+        r"payload\s*=\s*@([^@\x00]+)@",
         # defaultPrim references
-        r'references\s*=\s*@([^@\x00]+)@',
+        r"references\s*=\s*@([^@\x00]+)@",
         # Generic file references with common extensions
         r'"([^"\x00]+\.(?:usd|usda|usdc|png|jpg|jpeg|exr|hdr|tex|dds|tga|bmp|tif|tiff))"',
     ]
@@ -468,7 +471,7 @@ def extract_dependencies_with_regex(local_path: Path, base_url: str) -> list[str
         matches = re.findall(pattern, text_content, re.IGNORECASE)
         for match in matches:
             # Clean up the match (remove any trailing parameters like </Prim>)
-            clean_path = match.split('<')[0].split('>')[0].strip()
+            clean_path = match.split("<")[0].split(">")[0].strip()
             if clean_path:
                 found_paths.add(clean_path)
 
@@ -530,14 +533,14 @@ def extract_dependencies_from_mdl(local_path: Path, base_url: str) -> list[str]:
     base_dir = base_url.rsplit("/", 1)[0]  # Parent directory URL
 
     try:
-        content = local_path.read_text(encoding='utf-8', errors='ignore')
+        content = local_path.read_text(encoding="utf-8", errors="ignore")
     except Exception as e:
         print(f"  WARNING: Could not read MDL file {local_path}: {e}")
         return dependencies
 
     # Pattern to find local module imports: using .::ModuleName import *;
     # The .:: prefix means "same directory"
-    local_import_pattern = r'using\s+\.::(\w+)\s+import'
+    local_import_pattern = r"using\s+\.::(\w+)\s+import"
 
     found_modules = set()
     for match in re.finditer(local_import_pattern, content):
@@ -565,7 +568,9 @@ def extract_dependencies_from_mdl(local_path: Path, base_url: str) -> list[str]:
     return dependencies
 
 
-def download_asset_with_dependencies(omni_client, url: str, output_dir: Path, downloaded: set, stats: dict, include_siblings: bool = False) -> bool:
+def download_asset_with_dependencies(
+    omni_client, url: str, output_dir: Path, downloaded: set, stats: dict, include_siblings: bool = False
+) -> bool:
     """Download an asset and all its referenced dependencies (recursively).
 
     Args:
@@ -585,10 +590,10 @@ def download_asset_with_dependencies(omni_client, url: str, output_dir: Path, do
     downloaded.add(url)
 
     if not download_asset(omni_client, url, output_dir):
-        stats['failed'] += 1
+        stats["failed"] += 1
         return False
 
-    stats['success'] += 1
+    stats["success"] += 1
 
     # Parse USD files for dependencies
     if url.endswith((".usd", ".usda", ".usdc")):
@@ -602,7 +607,9 @@ def download_asset_with_dependencies(omni_client, url: str, output_dir: Path, do
             for dep_url in dependencies:
                 if dep_url not in downloaded:
                     print(f"    -> Dependency: {dep_url.split('/')[-1]}")
-                    download_asset_with_dependencies(omni_client, dep_url, output_dir, downloaded, stats, include_siblings=False)
+                    download_asset_with_dependencies(
+                        omni_client, dep_url, output_dir, downloaded, stats, include_siblings=False
+                    )
 
         # Rewrite references to point to localhost after extracting dependencies
         rewrite_references_to_localhost(local_path)
@@ -619,7 +626,9 @@ def download_asset_with_dependencies(omni_client, url: str, output_dir: Path, do
             for dep_url in dependencies:
                 if dep_url not in downloaded:
                     print(f"    -> MDL Module: {dep_url.split('/')[-1]}")
-                    download_asset_with_dependencies(omni_client, dep_url, output_dir, downloaded, stats, include_siblings=False)
+                    download_asset_with_dependencies(
+                        omni_client, dep_url, output_dir, downloaded, stats, include_siblings=False
+                    )
 
     # Optionally download sibling files (disabled by default)
     if include_siblings and url.endswith((".usd", ".usda", ".usdc")):
@@ -633,9 +642,9 @@ def download_asset_with_dependencies(omni_client, url: str, output_dir: Path, do
                 if entry_url not in downloaded and not entry.flags & omni_client.ItemFlags.CAN_HAVE_CHILDREN:
                     # It's a file, download it
                     if download_asset(omni_client, entry_url, output_dir):
-                        stats['success'] += 1
+                        stats["success"] += 1
                     else:
-                        stats['failed'] += 1
+                        stats["failed"] += 1
                     downloaded.add(entry_url)
 
     return True
@@ -646,25 +655,29 @@ def get_omni_client():
     # Method 1: Direct import (works if PYTHONPATH is set correctly)
     try:
         import omni.client as omni_client
+
         return omni_client
     except ImportError:
         pass
 
     # Method 2: Try importing via isaacsim bootstrap
     try:
-        import isaacsim
+        import isaacsim  # noqa: F401 (side-effect import to bootstrap Isaac Sim)
         from omni.isaac.kit import SimulationApp
+
         # Create a minimal simulation app to initialize omni
-        simulation_app = SimulationApp({"headless": True})
+        _simulation_app = SimulationApp({"headless": True})  # noqa: F841 (kept alive)
         import omni.client as omni_client
+
         return omni_client
     except ImportError:
         pass
 
     # Method 3: Try importing carb first (lower-level approach)
     try:
-        import carb
+        import carb  # noqa: F401 (side-effect import to initialize carb)
         import omni.client as omni_client
+
         return omni_client
     except ImportError:
         pass
@@ -697,7 +710,7 @@ def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     downloaded = set()
-    stats = {'success': 0, 'failed': 0}
+    stats = {"success": 0, "failed": 0}
 
     for url in OMNIVERSE_ASSETS:
         print("")
@@ -712,9 +725,8 @@ def main():
     # Shutdown client
     omni_client.shutdown()
 
-    return 0 if stats['failed'] == 0 else 1
+    return 0 if stats["failed"] == 0 else 1
 
 
 if __name__ == "__main__":
     sys.exit(main())
-

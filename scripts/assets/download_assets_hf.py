@@ -71,7 +71,7 @@ def main():
         print(f"\nDownloading: {file_path}")
         try:
             # Download directly to assets/ directory (not HF cache)
-            cached_path = hf_hub_download(
+            hf_hub_download(
                 repo_id=REPO_ID,
                 filename=file_path,
                 repo_type=REPO_TYPE,
@@ -93,4 +93,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
