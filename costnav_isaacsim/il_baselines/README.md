@@ -46,10 +46,16 @@ This installs `il_baselines` as an editable package so all imports
 
 ### Slurm
 
+Before submitting jobs, configure the YAML config files with your paths:
+
+- `data_processing/configs/processing_config.yaml` — set `input_dir` and `output_dir` for ROS Bag → MediaRef
+- `data_processing/configs/vint_processing_config.yaml` — set `input_dir` and `output_dir` for MediaRef → ViNT
+- `training/visualnav_transformer/configs/vint_costnav.yaml` — set dataset paths and `log_dir`
+
 ```bash
-# From CostNav root
-sbatch costnav_isaacsim/scripts/train_vint.sbatch
-sbatch costnav_isaacsim/scripts/process_data.sbatch
+cd costnav_isaacsim/il_baselines/scripts/
+sbatch process_data.sbatch
+sbatch train_vint.sbatch
 ```
 
 The sbatch scripts use `uv run` — no manual venv activation needed.
@@ -156,8 +162,8 @@ Edit `data_processing/configs/vint_processing_config.yaml` for Step 2 (MediaRef 
 **2. Submit the job to the cluster:**
 
 ```bash
-# From CostNav/costnav_isaacsim/il_baselines/
-sbatch scripts/process_data.sbatch
+cd costnav_isaacsim/il_baselines/scripts/
+sbatch process_data.sbatch
 ```
 
 The sbatch script will automatically read paths from the config files and execute both processing steps (ROS Bag → MediaRef → ViNT) as a batch job.
@@ -272,11 +278,28 @@ checkpoints/
 
 #### Fine-tuning ViNT on CostNav Data
 
+##### Option 1: Local Run
+
 ```bash
 # From CostNav/costnav_isaacsim/
 uv run python -m il_baselines.training.train_vint \
     --config il_baselines/training/visualnav_transformer/configs/vint_costnav.yaml
 ```
+
+##### Option 2: SLURM Job Submission
+
+**1. Edit the configuration file:**
+
+Edit `training/visualnav_transformer/configs/vint_costnav.yaml` — set dataset paths and `log_dir`.
+
+**2. Submit the job to the cluster:**
+
+```bash
+cd costnav_isaacsim/il_baselines/scripts/
+sbatch train_vint.sbatch
+```
+
+The sbatch script will automatically read paths from the config file and run training as a batch job.
 
 #### Configuration Options
 
@@ -306,12 +329,3 @@ Checkpoints are saved to `logs/vint-costnav/`.
 Evaluation runs in Docker with ROS2 and is maintained in a separate folder with its own `pyproject.toml`:
 
 See [`evaluation/README.md`](evaluation/README.md) for documentation on running trained IL policies in Isaac Sim.
-
-## Sample Data
-
-Sample rosbag files are stored at:
-
-- `data/sample_rosbags/recording_20260109_061808/` (~202MB, ~8.5s duration)
-- `data/sample_rosbags/recording_20260108_062956/` (~240MB)
-
-These contain front camera images, odometry, velocity commands, and navigation goals.

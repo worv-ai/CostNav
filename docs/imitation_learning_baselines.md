@@ -155,8 +155,8 @@ uv run python -m il_baselines.data_processing.process_data.process_mediaref_bags
 For large-scale processing on a cluster:
 
 ```bash
-# From CostNav/costnav_isaacsim/il_baselines/
-sbatch scripts/process_data.sbatch
+cd costnav_isaacsim/il_baselines/scripts/
+sbatch process_data.sbatch
 ```
 
 See [il_baselines/README.md](../costnav_isaacsim/il_baselines/README.md) for detailed configuration options.
@@ -248,8 +248,8 @@ uv run python -m il_baselines.training.train_vint \
 For cluster training:
 
 ```bash
-# From CostNav root
-sbatch costnav_isaacsim/scripts/train_vint.sbatch
+cd costnav_isaacsim/il_baselines/scripts/
+sbatch train_vint.sbatch
 ```
 
 The sbatch script uses `uv run` — no manual venv activation needed.
