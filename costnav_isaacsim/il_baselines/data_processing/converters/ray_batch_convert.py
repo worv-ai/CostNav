@@ -225,7 +225,22 @@ def main():
             elapsed = time.time() - start_time
             avg = elapsed / completed
             eta = avg * len(pending)
-            print(f"  [{completed}/{total}] Completed: {name}  (elapsed {elapsed:.0f}s, ETA {eta:.0f}s)", flush=True)
+
+            def _fmt_duration(secs: float) -> str:
+                """Format seconds as human-readable (Xd )HH:MM:SS."""
+                s = int(secs)
+                days, s = divmod(s, 86400)
+                hours, s = divmod(s, 3600)
+                minutes, s = divmod(s, 60)
+                if days > 0:
+                    return f"{days}d {hours:02d}:{minutes:02d}:{s:02d}"
+                return f"{hours:02d}:{minutes:02d}:{s:02d}"
+
+            print(
+                f"  [{completed}/{total}] Completed: {name}  "
+                f"(elapsed {_fmt_duration(elapsed)}, ETA {_fmt_duration(eta)})",
+                flush=True,
+            )
 
     elapsed = time.time() - start_time
 

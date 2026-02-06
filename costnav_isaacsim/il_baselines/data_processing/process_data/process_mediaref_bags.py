@@ -355,7 +355,21 @@ def main(args: argparse.Namespace):
         elapsed = time.time() - t0
         avg = elapsed / i
         eta = avg * (total - i)
-        print(f"  [{i}/{total}] Processed: {bag_dir.name}  (elapsed {elapsed:.0f}s, ETA {eta:.0f}s)", flush=True)
+
+        def _fmt_duration(secs: float) -> str:
+            """Format seconds as human-readable (Xd )HH:MM:SS."""
+            s = int(secs)
+            days, s = divmod(s, 86400)
+            hours, s = divmod(s, 3600)
+            minutes, s = divmod(s, 60)
+            if days > 0:
+                return f"{days}d {hours:02d}:{minutes:02d}:{s:02d}"
+            return f"{hours:02d}:{minutes:02d}:{s:02d}"
+
+        print(
+            f"  [{i}/{total}] Processed: {bag_dir.name}  (elapsed {_fmt_duration(elapsed)}, ETA {_fmt_duration(eta)})",
+            flush=True,
+        )
 
     print(f"\nProcessed {success_count}/{total} bags successfully")
 
