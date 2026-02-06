@@ -234,7 +234,8 @@ src/
 /build_ws/
 data/
 
-# Ignore assets
-assets/Users/
+# Ignore assets (but keep README)
+/assets/
+!assets/README.md
 
 .nucleus-stack/

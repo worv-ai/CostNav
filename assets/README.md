@@ -1,6 +1,6 @@
 # CostNav Assets
 
-This directory contains Omniverse USD assets used by CostNav and scripts to manage them.
+This directory contains Omniverse USD assets used by CostNav.
 
 ## For Open Source Users (Recommended)
 
@@ -25,14 +25,9 @@ cp .env.example .env
 # Get your API key at: https://org.ngc.nvidia.com/setup/api-keys
 ```
 
-**Step 2:** Run the initialization script (installs NGC CLI, downloads nucleus-stack):
+**Step 2:** Run the nucleus server:
 ```bash
-./assets/nucleus/init_nucleus.sh
-```
-
-**Step 3:** Start the Nucleus server:
-```bash
-./assets/nucleus/start_nucleus.sh
+make start-nucleus
 ```
 
 The script will configure Nucleus and copy assets. After starting, assets will be served at `omniverse://localhost`.
@@ -47,10 +42,10 @@ Default credentials:
 
 ```bash
 # Update all code references to use localhost
-python assets/update_asset_paths.py --target localhost
+python scripts/assets/update_asset_paths.py --target localhost
 
 # Dry run to preview changes
-python assets/update_asset_paths.py --target localhost --dry-run
+python scripts/assets/update_asset_paths.py --target localhost --dry-run
 ```
 
 ## For Internal Developers
@@ -68,5 +63,5 @@ make download-assets-omniverse
 huggingface-cli login
 
 # Upload assets
-python assets/upload_assets_hf.py
+python scripts/assets/upload_assets_hf.py
 ```

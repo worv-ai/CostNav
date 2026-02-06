@@ -7,16 +7,16 @@ or local file paths for users who have downloaded the assets.
 
 Usage:
     # Replace with localhost (for local Nucleus server):
-    python assets/update_asset_paths.py --target localhost
+    python scripts/assets/update_asset_paths.py --target localhost
 
     # Replace with local file paths:
-    python assets/update_asset_paths.py --target local
+    python scripts/assets/update_asset_paths.py --target local
 
     # Revert to original internal server:
-    python assets/update_asset_paths.py --target internal
+    python scripts/assets/update_asset_paths.py --target internal
 
     # Dry run (show changes without applying):
-    python assets/update_asset_paths.py --target localhost --dry-run
+    python scripts/assets/update_asset_paths.py --target localhost --dry-run
 """
 
 import argparse
@@ -29,8 +29,8 @@ from pathlib import Path
 INTERNAL_SERVER = "omniverse://10.50.2.21"
 LOCALHOST_SERVER = "omniverse://localhost"
 
-# Get the repository root (parent of assets directory)
-REPO_ROOT = Path(__file__).parent.parent
+# Get the repository root (parent of scripts directory)
+REPO_ROOT = Path(__file__).parent.parent.parent
 
 # Files to update (relative to repo root)
 FILES_TO_UPDATE = [

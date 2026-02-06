@@ -41,7 +41,9 @@ OMNIVERSE_ASSETS = [
 ]
 
 OMNIVERSE_SERVER = "omniverse://10.50.2.21"
-OUTPUT_DIR = Path("./assets")
+# Get the repository root (parent of scripts directory)
+REPO_ROOT = Path(__file__).parent.parent.parent
+OUTPUT_DIR = REPO_ROOT / "assets"
 
 
 def download_asset(omni_client, url: str, output_dir: Path) -> bool:

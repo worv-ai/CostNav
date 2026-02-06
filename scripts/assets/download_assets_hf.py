@@ -6,7 +6,7 @@ This script downloads assets from https://huggingface.co/datasets/maum-ai/CostNa
 to ./assets/Users/ maintaining the same directory structure.
 
 Usage:
-    python assets/download_assets_hf.py
+    python scripts/assets/download_assets_hf.py
 """
 
 import os
@@ -23,7 +23,9 @@ except ImportError:
 # Configuration
 REPO_ID = "maum-ai/CostNav"
 REPO_TYPE = "dataset"
-ASSETS_DIR = Path(__file__).parent
+# Get the repository root (parent of scripts directory)
+REPO_ROOT = Path(__file__).parent.parent.parent
+ASSETS_DIR = REPO_ROOT / "assets"
 # Only download files under Users/ directory
 ASSETS_PREFIX = "Users/"
 

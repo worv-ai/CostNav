@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 run-ros2 run-isaac-sim run-nav2 run-teleop start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop download-assets-omniverse download-assets-hf
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 run-ros2 run-isaac-sim run-nav2 run-teleop start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop download-assets-omniverse download-assets-hf start-nucleus stop-nucleus
 
 DOCKERFILE ?= Dockerfile
 DOCKER_BUILD ?= docker build
@@ -206,11 +206,105 @@ run-eval-teleop:
 download-assets-omniverse:
 	@echo "Downloading Omniverse assets using Isaac Sim environment..."
 	$(DOCKER_COMPOSE) --profile isaac-sim run --rm isaac-sim \
-		/isaac-sim/python.sh /workspace/assets/download_assets_omniverse.py
+		/isaac-sim/python.sh /workspace/scripts/assets/download_assets_omniverse.py
 
 # Download assets from Hugging Face dataset
 # Runs inside dev Docker container with huggingface_hub
 download-assets-hf:
 	@echo "Downloading assets from Hugging Face..."
 	$(DOCKER_COMPOSE) --profile dev run --rm dev \
-		bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/assets/download_assets_hf.py"
+		bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/scripts/assets/download_assets_hf.py"
+
+# =============================================================================
+# Nucleus Server Targets
+# =============================================================================
+
+# Nucleus server configuration
+NUCLEUS_STACK_DIR ?= .nucleus-stack
+NUCLEUS_STACK_VERSION ?= 2023.2.9
+NGC_CLI_VERSION ?= 3.41.4
+
+# Start local Omniverse Nucleus server in Docker
+# Automatically downloads Nucleus stack if not present
+# Usage: make start-nucleus
+start-nucleus:
+	@echo "Starting Omniverse Nucleus server..."
+	@if [ ! -d "assets/Users" ]; then \
+		echo "ERROR: Assets not found at assets/Users"; \
+		echo ""; \
+		echo "Please download assets first:"; \
+		echo "  make download-assets-hf"; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(NUCLEUS_STACK_DIR)/base_stack/nucleus-stack-no-ssl.yml" ]; then \
+		echo "Nucleus stack not found. Downloading via Docker..."; \
+		mkdir -p $(NUCLEUS_STACK_DIR); \
+		docker run --rm \
+			-v $(PWD)/$(NUCLEUS_STACK_DIR):/output \
+			-v $(PWD)/.env:/workspace/.env:ro \
+			ubuntu:22.04 bash -c '\
+				set -e && \
+				apt-get update && apt-get install -y wget unzip && \
+				cd /tmp && \
+				wget -q "https://api.ngc.nvidia.com/v2/resources/nvidia/ngc-apps/ngc_cli/versions/$(NGC_CLI_VERSION)/files/ngccli_linux.zip" && \
+				unzip -q ngccli_linux.zip && \
+				chmod +x ngc-cli/ngc && \
+				. /workspace/.env && \
+				mkdir -p ~/.ngc && \
+				echo -e "[CURRENT]\napikey = $${NGC_PASS}\nformat_type = ascii\norg = nvidia" > ~/.ngc/config && \
+				./ngc-cli/ngc registry resource download-version "nvidia/omniverse/nucleus-compose-stack:$(NUCLEUS_STACK_VERSION)" --dest /tmp && \
+				tar xzf /tmp/nucleus-compose-stack_v$(NUCLEUS_STACK_VERSION)/*.tar.gz -C /output --strip-components=1 && \
+				chown -R $(shell id -u):$(shell id -g) /output && \
+				echo "Nucleus stack downloaded successfully"'; \
+	fi
+	@echo "Configuring Nucleus stack..."
+	@cd $(NUCLEUS_STACK_DIR)/base_stack && \
+		if [ ! -f nucleus-stack.env.configured ]; then \
+			cp nucleus-stack.env nucleus-stack.env.backup 2>/dev/null || true; \
+			sed -i 's/^#*ACCEPT_EULA=.*/ACCEPT_EULA=1/' nucleus-stack.env; \
+			sed -i 's/^#*SECURITY_REVIEWED=.*/SECURITY_REVIEWED=1/' nucleus-stack.env; \
+			sed -i 's/^#*SERVER_IP_OR_HOST=.*/SERVER_IP_OR_HOST=localhost/' nucleus-stack.env; \
+			sed -i 's|^#*DATA_ROOT=.*|DATA_ROOT=$(PWD)/$(NUCLEUS_STACK_DIR)/data|' nucleus-stack.env; \
+			sed -i 's/^#*MASTER_PASSWORD=.*/MASTER_PASSWORD=costnav123/' nucleus-stack.env; \
+			sed -i 's/^#*SERVICE_PASSWORD=.*/SERVICE_PASSWORD=costnav123/' nucleus-stack.env; \
+			if [ -f generate-sample-insecure-secrets.sh ]; then ./generate-sample-insecure-secrets.sh; fi; \
+			touch nucleus-stack.env.configured; \
+		fi
+	@echo "Logging into NGC registry..."
+	@bash -c 'source .env && echo "$${NGC_PASS}" | docker login nvcr.io -u "$${NGC_USER:-\$$oauthtoken}" --password-stdin'
+	@echo "Copying assets to Nucleus data directory..."
+	@mkdir -p $(NUCLEUS_STACK_DIR)/data/Users
+	@cp -r assets/Users/* $(NUCLEUS_STACK_DIR)/data/Users/
+	@cd $(NUCLEUS_STACK_DIR)/base_stack && \
+		sed -i 's|^#*DATA_ROOT=.*|DATA_ROOT=$(PWD)/$(NUCLEUS_STACK_DIR)/data|' nucleus-stack.env
+	@echo "Starting Nucleus containers..."
+	cd $(NUCLEUS_STACK_DIR)/base_stack && \
+		docker compose --env-file nucleus-stack.env -f nucleus-stack-no-ssl.yml up -d
+	@echo ""
+	@echo "============================================================"
+	@echo "Nucleus server starting..."
+	@echo ""
+	@echo "Web UI:     http://localhost:8080"
+	@echo "Omniverse:  omniverse://localhost"
+	@echo ""
+	@echo "Default credentials:"
+	@echo "  Username: omniverse"
+	@echo "  Password: costnav123"
+	@echo ""
+	@echo "Assets available at:"
+	@echo "  omniverse://localhost/Users/worv/costnav/..."
+	@echo ""
+	@echo "To stop:    make stop-nucleus"
+	@echo "To test:    python assets/nucleus/test_nucleus_connection.py"
+	@echo "============================================================"
+
+# Stop local Omniverse Nucleus server
+stop-nucleus:
+	@echo "Stopping Omniverse Nucleus server..."
+	@if [ -f "$(NUCLEUS_STACK_DIR)/base_stack/nucleus-stack-no-ssl.yml" ]; then \
+		cd $(NUCLEUS_STACK_DIR)/base_stack && \
+		docker compose --env-file nucleus-stack.env -f nucleus-stack-no-ssl.yml down; \
+		echo "Nucleus server stopped."; \
+	else \
+		echo "Nucleus stack not found at $(NUCLEUS_STACK_DIR)"; \
+	fi

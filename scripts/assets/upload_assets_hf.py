@@ -10,7 +10,7 @@ Usage:
     huggingface-cli login
     
     # Then run the upload:
-    python assets/upload_assets_hf.py
+    python scripts/assets/upload_assets_hf.py
 """
 
 import os
@@ -27,7 +27,9 @@ except ImportError:
 # Configuration
 REPO_ID = "maum-ai/CostNav"
 REPO_TYPE = "dataset"
-ASSETS_DIR = Path(__file__).parent / "Users"
+# Get the repository root (parent of scripts directory)
+REPO_ROOT = Path(__file__).parent.parent.parent
+ASSETS_DIR = REPO_ROOT / "assets" / "Users"
 
 
 def main():
