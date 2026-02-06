@@ -227,9 +227,12 @@ rosbags/
 costnav_isaaclab/source/costnav_isaaclab/20*/
 
 # Work-in-progress refactored source
-src/
 .vscode/.standalone_examples.env
+.vscode/.ros2_jazzy.env
 
-/nav2_params/
+costnav_isaacsim/il_baselines/training/visualnav_transformer/checkpoints
+wandb/
+
 /build_ws/
 data/
+checkpoints/
