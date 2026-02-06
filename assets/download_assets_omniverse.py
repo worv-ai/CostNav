@@ -5,15 +5,6 @@ Download Omniverse assets from the internal server to local tmp folder.
 This script downloads all assets referenced in the codebase from
 omniverse://10.50.2.21/ to ./assets/ maintaining the same directory structure.
 
-Usage:
-    # Inside Isaac Sim environment:
-    python assets/download_omniverse_assets.py
-
-    # Or with Isaac Sim Python:
-    /isaac-sim/python.sh assets/download_omniverse_assets.py
-
-    # Or using isaacsim module directly:
-    python -c "import isaacsim; exec(open('assets/download_omniverse_assets.py').read())"
 """
 
 import os
@@ -148,22 +139,7 @@ def main():
         print("ERROR: omni.client not available.")
         print("This script must be run inside Isaac Sim environment.")
         print("")
-        print("Try one of these methods:")
-        print("")
-        print("  Method 1 - Using Isaac Sim python.sh:")
-        print("    /isaac-sim/python.sh assets/download_omniverse_assets.py")
-        print("")
-        print("  Method 2 - Using isaacsim module:")
-        print("    python -m isaacsim assets/download_omniverse_assets.py")
-        print("")
-        print("  Method 3 - Inside Docker with proper environment:")
-        print("    docker compose --profile isaac-lab run --rm isaac-lab bash")
-        print("    # Then inside container:")
-        print("    /isaac-sim/python.sh /workspace/assets/download_omniverse_assets.py")
-        print("")
-        print("  Method 4 - Source Isaac Sim environment first:")
-        print("    source /isaac-sim/setup_conda_env.sh")
-        print("    python assets/download_omniverse_assets.py")
+
         sys.exit(1)
 
     # Initialize Omniverse client

@@ -7,7 +7,7 @@ This directory contains Omniverse USD assets used by CostNav and scripts to mana
 ### 1. Download Assets from Hugging Face
 
 ```bash
-python assets/download_assets_hf.py
+make download-assets-hf
 ```
 
 This downloads all required assets to `assets/Users/`.
@@ -58,8 +58,7 @@ python assets/update_asset_paths.py --target localhost --dry-run
 ### Download from Internal Omniverse Server
 
 ```bash
-docker compose --profile isaac-lab run --rm isaac-lab \
-    python /workspace/assets/download_omniverse_assets.py
+make download-assets-omniverse
 ```
 
 ### Upload to Hugging Face

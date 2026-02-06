@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 run-ros2 run-isaac-sim run-nav2 run-teleop start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 run-ros2 run-isaac-sim run-nav2 run-teleop start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop download-assets-omniverse download-assets-hf
 
 DOCKERFILE ?= Dockerfile
 DOCKER_BUILD ?= docker build
@@ -196,3 +196,21 @@ run-eval-teleop:
 	@echo "  Number of missions:  $(NUM_MISSIONS)"
 	@echo ""
 	@bash scripts/eval.sh teleop $(TIMEOUT) $(NUM_MISSIONS)
+
+# =============================================================================
+# Asset Download Targets
+# =============================================================================
+
+# Download Omniverse assets to local ./assets/ directory
+# Runs inside Isaac Sim Docker container
+download-assets-omniverse:
+	@echo "Downloading Omniverse assets using Isaac Sim environment..."
+	$(DOCKER_COMPOSE) --profile isaac-sim run --rm isaac-sim \
+		/isaac-sim/python.sh /workspace/assets/download_assets_omniverse.py
+
+# Download assets from Hugging Face dataset
+# Runs inside dev Docker container with huggingface_hub
+download-assets-hf:
+	@echo "Downloading assets from Hugging Face..."
+	$(DOCKER_COMPOSE) --profile dev run --rm dev \
+		bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/assets/download_assets_hf.py"

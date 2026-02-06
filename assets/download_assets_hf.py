@@ -69,13 +69,12 @@ def main():
         
         print(f"\nDownloading: {file_path}")
         try:
-            # Download to cache and get the cached path
+            # Download directly to assets/ directory (not HF cache)
             cached_path = hf_hub_download(
                 repo_id=REPO_ID,
                 filename=file_path,
                 repo_type=REPO_TYPE,
                 local_dir=ASSETS_DIR,
-                local_dir_use_symlinks=False,
             )
             print(f"  SUCCESS: {local_path}")
             success_count += 1

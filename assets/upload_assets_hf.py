@@ -41,7 +41,7 @@ def main():
     # Check if assets directory exists
     if not ASSETS_DIR.exists():
         print(f"ERROR: Assets directory not found: {ASSETS_DIR}")
-        print("Please run download_omniverse_assets.py first to download assets.")
+        print("Please run `make download-assets-omniverse` first to download assets.")
         sys.exit(1)
     
     # Collect all files to upload
