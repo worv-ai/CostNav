@@ -21,6 +21,9 @@ Examples:
 - Summary of main changes
 - Files added/modified/deleted
 
+## 🔁 Reproduce
+Please write the execution commands to review this PR.
+
 ## 🧪 Testing
 - [ ] Verified locally
 - [ ] Existing experiments reproducible
