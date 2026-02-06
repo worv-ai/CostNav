@@ -162,13 +162,16 @@ make run-ros2
 
 Run the imitation learning baseline using ViNT (Visual Navigation Transformer):
 
+Download the pretrained model weights from Google Drive or train your model and place it to `checkpoints/`
+See [Download Pretrained Checkpoints](il_baselines/README.md#download-pretrained-checkpoints) for more information.
+
 ```bash
 # Build ViNT Docker image (first time only)
 make build-vint
 
 # Run ViNT evaluation with Isaac Sim
 # Optionally specify model checkpoint path
-MODEL_CHECKPOINT=/path/to/model.pth make run-vint
+MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
 
 # Or run with default model
 make run-vint

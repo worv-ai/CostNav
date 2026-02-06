@@ -353,6 +353,7 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
       - UV_LINK_MODE=copy
       - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
+      - MODEL_CHECKPOINT=${MODEL_CHECKPOINT:-checkpoints/vint.pth}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ./:/workspace
@@ -364,7 +365,7 @@ services:
         else
           ROBOT_CONFIG=/workspace/costnav_isaacsim/il_baselines/evaluation/configs/robot_segway.yaml
         fi &&
-        vint_policy_node --checkpoint /workspace/checkpoints/vint_nova_carter.pth --model_config /workspace/costnav_isaacsim/il_baselines/evaluation/configs/vint_eval.yaml --robot_config $${ROBOT_CONFIG} --inference_rate 10.0 --use_imagegoal"
+        vint_policy_node --checkpoint $${MODEL_CHECKPOINT} --model_config /workspace/costnav_isaacsim/il_baselines/evaluation/configs/vint_eval.yaml --robot_config $${ROBOT_CONFIG} --inference_rate 10.0 --use_imagegoal"
     network_mode: host
     ipc: host
     stdin_open: true
