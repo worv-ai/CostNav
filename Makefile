@@ -272,17 +272,37 @@ start-nucleus:
 		fi
 	@echo "Logging into NGC registry..."
 	@bash -c 'source .env && echo "$${NGC_PASS}" | docker login nvcr.io -u "$${NGC_USER:-\$$oauthtoken}" --password-stdin'
-	@echo "Copying assets to Nucleus data directory..."
-	@mkdir -p $(NUCLEUS_STACK_DIR)/data/Users
-	@cp -r assets/Users/* $(NUCLEUS_STACK_DIR)/data/Users/
-	@cd $(NUCLEUS_STACK_DIR)/base_stack && \
-		sed -i 's|^#*DATA_ROOT=.*|DATA_ROOT=$(PWD)/$(NUCLEUS_STACK_DIR)/data|' nucleus-stack.env
 	@echo "Starting Nucleus containers..."
 	cd $(NUCLEUS_STACK_DIR)/base_stack && \
 		docker compose --env-file nucleus-stack.env -f nucleus-stack-no-ssl.yml up -d
 	@echo ""
+	@echo "Uploading assets to Nucleus using Isaac Sim container..."
+	@if docker image inspect $(ISAAC_SIM_IMAGE) >/dev/null 2>&1; then \
+		docker run --rm \
+			--network host \
+			--entrypoint /bin/bash \
+			-v $(PWD)/assets:/workspace/assets:ro \
+			-v $(PWD)/scripts:/workspace/scripts:ro \
+			-e "OMNI_USER=omniverse" \
+			-e "OMNI_PASS=costnav123" \
+			$(ISAAC_SIM_IMAGE) \
+			-c "PYTHONPATH=/isaac-sim/kit/extscore/omni.client.lib:\$$PYTHONPATH /isaac-sim/python.sh /workspace/scripts/assets/upload_assets_to_nucleus.py \
+				--local-path /workspace/assets/Users \
+				--nucleus-url omniverse://localhost/Users \
+				--timeout 120"; \
+	else \
+		echo ""; \
+		echo "WARNING: Isaac Sim image not found: $(ISAAC_SIM_IMAGE)"; \
+		echo "Run 'make build-isaac-sim' first to enable automatic asset upload."; \
+		echo ""; \
+		echo "For now, please upload assets manually:"; \
+		echo "  1. Open http://localhost:8080"; \
+		echo "  2. Login with: omniverse / costnav123"; \
+		echo "  3. Navigate to /Users and upload files from assets/Users/"; \
+	fi
+	@echo ""
 	@echo "============================================================"
-	@echo "Nucleus server starting..."
+	@echo "Nucleus server is ready!"
 	@echo ""
 	@echo "Web UI:     http://localhost:8080"
 	@echo "Omniverse:  omniverse://localhost"
@@ -295,7 +315,6 @@ start-nucleus:
 	@echo "  omniverse://localhost/Users/worv/costnav/..."
 	@echo ""
 	@echo "To stop:    make stop-nucleus"
-	@echo "To test:    python assets/nucleus/test_nucleus_connection.py"
 	@echo "============================================================"
 
 # Stop local Omniverse Nucleus server
