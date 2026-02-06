@@ -3,11 +3,12 @@
 Download Omniverse assets from the internal server to local tmp folder.
 
 This script downloads all assets referenced in the codebase from
-omniverse://10.50.2.21/ to ./assets/ maintaining the same directory structure.
+the OMNI_URL server to ./assets/ maintaining the same directory structure.
 
 It also parses USD files to find and download all dependencies (references,
 sublayers, payloads, and texture assets).
 
+The server URL is determined by the OMNI_URL environment variable.
 """
 
 import os
@@ -38,15 +39,16 @@ def setup_isaac_sim():
 
 setup_isaac_sim()
 
-# List of all Omniverse assets used in the codebase
-OMNIVERSE_ASSETS = [
-    "omniverse://10.50.2.21/Users/worv/costnav/foods/popcorn/popcorn.usd",
-    "omniverse://10.50.2.21/Users/worv/costnav/street_sidewalk_segwaye1_Corrected.usd",
-    "omniverse://10.50.2.21/Users/worv/costnav/Street_sidewalk.usd",
-]
-
+# Get Omniverse server URL from environment
 OMNIVERSE_SERVER = "omniverse://10.50.2.21"
 LOCAL_SERVER = "omniverse://localhost"
+
+# List of all Omniverse assets used in the codebase
+OMNIVERSE_ASSETS = [
+    f"{OMNIVERSE_SERVER}/Users/worv/costnav/foods/popcorn/popcorn.usd",
+    f"{OMNIVERSE_SERVER}/Users/worv/costnav/street_sidewalk_segwaye1_Corrected.usd",
+    f"{OMNIVERSE_SERVER}/Users/worv/costnav/Street_sidewalk.usd",
+]
 # Get the repository root (parent of scripts directory)
 REPO_ROOT = Path(__file__).parent.parent.parent
 OUTPUT_DIR = REPO_ROOT / "assets"
@@ -83,7 +85,7 @@ def rewrite_references_to_localhost(local_path: Path) -> bool:
     """Rewrite Omniverse server references in a USD file to point to localhost.
 
     This modifies the downloaded USD file to replace references like
-    omniverse://10.50.2.21/... with omniverse://localhost/...
+    {OMNIVERSE_SERVER}/... with omniverse://localhost/...
 
     Args:
         local_path: Path to the local USD file
@@ -281,17 +283,17 @@ def resolve_asset_path(base_url: str, asset_path: str) -> str | None:
 
     # Handle relative paths (including implicit relative paths without ./ prefix)
     # Extract the base directory from the base URL
-    # base_url: omniverse://10.50.2.21/Users/worv/costnav/foods/popcorn/popcorn.usd
-    # base_dir: omniverse://10.50.2.21/Users/worv/costnav/foods/popcorn
+    # base_url: omniverse://<server>/Users/worv/costnav/foods/popcorn/popcorn.usd
+    # base_dir: omniverse://<server>/Users/worv/costnav/foods/popcorn
 
     # Split URL into scheme+server and path parts
     # Find the position after "omniverse://server"
     if base_url.startswith("omniverse://"):
-        # Extract server part: omniverse://10.50.2.21
+        # Extract server part: omniverse://<server>
         url_parts = base_url.split("/")
-        # url_parts = ['omniverse:', '', '10.50.2.21', 'Users', 'worv', ...]
+        # url_parts = ['omniverse:', '', '<server>', 'Users', 'worv', ...]
         if len(url_parts) >= 3:
-            server_prefix = "/".join(url_parts[:3])  # omniverse://10.50.2.21
+            server_prefix = "/".join(url_parts[:3])  # omniverse://<server>
             path_part = "/".join(url_parts[3:])      # Users/worv/costnav/foods/popcorn/popcorn.usd
 
             # Get the directory containing the base file
