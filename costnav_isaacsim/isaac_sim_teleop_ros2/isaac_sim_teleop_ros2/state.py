@@ -31,7 +31,7 @@ class ControlState:
     previous_axis_rt = 0
 
     previous_pose = Pose()
-    previous_pose.orientation.w = 1
+    previous_pose.orientation.w = 1.0
 
     current_pose = None
     twist = Twist()

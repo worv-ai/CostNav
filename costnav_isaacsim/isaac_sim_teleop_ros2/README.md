@@ -81,13 +81,13 @@ ros2 launch isaac_sim_teleop_ros2 teleop_isaac_sim.launch.py
 
 - **Left Stick (Left/Right)**: Angular velocity control
 - **Right Stick (Up/Down)**: Linear velocity control
-- **Left Bumper (LB)**: Decrease max linear velocity
-- **Right Bumper (RB)**: Increase max linear velocity
+- **Left Bumper (LB)**: Decrease max linear velocity (hold to continuously decrease)
+- **Right Bumper (RB)**: Increase max linear velocity (hold to continuously increase)
 - **Left Stick Button (LSB)**: Emergency stop toggle
 - **Right Stick Button (RSB)**: Linear rate lock toggle
-- **Right Trigger (RT)**: Model input switch
-- **X Button**: Teleport to previous pose (if teleport enabled)
-- **Y Button**: Teleport to initial pose (if teleport enabled)
+- **Right Trigger (RT)**: Model input switch / control request (depends on `use_control_topic`)
+- **X Button**: Teleport to previous pose (if `use_teleport` enabled) — **NOT YET IMPLEMENTED**: publishes to `/robot_pose` but no subscriber currently handles teleportation in Isaac Sim
+- **Y Button**: Teleport to initial pose (if `use_teleport` enabled) — **NOT YET IMPLEMENTED**: same as X Button
 
 ## Topics
 
