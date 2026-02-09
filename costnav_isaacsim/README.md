@@ -59,19 +59,31 @@ The `costnav_isaacsim` module serves as:
 
 ```
 costnav_isaacsim/
-├── costnav_isaacsim/         # CostNav Python package (pip install -e)
-│   ├── launch.py             # Isaac Sim launcher script
-│   ├── config/               # YAML configuration files
-│   └── src/costnav_isaacsim/ # Installable modules (config, mission_manager, people_manager)
-├── nav2_params/              # Nav2 navigation stack configuration
-│   ├── maps/                 # Occupancy grid maps
-│   ├── nova_carter/          # Nova Carter robot config
-│   └── segway_e1/            # Segway E1 robot config
-├── il_baselines/             # Imitation learning baselines
-│   ├── data_processing/      # ROS bag to training data conversion
-│   ├── evaluation/           # ViNT evaluation package (pip install -e)
-│   └── training/             # Model training scripts
-└── isaac_sim_teleop_ros2/    # ROS2 teleop package
+├── costnav_isaacsim/              # CostNav Python package (pip install -e)
+│   ├── launch.py                  # Thin entry point (delegates to launcher package)
+│   ├── config/                    # YAML configuration files
+│   └── src/costnav_isaacsim/      # Installable modules
+│       ├── config/                # Config dataclasses & YAML loader
+│       ├── launcher/              # Simulation launcher (refactored from launch.py)
+│       │   ├── sim_launcher.py    # CostNavSimLauncher class
+│       │   ├── extensions.py      # Isaac Sim extension management
+│       │   └── event_handlers.py  # Stage/physics event handlers
+│       ├── utils/                 # Shared utilities
+│       │   ├── args.py            # CLI argument parsing
+│       │   ├── config_cli.py      # Config loading & CLI overrides
+│       │   ├── robot_config.py    # Robot constants & resolution
+│       │   └── prim_utils.py      # USD prim manipulation helpers
+│       ├── mission_manager/       # Mission orchestration & NavMesh sampling
+│       └── people_manager.py      # Animated people (PeopleAPI)
+├── nav2_params/                   # Nav2 navigation stack configuration
+│   ├── maps/                      # Occupancy grid maps
+│   ├── nova_carter/               # Nova Carter robot config
+│   └── segway_e1/                 # Segway E1 robot config
+├── il_baselines/                  # Imitation learning baselines
+│   ├── data_processing/           # ROS bag to training data conversion
+│   ├── evaluation/                # ViNT evaluation package (pip install -e)
+│   └── training/                  # Model training scripts
+└── isaac_sim_teleop_ros2/         # ROS2 teleop package
 ```
 
 ---
@@ -308,11 +320,9 @@ docker compose --profile nav2 down
 
 ## File Reference
 
-### `costnav_isaacsim/launch.py` - Isaac Sim Launcher
+### `costnav_isaacsim/launch.py` - Entry Point
 
-Main entry point for Isaac Sim simulation with Nav2 support.
-
-> **Note**: This file was moved from `costnav/launch.py` to `costnav_isaacsim/launch.py`.
+Thin entry point that delegates to the `costnav_isaacsim.launcher` and `costnav_isaacsim.utils` packages. Parses CLI arguments, resolves robot/USD settings, loads mission config, creates a `CostNavSimLauncher`, and runs the simulation loop.
 
 **Usage:**
 
@@ -331,7 +341,7 @@ python launch.py --debug                            # Enable debug logging
 | `--usd_path`        | (derived from `--robot`)     | USD scene path                            |
 | `--robot`           | `nova_carter`                | Robot preset (`nova_carter`, `segway_e1`) |
 | `--headless`        | `false`                      | Run without GUI                           |
-| `--physics_dt`      | `1/60` (0.0167s)             | Physics timestep                          |
+| `--physics_dt`      | `1/120` (0.0083s)            | Physics timestep                          |
 | `--rendering_dt`    | `1/30` (0.0333s)             | Rendering timestep                        |
 | `--debug`           | `false`                      | Enable debug logging                      |
 | `--people`          | `20`                         | Number of people to spawn                 |
@@ -344,12 +354,22 @@ python launch.py --debug                            # Enable debug logging
 `--robot` defaults to `SIM_ROBOT` environment variable when set, otherwise `nova_carter`.
 If the Segway prim is not detected automatically, set `ROBOT_PRIM_PATH` to the robot base prim.
 
-**Key Features:**
+### `launcher/` - Simulation Launcher Package
 
-- **ROS2 Bridge**: Enables `isaacsim.ros2.bridge` extension for Nav2 communication
-- **Health Check**: Writes `/tmp/.isaac_sim_running` when ready (Docker healthcheck)
-- **Warm-up Steps**: Runs 100 warm-up steps to stabilize physics timing
-- **Throttled Loop**: Maintains consistent rendering framerate
+| File                | Description                                                                                                             |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `sim_launcher.py`   | `CostNavSimLauncher` class — SimulationApp creation, stage loading, simulation loop, mission/people manager integration |
+| `extensions.py`     | `enable_isaac_sim_extensions()` — enables navigation, sensor, ROS2 bridge, and PeopleAPI extensions                     |
+| `event_handlers.py` | `register_stage_open_handler()`, `handle_physics_reinit()` — stage reload and physics view invalidation recovery        |
+
+### `utils/` - Shared Utilities Package
+
+| File              | Description                                                                                                           |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `args.py`         | `parse_args()` — all CLI argument definitions (no Isaac Sim dependency)                                               |
+| `config_cli.py`   | `load_and_override_config()` — loads YAML config and applies CLI overrides                                            |
+| `robot_config.py` | Robot constants (`DEFAULT_USD_PATHS`, `DEFAULT_ROBOT_PRIM_PATHS`, etc.), `resolve_robot_name()`, `resolve_usd_path()` |
+| `prim_utils.py`   | USD prim helpers: `resolve_robot_prim_path()`, `find_robot_prim_by_tokens()`, `get/set_prim_world_translation()`      |
 
 ### `nav2_params/` - Navigation Configuration
 
@@ -615,7 +635,7 @@ python launch.py --headless
 | ---------------- | ---------- | ---------------------- |
 | `--usd_path`     | (internal) | Path to USD scene file |
 | `--headless`     | false      | Run without GUI        |
-| `--physics_dt`   | 1/60       | Physics time step      |
+| `--physics_dt`   | 1/120      | Physics time step      |
 | `--rendering_dt` | 1/30       | Rendering time step    |
 | `--debug`        | false      | Enable debug logging   |
 
