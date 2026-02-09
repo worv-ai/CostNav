@@ -8,16 +8,10 @@ x-ros2-service: &ros2-service
   image: costnav-ros2-jazzy:${COSTNAV_VERSION:-0.1.0}
   volumes:
     - ./third_party/IsaacSim-ros_workspaces/build_ws/jazzy/isaac_sim_ros_ws:/workspace/build_ws:rw
-    - ./costnav_isaacsim/nav2_params:/workspace/nav2_params:ro
+    - ./costnav_isaacsim/nav2_params:/workspace/costnav_isaacsim/nav2_params
     - /tmp/.X11-unix:/tmp/.X11-unix:rw
     - ${XAUTHORITY}:/tmp/.Xauthority:ro
   working_dir: /workspace
-  command: >
-    bash -c "
-      source /opt/ros/jazzy/setup.bash &&
-      source /workspace/build_ws/install/local_setup.sh &&
-      ros2 launch /workspace/nav2_params/carter_navigation.launch.py map:=/workspace/nav2_params/carter_sidewalk.yaml params_file:=/workspace/nav2_params/carter_navigation_params.yaml
-    "
   network_mode: host
   ipc: host
   stdin_open: true
@@ -26,7 +20,7 @@ x-ros2-service: &ros2-service
 services:
   # Isaac Sim environment
   isaac-sim:
-    profiles: ["isaac-sim", "nav2", "teleop"]
+    profiles: ["isaac-sim", "nav2", "teleop", "vint"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -62,6 +56,7 @@ services:
       - NUM_PEOPLE=${NUM_PEOPLE:-20}
       - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
       - FOOD=${FOOD:-True}
+      - GOAL_IMAGE=${GOAL_IMAGE:-False}
     volumes:
       - .:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -79,7 +74,7 @@ services:
     working_dir: /workspace
     command:
       - "-ic"
-      - "/workspace/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-20} --robot $${SIM_ROBOT:-segway_e1} --food-enabled $${FOOD:-True}"
+      - "/workspace/costnav_isaacsim/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-20} --robot $${SIM_ROBOT:-segway_e1} --food-enabled $${FOOD:-True} --goal-image-enabled $${GOAL_IMAGE:-False}"
     healthcheck:
       test:
         [
@@ -164,7 +159,7 @@ services:
     tty: true
     command: sleep infinity
 
-  # ROS2 Jazzy Runtime Container
+  # ROS2 Jazzy Container for development
   ros2:
     <<: *ros2-service
     profiles: ["ros2"]
@@ -175,6 +170,13 @@ services:
       - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
       - DISPLAY=${DISPLAY:-:0}
       - FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/fastdds.xml
+    volumes:
+      - ./third_party/IsaacSim-ros_workspaces/build_ws/jazzy/isaac_sim_ros_ws:/workspace/build_ws
+      - ./costnav_isaacsim/nav2_params:/workspace/costnav_isaacsim/nav2_params
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XAUTHORITY}:/tmp/.Xauthority:ro
+      - .:/workspace
+    command: sleep infinity
 
   # ROS2 with Nav2 - waits for Isaac Sim to be healthy before starting
   ros2-nav2:
@@ -197,17 +199,17 @@ services:
         source /opt/ros/jazzy/setup.bash &&
         source /workspace/build_ws/install/local_setup.sh &&
         if [ \"$${TUNED}\" = \"True\" ]; then
-          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_true.yaml
+          PARAMS_FILE=/workspace/costnav_isaacsim/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_true.yaml
         else
-          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_false.yaml
+          PARAMS_FILE=/workspace/costnav_isaacsim/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_false.yaml
         fi &&
-        ros2 launch /workspace/nav2_params/nav2.launch.py params_file:=$${PARAMS_FILE}
+        ros2 launch /workspace/costnav_isaacsim/nav2_params/nav2.launch.py params_file:=$${PARAMS_FILE}
       "
 
   # ROS2 with RViz - standalone visualization service that runs alongside Isaac Sim
   ros2-rviz-nav2:
     <<: *ros2-service
-    profiles: ["isaac-sim", "nav2"]
+    profiles: ["isaac-sim", "nav2", "vint"]
     container_name: costnav-ros2-rviz-nav2
     environment:
       - ROS_DISTRO=jazzy
@@ -226,15 +228,15 @@ services:
         source /opt/ros/jazzy/setup.bash &&
         source /workspace/build_ws/install/local_setup.sh &&
         if [ \"$${TUNED}\" = \"True\" ]; then
-          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_true.yaml
+          PARAMS_FILE=/workspace/costnav_isaacsim/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_true.yaml
         else
-          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_false.yaml
+          PARAMS_FILE=/workspace/costnav_isaacsim/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_false.yaml
         fi &&
-        RVIZ_LAUNCH=/workspace/nav2_params/rviz.launch.py &&
+        RVIZ_LAUNCH=/workspace/costnav_isaacsim/nav2_params/rviz.launch.py &&
         if [ \"$${AMCL}\" = \"False\" ]; then
-          RVIZ_LAUNCH=/workspace/nav2_params/rviz_no_amcl.launch.py
+          RVIZ_LAUNCH=/workspace/costnav_isaacsim/nav2_params/rviz_no_amcl.launch.py
         fi &&
-        ros2 launch $${RVIZ_LAUNCH} rviz_config:=/workspace/nav2_params/$${SIM_ROBOT}/navigation.rviz map:=/workspace/nav2_params/maps/sidewalk.yaml params_file:=$${PARAMS_FILE}
+        ros2 launch $${RVIZ_LAUNCH} rviz_config:=/workspace/costnav_isaacsim/nav2_params/$${SIM_ROBOT}/navigation.rviz map:=/workspace/costnav_isaacsim/nav2_params/maps/sidewalk.yaml params_file:=$${PARAMS_FILE}
       "
 
   # ROS2 with RViz (teleop profile) - hides TF/point clouds by default
@@ -260,15 +262,15 @@ services:
         source /opt/ros/jazzy/setup.bash &&
         source /workspace/build_ws/install/local_setup.sh &&
         if [ \"$${TUNED}\" = \"True\" ]; then
-          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_true.yaml
+          PARAMS_FILE=/workspace/costnav_isaacsim/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_true.yaml
         else
-          PARAMS_FILE=/workspace/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_false.yaml
+          PARAMS_FILE=/workspace/costnav_isaacsim/nav2_params/$${SIM_ROBOT}/navigation_params_tuned_false.yaml
         fi &&
-        RVIZ_LAUNCH=/workspace/nav2_params/rviz.launch.py &&
+        RVIZ_LAUNCH=/workspace/costnav_isaacsim/nav2_params/rviz.launch.py &&
         if [ \"$${AMCL}\" = \"False\" ]; then
-          RVIZ_LAUNCH=/workspace/nav2_params/rviz_no_amcl.launch.py
+          RVIZ_LAUNCH=/workspace/costnav_isaacsim/nav2_params/rviz_no_amcl.launch.py
         fi &&
-        ros2 launch $${RVIZ_LAUNCH} rviz_config:=/workspace/nav2_params/$${SIM_ROBOT}/navigation_teleop.rviz map:=/workspace/nav2_params/maps/sidewalk.yaml params_file:=$${PARAMS_FILE}
+        ros2 launch $${RVIZ_LAUNCH} rviz_config:=/workspace/costnav_isaacsim/nav2_params/$${SIM_ROBOT}/navigation_teleop.rviz map:=/workspace/costnav_isaacsim/nav2_params/maps/sidewalk.yaml params_file:=$${PARAMS_FILE}
       "
 
   # ROS2 with teleop - waits for Isaac Sim to be healthy before starting
@@ -288,7 +290,7 @@ services:
       - SIM_ROBOT=${SIM_ROBOT:-segway_e1} # NOTE: isaac_sim_teleop_ros2 Package requires SIM_ROBOT
     volumes:
       - ./third_party/IsaacSim-ros_workspaces/build_ws/jazzy/isaac_sim_ros_ws:/workspace/build_ws:rw
-      - ./costnav_isaacsim/isaac_sim_teleop_ros2:/workspace/isaac_sim_teleop_ros2:rw
+      - .:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
     devices:
       - /dev/input/by-id/usb-Microsoft_Controller_${XBOX_ID:-0}-event-joystick:/dev/input/event0
@@ -323,3 +325,116 @@ services:
         ros2 run image_transport republish --ros-args -p in_transport:=raw -p out_transport:=compressed --remap in:=/front_stereo_camera/left/image_raw --remap out/compressed:=/front_stereo_camera/left/image_raw/compressed &
         ros2 bag record -a -o /workspace/rosbags/recording_$$(date +%Y%m%d_%H%M%S) --exclude-topics /front_stereo_camera/left/image_raw
       "
+
+  # ROS2 with ViNT policy
+  ros2-vint:
+    profiles: ["vint"]
+    build:
+      context: .
+      dockerfile: Dockerfile.vint
+    image: costnav-ros2-vint:${COSTNAV_VERSION:-0.1.0}
+    container_name: costnav-ros2-vint
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${GPU_DEVICE_IDS:-0}"]
+              capabilities: [gpu]
+    depends_on:
+      isaac-sim:
+        condition: service_healthy
+    environment:
+      - ROS_DISTRO=jazzy
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+      - DISPLAY=${DISPLAY:-:0}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
+      - UV_LINK_MODE=copy
+      - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
+      - MODEL_CHECKPOINT=${MODEL_CHECKPOINT:-checkpoints/vint.pth}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ./:/workspace
+    working_dir: /workspace
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+        if [ \"$${SIM_ROBOT}\" = \"nova_carter\" ]; then
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_baselines/evaluation/configs/robot_carter.yaml
+        else
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_baselines/evaluation/configs/robot_segway.yaml
+        fi &&
+        vint_policy_node --checkpoint $${MODEL_CHECKPOINT} --model_config /workspace/costnav_isaacsim/il_baselines/evaluation/configs/vint_eval.yaml --robot_config $${ROBOT_CONFIG} --inference_rate 10.0 --use_imagegoal"
+    network_mode: host
+    ipc: host
+    stdin_open: true
+    tty: true
+
+  # ROS2 Trajectory Follower - MPC controller for executing ViNT trajectories
+  ros2-vint-trajectory-follower:
+    profiles: ["vint"]
+    build:
+      context: .
+      dockerfile: Dockerfile.vint
+    image: costnav-ros2-vint:${COSTNAV_VERSION:-0.1.0}
+    container_name: costnav-ros2-vint-trajectory-follower
+    depends_on:
+      isaac-sim:
+        condition: service_healthy
+    environment:
+      - ROS_DISTRO=jazzy
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+      - DISPLAY=${DISPLAY:-:0}
+      - UV_LINK_MODE=copy
+      - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - .:/workspace
+    working_dir: /workspace
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+        if [ \"$${SIM_ROBOT}\" = \"nova_carter\" ]; then
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_baselines/evaluation/configs/robot_carter.yaml
+        else
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_baselines/evaluation/configs/robot_segway.yaml
+        fi &&
+        trajectory_follower_node --robot_config $${ROBOT_CONFIG} --control_rate 20.0 --max_linear_vel 0.5 --max_angular_vel 0.5"
+    network_mode: host
+    ipc: host
+    stdin_open: true
+    tty: true
+
+  # ROS2 with ViNT policy - for devcontainer development
+  ros2-vint-dev:
+    profiles: ["vint-dev"]
+    build:
+      context: .
+      dockerfile: Dockerfile.vint
+    image: costnav-ros2-vint:${COSTNAV_VERSION:-0.1.0}
+    container_name: costnav-ros2-vint-dev
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${GPU_DEVICE_IDS:-0}"]
+              capabilities: [gpu]
+    environment:
+      - ROS_DISTRO=jazzy
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+      - DISPLAY=${DISPLAY:-:0}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
+      - UV_LINK_MODE=copy
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - .:/workspace
+    working_dir: /workspace
+    command: sleep infinity
+    network_mode: host
+    ipc: host
+    stdin_open: true
+    tty: true

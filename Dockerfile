@@ -67,13 +67,14 @@ ENV LD_LIBRARY_PATH="\
 
 COPY pyproject.toml ./
 COPY README.md ./
+COPY costnav_isaacsim/costnav_isaacsim/ ./costnav_isaacsim/costnav_isaacsim/
 
 # python -> python3 shim
 RUN ln -sf /isaac-sim/kit/python/bin/python3 /isaac-sim/kit/python/bin/python
 
-# Isaac Sim extras
+# Install costnav package (mission config, people manager, mission manager)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --python="${PYTHON_BIN}" --system -e ".[isaac-sim,dev]"
+    uv pip install --python="${PYTHON_BIN}" --system -e ./costnav_isaacsim/costnav_isaacsim
 
 # Install pre-commit for git hooks
 RUN --mount=type=cache,target=/root/.cache/uv \
