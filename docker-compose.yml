@@ -299,7 +299,7 @@ services:
       bash -c "
         source /opt/ros/jazzy/setup.bash &&
         source /workspace/build_ws/install/local_setup.sh &&
-        cd /workspace/isaac_sim_teleop_ros2 &&
+        cd /workspace/costnav_isaacsim/isaac_sim_teleop_ros2 &&
         colcon build --packages-select isaac_sim_teleop_ros2 &&
         source install/local_setup.sh &&
         ros2 launch isaac_sim_teleop_ros2 teleop_isaac_sim.launch.py
