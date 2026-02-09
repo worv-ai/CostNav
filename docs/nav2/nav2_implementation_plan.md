@@ -20,7 +20,7 @@
 - **Basic Navigation**: Both Nova Carter and Segway E1 successfully navigate to goals
 - **Mission Orchestration**: Automated start/goal sampling, robot teleportation, and RViz visualization
 - **NavMesh Position Sampling**: Valid start/goal positions sampled from Isaac Sim's NavMesh
-- **RViz Marker Visualization**: Start (green), goal (red), and robot (blue) markers
+- **RViz Marker Visualization**: Start (green) and goal (red) markers
 - **Robot-Specific Configuration**: Separate parameter files for Nova Carter and Segway E1
 - **Parameter Tuning**: Nav2 parameters optimized for both Nova Carter and Segway E1
 - **Localization**: Using ground truth odometry (AMCL disabled) for accurate position tracking
@@ -1034,7 +1034,7 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 - [x] Implement position sampling using NavMesh
 - [x] Ensure minimum distance threshold between start and goal
 - [x] Implement robot teleportation and mission initiation
-- [x] Configure RViz markers for start position, goal position, current robot position
+- [x] Configure RViz markers for start position and goal position
 
 **Deliverables:**
 
@@ -1053,7 +1053,7 @@ Following the [official Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsi
 - ✅ Recovery behaviors work
 - ✅ Start/goal positions sampled from NavMesh with minimum distance threshold (5-50m configurable)
 - ✅ Robot teleports to start and navigates to goal automatically
-- ✅ RViz displays distinct markers for start (green), goal (red), and robot (blue) positions
+- ✅ RViz displays distinct markers for start (green) and goal (red) positions
 - ✅ Parameters optimized for performance
 
 #### Implementation: Nav2 Mission Module
@@ -1075,7 +1075,6 @@ The following components have been implemented in `/workspace/costnav_isaacsim/n
 - `MarkerPublisher` ROS2 node publishing to:
   - `/start_marker` - Green arrow for start position
   - `/goal_marker` - Red arrow for goal position
-  - `/robot_marker` - Blue arrow for current robot position (real-time from `/odom`)
 - Uses `visualization_msgs/Marker` with ARROW type
 - TRANSIENT_LOCAL QoS for persistent marker visibility
 
@@ -1121,7 +1120,6 @@ markers:
   topics:
     start: "/start_marker"
     goal: "/goal_marker"
-    robot: "/robot_marker"
 ```
 
 **6. Integrated Launch (`launch.py`)**
@@ -1148,11 +1146,10 @@ python launch.py --mission-timeout 600 --min-distance 10
 
 #### RViz Marker Topics
 
-| Topic           | Color | Description                    |
-| --------------- | ----- | ------------------------------ |
-| `/start_marker` | Green | Start position (ARROW marker)  |
-| `/goal_marker`  | Red   | Goal position (ARROW marker)   |
-| `/robot_marker` | Blue  | Current robot position (10 Hz) |
+| Topic           | Color | Description                   |
+| --------------- | ----- | ----------------------------- |
+| `/start_marker` | Green | Start position (ARROW marker) |
+| `/goal_marker`  | Red   | Goal position (ARROW marker)  |
 
 ---
 

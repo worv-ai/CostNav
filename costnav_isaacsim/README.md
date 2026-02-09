@@ -587,15 +587,10 @@ markers:
   topics:
     start: "/start_marker"
     goal: "/goal_marker"
-    robot: "/robot_marker"
   scale:
     arrow_length: 1.0
     arrow_width: 0.2
     arrow_height: 0.2
-  robot_scale:
-    length: 0.9
-    width: 0.5
-    height: 0.2
 ```
 
 **Key Configuration Parameters:**
@@ -740,7 +735,7 @@ This state machine approach ensures:
 - **Path Validation**: Verify navigable paths exist between sampled positions
 - **Robot Teleportation**: Teleport robot to start position in Isaac Sim with physics settling
 - **AMCL Initialization**: Publish initial pose for localization
-- **RViz Markers**: Visualize start (green), goal (red), and robot (blue) positions
+- **RViz Markers**: Visualize start (green) and goal (red) positions
 - **Manual Trigger**: Start missions via `/start_mission` (e.g. `make start-mission`)
 - **Auto-Setup**: Automatically configures Isaac Sim teleportation if robot_prim_path is provided
 
@@ -748,11 +743,12 @@ This state machine approach ensures:
 
 The MissionManager publishes visualization markers for debugging and monitoring:
 
-| Topic           | Type                        | Color           | Description                    |
-| --------------- | --------------------------- | --------------- | ------------------------------ |
-| `/start_marker` | `visualization_msgs/Marker` | Green (0, 1, 0) | Start position (ARROW marker)  |
-| `/goal_marker`  | `visualization_msgs/Marker` | Red (1, 0, 0)   | Goal position (ARROW marker)   |
-| `/robot_marker` | `visualization_msgs/Marker` | Blue (0, 0, 1)  | Current robot position (10 Hz) |
+| Topic           | Type                        | Color           | Description                   |
+| --------------- | --------------------------- | --------------- | ----------------------------- |
+| `/start_marker` | `visualization_msgs/Marker` | Green (0, 1, 0) | Start position (ARROW marker) |
+| `/goal_marker`  | `visualization_msgs/Marker` | Red (1, 0, 0)   | Goal position (ARROW marker)  |
+
+> **Note:** `robot_marker` was removed because it degrades RViz performance; use the TF axis display instead.
 
 **Marker Properties:**
 
@@ -767,7 +763,6 @@ The MissionManager publishes visualization markers for debugging and monitoring:
 2. Add "Marker" displays for each topic:
    - `/start_marker`
    - `/goal_marker`
-   - `/robot_marker`
 3. Set "Fixed Frame" to `map`
 4. Markers will appear when missions are running
 
