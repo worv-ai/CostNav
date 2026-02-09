@@ -48,10 +48,12 @@ ros2 launch isaac_sim_teleop_ros2 teleop_isaac_sim.launch.py
 ### Topics
 
 **Published:**
+
 - `/cmd_vel` (`geometry_msgs/msg/Twist`) - Velocity commands for the robot
 - `/is_model` (`std_msgs/msg/Bool`) - Whether model control is active
 
 **Subscribed:**
+
 - `/joy` (`sensor_msgs/msg/Joy`) - Joystick input
 - `/cmd_vel_model` (`geometry_msgs/msg/Twist`) - Model velocity commands (optional)
 - `/odom` (`nav_msgs/msg/Odometry`) - Odometry feedback (optional)
@@ -72,6 +74,7 @@ ros2 launch isaac_sim_teleop_ros2 teleop_isaac_sim.launch.py
 - `auto_restart_on_collision` (default: 'true') - Auto restart on collision
 - `use_control_topic` (default: 'false') - Use control topic mode
 - `frame_id` (default: 'teleop') - Frame ID for teleop
+- `odom_topic` (default: '/odom') - Odometry topic name
 - `img_list` (default: '') - Comma-separated list of image topics
 
 ### Joystick Controls
@@ -141,4 +144,3 @@ ros2 topic echo /joy
 ## License
 
 BSD
-

@@ -1,6 +1,5 @@
 # ROS2 Jazzy Runtime Container for Isaac Sim ROS Workspace
 # This container mounts the pre-built workspace from the host
-# Do NOT run colcon build in this container - the workspace is already built
 FROM osrf/ros:jazzy-desktop
 
 # Set environment variables
@@ -31,9 +30,10 @@ WORKDIR /workspace
 COPY third_party/IsaacSim-ros_workspaces/jazzy_ws/fastdds.xml /workspace/build_ws/fastdds.xml
 ENV FASTRTPS_DEFAULT_PROFILES_FILE=/workspace/build_ws/fastdds.xml
 
-# Pre-build the isaac_sim_teleop_ros2 package into /ros2_ws
-# (separate from /workspace/build_ws which gets overwritten by the host volume mount at runtime)
+# Pre-build the isaac_sim_teleop_ros2 package into /workspace/build_ws
 COPY costnav_isaacsim/isaac_sim_teleop_ros2 /workspace/build_ws/src/isaac_sim_teleop_ros2
+
+# Build only the isaac_sim_teleop_ros2 package
 RUN . /opt/ros/jazzy/setup.sh && \
     cd /workspace/build_ws && \
     colcon build --packages-select isaac_sim_teleop_ros2

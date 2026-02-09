@@ -38,6 +38,8 @@ def generate_launch_description():
 
     frame_id_arg = DeclareLaunchArgument("frame_id", default_value="teleop", description="Frame ID for teleop")
 
+    odom_topic_arg = DeclareLaunchArgument("odom_topic", default_value="/odom", description="Odometry topic name")
+
     img_list_arg = DeclareLaunchArgument(
         "img_list", default_value="", description="Comma-separated list of image topics"
     )
@@ -78,13 +80,13 @@ def generate_launch_description():
                 "auto_restart_on_collision": LaunchConfiguration("auto_restart_on_collision"),
                 "use_control_topic": LaunchConfiguration("use_control_topic"),
                 "frame_id": LaunchConfiguration("frame_id"),
+                "odom_topic": LaunchConfiguration("odom_topic"),
                 "img_list": LaunchConfiguration("img_list"),
             }
         ],
         remappings=[
             ("/cmd_vel", "/cmd_vel"),
             ("/joy", "/joy"),
-            ("/odom", "/odom"),
         ],
     )
 
@@ -99,6 +101,7 @@ def generate_launch_description():
             auto_restart_on_collision_arg,
             use_control_topic_arg,
             frame_id_arg,
+            odom_topic_arg,
             img_list_arg,
             joy_node,
             teleop_node,

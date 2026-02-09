@@ -276,9 +276,6 @@ services:
       - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
       - DISPLAY=${DISPLAY:-:0}
       - SIM_ROBOT=${SIM_ROBOT:-segway_e1} # NOTE: isaac_sim_teleop_ros2 Package requires SIM_ROBOT
-    volumes:
-      - .:/workspace
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
     devices:
       - /dev/input/by-id/usb-Microsoft_Controller_${XBOX_ID:-0}-event-joystick:/dev/input/event0
       - /dev/input/by-id/usb-Microsoft_Controller_${XBOX_ID:-0}-joystick:/dev/input/js0
@@ -287,7 +284,7 @@ services:
         ros2 run joy joy_node --ros-args -p deadzone:=0.12 -p autorepeat_rate:=0.0 -p device_id:=0 &
         JOY_PID=$$! &&
         trap 'kill $$JOY_PID 2>/dev/null; wait $$JOY_PID 2>/dev/null' EXIT &&
-        ros2 run isaac_sim_teleop_ros2 isaac_sim_teleop_node
+        ros2 run isaac_sim_teleop_ros2 isaac_sim_teleop_node --ros-args -p odom_topic:=/chassis/odom
       "
 
   # ROS2 bag recorder - records all ROS messages to a bag file

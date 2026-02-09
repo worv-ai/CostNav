@@ -18,6 +18,9 @@ TUNED ?= True
 AMCL ?= False
 GOAL_IMAGE ?= False
 
+# Joystick settings for teleop (always reads from .env)
+XBOX_ID := $(shell grep '^XBOX_ID=' .env 2>/dev/null | cut -d= -f2)
+
 # model checkpoint path
 MODEL_CHECKPOINT ?= checkpoints/vint.pth
 
@@ -87,25 +90,17 @@ run-nav2:
 # Trigger mission start (manual)
 start-mission:
 	@container=""; \
-	if docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-nav2"; then \
-		container="costnav-ros2-nav2"; \
-	elif docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-teleop"; then \
-		container="costnav-ros2-teleop"; \
-	elif docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-vint"; then \
-		container="costnav-ros2-vint"; \
-	elif docker ps --format '{{.Names}}' | grep -qx "costnav-ros2"; then \
-		container="costnav-ros2"; \
-	fi; \
+	names=$$(docker ps --format '{{.Names}}'); \
+	for svc in costnav-ros2-nav2 costnav-ros2-teleop costnav-ros2-vint costnav-ros2; do \
+		container=$$(echo "$$names" | grep -m1 -E "^$${svc}($$|-run-)" || true); \
+		[ -n "$$container" ] && break; \
+	done; \
 	if [ -z "$$container" ]; then \
-		echo "No ROS2 container running (expected costnav-ros2-nav2, costnav-ros2-teleop, costnav-ros2-vint, costnav-ros2, or costnav-isaac-sim)."; \
+		echo "No ROS2 container running (expected costnav-ros2-nav2, costnav-ros2-teleop, costnav-ros2-vint, costnav-ros2)."; \
 		exit 1; \
 	fi; \
 	echo "Calling /start_mission via $$container"; \
-	docker exec "$$container" bash -c " \
-		if [ -f /opt/ros/jazzy/setup.bash ]; then source /opt/ros/jazzy/setup.bash; fi; \
-		if [ -f /workspace/build_ws/install/local_setup.sh ]; then source /workspace/build_ws/install/local_setup.sh; fi; \
-		if [ -f /isaac-sim/setup_ros_env.sh ]; then source /isaac-sim/setup_ros_env.sh; fi; \
-		ros2 service call /start_mission std_srvs/srv/Trigger {}"
+	docker exec "$$container" /ros_entrypoint.sh ros2 service call /start_mission std_srvs/srv/Trigger {}
 
 # Start ROS bag recording then trigger a mission
 start-mission-record:
@@ -126,7 +121,7 @@ SIM_ROBOT := segway_e1
 endif
 endif
 
-# Run both Isaac Sim and ROS2 teleop together (using combined 'teleop' profile)
+# Run Isaac Sim + RViz, then launch teleop node interactively (curses UI visible)
 # Usage: make run-teleop NUM_PEOPLE=5 FOOD=1 GOAL_IMAGE=True
 run-teleop:
 	@if [ "$(SIM_ROBOT)" != "nova_carter" ] && [ "$(SIM_ROBOT)" != "segway_e1" ]; then \
@@ -134,8 +129,27 @@ run-teleop:
 		exit 1; \
 	fi
 	xhost +local:docker 2>/dev/null || true
+	@# Bring down any previous teleop session
 	SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile teleop down
-	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) GOAL_IMAGE=$(GOAL_IMAGE) $(DOCKER_COMPOSE) --profile teleop up
+	@# Start Isaac Sim and RViz in background
+	@echo "Waiting for Isaac Sim to become healthy (tip: run 'docker logs -f costnav-isaac-sim' in another terminal to monitor)..."
+	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) GOAL_IMAGE=$(GOAL_IMAGE) \
+		$(DOCKER_COMPOSE) --profile teleop up -d
+	@# Wait for Isaac Sim to become healthy
+	@timeout 600 bash -c 'while [ "$$(docker inspect -f "{{.State.Health.Status}}" costnav-isaac-sim 2>/dev/null)" != "healthy" ]; do sleep 5; done' \
+		|| { echo "ERROR: Isaac Sim did not become healthy within 10 minutes."; exit 1; }
+	@echo "Isaac Sim is healthy. Starting teleop node..."
+	@# Resize terminal to minimum size for curses UI (58x35)
+	@cols=$$(tput cols 2>/dev/null || echo 0); rows=$$(tput lines 2>/dev/null || echo 0); \
+	if [ "$$cols" -lt 58 ] || [ "$$rows" -lt 35 ]; then \
+		printf '\033[8;35;58t'; \
+		sleep 0.3; \
+	fi
+	@# Run teleop interactively so the curses UI is visible
+	@# When teleop exits (Ctrl+C or normal end), bring down the teleop compose profile
+	SIM_ROBOT=$(SIM_ROBOT) XBOX_ID=$(XBOX_ID) \
+		$(DOCKER_COMPOSE) --profile teleop run --rm ros2-teleop; \
+	SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile teleop down
 
 # =============================================================================
 # IL Baselines (ViNT) Targets
@@ -203,7 +217,7 @@ run-eval-nav2:
 # Usage: make run-eval-teleop TIMEOUT=20 NUM_MISSIONS=10
 # Output: ./logs/teleop_evaluation_<timestamp>.log
 run-eval-teleop:
-	@if ! docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-teleop"; then \
+	@if ! docker ps --format '{{.Names}}' | grep -qE "^costnav-ros2-teleop($$|-run-)"; then \
 		echo "ERROR: 'make run-teleop' is not running."; \
 		echo ""; \
 		echo "Please start teleop first in a separate terminal:"; \

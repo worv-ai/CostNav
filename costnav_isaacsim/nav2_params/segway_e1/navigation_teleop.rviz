@@ -9,6 +9,7 @@ Panels:
         - /TF1/Tree1
         - /Controller1/Local Costmap1
         - /Image1/Topic1
+        - /Odometry1/Shape1
       Splitter Ratio: 0.5833333134651184
     Tree Height: 221
   - Class: rviz_common/Selection
@@ -579,24 +580,11 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /goal_marker
       Value: true
-    - Class: rviz_default_plugins/Marker
-      Enabled: true
-      Name: Robot Marker
-      Namespaces:
-        nav2_mission: true
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        Filter size: 10
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /robot_marker
-      Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 24.482402801513672
-        Min Value: -0.13866591453552246
+        Max Value: 24.761615753173828
+        Min Value: -0.08347702026367188
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -667,6 +655,45 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /vint_trajectory
       Value: true
+    - Angle Tolerance: 0.10000000149011612
+      Class: rviz_default_plugins/Odometry
+      Covariance:
+        Orientation:
+          Alpha: 0.5
+          Color: 255; 255; 127
+          Color Style: Unique
+          Frame: Local
+          Offset: 1
+          Scale: 1
+          Value: true
+        Position:
+          Alpha: 0.30000001192092896
+          Color: 204; 51; 204
+          Scale: 1
+          Value: true
+        Value: true
+      Enabled: true
+      Keep: 1
+      Name: Odometry
+      Position Tolerance: 0.10000000149011612
+      Shape:
+        Alpha: 1
+        Axes Length: 2
+        Axes Radius: 0.4000000059604645
+        Color: 255; 25; 0
+        Head Length: 0.30000001192092896
+        Head Radius: 0.10000000149011612
+        Shaft Length: 1
+        Shaft Radius: 0.05000000074505806
+        Value: Axes
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /chassis/odom
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -705,7 +732,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 10.344253540039062
+      Distance: 58.05961608886719
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -720,10 +747,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5897966623306274
+      Pitch: 0.6997966766357422
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 0.594218909740448
+      Yaw: 0.3792189359664917
     Saved: ~
 Window Geometry:
   Displays:
