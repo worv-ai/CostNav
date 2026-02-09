@@ -11,7 +11,7 @@ wandb_entity: maumai  # Your wandb entity/team name
 train: True
 pretrained_checkpoint: ${PROJECT_ROOT}/checkpoints/vint.pth
 batch_size: 64  # Reduced for small dataset
-epochs: 50
+epochs: 10
 gpu_ids: [0]
 num_workers: 4
 lr: 1e-4  # Lower LR for fine-tuning
