@@ -84,7 +84,22 @@ PROPERTY_PRIM_PATHS = {
         "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section18",
         "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section57",
     ],
+    "newspaper_box": [
+        "/World/Environment/SM_StreetDetails_002/SM_StreetDetails_03/SM_StreetDetails_002/Section21",
+        "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section21",
+        "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section21",
+        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section23",
+    ],
+    "bus_stop": [
+        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section8",
+        "/World/Environment/SM_StreetDetails_002/SM_StreetDetails_03/SM_StreetDetails_002/Section6",
+        "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section6",
+        "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section6",
+    ],
 }
+
+# Property categories used for cost comparison.
+_COST_PROPERTY_CATEGORIES = {"mail_box", "trash_bin", "building", "bollard"}
 
 
 class MissionState(Enum):
@@ -233,6 +248,8 @@ class MissionManager:
         self._total_impulse = 0.0  # Total impulse accumulated during mission
         self._last_contact_count = None  # Final contact count for last mission
         self._last_total_impulse = None  # Final total impulse for last mission
+        self._people_contact_count = 0  # People collisions (subset of contacts)
+        self._last_people_contact_count = None
         self._property_contact_counts = {key: 0 for key in PROPERTY_PRIM_PATHS}
         self._last_property_contact_counts = None
         self._property_contact_impulse_min_threshold = 100.0
@@ -471,6 +488,7 @@ class MissionManager:
         self._last_elapsed_time = None
         self._last_contact_count = None
         self._last_total_impulse = None
+        self._last_people_contact_count = None
         self._reset_impulse_health()
         # Reset food tracking
         self._initial_food_piece_count = 0
@@ -553,6 +571,7 @@ class MissionManager:
         self._impulse_health = self._impulse_health_max
         self._last_damage_steps_remaining = 0
         self._contact_count = 0
+        self._people_contact_count = 0
         self._total_impulse = 0.0
         self._property_contact_counts = {key: 0 for key in PROPERTY_PRIM_PATHS}
         # Reset delta-v and injury cost tracking
@@ -828,6 +847,8 @@ class MissionManager:
 
         if category is None:
             return None
+        if category not in _COST_PROPERTY_CATEGORIES:
+            return None
 
         print(f"[CONTACT] Property contact: {category} {impulse_amount}")
 
@@ -1012,6 +1033,8 @@ class MissionManager:
                 impulse_amount = (impulse.x * impulse.x + impulse.y * impulse.y + impulse.z * impulse.z) ** 0.5
                 if impulse_amount < self._impulse_min_threshold:
                     continue
+                if is_character_collision:
+                    self._people_contact_count += 1
                 self._record_property_contact_from_pair(actor0, actor1, impulse_amount)
                 # Compute delta-v from impulse/mass and calculate injury cost
                 injury_info = self._process_collision_injury(impulse_amount, is_character_collision)
@@ -1331,6 +1354,7 @@ class MissionManager:
         self._last_traveled_distance = None
         self._last_contact_count = None
         self._last_total_impulse = None
+        self._last_people_contact_count = None
         self._last_property_contact_counts = None
 
         self._start_requested = True
@@ -1401,14 +1425,12 @@ class MissionManager:
             "elapsed_time": float,  # seconds
             "total_contact_count": int,  # number of contact events
             "total_impulse": float,  # accumulated impulse in N*s
-            "property_contact_fire_hydrant": int,
-            "property_contact_traffic_light": int,
-            "property_contact_street_lamp": int,
             "property_contact_bollard": int,
             "property_contact_building": int,
             "property_contact_trash_bin": int,
             "property_contact_mail_box": int,
             "property_contact_total": int,
+            "people_contact_count": int,
             "food_enabled": bool,
             "food_initial_pieces": int,
             "food_final_pieces": int,
@@ -1445,6 +1467,7 @@ class MissionManager:
         if in_progress:
             total_contact_count = self._contact_count
             total_impulse = self._total_impulse
+            people_contact_count = self._people_contact_count
             property_counts = dict(self._property_contact_counts)
             delta_v_list = list(self._delta_v_magnitudes_mps)
             injury_costs = list(self._injury_costs)
@@ -1452,6 +1475,7 @@ class MissionManager:
         elif self._last_contact_count is not None:
             total_contact_count = self._last_contact_count
             total_impulse = self._last_total_impulse if self._last_total_impulse is not None else 0.0
+            people_contact_count = self._last_people_contact_count if self._last_people_contact_count is not None else 0
             property_counts = dict(self._last_property_contact_counts or {})
             delta_v_list = list(self._last_delta_v_magnitudes_mps or [])
             injury_costs = list(self._last_injury_costs or [])
@@ -1459,6 +1483,7 @@ class MissionManager:
         else:
             total_contact_count = self._contact_count
             total_impulse = self._total_impulse
+            people_contact_count = self._people_contact_count
             property_counts = dict(self._property_contact_counts)
             delta_v_list = list(self._delta_v_magnitudes_mps)
             injury_costs = list(self._injury_costs)
@@ -1499,14 +1524,12 @@ class MissionManager:
             "elapsed_time": elapsed_time,
             "total_contact_count": total_contact_count,
             "total_impulse": total_impulse,
-            "property_contact_fire_hydrant": property_counts.get("fire_hydrant", 0),
-            "property_contact_traffic_light": property_counts.get("traffic_light", 0),
-            "property_contact_street_lamp": property_counts.get("street_lamp", 0),
             "property_contact_bollard": property_counts.get("bollard", 0),
             "property_contact_building": property_counts.get("building", 0),
             "property_contact_trash_bin": property_counts.get("trash_bin", 0),
             "property_contact_mail_box": property_counts.get("mail_box", 0),
             "property_contact_total": sum(property_counts.values()),
+            "people_contact_count": people_contact_count,
             "delta_v_count": delta_v_count,
             "delta_v_avg_mps": delta_v_avg_mps,
             "delta_v_avg_mph": delta_v_avg_mph,
@@ -1965,6 +1988,7 @@ class MissionManager:
             self._last_elapsed_time = elapsed
             self._last_traveled_distance = self._traveled_distance
             self._last_contact_count = self._contact_count
+            self._last_people_contact_count = self._people_contact_count
             self._last_total_impulse = self._total_impulse
             self._last_property_contact_counts = dict(self._property_contact_counts)
             self._last_delta_v_magnitudes_mps = list(self._delta_v_magnitudes_mps)
@@ -2002,6 +2026,7 @@ class MissionManager:
             self._last_elapsed_time = elapsed
             self._last_traveled_distance = self._traveled_distance
             self._last_contact_count = self._contact_count
+            self._last_people_contact_count = self._people_contact_count
             self._last_total_impulse = self._total_impulse
             self._last_property_contact_counts = dict(self._property_contact_counts)
             self._last_delta_v_magnitudes_mps = list(self._delta_v_magnitudes_mps)
@@ -2025,6 +2050,7 @@ class MissionManager:
             self._last_elapsed_time = elapsed
             self._last_traveled_distance = self._traveled_distance
             self._last_contact_count = self._contact_count
+            self._last_people_contact_count = self._people_contact_count
             self._last_total_impulse = self._total_impulse
             self._last_property_contact_counts = dict(self._property_contact_counts)
             self._last_delta_v_magnitudes_mps = list(self._delta_v_magnitudes_mps)
@@ -2047,6 +2073,7 @@ class MissionManager:
             self._last_elapsed_time = elapsed
             self._last_traveled_distance = self._traveled_distance
             self._last_contact_count = self._contact_count
+            self._last_people_contact_count = self._people_contact_count
             self._last_total_impulse = self._total_impulse
             self._last_property_contact_counts = dict(self._property_contact_counts)
             self._last_delta_v_magnitudes_mps = list(self._delta_v_magnitudes_mps)
