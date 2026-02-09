@@ -37,7 +37,7 @@ def parse_args():
         "--physics_dt",
         type=float,
         default=DEFAULT_PHYSICS_DT,
-        help="Physics time step (default: 1/60)",
+        help="Physics time step (default: 1/120)",
     )
     sim_group.add_argument(
         "--rendering_dt",
@@ -111,8 +111,8 @@ def parse_args():
     people_group.add_argument(
         "--people",
         type=int,
-        default=0,
-        help="Number of people to spawn in the scene (default: 0, disabled)",
+        default=20,
+        help="Number of people to spawn in the scene (default: 20)",
     )
 
     # Goal image arguments (for ViNT ImageGoal mode)
