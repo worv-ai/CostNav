@@ -140,12 +140,7 @@ log_file() {
 
 # Execute ROS2 command in container
 ros2_exec() {
-    docker exec "$CONTAINER" bash -c "
-        if [ -f /opt/ros/jazzy/setup.bash ]; then source /opt/ros/jazzy/setup.bash; fi;
-        if [ -f /workspace/build_ws/install/local_setup.sh ]; then source /workspace/build_ws/install/local_setup.sh; fi;
-        if [ -f /isaac-sim/setup_ros_env.sh ]; then source /isaac-sim/setup_ros_env.sh; fi;
-        $1
-    " 2>&1
+    docker exec "$CONTAINER" /ros_entrypoint.sh bash -c "$1" 2>&1
 }
 
 # Set mission timeout via ROS2 topic

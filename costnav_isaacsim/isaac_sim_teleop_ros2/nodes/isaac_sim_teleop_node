@@ -4,12 +4,10 @@ import os
 import threading
 import time
 from enum import Enum
-from functools import partial
 from typing import Tuple
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
 import isaac_sim_teleop_ros2.robot as robot
 from geometry_msgs.msg import PointStamped, Pose, PoseArray, Twist
@@ -60,30 +58,30 @@ def change_max_linear_vel(state: ControlState, dv: int, dt: float, stop_event: t
 
 class TeleopNode(Node):
     def __init__(self):
-        super().__init__('isaac_sim_teleop_node')
-        
+        super().__init__("isaac_sim_teleop_node")
+
         # Declare parameters
-        self.declare_parameter('frame_id', 'teleop')
-        self.declare_parameter('use_teleport', True)
-        self.declare_parameter('use_clock', False)
-        self.declare_parameter('use_people_pose', True)
-        self.declare_parameter('use_wheel_odom', False)
-        self.declare_parameter('auto_restart_on_collision', True)
-        self.declare_parameter('use_control_topic', False)
-        self.declare_parameter('img_list', '')
-        self.declare_parameter('control_report_timeout', 1.0)
-        
+        self.declare_parameter("frame_id", "teleop")
+        self.declare_parameter("use_teleport", True)
+        self.declare_parameter("use_clock", False)
+        self.declare_parameter("use_people_pose", True)
+        self.declare_parameter("use_wheel_odom", False)
+        self.declare_parameter("auto_restart_on_collision", True)
+        self.declare_parameter("use_control_topic", False)
+        self.declare_parameter("img_list", "")
+        self.declare_parameter("control_report_timeout", 1.0)
+
         # Get parameters
-        self.frame_id = self.get_parameter('frame_id').value
-        use_teleport = self.get_parameter('use_teleport').value
-        use_clock = self.get_parameter('use_clock').value
-        use_people_pose = self.get_parameter('use_people_pose').value
-        use_wheel_odom = self.get_parameter('use_wheel_odom').value
-        auto_restart_on_collision = self.get_parameter('auto_restart_on_collision').value
-        self.use_control_topic = self.get_parameter('use_control_topic').value
-        img_list = self.get_parameter('img_list').value
-        self.control_report_timeout = self.get_parameter('control_report_timeout').value
-        
+        self.frame_id = self.get_parameter("frame_id").value
+        use_teleport = self.get_parameter("use_teleport").value
+        use_clock = self.get_parameter("use_clock").value
+        use_people_pose = self.get_parameter("use_people_pose").value
+        use_wheel_odom = self.get_parameter("use_wheel_odom").value
+        auto_restart_on_collision = self.get_parameter("auto_restart_on_collision").value
+        self.use_control_topic = self.get_parameter("use_control_topic").value
+        img_list = self.get_parameter("img_list").value
+        self.control_report_timeout = self.get_parameter("control_report_timeout").value
+
         # Initialize robot
         sim_robot = os.environ.get("SIM_ROBOT")
         if sim_robot == "nova_carter":
@@ -92,53 +90,44 @@ class TeleopNode(Node):
             self.sim_robot = robot.SegwayE1()
         else:
             raise ValueError(
-                "Unknown robot: {robot}. Set SIM_ROBOT to 'nova_carter' or 'segway_e1'.".format(
-                    robot=sim_robot
-                )
+                "Unknown robot: {robot}. Set SIM_ROBOT to 'nova_carter' or 'segway_e1'.".format(robot=sim_robot)
             )
-        
+
         self.control_state = ControlState()
-        
-        # QoS profile for best effort
-        qos_profile = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            history=HistoryPolicy.KEEP_LAST,
-            depth=10
-        )
-        
+
         # Publishers
-        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 1)
-        self.is_model_pub = self.create_publisher(Bool, '/is_model', 1)
-        
+        self.cmd_vel_pub = self.create_publisher(Twist, "/cmd_vel", 1)
+        self.is_model_pub = self.create_publisher(Bool, "/is_model", 1)
+
         # Optional publishers
         self.robot_pose_pub = None
         if use_teleport:
-            self.robot_pose_pub = self.create_publisher(Pose, '/robot_pose', 1)
-            self.create_subscription(Bool, '/start_record', self.callback_start_record, 1)
+            self.robot_pose_pub = self.create_publisher(Pose, "/robot_pose", 1)
+            self.create_subscription(Bool, "/start_record", self.callback_start_record, 1)
             if auto_restart_on_collision:
-                self.create_subscription(PointStamped, '/collision_event', self.callback_collision_event, 10)
-        
+                self.create_subscription(PointStamped, "/collision_event", self.callback_collision_event, 10)
+
         self.control_request_pub = None
         if self.use_control_topic:
-            self.control_request_pub = self.create_publisher(Bool, '/control_request', 1)
-            self.create_subscription(String, '/control_report', self.callback_control_report, 10)
-        
+            self.control_request_pub = self.create_publisher(Bool, "/control_request", 1)
+            self.create_subscription(String, "/control_report", self.callback_control_report, 10)
+
         # Subscribers
-        odom_topic_name = '/odom'
+        odom_topic_name = "/odom"
         self.odom_latency_pub = self.create_publisher(TimeReference, f"{odom_topic_name}/latency", 10)
-        self.create_subscription(Odometry, '/odom', self.callback_odom, 10)
+        self.create_subscription(Odometry, "/odom", self.callback_odom, 10)
 
         if use_clock:
-            self.create_subscription(Clock, '/clock', self.callback_clock, 1)
+            self.create_subscription(Clock, "/clock", self.callback_clock, 1)
 
         if use_people_pose:
-            self.create_subscription(PoseArray, '/people_pose', self.callback_people_pose, 1)
+            self.create_subscription(PoseArray, "/people_pose", self.callback_people_pose, 1)
 
         if use_wheel_odom:
-            self.create_subscription(Odometry, '/wheel_odom', self.callback_wheel_odom, 10)
+            self.create_subscription(Odometry, "/wheel_odom", self.callback_wheel_odom, 10)
 
-        self.create_subscription(Twist, '/cmd_vel_model', self.callback_cmd_vel_model, 10)
-        self.create_subscription(Joy, '/joy', self.callback_joy, 10)
+        self.create_subscription(Twist, "/cmd_vel_model", self.callback_cmd_vel_model, 10)
+        self.create_subscription(Joy, "/joy", self.callback_joy, 10)
 
         # Image latency managers
         img_list = img_list.split(",") if img_list else []
@@ -159,7 +148,13 @@ class TeleopNode(Node):
                 self.control_state.thread_stop_lb = threading.Event()
                 interval_thread = threading.Thread(
                     target=change_max_linear_vel,
-                    args=(self.control_state, -1, MAX_LINEAR_VEL_LEVEL_DT, self.control_state.thread_stop_lb, self.sim_robot)
+                    args=(
+                        self.control_state,
+                        -1,
+                        MAX_LINEAR_VEL_LEVEL_DT,
+                        self.control_state.thread_stop_lb,
+                        self.sim_robot,
+                    ),
                 )
                 interval_thread.start()
             else:
@@ -174,7 +169,13 @@ class TeleopNode(Node):
                 self.control_state.thread_stop_rb = threading.Event()
                 interval_thread = threading.Thread(
                     target=change_max_linear_vel,
-                    args=(self.control_state, +1, MAX_LINEAR_VEL_LEVEL_DT, self.control_state.thread_stop_rb, self.sim_robot)
+                    args=(
+                        self.control_state,
+                        +1,
+                        MAX_LINEAR_VEL_LEVEL_DT,
+                        self.control_state.thread_stop_rb,
+                        self.sim_robot,
+                    ),
                 )
                 interval_thread.start()
             else:
@@ -240,7 +241,7 @@ class TeleopNode(Node):
     def callback_odom(self, data: Odometry):
         self.control_state.odom_header = data.header
         self.control_state.current_pose = data.pose.pose
-        if not self.get_parameter('use_wheel_odom').value:
+        if not self.get_parameter("use_wheel_odom").value:
             self.control_state.twist = data.twist.twist
 
         latency = TimeReference()
@@ -248,7 +249,7 @@ class TeleopNode(Node):
         latency.header.stamp = self.get_clock().now().to_msg()
         latency.header.frame_id = self.frame_id
         latency.time_ref = data.header.stamp
-        latency.source = '/odom'
+        latency.source = "/odom"
         self.odom_latency_pub.publish(latency)
 
     def callback_wheel_odom(self, data: Odometry):
@@ -290,9 +291,7 @@ class TeleopNode(Node):
     def _create_teleop_command(self, current_time) -> Tuple[bool, Twist, bool]:
         """Create a teleop command based on current joystick state."""
         twist = self.sim_robot.compute_cmd_vel(
-            self.control_state.linear_rate,
-            self.control_state.angular_rate,
-            self.control_state.twist
+            self.control_state.linear_rate, self.control_state.angular_rate, self.control_state.twist
         )
         return (True, twist, False)
 
@@ -358,7 +357,10 @@ class TeleopNode(Node):
                 self.robot_pose_pub.publish(self.control_state.previous_pose)
 
     def cleanup(self):
-        self.cmd_vel_pub.publish(Twist())
+        try:
+            self.cmd_vel_pub.publish(Twist())
+        except Exception:
+            pass
         self.monitoring.close()
         self.get_logger().info("teleop end")
 
@@ -374,12 +376,11 @@ def main(args=None):
     except Exception as e:
         print(f"Error: {e}")
     finally:
-        if 'node' in locals():
+        if "node" in locals():
             node.cleanup()
             node.destroy_node()
-        rclpy.shutdown()
+        rclpy.try_shutdown()
 
 
 if __name__ == "__main__":
     main()
-
