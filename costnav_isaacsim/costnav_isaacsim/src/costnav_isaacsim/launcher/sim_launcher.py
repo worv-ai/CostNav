@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Optional
 
 from isaacsim import SimulationApp
 
-from ..utils import (
+from costnav_isaacsim.utils import (
     WARMUP_STEPS,
     resolve_people_robot_prim,
     resolve_robot_prim_path,
@@ -72,7 +72,7 @@ class CostNavSimLauncher:
         self.people_manager = None
         self._people_initialized = False
         if self.num_people > 0:
-            from people_manager import PeopleManager
+            from costnav_isaacsim.people_manager import PeopleManager
 
             people_robot_prim_path = resolve_people_robot_prim(robot_prim_path)
             self.people_manager = PeopleManager(
@@ -310,7 +310,7 @@ class CostNavSimLauncher:
         if not self.mission_config:
             return None
 
-        from nav2_mission import MissionManager
+        from costnav_isaacsim.mission_manager import MissionManager
 
         mission_manager = MissionManager(
             mission_config=self.mission_config,

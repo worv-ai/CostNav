@@ -24,8 +24,8 @@ Missions are triggered manually via /start_mission (e.g. `make start-mission`).
 
 import logging
 
-from launcher import CostNavSimLauncher
-from utils import (
+from costnav_isaacsim.launcher import CostNavSimLauncher
+from costnav_isaacsim.utils import (
     load_and_override_config,
     parse_args,
     resolve_robot_name,

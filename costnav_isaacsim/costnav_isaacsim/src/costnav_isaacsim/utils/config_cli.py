@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from .robot_config import DEFAULT_GOAL_CAMERA_HEIGHTS
 
 if TYPE_CHECKING:
-    from config import MissionConfig
+    from costnav_isaacsim.config import MissionConfig
 
 
 def load_and_override_config(args, robot_name: str) -> "MissionConfig":
@@ -23,7 +23,7 @@ def load_and_override_config(args, robot_name: str) -> "MissionConfig":
     Returns:
         MissionConfig instance with loaded settings.
     """
-    from config import load_mission_config
+    from costnav_isaacsim.config import load_mission_config
 
     # Load from config file (or default)
     config = load_mission_config(args.config)
