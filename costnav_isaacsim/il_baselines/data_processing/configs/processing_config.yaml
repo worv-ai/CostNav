@@ -1,0 +1,25 @@
+# CostNav Data Processing Configuration
+# Configuration for converting ROS bags to MediaRef format
+
+# Video encoding settings
+video:
+  fps: 30.0  # Target frames per second for video encoding
+  codec: "h264"  # Video codec (h264 for lossy, libx264rgb for lossless)
+  gop_size: 30  # Keyframe interval
+
+# Topics to extract as video
+image_topics:
+  - /front_stereo_camera/left/image_raw
+
+# Topics to remove from the dataset (to reduce storage)
+topics_to_remove:
+  []
+
+# Ray batch processing settings
+ray:
+  max_disk_workers: 16  # Max parallel disk I/O workers
+  max_retries: 3  # Max retries for failed conversions
+
+# Output settings
+output:
+  create_success_marker: true  # Create _SUCCESS file on completion

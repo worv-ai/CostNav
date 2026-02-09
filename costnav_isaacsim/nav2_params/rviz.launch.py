@@ -89,19 +89,50 @@ def generate_launch_description():
                     "autostart": autostart,
                 }.items(),
             ),
-            # Pointcloud to laserscan conversion
+            # Pre-filter: Remove points inside robot bounding box using PCL CropBox
+            # Robot footprint: X [-0.607, 0.14], Y [-0.25, 0.25]
+            # Adding margin and height range for the crop box
+            # Note: pcl_ros CropBox works with xyz-only pointclouds (no intensity field required)
+            Node(
+                package="pcl_ros",
+                executable="filter_crop_box_node",
+                name="robot_self_filter",
+                remappings=[
+                    ("input", "/front_3d_lidar/lidar_points"),
+                    ("output", "/front_3d_lidar/lidar_points_filtered"),
+                ],
+                parameters=[
+                    {
+                        "min_x": -0.7,  # Robot back with margin
+                        "max_x": 0.2,  # Robot front with margin
+                        "min_y": -0.4,  # Robot right with margin
+                        "max_y": 0.4,  # Robot left with margin
+                        "min_z": -0.5,  # Below robot
+                        "max_z": 1.5,  # Above robot
+                        "negative": True,  # Keep points OUTSIDE the box (remove inside)
+                        "input_frame": "base_link",  # Transform to base_link for filtering
+                        "output_frame": "front_3d_lidar",  # Output in original frame
+                        "use_sim_time": True,
+                    }
+                ],
+                output="screen",
+            ),
+            # Pointcloud to laserscan conversion (using filtered pointcloud)
             Node(
                 package="pointcloud_to_laserscan",
                 executable="pointcloud_to_laserscan_node",
-                remappings=[("cloud_in", ["/front_3d_lidar/lidar_points"]), ("scan", ["/scan"])],
+                remappings=[
+                    ("cloud_in", "/front_3d_lidar/lidar_points_filtered"),
+                    ("scan", "/scan"),
+                ],
                 parameters=[
                     {
                         "target_frame": "front_3d_lidar",
                         "transform_tolerance": 0.01,
                         "min_height": -0.4,
                         "max_height": 1.5,
-                        "angle_min": -1.5708,  # -M_PI/2
-                        "angle_max": 1.5708,  # M_PI/2
+                        "angle_min": -3.14159,  # -M_PI (full 360 degrees)
+                        "angle_max": 3.14159,  # M_PI (full 360 degrees)
                         "angle_increment": 0.0087,  # M_PI/360.0
                         "scan_time": 0.3333,
                         "range_min": 0.05,

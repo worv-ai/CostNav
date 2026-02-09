@@ -4,71 +4,18 @@ version = "0.1.0"
 description = "A benchmark for navigation with cost estimation"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = [
-    # Core dependencies that all environments need
-    "numpy>=1.24.0",
-    "gymnasium>=0.29.0",
-]
+dependencies = []
 
 [project.optional-dependencies]
-# Isaac Sim specific dependencies
-# Note: Isaac Sim itself is container-based (nvcr.io/nvidia/isaac-sim:5.1.0)
-# These are additional packages that work with Isaac Sim
-isaac-sim = [
-    # Add any additional packages needed for Isaac Sim workflows
-    # Most dependencies come from the Isaac Sim container itself
-    "empy",
-    "lark",
-]
-
-# Isaac Lab specific dependencies
-# Note: Isaac Lab is installed on top of Isaac Sim container
-# The actual installation happens in Dockerfile with specific commands:
-#   - torch==2.7.0, torchvision==0.22.0 (CUDA 12.8)
-#   - rl_games from isaac-sim fork
-#   - isaaclab[isaacsim,all]==2.3.0
-isaac-lab = [
-    # Add any additional packages needed for Isaac Lab workflows
-    # Core Isaac Lab deps are installed via pip in Dockerfile
-]
-
-# Development dependencies
 dev = [
-    "pytest>=7.4.0",
-    "pytest-cov>=4.1.0",
-    "ruff>=0.3.0",
-    "typer>=0.9.0",
-    "rich>=13.0.0",
-    "mkdocs>=1.5.0",
-    "mkdocs-material>=9.5.0",
-    "mkdocstrings[python]>=0.24.0",
+    "pytest>=7.0.0",
 ]
-
-# All simulation environments (for CI/testing)
-all = [
-    "costnav[isaac-sim,isaac-lab]",
-]
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
 
 [tool.ruff]
-line-length = 119
+line-length = 120
 target-version = "py310"
-exclude = ["third_party"]
+exclude = ["third_party", "costnav_isaaclab", "external"]
 
 [tool.ruff.lint]
-ignore = ["E402"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = "test_*.py"
-python_classes = "Test*"
-python_functions = "test_*"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/costnav"]
-
-[tool.hatch.build.targets.sdist]
-include = ["src/costnav"]
+select = ["E", "F", "W"]
+ignore = ["E402", "E501"]

@@ -1,0 +1,19 @@
+# ViNT Evaluation Configuration for CostNav
+# This config is used by the ViNT agent during inference
+
+# Model architecture parameters
+context_size: 5                    # Number of past frames for temporal context
+len_traj_pred: 5                   # Number of waypoints to predict
+learn_angle: true                  # Predict heading angles
+obs_encoder: "efficientnet-b0"     # Image encoder backbone
+obs_encoding_size: 512             # Encoding dimension
+late_fusion: false                 # Early fusion of obs+goal
+mha_num_attention_heads: 4         # Transformer attention heads
+mha_num_attention_layers: 4        # Transformer layers
+mha_ff_dim_factor: 4               # Feedforward dimension factor
+
+# Input dimensions
+image_size: [85, 64]               # [width, height] - matches training
+
+# Action normalization
+normalize: true                    # Normalize actions by max velocity

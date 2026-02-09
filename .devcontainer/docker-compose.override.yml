@@ -4,12 +4,7 @@
 services:
   isaac-sim:
     # Override command to keep container running instead of launching Isaac Sim
-    command: ["/bin/bash", "-c", "sleep infinity"]
+    command: ["-c", "sleep infinity"]
 
   isaac-lab:
-    command: ["/bin/bash", "-c", "sleep infinity"]
-
-  ros2:
-    command: ["/bin/bash", "-c", "sleep infinity"]
-    volumes:
-      - .:/workspace
+    command: ["-c", "sleep infinity"]

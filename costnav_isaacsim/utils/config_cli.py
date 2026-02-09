@@ -7,15 +7,18 @@
 
 from typing import TYPE_CHECKING
 
+from .robot_config import DEFAULT_GOAL_CAMERA_HEIGHTS
+
 if TYPE_CHECKING:
     from config import MissionConfig
 
 
-def load_and_override_config(args) -> "MissionConfig":
+def load_and_override_config(args, robot_name: str) -> "MissionConfig":
     """Load mission config from file and apply CLI overrides.
 
     Args:
         args: Parsed command line arguments.
+        robot_name: Resolved robot name for robot-specific settings.
 
     Returns:
         MissionConfig instance with loaded settings.
@@ -43,5 +46,13 @@ def load_and_override_config(args) -> "MissionConfig":
         config.food.prim_path = args.food_prim_path
     if args.food_spoilage_threshold is not None:
         config.food.spoilage_threshold = args.food_spoilage_threshold
+
+    # Goal image overrides (for ViNT ImageGoal mode)
+    if args.goal_image_enabled is not None:
+        config.goal_image.enabled = args.goal_image_enabled.lower() in ("true", "1")
+
+    # Set robot-specific goal camera height
+    if robot_name in DEFAULT_GOAL_CAMERA_HEIGHTS:
+        config.goal_image.camera_height_offset = DEFAULT_GOAL_CAMERA_HEIGHTS[robot_name]
 
     return config

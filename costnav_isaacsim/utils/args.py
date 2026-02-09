@@ -115,4 +115,13 @@ def parse_args():
         help="Number of people to spawn in the scene (default: 0, disabled)",
     )
 
+    # Goal image arguments (for ViNT ImageGoal mode)
+    goal_image_group = parser.add_argument_group("Goal Image")
+    goal_image_group.add_argument(
+        "--goal-image-enabled",
+        type=str,
+        default=None,
+        help="Enable goal image publishing for ViNT ImageGoal mode (True/False or 1/0)",
+    )
+
     return parser.parse_args()

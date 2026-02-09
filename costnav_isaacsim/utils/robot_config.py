@@ -26,6 +26,11 @@ DEFAULT_ROBOT_PRIM_PATHS = {
     "segway_e1": "/World/Segway_E1_ROS2/base_link",
 }
 
+DEFAULT_GOAL_CAMERA_HEIGHTS = {
+    "nova_carter": 0.3,  # Nova Carter camera height
+    "segway_e1": 0.825,  # Segway E1 camera height
+}
+
 ROBOT_NAME_ALIASES = {
     "segway": "segway_e1",
     "segway-e1": "segway_e1",
