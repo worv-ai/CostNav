@@ -24,11 +24,12 @@
 CostNav introduces a **paradigm shift** in how we evaluate navigation systems: from purely technical metrics to actual economic cost and revenue.
 
 Our key contributions are:
-1. **High-Fidelity Physics Simulation with Economically Grounded Dynamics.**
+1. **High-Fidelity Physics Simulation with Economically Grounded Dynamics.**  
   a. Supporting Segway E1 delivery robot, food cargo dynamics with popcorn, detailed collision dynamics, pedestrians
-2. **Real-world referenced Cost-Revenue Model with Break-Even Point Analysis.**
+2. **Real-world referenced Cost-Revenue Model with Break-Even Point Analysis.**  
   a. Supporting Energy Cost, Pedestrian Safety Cost, Property Damage Cost, Repair Cost
-3. **Rule based Navigation Evaluation (Coming up soon: Learning based Navigation Evaluation and Dataset)**
+3. **Rule based Navigation Evaluation (Coming up soon: Learning based Navigation Evaluation and Dataset)**  
+  a. Comparing Profitability between Nav2 with GPS and Nav2 with AMCL localization
 
 You can find more details in our [technical report](https://arxiv.org/abs/2511.20216).
 
