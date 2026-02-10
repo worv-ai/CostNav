@@ -29,12 +29,12 @@ def _logistic_probability(intercept: float, slope: float, delta_v_mph: float) ->
     return math.exp(exponent) / (1.0 + math.exp(exponent))
 
 
-def compute_mais_probabilities(mission_config, delta_v_mps: float) -> dict:
+def compute_mais_probabilities(config, delta_v_mps: float) -> dict:
     if delta_v_mps <= 0.0:
         return {level: 1.0 if level == "mais_0" else 0.0 for level in _MAIS_LEVELS}
 
     delta_v_mph = delta_v_mps * MPS_TO_MPH
-    crash_mode = mission_config.injury.crash_mode or "all"
+    crash_mode = config.injury.crash_mode or "all"
     coefficients = _MAIS_COEFFICIENTS.get(crash_mode, _MAIS_COEFFICIENTS["all"])
 
     # Compute cumulative probabilities P(MAIS >= level)
@@ -64,8 +64,8 @@ def compute_mais_probabilities(mission_config, delta_v_mps: float) -> dict:
     }
 
 
-def compute_expected_injury_cost(mission_config, probabilities: dict) -> float:
-    costs = mission_config.injury.costs
+def compute_expected_injury_cost(config, probabilities: dict) -> float:
+    costs = config.injury.costs
     raw_cost = (
         probabilities.get("mais_0", 0.0) * costs.mais_0
         + probabilities.get("mais_1", 0.0) * costs.mais_1
@@ -78,16 +78,16 @@ def compute_expected_injury_cost(mission_config, probabilities: dict) -> float:
     return raw_cost * _INJURY_COST_ADJUSTMENT_FACTOR
 
 
-def process_collision_injury(state, mission_config, impulse_amount: float, is_character_collision: bool):
-    if not mission_config.injury.enabled or not is_character_collision:
+def process_collision_injury(state, config, impulse_amount: float, is_character_collision: bool):
+    if not config.injury.enabled or not is_character_collision:
         return None
 
-    robot_mass = mission_config.injury.robot_mass
+    robot_mass = config.injury.robot_mass
     delta_v_mps = impulse_amount / robot_mass
     state.delta_v_magnitudes_mps.append(delta_v_mps)
 
-    probabilities = compute_mais_probabilities(mission_config, delta_v_mps)
-    injury_cost = compute_expected_injury_cost(mission_config, probabilities)
+    probabilities = compute_mais_probabilities(config, delta_v_mps)
+    injury_cost = compute_expected_injury_cost(config, probabilities)
     state.injury_costs.append(injury_cost)
     state.total_injury_cost += injury_cost
 

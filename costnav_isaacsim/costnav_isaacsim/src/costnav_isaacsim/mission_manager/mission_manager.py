@@ -28,9 +28,6 @@ logger = logging.getLogger("costnav_mission_manager")
 from costnav_isaacsim.evaluation import EvaluationManager
 from costnav_isaacsim.evaluation import injury
 
-# Property categories used for cost comparison.
-_COST_PROPERTY_CATEGORIES = {"mail_box", "trash_bin", "building", "bollard"}
-
 
 class MissionState(Enum):
     """State machine for mission execution."""
@@ -167,8 +164,7 @@ class MissionManager:
 
         # Evaluation tracking (contact/impulse/injury/food)
         self._evaluation = EvaluationManager(
-            mission_config=self.config,
-            manager_config=self.config,
+            config=self.config,
             is_mission_active=self._is_mission_active,
         )
         self._eval = self._evaluation.state
@@ -732,7 +728,7 @@ class MissionManager:
         """
         from .evaluation import food
 
-        return food._get_robot_z_offset(self.config, self.config)
+        return food._get_robot_z_offset(self.config)
 
     def _spawn_food_at_position(
         self, x: float = 0.0, y: float = 0.0, z: float = 0.0, remove_existing: bool = False
@@ -755,7 +751,6 @@ class MissionManager:
 
         return food._spawn_food_at_position(
             self._eval,
-            self.config,
             self.config,
             x=x,
             y=y,

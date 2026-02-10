@@ -101,8 +101,8 @@ def reset_impulse_health(state) -> None:
     state.total_injury_cost = 0.0
 
 
-def setup_contact_reporting(state, mission_config, manager_config, on_contact_report: Callable) -> None:
-    base_link_path = mission_config.teleport.robot_prim or manager_config.robot_prim_path
+def setup_contact_reporting(state, config, on_contact_report: Callable) -> None:
+    base_link_path = config.teleport.robot_prim or config.manager.robot_prim_path
     if base_link_path:
         base_link_path = base_link_path.rstrip("/")
 
@@ -228,9 +228,7 @@ def apply_impulse_damage(
     print(msg)
 
 
-def on_contact_report(
-    state, contact_headers, contact_data, mission_config, is_mission_active: Callable[[], bool]
-) -> None:
+def on_contact_report(state, contact_headers, contact_data, config, is_mission_active: Callable[[], bool]) -> None:
     if not state.contact_report_targets:
         return
 
@@ -280,7 +278,7 @@ def on_contact_report(
             if is_character_collision:
                 state.people_contact_count += 1
             record_property_contact_from_pair(state, actor0, actor1, impulse_amount)
-            injury_info = injury.process_collision_injury(state, mission_config, impulse_amount, is_character_collision)
+            injury_info = injury.process_collision_injury(state, config, impulse_amount, is_character_collision)
             apply_impulse_damage(state, impulse_amount, is_mission_active, injury_info)
             state.last_damage_steps_remaining = state.damage_cooldown_steps
             return

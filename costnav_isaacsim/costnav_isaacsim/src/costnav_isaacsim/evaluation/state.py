@@ -53,12 +53,10 @@ class EvaluationManager:
 
     def __init__(
         self,
-        mission_config,
-        manager_config,
+        config,
         is_mission_active: Callable[[], bool],
     ) -> None:
-        self._mission_config = mission_config
-        self._manager_config = manager_config
+        self._config = config
         self._is_mission_active = is_mission_active
         self.state = EvaluationState()
 
@@ -66,15 +64,15 @@ class EvaluationManager:
         metrics.reset_impulse_health(self.state)
 
     def setup_contact_reporting(self) -> None:
-        food.update_food_root_prefix(self.state, self._mission_config)
-        metrics.setup_contact_reporting(self.state, self._mission_config, self._manager_config, self.on_contact_report)
+        food.update_food_root_prefix(self.state, self._config)
+        metrics.setup_contact_reporting(self.state, self._config, self.on_contact_report)
 
     def on_contact_report(self, contact_headers, contact_data) -> None:
         metrics.on_contact_report(
             self.state,
             contact_headers,
             contact_data,
-            self._mission_config,
+            self._config,
             self._is_mission_active,
         )
 
@@ -84,16 +82,16 @@ class EvaluationManager:
         self.state.contact_report_targets = set()
         self.setup_contact_reporting()
         if stage_reloaded:
-            food.setup_food_tracking(self.state, self._mission_config, self._manager_config)
+            food.setup_food_tracking(self.state, self._config)
 
     def count_food_pieces_in_bucket(self) -> int:
-        return food.count_food_pieces_in_bucket(self.state, self._mission_config)
+        return food.count_food_pieces_in_bucket(self.state, self._config)
 
     def setup_food_tracking(self) -> None:
-        food.setup_food_tracking(self.state, self._mission_config, self._manager_config)
+        food.setup_food_tracking(self.state, self._config)
 
     def check_food_spoilage(self) -> bool:
-        return food.check_food_spoilage(self.state, self._mission_config)
+        return food.check_food_spoilage(self.state, self._config)
 
     def reset_food_for_teleport(self) -> bool:
-        return food.reset_food_for_teleport(self.state, self._mission_config, self._manager_config)
+        return food.reset_food_for_teleport(self.state, self._config)

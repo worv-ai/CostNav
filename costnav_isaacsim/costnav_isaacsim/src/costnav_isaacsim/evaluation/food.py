@@ -8,8 +8,8 @@ from typing import Optional
 logger = logging.getLogger("costnav_mission_manager")
 
 
-def update_food_root_prefix(state, mission_config) -> None:
-    food_root = mission_config.food.prim_path
+def update_food_root_prefix(state, config) -> None:
+    food_root = config.food.prim_path
     if food_root:
         state.food_root_prim_path = food_root.rstrip("/")
         state.food_prefix_path = f"{state.food_root_prim_path}/"
@@ -18,8 +18,8 @@ def update_food_root_prefix(state, mission_config) -> None:
         state.food_prefix_path = None
 
 
-def count_food_pieces_in_bucket(state, mission_config) -> int:
-    if not mission_config.food.enabled or state.food_pieces_prim_path is None:
+def count_food_pieces_in_bucket(state, config) -> int:
+    if not config.food.enabled or state.food_pieces_prim_path is None:
         return 0
 
     try:
@@ -68,36 +68,35 @@ def count_food_pieces_in_bucket(state, mission_config) -> int:
         return 0
 
 
-def _get_robot_z_offset(mission_config, manager_config) -> Optional[float]:
-    robot_prim = mission_config.teleport.robot_prim.lower()
+def _get_robot_z_offset(config) -> Optional[float]:
+    robot_prim = config.teleport.robot_prim.lower()
 
     if "segway" in robot_prim:
         return 0.33
     if "nova_carter" in robot_prim:
-        return manager_config.teleport_height
+        return config.manager.teleport_height
     return None
 
 
 def _spawn_food_at_position(
     state,
-    mission_config,
-    manager_config,
+    config,
     x: float = 0.0,
     y: float = 0.0,
     z: float = 0.0,
     remove_existing: bool = False,
 ) -> bool:
-    food_config = mission_config.food
+    food_config = config.food
     base_path = food_config.prim_path.rstrip("/")
 
-    z_offset = _get_robot_z_offset(mission_config, manager_config)
+    z_offset = _get_robot_z_offset(config)
     if z_offset is None:
-        robot_prim = mission_config.teleport.robot_prim.lower()
+        robot_prim = config.teleport.robot_prim.lower()
         logger.warning(
             f"[FOOD] Food spawning not implemented for robot: {robot_prim}. "
             f"Currently only segway_e1 is supported. Disabling food tracking."
         )
-        mission_config.food.enabled = False
+        config.food.enabled = False
         return False
 
     try:
@@ -142,14 +141,14 @@ def _spawn_food_at_position(
         return False
 
 
-def setup_food_tracking(state, mission_config, manager_config) -> None:
-    if not mission_config.food.enabled:
+def setup_food_tracking(state, config) -> None:
+    if not config.food.enabled:
         return
 
-    if not _spawn_food_at_position(state, mission_config, manager_config, x=0.0, y=0.0, z=0.0):
+    if not _spawn_food_at_position(state, config, x=0.0, y=0.0, z=0.0):
         return
 
-    food_config = mission_config.food
+    food_config = config.food
     base_path = food_config.prim_path.rstrip("/")
     state.food_pieces_prim_path = f"{base_path}/{food_config.pieces_prim_path}"
     state.food_bucket_prim_path = f"{base_path}/{food_config.bucket_prim_path}"
@@ -159,11 +158,11 @@ def setup_food_tracking(state, mission_config, manager_config) -> None:
     logger.info(f"[FOOD] Bucket path: {state.food_bucket_prim_path}")
 
 
-def check_food_spoilage(state, mission_config) -> bool:
-    if not mission_config.food.enabled:
+def check_food_spoilage(state, config) -> bool:
+    if not config.food.enabled:
         return False
 
-    state.final_food_piece_count = count_food_pieces_in_bucket(state, mission_config)
+    state.final_food_piece_count = count_food_pieces_in_bucket(state, config)
 
     if state.initial_food_piece_count == 0:
         return False
@@ -176,11 +175,11 @@ def check_food_spoilage(state, mission_config) -> bool:
         f"final={state.final_food_piece_count}, lost={pieces_lost} ({loss_fraction:.1%})"
     )
 
-    return loss_fraction > mission_config.food.spoilage_threshold
+    return loss_fraction > config.food.spoilage_threshold
 
 
-def reset_food_for_teleport(state, mission_config, manager_config) -> bool:
-    if not mission_config.food.enabled:
+def reset_food_for_teleport(state, config) -> bool:
+    if not config.food.enabled:
         return True
 
     try:
@@ -188,7 +187,7 @@ def reset_food_for_teleport(state, mission_config, manager_config) -> bool:
         from pxr import UsdGeom
 
         stage = omni.usd.get_context().get_stage()
-        robot_prim_path = mission_config.teleport.robot_prim
+        robot_prim_path = config.teleport.robot_prim
         robot_prim = stage.GetPrimAtPath(robot_prim_path)
 
         if not robot_prim.IsValid():
@@ -203,8 +202,7 @@ def reset_food_for_teleport(state, mission_config, manager_config) -> bool:
 
         return _spawn_food_at_position(
             state,
-            mission_config,
-            manager_config,
+            config,
             x=robot_pos[0],
             y=robot_pos[1],
             z=robot_pos[2],
