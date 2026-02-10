@@ -641,7 +641,7 @@ class MissionManager:
             return False
 
     def _classify_property_from_prim_path(self, prim_path: str) -> Optional[str]:
-        from .evaluation import metrics
+        from costnav_isaacsim.evaluation import metrics
 
         return metrics.classify_property_from_prim_path(prim_path)
 
@@ -652,14 +652,14 @@ class MissionManager:
         impulse_amount: float,
     ) -> Optional[str]:
         """Record property contact from a pair of actor prim paths."""
-        from .evaluation import metrics
+        from costnav_isaacsim.evaluation import metrics
 
         return metrics.record_property_contact_from_pair(self._eval, actor0_path, actor1_path, impulse_amount)
 
     def _apply_impulse_damage(
         self, impulse_amount: float, injury_info: "tuple[float, float, float] | None" = None
     ) -> None:
-        from .evaluation import metrics
+        from costnav_isaacsim.evaluation import metrics
 
         metrics.apply_impulse_damage(self._eval, impulse_amount, self._is_mission_active, injury_info)
 
@@ -726,7 +726,7 @@ class MissionManager:
         - nova_carter: Uses config teleport.height_offset (default behavior)
         - Other robots: Not yet implemented
         """
-        from .evaluation import food
+        from costnav_isaacsim.evaluation import food
 
         return food._get_robot_z_offset(self.config)
 
@@ -747,7 +747,7 @@ class MissionManager:
         Returns:
             True if food was successfully spawned, False otherwise.
         """
-        from .evaluation import food
+        from costnav_isaacsim.evaluation import food
 
         return food._spawn_food_at_position(
             self._eval,
