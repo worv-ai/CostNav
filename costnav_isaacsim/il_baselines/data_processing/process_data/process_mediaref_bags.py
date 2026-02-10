@@ -32,6 +32,8 @@ from __future__ import annotations
 
 import argparse
 import pickle
+import sys
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -42,7 +44,6 @@ from mediaref import MediaRef, batch_decode
 from PIL import Image
 from rosbags.rosbag2 import Reader as Reader2
 from rosbags.typesys import Stores, get_typestore
-from tqdm import tqdm
 
 # Image processing constants (from visualnav-transformer)
 IMAGE_SIZE = (160, 120)
@@ -346,11 +347,31 @@ def main(args: argparse.Namespace):
 
     # Process each bag
     success_count = 0
-    for bag_dir in tqdm(bag_dirs, desc="Processing bags"):
+    total = len(bag_dirs)
+    t0 = time.time()
+    for i, bag_dir in enumerate(bag_dirs, 1):
         if process_mediaref_bag(bag_dir, output_dir, config, args.sample_rate):
             success_count += 1
+        elapsed = time.time() - t0
+        avg = elapsed / i
+        eta = avg * (total - i)
 
-    print(f"\nProcessed {success_count}/{len(bag_dirs)} bags successfully")
+        def _fmt_duration(secs: float) -> str:
+            """Format seconds as human-readable (Xd )HH:MM:SS."""
+            s = int(secs)
+            days, s = divmod(s, 86400)
+            hours, s = divmod(s, 3600)
+            minutes, s = divmod(s, 60)
+            if days > 0:
+                return f"{days}d {hours:02d}:{minutes:02d}:{s:02d}"
+            return f"{hours:02d}:{minutes:02d}:{s:02d}"
+
+        print(
+            f"  [{i}/{total}] Processed: {bag_dir.name}  (elapsed {_fmt_duration(elapsed)}, ETA {_fmt_duration(eta)})",
+            flush=True,
+        )
+
+    print(f"\nProcessed {success_count}/{total} bags successfully")
 
 
 if __name__ == "__main__":
@@ -359,15 +380,13 @@ if __name__ == "__main__":
         "--input-dir",
         "-i",
         type=str,
-        required=True,
-        help="Directory containing MediaRef bags (recording_*_mediaref/)",
+        help="Directory containing MediaRef bags (recording_*_mediaref/) - can be set in config",
     )
     parser.add_argument(
         "--output-dir",
         "-o",
         type=str,
-        default="./vint_datasets/",
-        help="Output directory for ViNT format data",
+        help="Output directory for ViNT format data - can be set in config",
     )
     parser.add_argument(
         "--config",
@@ -386,11 +405,31 @@ if __name__ == "__main__":
         "--sample-rate",
         "-s",
         type=float,
-        default=4.0,
-        help="Sampling rate in Hz (default: 4.0)",
+        help="Sampling rate in Hz (can be set in config, default: 4.0)",
     )
 
     args = parser.parse_args()
+
+    # Load config to get paths if not provided via command line
+    config = load_config(args.config)
+    paths_config = config.get("paths", {})
+
+    # Override with config values if command-line args not provided
+    if args.input_dir is None:
+        args.input_dir = paths_config.get("input_dir")
+    if args.output_dir is None:
+        args.output_dir = paths_config.get("output_dir", "./vint_datasets/")
+    if args.sample_rate is None:
+        args.sample_rate = config.get("processing", {}).get("sample_rate", 4.0)
+
+    # Validate required paths
+    if args.input_dir is None:
+        print("Error: input_dir must be specified via --input-dir or in config file")
+        sys.exit(1)
+    if args.output_dir is None:
+        print("Error: output_dir must be specified via --output-dir or in config file")
+        sys.exit(1)
+
     print("STARTING PROCESSING MEDIAREF DATASETS")
     main(args)
     print("FINISHED PROCESSING MEDIAREF DATASETS")

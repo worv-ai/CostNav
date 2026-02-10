@@ -22,22 +22,15 @@ Example:
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 import time
+import warnings
 from pathlib import Path
 from typing import Optional
 
 import ray
 from rich.console import Console
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-)
 from rich.table import Table
 
 try:
@@ -94,6 +87,7 @@ def convert_bag_task(
             fps=fps,
             image_topics=image_topics,
             topics_to_remove=topics_to_remove,
+            quiet=True,
         )
 
         # Write success marker
@@ -106,7 +100,7 @@ def convert_bag_task(
 
 
 def find_bags(input_dir: Path, bag_names: Optional[list[str]] = None) -> list[Path]:
-    """Find all valid ROS bags in directory."""
+    """Find all valid ROS bags in directory, recursing into subdirectories."""
     bags = []
 
     if bag_names:
@@ -120,14 +114,16 @@ def find_bags(input_dir: Path, bag_names: Optional[list[str]] = None) -> list[Pa
                 except ValueError:
                     console.print(f"[yellow]Warning: {name} is not a valid bag[/yellow]")
     else:
-        # Find all bags in directory
+        # Find all bags in directory, recursing into subdirectories
         for item in input_dir.iterdir():
             if item.is_dir():
                 try:
                     detect_format(item)
                     bags.append(item)
                 except ValueError:
-                    pass
+                    # Not a valid bag — recurse into it to find bags inside
+                    sub_bags = find_bags(item)
+                    bags.extend(sub_bags)
 
     return sorted(bags)
 
@@ -136,69 +132,115 @@ def main():
     parser = argparse.ArgumentParser(
         description="Batch convert ROS bags to MediaRef format using Ray",
     )
-    parser.add_argument("--input_dir", "-i", type=Path, required=True, help="Input directory with bags")
-    parser.add_argument("--output_dir", "-o", type=Path, required=True, help="Output directory")
+    parser.add_argument("--input_dir", "-i", type=Path, help="Input directory with bags (can be set in config)")
+    parser.add_argument("--output_dir", "-o", type=Path, help="Output directory (can be set in config)")
     parser.add_argument("--config", "-c", type=Path, help="Processing config YAML")
-    parser.add_argument("--num_workers", "-n", type=int, default=4, help="Number of parallel workers")
-    parser.add_argument("--bags", nargs="*", help="Specific bag names to process (default: all)")
+    parser.add_argument("--num_workers", "-n", type=int, help="Number of parallel workers (can be set in config)")
+    parser.add_argument("--bags", nargs="*", help="Specific bag names to process (default: all, can be set in config)")
     parser.add_argument("--fps", type=float, default=30.0, help="Video FPS")
 
     args = parser.parse_args()
 
-    if not args.input_dir.exists():
-        console.print(f"[red]Error: Input directory not found: {args.input_dir}[/red]")
-        sys.exit(1)
-
     # Load config
     config = load_config(args.config)
+
+    # Get paths from config if not provided via command line
+    paths_config = config.get("paths", {})
+    input_dir = args.input_dir or (Path(paths_config["input_dir"]) if "input_dir" in paths_config else None)
+    output_dir = args.output_dir or (Path(paths_config["output_dir"]) if "output_dir" in paths_config else None)
+    bags = args.bags if args.bags is not None else paths_config.get("bags")
+
+    # Validate required paths
+    if input_dir is None:
+        console.print("[red]Error: input_dir must be specified via --input_dir or in config file[/red]")
+        sys.exit(1)
+    if output_dir is None:
+        console.print("[red]Error: output_dir must be specified via --output_dir or in config file[/red]")
+        sys.exit(1)
+    if not input_dir.exists():
+        console.print(f"[red]Error: Input directory not found: {input_dir}[/red]")
+        sys.exit(1)
+
+    # Get processing settings from config
     fps = config.get("video", {}).get("fps", args.fps)
     image_topics = config.get("image_topics")
     topics_to_remove = config.get("topics_to_remove")
-    num_workers = config.get("ray", {}).get("max_disk_workers", args.num_workers)
+    num_workers = (
+        args.num_workers or paths_config.get("num_workers") or config.get("ray", {}).get("max_disk_workers", 4)
+    )
 
     # Find bags to process
-    bags = find_bags(args.input_dir, args.bags)
-    if not bags:
+    bag_paths = find_bags(input_dir, bags)
+    if not bag_paths:
         console.print("[yellow]No bags found to process[/yellow]")
         sys.exit(0)
 
-    console.print(f"[bold]Found {len(bags)} bags to process[/bold]")
-    args.output_dir.mkdir(parents=True, exist_ok=True)
+    console.print(f"[bold]Found {len(bag_paths)} bags to process[/bold]")
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # Initialize Ray
-    ray.init(num_cpus=num_workers, ignore_reinit_error=True)
+    # Exclude project metadata so that Ray workers don't trigger uv to
+    # recreate the virtual-env inside their temp directory (the relative
+    # paths in pyproject.toml would not resolve there).
+    warnings.filterwarnings("ignore", message=".*RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO.*")
+    ray.init(
+        num_cpus=num_workers,
+        ignore_reinit_error=True,
+        logging_level=logging.WARNING,
+        runtime_env={
+            "excludes": [
+                "pyproject.toml",
+                "uv.lock",
+                ".venv/",
+            ],
+        },
+    )
     console.print(f"[green]Ray initialized with {num_workers} workers[/green]")
 
     # Submit tasks - each bag gets its own _mediaref subdirectory
+    # Flat output: if names collide across subdirs, append _1, _2, etc.
     start_time = time.time()
     futures = []
-    for bag_path in bags:
-        bag_output_dir = args.output_dir / f"{bag_path.name}_mediaref"
+    used_names: dict[str, int] = {}  # base_name -> count of times seen
+    for bag_path in bag_paths:
+        base_name = bag_path.name
+        count = used_names.get(base_name, 0)
+        used_names[base_name] = count + 1
+        suffix = f"_{count}" if count > 0 else ""
+        bag_output_dir = output_dir / f"{base_name}{suffix}_mediaref"
         future = convert_bag_task.remote(bag_path, bag_output_dir, fps, image_topics, topics_to_remove)
-        futures.append((bag_path.name, future))
+        futures.append((f"{base_name}{suffix}", future))
 
     # Collect results
     results = []
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        MofNCompleteColumn(),
-        TimeElapsedColumn(),
-        TextColumn("ETA:"),
-        TimeRemainingColumn(),
-        console=console,
-    ) as progress:
-        task = progress.add_task("Processing bags...", total=len(futures))
+    total = len(futures)
+    pending = {f: name for name, f in futures}
+    while pending:
+        done, _ = ray.wait(list(pending.keys()), num_returns=1, timeout=1.0)
+        for future in done:
+            name = pending.pop(future)
+            result = ray.get(future)
+            results.append(result)
+            completed = total - len(pending)
+            elapsed = time.time() - start_time
+            avg = elapsed / completed
+            eta = avg * len(pending)
 
-        pending = {f: name for name, f in futures}
-        while pending:
-            done, _ = ray.wait(list(pending.keys()), num_returns=1, timeout=1.0)
-            for future in done:
-                name = pending.pop(future)
-                result = ray.get(future)
-                results.append(result)
-                progress.update(task, advance=1, description=f"Completed: {name}")
+            def _fmt_duration(secs: float) -> str:
+                """Format seconds as human-readable (Xd )HH:MM:SS."""
+                s = int(secs)
+                days, s = divmod(s, 86400)
+                hours, s = divmod(s, 3600)
+                minutes, s = divmod(s, 60)
+                if days > 0:
+                    return f"{days}d {hours:02d}:{minutes:02d}:{s:02d}"
+                return f"{hours:02d}:{minutes:02d}:{s:02d}"
+
+            print(
+                f"  [{completed}/{total}] Completed: {name}  "
+                f"(elapsed {_fmt_duration(elapsed)}, ETA {_fmt_duration(eta)})",
+                flush=True,
+            )
 
     elapsed = time.time() - start_time
 
