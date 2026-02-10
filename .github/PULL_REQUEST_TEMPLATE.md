@@ -17,6 +17,9 @@ Examples:
 - [ ] Documentation/configuration update
 - [ ] Refactoring
 
+## 🔁 Reproduce
+Please write the execution commands to review this PR.
+
 ## 📊 Changes
 - Summary of main changes
 - Files added/modified/deleted

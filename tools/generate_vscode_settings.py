@@ -12,11 +12,11 @@ from typing import Iterable, List, Optional
 import typer
 from rich.console import Console
 from rich.progress import (
+    BarColumn,
     Progress,
     SpinnerColumn,
-    TextColumn,
-    BarColumn,
     TaskProgressColumn,
+    TextColumn,
 )
 
 VSCODE_TEMPLATE = """

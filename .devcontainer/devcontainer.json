@@ -4,7 +4,7 @@
   // =============================================================================
   // Select the Docker service to use for the dev container.
   // To select a different service, change the "service" and "runServices" fields below.
-  // Available services: isaac-sim (default), isaac-lab, dev, ros2
+  // Available services: isaac-sim (default), isaac-lab, dev, ros2, ros2-vint-dev
   // See docker-compose.yml for full service definitions.
   // =============================================================================
   "name": "CostNav",

@@ -1,0 +1,81 @@
+[project]
+name = "costnav_il_baselines"
+version = "0.1.0"
+description = "Imitation Learning Baseline Evaluation for CostNav - ViNT Policy Node"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "CostNav Authors", email = "cyjun0304@naver.com" },
+]
+keywords = ["robotics", "navigation", "imitation-learning", "vint"]
+
+dependencies = [
+    # Core ML dependencies
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "efficientnet-pytorch>=0.7.1",
+    # Image processing
+    "opencv-python>=4.8.0",
+    "pillow>=10.0.0",
+    # Data handling
+    "numpy>=1.24.0,<2",  # cv_bridge from ROS2 requires numpy<2
+    "pyyaml>=6.0.0",
+    # vint_train for loading checkpoints trained with visualnav-transformer
+    "vint_train",
+    # Warmup scheduler (required by vint_train checkpoint)
+    "warmup-scheduler",
+    "scipy>=1.15.3",
+    "casadi>=3.7.2",
+    "transforms3d>=0.4.2",
+]
+
+[tool.uv.sources]
+vint_train = { path = "../../../third_party/visualnav-transformer/train", editable = true }
+warmup-scheduler = { git = "https://github.com/ildoonet/pytorch-gradual-warmup-lr.git" }
+
+[project.scripts]
+# Main ViNT policy node entry point
+# Usage: vint_policy_node --checkpoint /path/to/model.pth --model_config /path/to/config.yaml --robot_config /path/to/robot.yaml
+vint_policy_node = "evaluation.nodes.vint_policy_node:main"
+# Trajectory follower node for executing trajectories at high rate
+# Usage: trajectory_follower_node --control_rate 20.0 --max_linear_vel 1.0 --max_angular_vel 1.0
+trajectory_follower_node = "evaluation.nodes.trajectory_follower_node:main"
+
+[project.urls]
+Repository = "https://github.com/worv-ai/CostNav"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/evaluation"]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "mypy>=1.0.0",
+    "ruff>=0.1.0",
+]
+
+# Default checkpoint path for the ViNT model
+[tool.vint]
+default_checkpoint = "/workspace/checkpoints/vint_nova_carter.pth"
+default_model_config = "configs/vint_eval.yaml"
+default_robot_config = "configs/robot_carter.yaml"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E402", "E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_ignores = true
+ignore_missing_imports = true
