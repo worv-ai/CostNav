@@ -159,11 +159,6 @@ make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
 ```
 
 
-
-## Contributing
-
-Issues and pull requests are welcome! Open a discussion or issue.
-
 ## What's next?
 
 - [x] Paper release
@@ -171,6 +166,10 @@ Issues and pull requests are welcome! Open a discussion or issue.
 - [ ] cost formula and reference sheet
 - [ ] imitation learning baseline, and collected dataset with teleoperation
 
+
+## Contributing
+
+As we aim to be a large-scale endless-evolving benchmark, issues and pull requests are welcome! 
 
 ## Contact
 
