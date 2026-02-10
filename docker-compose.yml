@@ -334,7 +334,7 @@ services:
       - MODEL_CHECKPOINT=${MODEL_CHECKPOINT:-checkpoints/vint.pth}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ./:/workspace
+      - .:/workspace
     working_dir: /workspace
     command: >
       bash -c "if [ \"$${SIM_ROBOT}\" = \"nova_carter\" ]; then
