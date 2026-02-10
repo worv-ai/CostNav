@@ -6,17 +6,20 @@ FROM osrf/ros:jazzy-desktop
 ENV ROS_DISTRO=jazzy
 ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 
-# Create workspace directory
-RUN mkdir -p /workspace/build_ws
+# Create workspace directory outside /workspace so bind-mounts don't shadow it
+RUN mkdir -p /opt/ros_ws
 
-# Copy the source packages to install dependencies via rosdep
-COPY third_party/IsaacSim-ros_workspaces/build_ws/jazzy/isaac_sim_ros_ws /workspace/build_ws
+# Build the isaac_sim_teleop_ros2 package into /opt/ros_ws
+COPY costnav_isaacsim/isaac_sim_teleop_ros2 /opt/ros_ws/src/isaac_sim_teleop_ros2
 
 # Install all dependencies using rosdep and additional packages for teleop
 RUN apt-get update && \
     rosdep update && \
-    rosdep install --from-paths /workspace/build_ws/src --ignore-src -r -y && \
+    rosdep install --from-paths /opt/ros_ws/src --ignore-src -r -y && \
     apt-get install -y \
+    ros-jazzy-navigation2 \
+    ros-jazzy-nav2-bringup \
+    ros-jazzy-pointcloud-to-laserscan \
     ros-jazzy-joy \
     ros-jazzy-teleop-twist-joy \
     ros-jazzy-image-transport-plugins \
@@ -26,17 +29,10 @@ RUN apt-get update && \
 # Set the default workspace directory
 WORKDIR /workspace
 
-# Copy the fastdds.xml configuration for multi-machine/docker communication
-COPY third_party/IsaacSim-ros_workspaces/jazzy_ws/fastdds.xml /workspace/build_ws/fastdds.xml
-ENV FASTRTPS_DEFAULT_PROFILES_FILE=/workspace/build_ws/fastdds.xml
-
-# Pre-build the isaac_sim_teleop_ros2 package into /workspace/build_ws
-COPY costnav_isaacsim/isaac_sim_teleop_ros2 /workspace/build_ws/src/isaac_sim_teleop_ros2
-
 # Build only the isaac_sim_teleop_ros2 package
 RUN . /opt/ros/jazzy/setup.sh && \
-    cd /workspace/build_ws && \
-    colcon build --packages-select isaac_sim_teleop_ros2
+    cd /opt/ros_ws && \
+    colcon build
 
 COPY docker/ros_entrypoint.sh /ros_entrypoint.sh
 RUN chmod +x /ros_entrypoint.sh

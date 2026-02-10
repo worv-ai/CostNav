@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros-ws build-ros2 build-vint run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-vint run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
 
 # Load environment variables from .env file if it exists
 # Variables can still be overridden from command line
@@ -64,15 +64,6 @@ fetch-third-party:
 # ROS2 Workspace Build and Runtime Targets
 # =============================================================================
 
-# Build the Isaac Sim ROS workspace using build_ros.sh
-build-ros-ws:
-	@echo "==> Cleaning previous build_ws/$(ROS_DISTRO)..."
-	cd third_party/IsaacSim-ros_workspaces && \
-		docker run --rm -v $$(pwd)/build_ws:/build_ws ubuntu:$(UBUNTU_VERSION) rm -rf /build_ws/$(ROS_DISTRO)
-	@echo "==> Building ROS workspace for $(ROS_DISTRO) on Ubuntu $(UBUNTU_VERSION)..."
-	cd third_party/IsaacSim-ros_workspaces && ./build_ros.sh -d $(ROS_DISTRO) -v $(UBUNTU_VERSION)
-	@echo "==> Build complete!"
-
 # Build the ROS2 runtime Docker image
 build-ros2:
 	$(DOCKER_COMPOSE) --profile ros2 build ros2
@@ -113,10 +104,6 @@ run-nav2:
 	@if ! docker image inspect $(ISAAC_SIM_IMAGE) >/dev/null 2>&1; then \
 		echo "==> Missing Isaac Sim image ($(ISAAC_SIM_IMAGE)); building..."; \
 		$(MAKE) build-isaac-sim; \
-	fi
-	@if [ ! -d third_party/IsaacSim-ros_workspaces/build_ws/$(ROS_DISTRO)/isaac_sim_ros_ws ]; then \
-		echo "==> Missing ROS workspace for $(ROS_DISTRO); building..."; \
-		$(MAKE) build-ros-ws; \
 	fi
 	@if ! docker image inspect $(COSTNAV_ROS2_IMAGE) >/dev/null 2>&1; then \
 		echo "==> Missing ROS2 image ($(COSTNAV_ROS2_IMAGE)); building..."; \

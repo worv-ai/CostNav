@@ -1,6 +1,4 @@
 # Define a reusable block for ROS2 service configuration
-# Mounts the pre-built Isaac Sim ROS workspace from the host
-# The workspace should be built using: make build-ros-ws
 x-ros2-service: &ros2-service
   build:
     context: .

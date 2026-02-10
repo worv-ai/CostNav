@@ -59,7 +59,6 @@ make fetch-third-party # we use third-party submodules for reference or dependen
 
 ```bash
 cd CostNav
-make build-ros-ws # build third_party/IsaacSim-ros_workspaces
 make build-ros2
 make build-isaac-sim
 ```

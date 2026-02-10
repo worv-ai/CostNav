@@ -111,11 +111,6 @@ cd /path/to/CostNav
 # Build Isaac Sim image
 make build-isaac-sim
 
-# Build ROS2 workspace (required for Nav2)
-# Note: Clean up build_ws if errors occur
-# sudo rm -rf third_party/IsaacSim-ros_workspaces/build_ws
-make build-ros-ws
-
 # Build ROS2 runtime image
 make build-ros2
 
