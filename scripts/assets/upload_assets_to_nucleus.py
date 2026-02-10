@@ -45,7 +45,7 @@ SKIP_PATTERNS = [
     "NVIDIA/Materials/",
     "NVIDIA/Assets/",
     "NVIDIA/Environments/",
-    ".cache/"
+    ".cache/",
 ]
 
 
