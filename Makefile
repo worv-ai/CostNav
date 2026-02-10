@@ -58,7 +58,7 @@ build-all: build-isaac-sim build-isaac-lab build-dev
 build-ros-ws:
 	@echo "==> Cleaning previous build_ws/$(ROS_DISTRO)..."
 	cd third_party/IsaacSim-ros_workspaces && \
-		docker run --rm -v $$(pwd)/build_ws:/build_ws ubuntu:22.04 rm -rf /build_ws/$(ROS_DISTRO)
+		docker run --rm -v $$(pwd)/build_ws:/build_ws ubuntu:$(UBUNTU_VERSION) rm -rf /build_ws/$(ROS_DISTRO)
 	@echo "==> Building ROS workspace for $(ROS_DISTRO) on Ubuntu $(UBUNTU_VERSION)..."
 	cd third_party/IsaacSim-ros_workspaces && ./build_ros.sh -d $(ROS_DISTRO) -v $(UBUNTU_VERSION)
 	@echo "==> Build complete!"
@@ -86,8 +86,20 @@ run-isaac-sim:
 	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) GOAL_IMAGE=$(GOAL_IMAGE) $(DOCKER_COMPOSE) --profile isaac-sim up
 
 # Run both Isaac Sim and ROS2 Nav2 navigation together (using combined 'nav2' profile)
-# Usage: make run-nav2 NUM_PEOPLE=5 SIM_ROBOT=nova_carter FOOD=1 TUNED=True AMCL=False
+# Usage: make run-nav2 NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True TUNED=True AMCL=False
 run-nav2:
+	@if ! docker image inspect $(ISAAC_SIM_IMAGE) >/dev/null 2>&1; then \
+		echo "==> Missing Isaac Sim image ($(ISAAC_SIM_IMAGE)); building..."; \
+		$(MAKE) build-isaac-sim; \
+	fi
+	@if [ ! -d third_party/IsaacSim-ros_workspaces/build_ws/$(ROS_DISTRO)/isaac_sim_ros_ws ]; then \
+		echo "==> Missing ROS workspace for $(ROS_DISTRO); building..."; \
+		$(MAKE) build-ros-ws; \
+	fi
+	@if ! docker image inspect $(COSTNAV_ROS2_IMAGE) >/dev/null 2>&1; then \
+		echo "==> Missing ROS2 image ($(COSTNAV_ROS2_IMAGE)); building..."; \
+		$(MAKE) build-ros2; \
+	fi
 	xhost +local:docker 2>/dev/null || true
 	SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile nav2 down
 	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) TUNED=$(TUNED) AMCL=$(AMCL) $(DOCKER_COMPOSE) --profile nav2 up
@@ -122,7 +134,7 @@ start-mission-record:
 
 
 # Run both Isaac Sim and ROS2 teleop together (using combined 'teleop' profile)
-# Usage: make run-teleop NUM_PEOPLE=5 FOOD=1 GOAL_IMAGE=True
+# Usage: make run-teleop NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True GOAL_IMAGE=True
 run-teleop:
 	@if [ "$(SIM_ROBOT)" != "nova_carter" ] && [ "$(SIM_ROBOT)" != "segway_e1" ]; then \
 		echo "Unsupported robot: $(SIM_ROBOT). Use nova_carter or segway_e1."; \
@@ -375,6 +387,5 @@ stop-nucleus:
 	else \
 		echo "Nucleus stack not found at $(NUCLEUS_STACK_DIR)"; \
 	fi
-
 
 
