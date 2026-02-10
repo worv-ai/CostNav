@@ -159,13 +159,6 @@ make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
 ```
 
 
-## Roadmap
-
-1. **Rule-based baselines:** Integrate classical planners/pure-pursuit controllers to ground the benchmark with non-learning references.
-2. **Cloud inference toggles:** Decouple policy execution from the robot and simulate cloud latency + bandwidth costs.
-3. **Cost-aware RL training:** Incorporate direct profit margins, SLA penalties, and maintenance risk into the reward to study economically aligned policies.
-4. **Expanded asset suite:** Add night-time lighting variations, more COCO payload types (food containers, mail), and additional sidewalk geometries.
-5. **Analytics tooling:** Publish notebooks/notebooks dashboards that convert `outputs/` records into ROI charts for entire fleets.
 
 ## Contributing
 
