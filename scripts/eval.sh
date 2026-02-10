@@ -122,8 +122,15 @@ check_skip_key() {
 
 # Find the running container
 find_container() {
-    if docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
+    local names run_name
+    names=$(docker ps --format '{{.Names}}')
+    if echo "$names" | grep -qx "$CONTAINER_NAME"; then
         CONTAINER="$CONTAINER_NAME"
+        return 0
+    fi
+    run_name=$(echo "$names" | grep -E "^${CONTAINER_NAME}-run-" | head -n1)
+    if [ -n "$run_name" ]; then
+        CONTAINER="$run_name"
         return 0
     fi
     return 1
