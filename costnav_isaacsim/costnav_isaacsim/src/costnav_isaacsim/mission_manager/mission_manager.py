@@ -286,13 +286,8 @@ class MissionManager:
                 arrow_length=self.config.markers.arrow_length,
                 arrow_width=self.config.markers.arrow_width,
                 arrow_height=self.config.markers.arrow_height,
-                robot_length=self.config.markers.robot_length,
-                robot_width=self.config.markers.robot_width,
-                robot_height=self.config.markers.robot_height,
                 start_topic=self.config.markers.start_topic,
                 goal_topic=self.config.markers.goal_topic,
-                robot_topic=self.config.markers.robot_topic,
-                odom_topic=self.config.nav2.odom_topic,
                 enabled=self.config.markers.enabled,
             )
 

@@ -9,12 +9,14 @@
 ## Installation
 
 1. **Copy to ROS2 workspace:**
+
    ```bash
    cd ~/ros2_ws/src  # or your ROS2 workspace
-   cp -r /workspace/isaac_sim_teleop_ros2 .
+   cp -r /workspace/costnav_isaacsim/isaac_sim_teleop_ros2 .
    ```
 
 2. **Build the package:**
+
    ```bash
    cd ~/ros2_ws
    colcon build --packages-select isaac_sim_teleop_ros2
@@ -54,18 +56,22 @@ ros2 launch isaac_sim_teleop_ros2 teleop_isaac_sim.launch.py \
 ## Joystick Controls (Xbox Controller Layout)
 
 ### Movement
+
 - **Left Stick (Horizontal)**: Rotate left/right (angular velocity)
 - **Right Stick (Vertical)**: Move forward/backward (linear velocity)
 
 ### Speed Control
+
 - **LB (Left Bumper)**: Decrease max linear velocity
 - **RB (Right Bumper)**: Increase max linear velocity
 
 ### Safety
+
 - **LSB (Left Stick Button)**: Emergency stop toggle
 - **RSB (Right Stick Button)**: Linear rate lock toggle
 
 ### Advanced (if enabled)
+
 - **RT (Right Trigger)**: Switch between manual/model control
 - **X Button**: Teleport to previous pose
 - **Y Button**: Teleport to initial pose (origin)
@@ -73,16 +79,19 @@ ros2 launch isaac_sim_teleop_ros2 teleop_isaac_sim.launch.py \
 ## Topics
 
 ### Published
+
 - `/cmd_vel` - Velocity commands (geometry_msgs/TwistStamped)
 - `/is_model` - Model control status (std_msgs/Bool)
 
 ### Subscribed
+
 - `/joy` - Joystick input (sensor_msgs/Joy)
 - `/odom` - Robot odometry (nav_msgs/Odometry)
 
 ## Troubleshooting
 
 ### No joystick detected
+
 ```bash
 # Check if joystick is connected
 ls -l /dev/input/js0
@@ -93,12 +102,14 @@ ros2 topic echo /joy
 ```
 
 ### Robot not moving
+
 1. Check that `SIM_ROBOT` environment variable is set
 2. Verify `/cmd_vel` is being published: `ros2 topic echo /cmd_vel`
 3. Check emergency stop is not engaged (press LSB to toggle)
 4. Verify joystick deadzone is not too high
 
 ### Build errors
+
 ```bash
 # Clean and rebuild
 cd ~/ros2_ws
@@ -127,4 +138,3 @@ ros2 topic echo /cmd_vel
 - See `README.md` for detailed documentation
 - See `PORTING_NOTES.md` for technical details about the ROS1→ROS2 port
 - Customize robot parameters in `isaac_sim_teleop_ros2/robot.py`
-

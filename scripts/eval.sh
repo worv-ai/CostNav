@@ -122,8 +122,15 @@ check_skip_key() {
 
 # Find the running container
 find_container() {
-    if docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
+    local names run_name
+    names=$(docker ps --format '{{.Names}}')
+    if echo "$names" | grep -qx "$CONTAINER_NAME"; then
         CONTAINER="$CONTAINER_NAME"
+        return 0
+    fi
+    run_name=$(echo "$names" | grep -E "^${CONTAINER_NAME}-run-" | head -n1)
+    if [ -n "$run_name" ]; then
+        CONTAINER="$run_name"
         return 0
     fi
     return 1
@@ -143,12 +150,7 @@ log_file() {
 
 # Execute ROS2 command in container
 ros2_exec() {
-    docker exec "$CONTAINER" bash -c "
-        if [ -f /opt/ros/jazzy/setup.bash ]; then source /opt/ros/jazzy/setup.bash; fi;
-        if [ -f /workspace/build_ws/install/local_setup.sh ]; then source /workspace/build_ws/install/local_setup.sh; fi;
-        if [ -f /isaac-sim/setup_ros_env.sh ]; then source /isaac-sim/setup_ros_env.sh; fi;
-        $1
-    " 2>&1
+    docker exec "$CONTAINER" /ros_entrypoint.sh bash -c "$1" 2>&1
 }
 
 # Set mission timeout via ROS2 topic

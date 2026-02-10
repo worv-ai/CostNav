@@ -42,13 +42,9 @@ class TestMarkerConfig:
         assert config.enabled is True
         assert config.start_topic == "/start_marker"
         assert config.goal_topic == "/goal_marker"
-        assert config.robot_topic == "/robot_marker"
         assert config.arrow_length == 1.0
         assert config.arrow_width == 0.2
         assert config.arrow_height == 0.2
-        assert config.robot_length == 0.9
-        assert config.robot_width == 0.5
-        assert config.robot_height == 0.2
 
     def test_custom_values(self):
         """Test MarkerConfig with custom values."""
@@ -389,16 +385,14 @@ class TestMissionConfigFromDict:
         data = {
             "markers": {
                 "enabled": False,
-                "topics": {"start": "/s", "goal": "/g", "robot": "/r"},
+                "topics": {"start": "/s", "goal": "/g"},
                 "scale": {"arrow_length": 5.0, "arrow_width": 1.0, "arrow_height": 1.0},
-                "robot_scale": {"length": 2.0, "width": 1.0, "height": 0.5},
             }
         }
         config = MissionConfig.from_dict(data)
         assert config.markers.enabled is False
         assert config.markers.start_topic == "/s"
         assert config.markers.arrow_length == 5.0
-        assert config.markers.robot_length == 2.0
 
     def test_sampling_parsing(self):
         """Test sampling config parsing from dict."""
@@ -786,12 +780,8 @@ class TestConfigUsageInMarkerPublisher:
         assert config.markers.arrow_length == 10.0  # YAML: arrow_length: 10.0
         assert config.markers.arrow_width == 3.0  # YAML: arrow_width: 3.0
         assert config.markers.arrow_height == 3.0  # YAML: arrow_height: 3.0
-        assert config.markers.robot_length == 1.1  # YAML: length: 1.1
-        assert config.markers.robot_width == 0.5
-        assert config.markers.robot_height == 0.2
         assert config.markers.start_topic == "/start_marker"
         assert config.markers.goal_topic == "/goal_marker"
-        assert config.markers.robot_topic == "/robot_marker"
 
     def test_marker_publisher_receives_odom_topic(self):
         """Test that MarkerPublisher receives nav2.odom_topic from YAML."""
@@ -807,17 +797,11 @@ class TestConfigUsageInMarkerPublisher:
                 "topics": {
                     "start": "/custom_start",
                     "goal": "/custom_goal",
-                    "robot": "/custom_robot",
                 },
                 "scale": {
                     "arrow_length": 2.0,
                     "arrow_width": 0.5,
                     "arrow_height": 0.5,
-                },
-                "robot_scale": {
-                    "length": 1.5,
-                    "width": 0.8,
-                    "height": 0.4,
                 },
             },
             "nav2": {
@@ -830,13 +814,9 @@ class TestConfigUsageInMarkerPublisher:
         assert config.markers.enabled is False
         assert config.markers.start_topic == "/custom_start"
         assert config.markers.goal_topic == "/custom_goal"
-        assert config.markers.robot_topic == "/custom_robot"
         assert config.markers.arrow_length == 2.0
         assert config.markers.arrow_width == 0.5
         assert config.markers.arrow_height == 0.5
-        assert config.markers.robot_length == 1.5
-        assert config.markers.robot_width == 0.8
-        assert config.markers.robot_height == 0.4
         assert config.nav2.odom_topic == "/custom_odom"
 
 

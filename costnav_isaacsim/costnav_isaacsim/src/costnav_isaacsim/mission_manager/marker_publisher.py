@@ -8,12 +8,10 @@
 This module provides a ROS2 node that publishes visualization markers for:
 - Start position (green sphere/arrow)
 - Goal position (red sphere/arrow)
-    - Current robot position (blue arrow + dot, real-time updates)
 
 Topics:
     /start_marker (visualization_msgs/Marker): Start position marker
     /goal_marker (visualization_msgs/Marker): Goal position marker
-    /robot_marker (visualization_msgs/Marker): Current robot position markers
 """
 
 from __future__ import annotations
@@ -23,7 +21,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 import rclpy
-from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import ColorRGBA
@@ -71,8 +68,7 @@ class MarkerConfig:
 class MarkerPublisher(Node):
     """ROS2 Node for publishing Nav2 mission visualization markers.
 
-    This node publishes markers for start, goal, and robot positions to RViz2.
-    It subscribes to odometry for real-time robot position updates.
+    This node publishes markers for start and goal positions to RViz2.
 
     Example usage:
         rclpy.init()
@@ -82,7 +78,6 @@ class MarkerPublisher(Node):
         marker_pub.publish_start_marker(x=0.0, y=0.0, z=0.0, heading=0.0)
         marker_pub.publish_goal_marker(x=10.0, y=5.0, z=0.0, heading=0.5)
 
-        # Robot marker is updated automatically from /odom
         rclpy.spin(marker_pub)
     """
 
@@ -92,13 +87,8 @@ class MarkerPublisher(Node):
         arrow_length: float = 0.8,
         arrow_width: float = 0.15,
         arrow_height: float = 0.15,
-        robot_length: float = 0.9,
-        robot_width: float = 0.5,
-        robot_height: float = 0.2,
         start_topic: str = "/start_marker",
         goal_topic: str = "/goal_marker",
-        robot_topic: str = "/robot_marker",
-        odom_topic: str = "/chassis/odom",
         enabled: bool = True,
     ):
         """Initialize the marker publisher node.
@@ -108,13 +98,8 @@ class MarkerPublisher(Node):
             arrow_length: Length of arrow markers (scale_x).
             arrow_width: Width of arrow markers (scale_y).
             arrow_height: Height of arrow markers (scale_z).
-            robot_length: Length of robot marker arrow (scale_x).
-            robot_width: Width of robot marker arrow (scale_y).
-            robot_height: Height of robot marker arrow (scale_z).
             start_topic: Topic name for start position marker.
             goal_topic: Topic name for goal position marker.
-            robot_topic: Topic name for robot position marker.
-            odom_topic: Topic name for odometry subscription.
             enabled: Whether to enable marker publishing.
         """
         super().__init__(node_name)
@@ -124,9 +109,6 @@ class MarkerPublisher(Node):
         self._arrow_length = arrow_length
         self._arrow_width = arrow_width
         self._arrow_height = arrow_height
-        self._robot_length = robot_length
-        self._robot_width = robot_width
-        self._robot_height = robot_height
 
         # QoS profile for markers (latched/transient local for persistence)
         marker_qos = QoSProfile(
@@ -138,20 +120,10 @@ class MarkerPublisher(Node):
         # Publishers (using topic names from config)
         self.start_marker_pub = self.create_publisher(Marker, start_topic, marker_qos)
         self.goal_marker_pub = self.create_publisher(Marker, goal_topic, marker_qos)
-        self.robot_marker_pub = self.create_publisher(Marker, robot_topic, 10)
-
-        # Subscriber for robot odometry (using topic name from config)
-        self.odom_sub = self.create_subscription(Odometry, odom_topic, self._odom_callback, 10)
-
-        # Timer for robot marker updates (10 Hz)
-        self._robot_pose: Optional[tuple] = None
-        self.robot_marker_timer = self.create_timer(0.1, self._publish_robot_marker)
 
         # Marker IDs
         self._start_marker_id = 0
         self._goal_marker_id = 1
-        self._robot_marker_id = 2
-        self._robot_dot_marker_id = 3
 
         self.get_logger().info("MarkerPublisher initialized.")
 
@@ -183,36 +155,6 @@ class MarkerPublisher(Node):
             scale_z=self._arrow_height,
             fixed_heading=math.pi,
             head_on_pose=True,
-        )
-
-    def _get_robot_marker_config(self) -> MarkerConfig:
-        """Get marker configuration for robot position."""
-        return MarkerConfig(
-            r=0.0,
-            g=0.0,
-            b=1.0,
-            a=0.5,
-            marker_type=Marker.ARROW,
-            scale_x=self._robot_length,
-            scale_y=self._robot_width,
-            scale_z=self._robot_height,
-            heading_offset=0.0,
-            head_on_pose=True,
-            pose_offset_factor=0.5,
-        )
-
-    def _get_robot_dot_config(self) -> MarkerConfig:
-        """Get marker configuration for robot position dot."""
-        dot_scale = max(0.05, min(self._robot_width, self._robot_height) * 2.0)
-        return MarkerConfig(
-            r=0.0,
-            g=0.0,
-            b=1.0,
-            a=1.0,
-            marker_type=Marker.SPHERE,
-            scale_x=dot_scale,
-            scale_y=dot_scale,
-            scale_z=dot_scale,
         )
 
     def _create_marker(
@@ -275,7 +217,7 @@ class MarkerPublisher(Node):
         # Color (ensure float type for ROS2 compatibility)
         marker.color = ColorRGBA(r=float(config.r), g=float(config.g), b=float(config.b), a=float(config.a))
 
-        # Lifetime (0 = forever for start/goal, short for robot)
+        # Lifetime (0 = forever for start/goal)
         marker.lifetime.sec = 0
         marker.lifetime.nanosec = 0
 
@@ -351,60 +293,11 @@ class MarkerPublisher(Node):
         self.publish_start_marker(start.x, start.y, start.z, start.heading)
         self.publish_goal_marker(goal.x, goal.y, goal.z, goal.heading)
 
-    def _odom_callback(self, msg: Odometry) -> None:
-        """Handle odometry messages for robot position tracking."""
-        pos = msg.pose.pose.position
-        orient = msg.pose.pose.orientation
-
-        # Extract yaw from quaternion
-        siny_cosp = 2.0 * (orient.w * orient.z + orient.x * orient.y)
-        cosy_cosp = 1.0 - 2.0 * (orient.y * orient.y + orient.z * orient.z)
-        yaw = math.atan2(siny_cosp, cosy_cosp)
-
-        self._robot_pose = (pos.x, pos.y, pos.z, yaw)
-
-    def _publish_robot_marker(self) -> None:
-        """Publish robot position marker (called by timer)."""
-        if not self._enabled or self._robot_pose is None:
-            return
-
-        x, y, z, heading = self._robot_pose
-        marker = self._create_marker(
-            marker_id=self._robot_marker_id,
-            x=x,
-            y=y,
-            z=z,
-            heading=heading,
-            config=self._get_robot_marker_config(),
-            label="Robot",
-        )
-        # Short lifetime for robot marker (updates frequently)
-        marker.lifetime.sec = 0
-        marker.lifetime.nanosec = 200_000_000  # 200ms
-
-        self.robot_marker_pub.publish(marker)
-
-        dot_marker = self._create_marker(
-            marker_id=self._robot_dot_marker_id,
-            x=x,
-            y=y,
-            z=z,
-            heading=heading,
-            config=self._get_robot_dot_config(),
-            label="RobotDot",
-        )
-        dot_marker.lifetime.sec = 0
-        dot_marker.lifetime.nanosec = 200_000_000  # 200ms
-
-        self.robot_marker_pub.publish(dot_marker)
-
     def clear_markers(self) -> None:
         """Clear all published markers."""
         for marker_id, publisher in [
             (self._start_marker_id, self.start_marker_pub),
             (self._goal_marker_id, self.goal_marker_pub),
-            (self._robot_marker_id, self.robot_marker_pub),
-            (self._robot_dot_marker_id, self.robot_marker_pub),
         ]:
             marker = Marker()
             marker.header.frame_id = "map"

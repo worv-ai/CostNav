@@ -48,10 +48,12 @@ ros2 launch isaac_sim_teleop_ros2 teleop_isaac_sim.launch.py
 ### Topics
 
 **Published:**
+
 - `/cmd_vel` (`geometry_msgs/msg/Twist`) - Velocity commands for the robot
 - `/is_model` (`std_msgs/msg/Bool`) - Whether model control is active
 
 **Subscribed:**
+
 - `/joy` (`sensor_msgs/msg/Joy`) - Joystick input
 - `/cmd_vel_model` (`geometry_msgs/msg/Twist`) - Model velocity commands (optional)
 - `/odom` (`nav_msgs/msg/Odometry`) - Odometry feedback (optional)
@@ -72,19 +74,20 @@ ros2 launch isaac_sim_teleop_ros2 teleop_isaac_sim.launch.py
 - `auto_restart_on_collision` (default: 'true') - Auto restart on collision
 - `use_control_topic` (default: 'false') - Use control topic mode
 - `frame_id` (default: 'teleop') - Frame ID for teleop
+- `odom_topic` (default: '/odom') - Odometry topic name
 - `img_list` (default: '') - Comma-separated list of image topics
 
 ### Joystick Controls
 
 - **Left Stick (Left/Right)**: Angular velocity control
 - **Right Stick (Up/Down)**: Linear velocity control
-- **Left Bumper (LB)**: Decrease max linear velocity
-- **Right Bumper (RB)**: Increase max linear velocity
+- **Left Bumper (LB)**: Decrease max linear velocity (hold to continuously decrease)
+- **Right Bumper (RB)**: Increase max linear velocity (hold to continuously increase)
 - **Left Stick Button (LSB)**: Emergency stop toggle
 - **Right Stick Button (RSB)**: Linear rate lock toggle
-- **Right Trigger (RT)**: Model input switch
-- **X Button**: Teleport to previous pose (if teleport enabled)
-- **Y Button**: Teleport to initial pose (if teleport enabled)
+- **Right Trigger (RT)**: Model input switch / control request (depends on `use_control_topic`)
+- **X Button**: Teleport to previous pose (if `use_teleport` enabled) — **NOT YET IMPLEMENTED**: publishes to `/robot_pose` but no subscriber currently handles teleportation in Isaac Sim
+- **Y Button**: Teleport to initial pose (if `use_teleport` enabled) — **NOT YET IMPLEMENTED**: same as X Button
 
 ## Topics
 
@@ -141,4 +144,3 @@ ros2 topic echo /joy
 ## License
 
 BSD
-

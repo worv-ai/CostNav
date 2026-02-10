@@ -8,7 +8,7 @@
 This package provides tools for:
 - NavMesh-based position sampling for navigation goals
 - Robot teleportation and mission initiation
-- RViz marker visualization for start, goal, and robot positions
+- RViz marker visualization for start and goal positions
 - Mission execution via MissionManager (main loop integration)
 
 Usage:

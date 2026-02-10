@@ -53,7 +53,7 @@ class DifferentialRobot(Robot):
         self.max_lin_vel = max_lin_vel
         self.max_ang_vel = max_ang_vel
         self.max_linear_vel_level = max_linear_vel_level
-        self.set_max_linear_vel(1)
+        self.set_max_linear_vel(max_linear_vel_level)
 
     def print_msg(self) -> str:
         msg = f"""
@@ -101,7 +101,7 @@ CTRL-C to quit
 
 class NovaCarter(DifferentialRobot):
     def __init__(self) -> None:
-        super().__init__(robot_name=self.__class__.__name__, max_lin_vel=2.0, max_ang_vel=1.2, max_linear_vel_level=1)
+        super().__init__(robot_name=self.__class__.__name__, max_lin_vel=2.0, max_ang_vel=1.2, max_linear_vel_level=10)
 
 
 class SegwayE1(DifferentialRobot):
@@ -110,5 +110,5 @@ class SegwayE1(DifferentialRobot):
             robot_name=self.__class__.__name__,
             max_lin_vel=2.0,
             max_ang_vel=1.2,
-            max_linear_vel_level=1,
+            max_linear_vel_level=10,
         )
