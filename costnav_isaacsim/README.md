@@ -159,11 +159,15 @@ make run-teleop SIM_ROBOT=nova_carter NUM_PEOPLE=20
 make run-teleop SIM_ROBOT=segway_e1 NUM_PEOPLE=20
 ```
 
+> **Tip:** Press **Ctrl+C once** to stop teleop. The teardown will run automatically — do not press Ctrl+C again while containers are being cleaned up.
+
 You can also trigger missions while teleop is running:
 
 ```bash
 make start-mission
 ```
+
+For recording data, see [Running Teleop (For Data Collection)](../README.md#running-teleop-for-data-collection).
 
 ### 4. Alternative: Run Services Separately
 

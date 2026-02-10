@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros-ws build-ros2 build-vint run-ros2 run-isaac-sim run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros-ws build-ros2 build-vint run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
 
 # Load environment variables from .env file if it exists
 # Variables can still be overridden from command line
@@ -95,6 +95,18 @@ run-isaac-sim:
 	$(DOCKER_COMPOSE) --profile isaac-sim down
 	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) GOAL_IMAGE=$(GOAL_IMAGE) $(DOCKER_COMPOSE) --profile isaac-sim up
 
+# Run the Isaac Sim container with the native Isaac Sim GUI (no launch.py)
+# Useful for opening the editor directly to inspect scenes, create assets, etc.
+# Usage: make run-isaac-sim-raw
+run-isaac-sim-raw:
+	xhost +local:docker 2>/dev/null || true
+	$(DOCKER_COMPOSE) --profile isaac-sim down
+	$(DOCKER_COMPOSE) --profile isaac-sim run --rm \
+		-e DISPLAY=$(DISPLAY) \
+		-e XAUTHORITY=/tmp/.Xauthority \
+		-e OMNI_KIT_ALLOW_ROOT=1 \
+		isaac-sim /isaac-sim/isaac-sim.sh
+
 # Run both Isaac Sim and ROS2 Nav2 navigation together (using combined 'nav2' profile)
 # Usage: make run-nav2 NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True TUNED=True AMCL=False
 run-nav2:
@@ -133,6 +145,8 @@ start-mission:
 start-mission-record:
 	$(MAKE) run-rosbag
 	$(MAKE) start-mission
+	@echo ""
+	@echo "Run 'make stop-rosbag' after recording is done."
 
 
 # Run Isaac Sim + RViz, then launch teleop node interactively (curses UI visible)
@@ -160,10 +174,15 @@ run-teleop:
 		sleep 0.3; \
 	fi
 	@# Run teleop interactively so the curses UI is visible
-	@# When teleop exits (Ctrl+C or normal end), bring down the teleop compose profile
-	SIM_ROBOT=$(SIM_ROBOT) XBOX_ID=$(XBOX_ID) \
+	@# On Ctrl+C: stop teleop, then tear down the whole profile.
+	@# Ignore further SIGINTs during teardown so a second Ctrl+C doesn't interrupt cleanup.
+	@SIM_ROBOT=$(SIM_ROBOT) XBOX_ID=$(XBOX_ID) \
 		$(DOCKER_COMPOSE) --profile teleop run --rm ros2-teleop; \
-	SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile teleop down
+	echo ""; \
+	echo "Teleop stopped. Tearing down containers (please wait, do not press Ctrl+C again)..."; \
+	trap '' INT; \
+	SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile teleop down; \
+	echo "Done."
 
 # =============================================================================
 # IL Baselines (ViNT) Targets
