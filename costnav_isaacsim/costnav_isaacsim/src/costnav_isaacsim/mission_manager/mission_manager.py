@@ -25,8 +25,8 @@ if TYPE_CHECKING:
     from costnav_isaacsim.config import MissionConfig
 
 logger = logging.getLogger("costnav_mission_manager")
-from .evaluation import EvaluationManager
-from .evaluation import injury
+from costnav_isaacsim.evaluation import EvaluationManager
+from costnav_isaacsim.evaluation import injury
 
 # Property categories used for cost comparison.
 _COST_PROPERTY_CATEGORIES = {"mail_box", "trash_bin", "building", "bollard"}

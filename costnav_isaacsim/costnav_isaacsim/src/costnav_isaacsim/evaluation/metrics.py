@@ -280,9 +280,7 @@ def on_contact_report(
             if is_character_collision:
                 state.people_contact_count += 1
             record_property_contact_from_pair(state, actor0, actor1, impulse_amount)
-            injury_info = injury.process_collision_injury(
-                state, mission_config, impulse_amount, is_character_collision
-            )
+            injury_info = injury.process_collision_injury(state, mission_config, impulse_amount, is_character_collision)
             apply_impulse_damage(state, impulse_amount, is_mission_active, injury_info)
             state.last_damage_steps_remaining = state.damage_cooldown_steps
             return
