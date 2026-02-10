@@ -25,81 +25,9 @@ if TYPE_CHECKING:
     from costnav_isaacsim.config import MissionConfig
 
 logger = logging.getLogger("costnav_mission_manager")
-
-PROPERTY_PRIM_PATHS = {
-    "fire_hydrant": [
-        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section19",
-        "/World/Environment/SM_StreetDetails_002/SM_StreetDetails_03/SM_StreetDetails_002/Section53",
-        "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section57",
-        "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section55",
-    ],
-    "traffic_light": [
-        "/World/Environment/SM_StreetDetails_002/SM_StreetDetails_03/SM_StreetDetails_002/Section32",
-        "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section31",
-        "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section31",
-        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section12",
-        "/World/Environment/SM_StreetDetails_002/SM_StreetDetails_03/SM_StreetDetails_002/Section39",
-        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section39",
-        "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section41",
-        "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section41",
-    ],
-    "street_lamp": [
-        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section1",
-        "/World/Environment/SM_StreetDetails_002/SM_StreetDetails_03/SM_StreetDetails_002/Section1",
-        "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section1",
-        "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section1",
-        "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section78",
-    ],
-    "bollard": [
-        "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section77",
-        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section31",
-    ],
-    # Building prims are matched broadly via prefix; keep only explicit non-standard
-    # building-related prims here (e.g., cubes that represent building parts).
-    "building": [
-        "/World/box/Cube",
-        "/World/box/Cube_01",
-        "/World/box/Cube_02",
-        "/World/box/Cube_03",
-        "/World/box/Cube_04",
-        "/World/box/Cube_05",
-        "/World/box/Cube_06",
-        "/World/box/Cube_07",
-        "/World/box/Cube_08",
-        "/World/box/Cube_09",
-        "/World/box/Cube_10",
-        "/World/box/Cube_11",
-        "/World/box/Cube_12",
-        "/World/box/Cube_13",
-    ],
-    "trash_bin": [
-        "/World/Environment/SM_Buidlng_032/SM_Buidlng_032/Section26",
-    ],
-    "mail_box": [
-        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section20",
-        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section85",
-        "/World/Environment/SM_StreetDetails_002/SM_StreetDetails_03/SM_StreetDetails_002/Section55",
-        "/World/Environment/SM_StreetDetails_002/SM_StreetDetails_03/SM_StreetDetails_002/Section18",
-        "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section18",
-        "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section18",
-        "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section57",
-    ],
-    "newspaper_box": [
-        "/World/Environment/SM_StreetDetails_002/SM_StreetDetails_03/SM_StreetDetails_002/Section21",
-        "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section21",
-        "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section21",
-        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section23",
-    ],
-    "bus_stop": [
-        "/World/Environment/SM_StreetDetails_001/SM_StreetDetails_001/Section8",
-        "/World/Environment/SM_StreetDetails_002/SM_StreetDetails_03/SM_StreetDetails_002/Section6",
-        "/World/Environment/SM_StreetDetails_003/SM_StreetDetails_003/Section6",
-        "/World/Environment/SM_StreetDetails_004/SM_StreetDetails_004/Section6",
-    ],
-}
-
-# Property categories used for cost comparison.
-_COST_PROPERTY_CATEGORIES = {"mail_box", "trash_bin", "building", "bollard"}
+from costnav_isaacsim.evaluation import EvaluationManager
+from costnav_isaacsim.evaluation import injury
+from costnav_isaacsim.evaluation import food
 
 
 class MissionState(Enum):
@@ -235,44 +163,12 @@ class MissionManager:
         self._last_traveled_distance = None  # Final traveled distance for last mission (meters)
         self._last_elapsed_time = None  # Elapsed time for last mission (seconds)
 
-        # Impulse health tracking (structural damage)
-        self._impulse_min_threshold = 50.0
-        self._impulse_health_max = 177.8
-        self._impulse_health = self._impulse_health_max
-        self._impulse_damage_accumulated = 0.0
-        self._contact_report_subscription = None
-        self._contact_report_targets = set()
-
-        # Contact count and total impulse tracking (for evaluation metrics)
-        self._contact_count = 0  # Number of contact events during mission
-        self._total_impulse = 0.0  # Total impulse accumulated during mission
-        self._last_contact_count = None  # Final contact count for last mission
-        self._last_total_impulse = None  # Final total impulse for last mission
-        self._people_contact_count = 0  # People collisions (subset of contacts)
-        self._last_people_contact_count = None
-        self._property_contact_counts = {key: 0 for key in PROPERTY_PRIM_PATHS}
-        self._last_property_contact_counts = None
-        self._property_contact_impulse_min_threshold = 100.0
-
-        # Damager cooldown tracking
-        self._last_damage_steps_remaining = 0
-        self._damage_cooldown_steps = 30
-
-        # Delta-v and injury cost tracking (computed from impulse/mass)
-        self._delta_v_magnitudes_mps = []  # List of delta-v magnitudes in m/s per mission
-        self._last_delta_v_magnitudes_mps = None  # Final list for last mission
-        self._injury_costs = []  # List of MAIS-based injury costs per collision
-        self._total_injury_cost = 0.0  # Sum of all injury costs during mission
-        self._last_injury_costs = None  # Final list for last mission
-        self._last_total_injury_cost = None  # Final total for last mission
-
-        # Food tracking for spoilage evaluation
-        self._food_root_prim_path = None  # Root prim path for food assets
-        self._food_prefix_path = None  # Pre-calculated prefix for startswith check
-        self._food_pieces_prim_path = None  # Full prim path to food pieces
-        self._food_bucket_prim_path = None  # Full prim path to food bucket
-        self._initial_food_piece_count = 0  # Piece count at mission start
-        self._final_food_piece_count = None  # Piece count at mission end
+        # Evaluation tracking (contact/impulse/injury/food)
+        self._evaluation = EvaluationManager(
+            config=self.config,
+            is_mission_active=self._is_mission_active,
+        )
+        self._eval = self._evaluation.state
 
         # Goal image capture for ViNT ImageGoal mode
         self._goal_camera_prim = None  # USD camera prim for goal image capture
@@ -434,10 +330,10 @@ class MissionManager:
                 self._setup_goal_camera()
 
             # Setup food tracking if enabled
-            self._setup_food_tracking()
+            self._evaluation.setup_food_tracking()
 
             # Setup contact reporting for impulse health tracking
-            self._setup_contact_reporting()
+            self._evaluation.setup_contact_reporting()
 
             self._initialized = True
             self._state = MissionState.WAITING_FOR_NAV2
@@ -481,13 +377,13 @@ class MissionManager:
         self._prev_robot_position = None
         self._last_traveled_distance = None
         self._last_elapsed_time = None
-        self._last_contact_count = None
-        self._last_total_impulse = None
-        self._last_people_contact_count = None
-        self._reset_impulse_health()
+        self._eval.last_contact_count = None
+        self._eval.last_total_impulse = None
+        self._eval.last_people_contact_count = None
+        self._evaluation.reset_impulse_health()
         # Reset food tracking
-        self._initial_food_piece_count = 0
-        self._final_food_piece_count = None
+        self._eval.initial_food_piece_count = 0
+        self._eval.final_food_piece_count = None
 
         # Reset costmap clear tracking
         self._costmap_clear_futures = {}
@@ -560,69 +456,6 @@ class MissionManager:
         tilt_angle = math.acos(min(1.0, max(-1.0, gz_body_z)))
 
         return tilt_angle > limit_angle
-
-    def _reset_impulse_health(self) -> None:
-        self._impulse_damage_accumulated = 0.0
-        self._impulse_health = self._impulse_health_max
-        self._last_damage_steps_remaining = 0
-        self._contact_count = 0
-        self._people_contact_count = 0
-        self._total_impulse = 0.0
-        self._property_contact_counts = {key: 0 for key in PROPERTY_PRIM_PATHS}
-        # Reset delta-v and injury cost tracking
-        self._delta_v_magnitudes_mps = []
-        self._injury_costs = []
-        self._total_injury_cost = 0.0
-
-    def _setup_contact_reporting(self) -> None:
-        food_root = self.config.food.prim_path
-        if food_root:
-            self._food_root_prim_path = food_root.rstrip("/")
-            self._food_prefix_path = f"{self._food_root_prim_path}/"
-        else:
-            self._food_root_prim_path = None
-            self._food_prefix_path = None
-
-        base_link_path = self.config.teleport.robot_prim or self.config.manager.robot_prim_path
-        if base_link_path:
-            base_link_path = base_link_path.rstrip("/")
-
-        robot_hint = base_link_path.lower() if base_link_path else ""
-        if "segway" in robot_hint:
-            base_link_path = "/World/Segway_E1_ROS2/base_link"
-        elif "nova_carter" in robot_hint or "carter" in robot_hint:
-            base_link_path = "/World/Nova_Carter_ROS/chassis_link"
-
-        if not base_link_path:
-            logger.warning("[CONTACT] Robot prim path not configured; skipping contact reporting")
-            return
-
-        try:
-            import omni.usd
-            from omni.physx import get_physx_simulation_interface
-            from pxr import PhysxSchema
-
-            stage = omni.usd.get_context().get_stage()
-            prim = stage.GetPrimAtPath(base_link_path)
-            if not prim.IsValid():
-                logger.warning(f"[CONTACT] Base link prim not found: {base_link_path}")
-                return
-
-            contact_api = PhysxSchema.PhysxContactReportAPI.Apply(prim)
-            contact_api.CreateThresholdAttr().Set(self._impulse_min_threshold)
-            self._contact_report_targets = {base_link_path}
-
-            if self._contact_report_subscription is None:
-                sim_interface = get_physx_simulation_interface()
-                self._contact_report_subscription = sim_interface.subscribe_contact_report_events(
-                    self._on_contact_report
-                )
-
-            logger.info(f"[CONTACT] Contact reporting enabled for {base_link_path}")
-        except ImportError as exc:
-            logger.warning(f"[CONTACT] Isaac Sim modules not available: {exc}")
-        except Exception as exc:
-            logger.error(f"[CONTACT] Failed to setup contact reporting: {exc}")
 
     def _setup_goal_image_publisher(self, qos_profile) -> None:
         """Setup ROS2 publisher for goal images.
@@ -797,522 +630,15 @@ class MissionManager:
             logger.error(f"[GOAL_IMAGE] {traceback.format_exc()}")
             return False
 
-    def _classify_property_from_prim_path(self, prim_path: str) -> Optional[str]:
-        if not prim_path:
-            return None
-        # Exception in trash bin path.
-        if prim_path.startswith("/World/Environment/SM_Buidlng_032/SM_Buidlng_032/Section26"):
-            return "trash_bin"
-        # Broad match for any building prims (handle both SM_Buidlng_ and SM_Buildlng_)
-        if prim_path.startswith("/World/Environment/SM_Buidlng_") or prim_path.startswith(
-            "/World/Environment/SM_Buildlng_"
-        ):
-            return "building"
-        for category, paths in PROPERTY_PRIM_PATHS.items():
-            for base_path in paths:
-                if prim_path == base_path or prim_path.startswith(base_path + "/"):
-                    return category
-        return None
-
-    def _record_property_contact_from_pair(
-        self,
-        actor0_path: str,
-        actor1_path: str,
-        impulse_amount: float,
-    ) -> Optional[str]:
-        """Record property contact from a pair of actor prim paths."""
-        if impulse_amount < self._property_contact_impulse_min_threshold:
-            return None
-
-        target = next(iter(self._contact_report_targets), None)
-        if target:
-            if actor0_path == target or actor0_path.startswith(target + "/"):
-                category = self._classify_property_from_prim_path(actor1_path)
-            elif actor1_path == target or actor1_path.startswith(target + "/"):
-                category = self._classify_property_from_prim_path(actor0_path)
-            else:
-                category = None
-        else:
-            category = None
-
-        if category is None:
-            category = self._classify_property_from_prim_path(actor0_path)
-        if category is None:
-            category = self._classify_property_from_prim_path(actor1_path)
-
-        if category is None:
-            return None
-        if category not in _COST_PROPERTY_CATEGORIES:
-            return None
-
-        print(f"[CONTACT] Property contact: {category} {impulse_amount}")
-
-        self._property_contact_counts[category] += 1
-        return category
-
-    def _apply_impulse_damage(
-        self, impulse_amount: float, injury_info: "tuple[float, float, float] | None" = None
-    ) -> None:
-        # Only calculate health damage when mission is active
-        if not self._is_mission_active():
-            msg = f"[CONTACT] Impulse: {impulse_amount:.2f}"
-            if injury_info:
-                delta_v_mps, injury_cost, total_injury_cost = injury_info
-                msg += (
-                    f" | delta_v={delta_v_mps:.4f} m/s ({delta_v_mps * self._MPS_TO_MPH:.2f} mph), "
-                    f"{injury_cost=:.2f}, {total_injury_cost=:.2f}"
-                )
-            print(msg)
-            return
-
-        if self._impulse_health <= 0.0:
-            return
-
-        # Track contact count and total impulse for evaluation metrics
-        self._contact_count += 1
-        self._total_impulse += impulse_amount
-
-        self._impulse_damage_accumulated += impulse_amount
-        self._impulse_health = max(0.0, self._impulse_health_max - self._impulse_damage_accumulated)
-        msg = (
-            f"[CONTACT] Impulse: {impulse_amount:.2f}, Health: {self._impulse_health:.2f}, Count: {self._contact_count}"
-        )
-        if injury_info:
-            delta_v_mps, injury_cost, total_injury_cost = injury_info
-            msg += (
-                f" | delta_v={delta_v_mps:.4f} m/s ({delta_v_mps * self._MPS_TO_MPH:.2f} mph), "
-                f"cost={injury_cost:.2f}, total={total_injury_cost:.2f}"
-            )
-        print(msg)
-
-    # MAIS logistic regression coefficients from crash data
-    # Format: (intercept, slope) for P(MAIS >= level) = 1 / (1 + exp(-(intercept + slope * delta_v_mph)))
-    _MAIS_COEFFICIENTS = {
-        "all": {
-            "mais_1": (-1.3925, 0.0815),
-            "mais_2": (-5.1331, 0.1479),
-            "mais_3": (-6.9540, 0.1637),
-            "mais_4": (-8.2070, 0.1564),
-            "mais_5": (-8.7927, 0.1598),
-            "fatality": (-8.9819, 0.1603),
-        },
-    }
-    _MPS_TO_MPH = 2.23694
-    _MAIS_LEVELS = ("mais_0", "mais_1", "mais_2", "mais_3", "mais_4", "mais_5", "fatality")
-
-    @staticmethod
-    def _logistic_probability(intercept: float, slope: float, delta_v_mph: float) -> float:
-        """Compute logistic probability P(MAIS >= level)."""
-        exponent = intercept + slope * delta_v_mph
-        return math.exp(exponent) / (1.0 + math.exp(exponent))
-
-    def _compute_mais_probabilities(self, delta_v_mps: float) -> dict:
-        """Compute MAIS level probabilities from delta-v using logistic regression."""
-        if delta_v_mps <= 0.0:
-            return {level: 1.0 if level == "mais_0" else 0.0 for level in self._MAIS_LEVELS}
-
-        delta_v_mph = delta_v_mps * self._MPS_TO_MPH
-        crash_mode = self.config.injury.crash_mode or "all"
-        coefficients = self._MAIS_COEFFICIENTS.get(crash_mode, self._MAIS_COEFFICIENTS["all"])
-
-        # Compute cumulative probabilities P(MAIS >= level)
-        mais_1_plus = self._logistic_probability(*coefficients["mais_1"], delta_v_mph)
-        mais_2_plus = self._logistic_probability(*coefficients["mais_2"], delta_v_mph)
-        mais_3_plus = self._logistic_probability(*coefficients["mais_3"], delta_v_mph)
-        mais_4_plus = self._logistic_probability(*coefficients["mais_4"], delta_v_mph)
-        mais_5_plus = self._logistic_probability(*coefficients["mais_5"], delta_v_mph)
-        fatality = self._logistic_probability(*coefficients["fatality"], delta_v_mph)
-
-        # Ensure monotonicity
-        mais_2_plus = min(mais_2_plus, mais_1_plus)
-        mais_3_plus = min(mais_3_plus, mais_2_plus)
-        mais_4_plus = min(mais_4_plus, mais_3_plus)
-        mais_5_plus = min(mais_5_plus, mais_4_plus)
-        fatality = min(fatality, mais_5_plus)
-
-        # Convert cumulative to individual level probabilities
-        return {
-            "mais_0": 1.0 - mais_1_plus,
-            "mais_1": mais_1_plus - mais_2_plus,
-            "mais_2": mais_2_plus - mais_3_plus,
-            "mais_3": mais_3_plus - mais_4_plus,
-            "mais_4": mais_4_plus - mais_5_plus,
-            "mais_5": mais_5_plus - fatality,
-            "fatality": fatality,
-        }
-
-    # Injury cost adjustment factor to scale expected costs
-    _INJURY_COST_ADJUSTMENT_FACTOR = 0.0110
-
-    def _compute_expected_injury_cost(self, probabilities: dict) -> float:
-        """Compute expected injury cost from MAIS probabilities and configured costs."""
-        costs = self.config.injury.costs
-        raw_cost = (
-            probabilities.get("mais_0", 0.0) * costs.mais_0
-            + probabilities.get("mais_1", 0.0) * costs.mais_1
-            + probabilities.get("mais_2", 0.0) * costs.mais_2
-            + probabilities.get("mais_3", 0.0) * costs.mais_3
-            + probabilities.get("mais_4", 0.0) * costs.mais_4
-            + probabilities.get("mais_5", 0.0) * costs.mais_5
-            + probabilities.get("fatality", 0.0) * costs.fatality
-        )
-        return raw_cost * self._INJURY_COST_ADJUSTMENT_FACTOR
-
-    def _process_collision_injury(
-        self, impulse_amount: float, is_character_collision: bool
-    ) -> "tuple[float, float, float] | None":
-        """Compute delta-v from impulse/mass and calculate injury cost.
-
-        Returns:
-            A tuple of (delta_v_mps, injury_cost, total_injury_cost) if injury tracking
-            is enabled, otherwise None.
-        """
-        if not self.config.injury.enabled or not is_character_collision:
-            return None
-
-        robot_mass = self.config.injury.robot_mass
-        delta_v_mps = impulse_amount / robot_mass
-        self._delta_v_magnitudes_mps.append(delta_v_mps)
-
-        probabilities = self._compute_mais_probabilities(delta_v_mps)
-        injury_cost = self._compute_expected_injury_cost(probabilities)
-        self._injury_costs.append(injury_cost)
-        self._total_injury_cost += injury_cost
-
-        return (delta_v_mps, injury_cost, self._total_injury_cost)
-
-    def _on_contact_report(self, contact_headers, contact_data) -> None:
-        if not self._contact_report_targets:
-            return
-
-        if self._last_damage_steps_remaining > 0:
-            self._last_damage_steps_remaining = max(0, self._last_damage_steps_remaining - 1)
-            return
-
-        try:
-            from pxr import PhysicsSchemaTools
-        except ImportError:
-            return
-
-        food_root: str = self._food_root_prim_path or ""
-        for header in contact_headers:
-            actor0 = str(PhysicsSchemaTools.intToSdfPath(header.actor0))
-            actor1 = str(PhysicsSchemaTools.intToSdfPath(header.actor1))
-            if (actor0 not in self._contact_report_targets) and (actor1 not in self._contact_report_targets):
-                continue
-
-            if food_root:
-                food_prefix_str: str = f"{food_root}/"
-                if actor0 in self._contact_report_targets and (
-                    actor1 == food_root or actor1[: len(food_prefix_str)] == food_prefix_str
-                ):
-                    continue
-                if actor1 in self._contact_report_targets and (
-                    actor0 == food_root or actor0[: len(food_prefix_str)] == food_prefix_str
-                ):
-                    continue
-
-            if header.num_contact_data == 0:
-                continue
-
-            is_character_collision = False
-            if "/World/Characters/" in actor0 or "/World/Characters/" in actor1:
-                is_character_collision = True
-
-            contact_range = range(
-                header.contact_data_offset,
-                header.contact_data_offset + header.num_contact_data,
-            )
-            for idx in contact_range:
-                impulse = contact_data[idx].impulse
-                impulse_amount = (impulse.x * impulse.x + impulse.y * impulse.y + impulse.z * impulse.z) ** 0.5
-                if impulse_amount < self._impulse_min_threshold:
-                    continue
-                if is_character_collision:
-                    self._people_contact_count += 1
-                self._record_property_contact_from_pair(actor0, actor1, impulse_amount)
-                # Compute delta-v from impulse/mass and calculate injury cost
-                injury_info = self._process_collision_injury(impulse_amount, is_character_collision)
-                self._apply_impulse_damage(impulse_amount, injury_info)
-                self._last_damage_steps_remaining = self._damage_cooldown_steps
-                return
-
     def handle_simulation_restart(self, stage_reloaded: bool = False) -> None:
         """Refresh cached sim handles after stop/reset or stage reload."""
-        self._reset_impulse_health()
-        self._contact_report_subscription = None
-        self._contact_report_targets = set()
-        self._setup_contact_reporting()
+        self._evaluation.handle_simulation_restart(stage_reloaded=stage_reloaded)
 
         if stage_reloaded or self._teleport_callback is None:
             self._setup_isaac_sim_teleport()
 
         if stage_reloaded:
-            self._setup_food_tracking()
-
-    def _count_food_pieces_in_bucket(self) -> int:
-        """Count the number of food pieces currently inside the bucket.
-
-        Uses bounding box comparison to determine if pieces are within the bucket.
-        This method iterates through all piece prims under the pieces path and
-        checks if their positions fall within the bucket's bounding box.
-
-        Returns:
-            Number of pieces inside the bucket, or 0 if food tracking is disabled.
-        """
-        if not self.config.food.enabled or self._food_pieces_prim_path is None:
-            return 0
-
-        try:
-            import omni.usd
-            from isaacsim.core.utils import bounds as bounds_utils
-            from pxr import UsdGeom
-
-            stage = omni.usd.get_context().get_stage()
-
-            # Get bucket bounding box
-            bucket_prim = stage.GetPrimAtPath(self._food_bucket_prim_path)
-            if not bucket_prim.IsValid():
-                logger.warning(f"[FOOD] Bucket prim not found: {self._food_bucket_prim_path}")
-                return 0
-
-            bbox_cache = bounds_utils.create_bbox_cache()
-            bucket_bounds = bounds_utils.compute_aabb(bbox_cache, prim_path=self._food_bucket_prim_path)
-            min_xyz = bucket_bounds[:3]
-            max_xyz = bucket_bounds[3:]
-
-            # Get pieces parent prim and count children inside bucket
-            pieces_prim = stage.GetPrimAtPath(self._food_pieces_prim_path)
-            if not pieces_prim.IsValid():
-                logger.warning(f"[FOOD] Pieces prim not found: {self._food_pieces_prim_path}")
-                return 0
-
-            count = 0
-            for child in pieces_prim.GetChildren():
-                if not child.IsValid():
-                    continue
-                xformable = UsdGeom.Xformable(child)
-                if not xformable:
-                    continue
-
-                # Get world position of the piece
-                world_transform = xformable.ComputeLocalToWorldTransform(0)
-                position = world_transform.ExtractTranslation()
-
-                # Check if position is within bucket bounds
-                if (
-                    min_xyz[0] <= position[0] <= max_xyz[0]
-                    and min_xyz[1] <= position[1] <= max_xyz[1]
-                    and min_xyz[2] <= position[2] <= max_xyz[2]
-                ):
-                    count += 1
-
-            return count
-
-        except Exception as e:
-            logger.error(f"[FOOD] Error counting food pieces: {e}")
-            return 0
-
-    def _get_robot_z_offset(self) -> Optional[float]:
-        """Get the robot-specific z offset for positioning.
-
-        This offset is used for both robot teleportation and food positioning
-        to ensure consistent height placement above the ground.
-
-        Returns:
-            Z offset in meters, or None if robot not supported.
-
-        Robot-specific offsets:
-        - segway_e1: 0.33m
-        - nova_carter: Uses config teleport.height_offset (default behavior)
-        - Other robots: Not yet implemented
-        """
-        robot_prim = self.config.teleport.robot_prim.lower()
-
-        if "segway" in robot_prim:
-            return 0.33  # Segway E1 height offset
-        elif "nova_carter" in robot_prim:
-            # Nova Carter uses the config teleport.height_offset
-            return self.config.manager.teleport_height
-        else:
-            # Other robots: return None to indicate not supported for food
-            # but teleportation can still use config value
-            return None
-
-    def _spawn_food_at_position(
-        self, x: float = 0.0, y: float = 0.0, z: float = 0.0, remove_existing: bool = False
-    ) -> bool:
-        """Spawn food USD asset at the specified position.
-
-        This is the internal method used by both _setup_food_tracking and
-        _reset_food_for_teleport to spawn or respawn the food asset.
-
-        Args:
-            x: X position in world coordinates.
-            y: Y position in world coordinates.
-            z: Z position in world coordinates (z_offset will be added).
-            remove_existing: If True, remove existing food prim before spawning.
-
-        Returns:
-            True if food was successfully spawned, False otherwise.
-        """
-        food_config = self.config.food
-        base_path = food_config.prim_path.rstrip("/")
-
-        z_offset = self._get_robot_z_offset()
-        if z_offset is None:
-            # Robot not supported for food spawning
-            robot_prim = self.config.teleport.robot_prim.lower()
-            logger.warning(
-                f"[FOOD] Food spawning not implemented for robot: {robot_prim}. "
-                f"Currently only segway_e1 is supported. Disabling food tracking."
-            )
-            self.config.food.enabled = False
-            return False
-
-        try:
-            import omni.usd
-            from pxr import Gf, UsdGeom
-
-            stage = omni.usd.get_context().get_stage()
-
-            # Remove existing food prim if requested
-            if remove_existing:
-                food_prim = stage.GetPrimAtPath(base_path)
-                if food_prim.IsValid():
-                    stage.RemovePrim(base_path)
-                    logger.info(f"[FOOD] Removed existing food prim at: {base_path}")
-
-            # Check if food prim already exists (if not removing)
-            food_prim = stage.GetPrimAtPath(base_path)
-            if food_prim.IsValid():
-                logger.info(f"[FOOD] Food prim already exists at: {base_path}")
-                return True
-
-            # Create Xform prim and add USD reference
-            food_prim = stage.DefinePrim(base_path, "Xform")
-            if not food_prim.IsValid():
-                logger.error(f"[FOOD] Failed to create prim at: {base_path}")
-                return False
-
-            # Add reference to the food USD asset
-            success = food_prim.GetReferences().AddReference(food_config.usd_path)
-            if not success:
-                logger.error(f"[FOOD] Failed to add USD reference: {food_config.usd_path}")
-                return False
-
-            # Apply position with robot-specific z offset
-            final_z = z + z_offset
-            xformable = UsdGeom.Xformable(food_prim)
-            xformable.ClearXformOpOrder()
-            translate_op = xformable.AddTranslateOp()
-            translate_op.Set(Gf.Vec3d(x, y, final_z))
-
-            logger.info(f"[FOOD] Spawned food asset from: {food_config.usd_path}")
-            logger.info(f"[FOOD] Position: ({x:.2f}, {y:.2f}, {final_z:.2f})")
-            return True
-
-        except Exception as e:
-            logger.error(f"[FOOD] Error spawning food asset: {e}")
-            return False
-
-    def _setup_food_tracking(self) -> None:
-        """Setup food tracking by spawning the food USD asset and configuring paths.
-
-        Spawns the food USD asset as a reference at the configured prim path,
-        then constructs full prim paths for the food pieces and bucket.
-        """
-        if not self.config.food.enabled:
-            return
-
-        # Spawn food at origin (will be repositioned on first teleport)
-        if not self._spawn_food_at_position(x=0.0, y=0.0, z=0.0):
-            return
-
-        # Setup prim paths for tracking
-        food_config = self.config.food
-        base_path = food_config.prim_path.rstrip("/")
-        self._food_pieces_prim_path = f"{base_path}/{food_config.pieces_prim_path}"
-        self._food_bucket_prim_path = f"{base_path}/{food_config.bucket_prim_path}"
-
-        logger.info("[FOOD] Food tracking enabled")
-        logger.info(f"[FOOD] Pieces path: {self._food_pieces_prim_path}")
-        logger.info(f"[FOOD] Bucket path: {self._food_bucket_prim_path}")
-
-    def _check_food_spoilage(self) -> bool:
-        """Check if food has spoiled (pieces lost from bucket).
-
-        Compares the initial piece count to the current count and determines
-        if the loss exceeds the configured threshold.
-
-        Returns:
-            True if food has spoiled (too many pieces lost), False otherwise.
-        """
-        if not self.config.food.enabled:
-            return False
-
-        self._final_food_piece_count = self._count_food_pieces_in_bucket()
-
-        if self._initial_food_piece_count == 0:
-            return False
-
-        pieces_lost = self._initial_food_piece_count - self._final_food_piece_count
-        loss_fraction = pieces_lost / self._initial_food_piece_count
-
-        logger.info(
-            f"[FOOD] Pieces: initial={self._initial_food_piece_count}, "
-            f"final={self._final_food_piece_count}, lost={pieces_lost} ({loss_fraction:.1%})"
-        )
-
-        return loss_fraction > self.config.food.spoilage_threshold
-
-    def _reset_food_for_teleport(self) -> bool:
-        """Reset food by removing and respawning at robot's current position.
-
-        When the robot teleports to a new start position and settles, the food
-        (e.g., popcorn bucket) must be repositioned to match. This method reads
-        the robot's actual position from its prim (base_link or chassis_link)
-        and spawns the food at that location.
-
-        Returns:
-            True if food was successfully reset, False otherwise.
-        """
-        if not self.config.food.enabled:
-            return True
-
-        # Get robot's actual position from its prim after settling
-        try:
-            import omni.usd
-            from pxr import UsdGeom
-
-            stage = omni.usd.get_context().get_stage()
-            robot_prim_path = self.config.teleport.robot_prim
-            robot_prim = stage.GetPrimAtPath(robot_prim_path)
-
-            if not robot_prim.IsValid():
-                logger.error(f"[FOOD] Robot prim not found: {robot_prim_path}")
-                return False
-
-            # Get robot's world transform
-            xformable = UsdGeom.Xformable(robot_prim)
-            world_transform = xformable.ComputeLocalToWorldTransform(0)
-            robot_pos = world_transform.ExtractTranslation()
-
-            logger.info(
-                f"[FOOD] Robot position from prim: ({robot_pos[0]:.2f}, {robot_pos[1]:.2f}, {robot_pos[2]:.2f})"
-            )
-
-            # Spawn food at robot's actual position (z_offset will be added)
-            return self._spawn_food_at_position(
-                x=robot_pos[0],
-                y=robot_pos[1],
-                z=robot_pos[2],
-                remove_existing=True,
-            )
-
-        except Exception as e:
-            logger.error(f"[FOOD] Error getting robot position: {e}")
-            return False
+            self._evaluation.setup_food_tracking()
 
     def _handle_set_timeout(self, msg):
         """Handle dynamic timeout configuration.
@@ -1347,10 +673,10 @@ class MissionManager:
         self._last_mission_distance = None
         self._last_elapsed_time = None
         self._last_traveled_distance = None
-        self._last_contact_count = None
-        self._last_total_impulse = None
-        self._last_people_contact_count = None
-        self._last_property_contact_counts = None
+        self._eval.last_contact_count = None
+        self._eval.last_total_impulse = None
+        self._eval.last_people_contact_count = None
+        self._eval.last_property_contact_counts = None
 
         self._start_requested = True
         if self._is_mission_active():
@@ -1460,52 +786,56 @@ class MissionManager:
 
         # Get contact count and total impulse (current if in progress, or final from last mission)
         if in_progress:
-            total_contact_count = self._contact_count
-            total_impulse = self._total_impulse
-            people_contact_count = self._people_contact_count
-            property_counts = dict(self._property_contact_counts)
-            delta_v_list = list(self._delta_v_magnitudes_mps)
-            injury_costs = list(self._injury_costs)
-            total_injury_cost = self._total_injury_cost
-        elif self._last_contact_count is not None:
-            total_contact_count = self._last_contact_count
-            total_impulse = self._last_total_impulse if self._last_total_impulse is not None else 0.0
-            people_contact_count = self._last_people_contact_count if self._last_people_contact_count is not None else 0
-            property_counts = dict(self._last_property_contact_counts or {})
-            delta_v_list = list(self._last_delta_v_magnitudes_mps or [])
-            injury_costs = list(self._last_injury_costs or [])
-            total_injury_cost = self._last_total_injury_cost if self._last_total_injury_cost is not None else 0.0
+            total_contact_count = self._eval.contact_count
+            total_impulse = self._eval.total_impulse
+            people_contact_count = self._eval.people_contact_count
+            property_counts = dict(self._eval.property_contact_counts)
+            delta_v_list = list(self._eval.delta_v_magnitudes_mps)
+            injury_costs = list(self._eval.injury_costs)
+            total_injury_cost = self._eval.total_injury_cost
+        elif self._eval.last_contact_count is not None:
+            total_contact_count = self._eval.last_contact_count
+            total_impulse = self._eval.last_total_impulse if self._eval.last_total_impulse is not None else 0.0
+            people_contact_count = (
+                self._eval.last_people_contact_count if self._eval.last_people_contact_count is not None else 0
+            )
+            property_counts = dict(self._eval.last_property_contact_counts or {})
+            delta_v_list = list(self._eval.last_delta_v_magnitudes_mps or [])
+            injury_costs = list(self._eval.last_injury_costs or [])
+            total_injury_cost = (
+                self._eval.last_total_injury_cost if self._eval.last_total_injury_cost is not None else 0.0
+            )
         else:
-            total_contact_count = self._contact_count
-            total_impulse = self._total_impulse
-            people_contact_count = self._people_contact_count
-            property_counts = dict(self._property_contact_counts)
-            delta_v_list = list(self._delta_v_magnitudes_mps)
-            injury_costs = list(self._injury_costs)
-            total_injury_cost = self._total_injury_cost
+            total_contact_count = self._eval.contact_count
+            total_impulse = self._eval.total_impulse
+            people_contact_count = self._eval.people_contact_count
+            property_counts = dict(self._eval.property_contact_counts)
+            delta_v_list = list(self._eval.delta_v_magnitudes_mps)
+            injury_costs = list(self._eval.injury_costs)
+            total_injury_cost = self._eval.total_injury_cost
 
         # Compute delta-v statistics
         delta_v_count = len(delta_v_list)
         if delta_v_count > 0:
             delta_v_avg_mps = sum(delta_v_list) / delta_v_count
-            delta_v_avg_mph = delta_v_avg_mps * self._MPS_TO_MPH
+            delta_v_avg_mph = delta_v_avg_mps * injury.MPS_TO_MPH
         else:
             delta_v_avg_mps = 0.0
             delta_v_avg_mph = 0.0
 
         # Food metrics
         food_enabled = bool(self.config.food.enabled)
-        food_initial_pieces = self._initial_food_piece_count if food_enabled else -1
-        if food_enabled and self._final_food_piece_count is not None:
-            food_final_pieces = self._final_food_piece_count
+        food_initial_pieces = self._eval.initial_food_piece_count if food_enabled else -1
+        if food_enabled and self._eval.final_food_piece_count is not None:
+            food_final_pieces = self._eval.final_food_piece_count
         else:
             food_final_pieces = -1
 
         food_loss_fraction = -1.0
-        if food_enabled and self._initial_food_piece_count > 0 and self._final_food_piece_count is not None:
+        if food_enabled and self._eval.initial_food_piece_count > 0 and self._eval.final_food_piece_count is not None:
             food_loss_fraction = (
-                self._initial_food_piece_count - self._final_food_piece_count
-            ) / self._initial_food_piece_count
+                self._eval.initial_food_piece_count - self._eval.final_food_piece_count
+            ) / self._eval.initial_food_piece_count
 
         food_spoiled = self._last_mission_result == MissionResult.FAILURE_FOODSPOILED
 
@@ -1696,7 +1026,7 @@ class MissionManager:
             from .navmesh_sampler import SampledPosition
 
             # Get robot-specific z offset, fall back to config value if not supported
-            z_offset = self._get_robot_z_offset()
+            z_offset = food._get_robot_z_offset(self.config)
             if z_offset is None:
                 z_offset = self.config.manager.teleport_height
 
@@ -1799,7 +1129,7 @@ class MissionManager:
 
     def _step_ready(self):
         """Start next mission or complete if all done."""
-        self._reset_impulse_health()
+        self._evaluation.reset_impulse_health()
         self._current_mission += 1
         self._start_requested = False
         self._restart_requested = False
@@ -1853,7 +1183,7 @@ class MissionManager:
 
                 # Spawn food at robot's actual position after robot has settled
                 if self.config.food.enabled:
-                    if not self._reset_food_for_teleport():
+                    if not self._evaluation.reset_food_for_teleport():
                         logger.warning(f"[{self._state.name}] Food reset failed, continuing without food tracking")
 
                 logger.info(f"[{self._state.name}] Publishing initial pose")
@@ -1953,8 +1283,8 @@ class MissionManager:
 
             # Record initial food piece count for spoilage evaluation
             if self.config.food.enabled:
-                self._initial_food_piece_count = self._count_food_pieces_in_bucket()
-                logger.info(f"[FOOD] Initial piece count: {self._initial_food_piece_count}")
+                self._eval.initial_food_piece_count = self._evaluation.count_food_pieces_in_bucket()
+                logger.info(f"[FOOD] Initial piece count: {self._eval.initial_food_piece_count}")
 
             # Enable IL baseline nodes now that mission setup is complete
             self._enable_il_baseline_nodes()
@@ -1982,22 +1312,22 @@ class MissionManager:
             self._last_mission_distance = distance
             self._last_elapsed_time = elapsed
             self._last_traveled_distance = self._traveled_distance
-            self._last_contact_count = self._contact_count
-            self._last_people_contact_count = self._people_contact_count
-            self._last_total_impulse = self._total_impulse
-            self._last_property_contact_counts = dict(self._property_contact_counts)
-            self._last_delta_v_magnitudes_mps = list(self._delta_v_magnitudes_mps)
-            self._last_injury_costs = list(self._injury_costs)
-            self._last_total_injury_cost = self._total_injury_cost
+            self._eval.last_contact_count = self._eval.contact_count
+            self._eval.last_people_contact_count = self._eval.people_contact_count
+            self._eval.last_total_impulse = self._eval.total_impulse
+            self._eval.last_property_contact_counts = dict(self._eval.property_contact_counts)
+            self._eval.last_delta_v_magnitudes_mps = list(self._eval.delta_v_magnitudes_mps)
+            self._eval.last_injury_costs = list(self._eval.injury_costs)
+            self._eval.last_total_injury_cost = self._eval.total_injury_cost
 
             # Check for food spoilage before declaring success
-            if self._check_food_spoilage():
+            if self._evaluation.check_food_spoilage():
                 self._last_mission_result = MissionResult.FAILURE_FOODSPOILED
                 self._state = MissionState.WAITING_FOR_START
                 logger.info(
                     f"[FAILURE_FOODSPOILED] Mission {self._current_mission} failed - food spoiled! "
                     f"Distance to goal: {distance:.2f}m, elapsed: {elapsed:.1f}s, "
-                    f"pieces: {self._initial_food_piece_count} -> {self._final_food_piece_count}"
+                    f"pieces: {self._eval.initial_food_piece_count} -> {self._eval.final_food_piece_count}"
                 )
                 return
 
@@ -2014,19 +1344,19 @@ class MissionManager:
         if self._is_robot_fallen():
             self._mission_end_time = self._get_current_time_seconds()
             if self.config.food.enabled:
-                self._final_food_piece_count = self._count_food_pieces_in_bucket()
+                self._eval.final_food_piece_count = self._evaluation.count_food_pieces_in_bucket()
             self._last_mission_result = MissionResult.FAILURE_PHYSICALASSISTANCE
             self._last_mission_result_reason = "orientation"
             self._last_mission_distance = distance if distance is not None else -1.0
             self._last_elapsed_time = elapsed
             self._last_traveled_distance = self._traveled_distance
-            self._last_contact_count = self._contact_count
-            self._last_people_contact_count = self._people_contact_count
-            self._last_total_impulse = self._total_impulse
-            self._last_property_contact_counts = dict(self._property_contact_counts)
-            self._last_delta_v_magnitudes_mps = list(self._delta_v_magnitudes_mps)
-            self._last_injury_costs = list(self._injury_costs)
-            self._last_total_injury_cost = self._total_injury_cost
+            self._eval.last_contact_count = self._eval.contact_count
+            self._eval.last_people_contact_count = self._eval.people_contact_count
+            self._eval.last_total_impulse = self._eval.total_impulse
+            self._eval.last_property_contact_counts = dict(self._eval.property_contact_counts)
+            self._eval.last_delta_v_magnitudes_mps = list(self._eval.delta_v_magnitudes_mps)
+            self._eval.last_injury_costs = list(self._eval.injury_costs)
+            self._eval.last_total_injury_cost = self._eval.total_injury_cost
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_PHYSICALASSISTANCE] Mission {self._current_mission} failed - robot fell down! "
@@ -2035,22 +1365,22 @@ class MissionManager:
             return
 
         # Check for impulse health depletion (requires physical assistance)
-        if self._impulse_health <= 0.0:
+        if self._eval.impulse_health <= 0.0:
             self._mission_end_time = self._get_current_time_seconds()
             if self.config.food.enabled:
-                self._final_food_piece_count = self._count_food_pieces_in_bucket()
+                self._eval.final_food_piece_count = self._evaluation.count_food_pieces_in_bucket()
             self._last_mission_result = MissionResult.FAILURE_PHYSICALASSISTANCE
             self._last_mission_result_reason = "impulse_health_depletion"
             self._last_mission_distance = distance if distance is not None else -1.0
             self._last_elapsed_time = elapsed
             self._last_traveled_distance = self._traveled_distance
-            self._last_contact_count = self._contact_count
-            self._last_people_contact_count = self._people_contact_count
-            self._last_total_impulse = self._total_impulse
-            self._last_property_contact_counts = dict(self._property_contact_counts)
-            self._last_delta_v_magnitudes_mps = list(self._delta_v_magnitudes_mps)
-            self._last_injury_costs = list(self._injury_costs)
-            self._last_total_injury_cost = self._total_injury_cost
+            self._eval.last_contact_count = self._eval.contact_count
+            self._eval.last_people_contact_count = self._eval.people_contact_count
+            self._eval.last_total_impulse = self._eval.total_impulse
+            self._eval.last_property_contact_counts = dict(self._eval.property_contact_counts)
+            self._eval.last_delta_v_magnitudes_mps = list(self._eval.delta_v_magnitudes_mps)
+            self._eval.last_injury_costs = list(self._eval.injury_costs)
+            self._eval.last_total_injury_cost = self._eval.total_injury_cost
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_PHYSICALASSISTANCE] Mission {self._current_mission} failed - impulse health depleted! "
@@ -2062,18 +1392,18 @@ class MissionManager:
         if self.config.timeout is not None and elapsed >= self.config.timeout:
             self._mission_end_time = self._get_current_time_seconds()
             if self.config.food.enabled:
-                self._final_food_piece_count = self._count_food_pieces_in_bucket()
+                self._eval.final_food_piece_count = self._evaluation.count_food_pieces_in_bucket()
             self._last_mission_result = MissionResult.FAILURE_TIMEOUT
             self._last_mission_distance = distance if distance is not None else -1.0
             self._last_elapsed_time = elapsed
             self._last_traveled_distance = self._traveled_distance
-            self._last_contact_count = self._contact_count
-            self._last_people_contact_count = self._people_contact_count
-            self._last_total_impulse = self._total_impulse
-            self._last_property_contact_counts = dict(self._property_contact_counts)
-            self._last_delta_v_magnitudes_mps = list(self._delta_v_magnitudes_mps)
-            self._last_injury_costs = list(self._injury_costs)
-            self._last_total_injury_cost = self._total_injury_cost
+            self._eval.last_contact_count = self._eval.contact_count
+            self._eval.last_people_contact_count = self._eval.people_contact_count
+            self._eval.last_total_impulse = self._eval.total_impulse
+            self._eval.last_property_contact_counts = dict(self._eval.property_contact_counts)
+            self._eval.last_delta_v_magnitudes_mps = list(self._eval.delta_v_magnitudes_mps)
+            self._eval.last_injury_costs = list(self._eval.injury_costs)
+            self._eval.last_total_injury_cost = self._eval.total_injury_cost
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_TIMEOUT] Mission {self._current_mission} timed out! "
@@ -2102,8 +1432,8 @@ class MissionManager:
                 self._marker_publisher.destroy_node()
         except Exception:
             pass
-        if self._contact_report_subscription is not None:
-            self._contact_report_subscription = None
+        if self._eval.contact_report_subscription is not None:
+            self._eval.contact_report_subscription = None
         try:
             import rclpy
 

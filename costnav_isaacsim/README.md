@@ -73,6 +73,11 @@ costnav_isaacsim/
 │       │   ├── config_cli.py      # Config loading & CLI overrides
 │       │   ├── robot_config.py    # Robot constants & resolution
 │       │   └── prim_utils.py      # USD prim manipulation helpers
+│       ├── evaluation/            # Evaluation metrics & tracking
+│       │   ├── state.py           # EvaluationState dataclass & EvaluationManager facade
+│       │   ├── metrics.py         # Contact & impulse evaluation helpers
+│       │   ├── injury.py          # MAIS-based injury cost calculation
+│       │   └── food.py            # Food spoilage tracking & spawning
 │       ├── mission_manager/       # Mission orchestration & NavMesh sampling
 │       └── people_manager.py      # Animated people (PeopleAPI)
 ├── nav2_params/                   # Nav2 navigation stack configuration
