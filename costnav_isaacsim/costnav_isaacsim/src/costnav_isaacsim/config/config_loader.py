@@ -53,12 +53,19 @@ class SamplingConfig:
     edge_margin: float = 0.5  # Minimum distance from navmesh edges (meters)
 
 
+def _get_omni_url() -> str:
+    """Get OMNI_URL from environment, defaulting to localhost."""
+    import os
+
+    return os.environ.get("OMNI_URL", "omniverse://localhost")
+
+
 @dataclass
 class FoodConfig:
     """Food evaluation configuration for spoilage tracking."""
 
     enabled: bool = False  # Whether food evaluation is enabled
-    usd_path: str = "omniverse://10.50.2.21/Users/worv/costnav/foods/popcorn/popcorn.usd"
+    usd_path: str = f"{_get_omni_url()}/Users/worv/costnav/foods/popcorn/popcorn.usd"
     prim_path: str = "/World/Food"  # Where the food USD is referenced in the stage
     pieces_prim_path: str = "Popcorn/PopcornBucket/PopcornPieces"  # Relative path to pieces under food prim
     bucket_prim_path: str = "Popcorn/PopcornBucket"  # Relative path to bucket/container under food prim
@@ -198,9 +205,11 @@ class MissionConfig:
         )
 
         # Parse food config
+        # Get default usd_path from FoodConfig dataclass to avoid empty string bug
+        default_food_config = FoodConfig()
         food_config = FoodConfig(
             enabled=food_data.get("enabled", False),
-            usd_path=food_data.get("usd_path", ""),
+            usd_path=food_data.get("usd_path", default_food_config.usd_path),
             prim_path=food_data.get("prim_path", "/World/Food"),
             pieces_prim_path=food_data.get("pieces_prim_path", "PopcornBucket/PopcornPieces"),
             bucket_prim_path=food_data.get("bucket_prim_path", "PopcornBucket"),

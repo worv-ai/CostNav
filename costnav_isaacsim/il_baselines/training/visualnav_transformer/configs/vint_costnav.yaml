@@ -9,9 +9,9 @@ run_name: vint-costnav-finetune
 use_wandb: True  # Set to True if you want to log to wandb
 wandb_entity: maumai  # Your wandb entity/team name
 train: True
-pretrained_checkpoint: ${COSTNAV_ROOT}/il_baselines/training/visualnav_transformer/checkpoints/vint.pth
+pretrained_checkpoint: ${PROJECT_ROOT}/checkpoints/vint.pth
 batch_size: 64  # Reduced for small dataset
-epochs: 50
+epochs: 10
 gpu_ids: [0]
 num_workers: 4
 lr: 1e-4  # Lower LR for fine-tuning
@@ -63,9 +63,9 @@ goal_type: "image"
 # Paths to the nova_carter_vint dataset
 datasets:
   nova_carter_vint:
-    data_folder: /raid/datasets/CostNav/nova_carter_vint
-    train: /raid/datasets/CostNav/nova_carter_vint_splits/train/
-    test: /raid/datasets/CostNav/nova_carter_vint_splits/test/
+    data_folder: # Enter your data directory here (ex. "/mnt/raid11/workspace/vint_training")
+    train: # Enter your train directory here (ex. "/mnt/raid11/workspace/vint_training_splits/train")
+    test: # Enter your test directory here (ex. "/mnt/raid11/workspace/vint_training_splits/test")
     end_slack: 3
     goals_per_obs: 2
     negative_mining: True
@@ -73,7 +73,7 @@ datasets:
     metric_waypoint_spacing: 0.25  # average spacing between waypoints (meters) - automatically updates data_config.yaml
 
 # Logging
-log_dir: /mnt/harbor/users/${USERNAME}/checkpoint/costnav  # Output directory for logs and checkpoints
+log_dir: # Enter your log directory here (ex. /mnt/harbor/users/${USERNAME}/checkpoint/costnav)
 print_log_freq: 100
 image_log_freq: 1000
 num_images_log: 8

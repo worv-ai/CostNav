@@ -1,6 +1,6 @@
-# Build arguments for versions
-ARG ISAAC_SIM_VERSION
-ARG ISAAC_LAB_VERSION
+# Build arguments for versions (defaults to avoid empty tags)
+ARG ISAAC_SIM_VERSION=5.1.0
+ARG ISAAC_LAB_VERSION=2.2.0
 
 # === Base stage with shared deps ===
 FROM ubuntu:24.04 AS base
@@ -24,10 +24,10 @@ COPY README.md ./
 
 # Core dev extras
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system -e ".[dev]"
+    uv pip install --system --break-system-packages -e ".[dev]"
 
 # === Isaac Sim image ===
-ARG ISAAC_SIM_VERSION
+ARG ISAAC_SIM_VERSION=5.1.0
 FROM nvcr.io/nvidia/isaac-sim:${ISAAC_SIM_VERSION} AS isaac-sim
 
 # Reuse uv binary
@@ -45,6 +45,8 @@ ENV ISAAC_SIM_PATH=/isaac-sim
 ENV CARB_APP_PATH=/isaac-sim/kit
 ENV EXP_PATH=/isaac-sim/apps
 ENV PYTHON_BIN="/isaac-sim/kit/python/bin/python3"
+ENV PYTHONPATH=""
+ENV LD_LIBRARY_PATH=""
 
 # Set PYTHONPATH to include all Isaac Sim, Omni Kit, and extension directories
 ENV PYTHONPATH="\

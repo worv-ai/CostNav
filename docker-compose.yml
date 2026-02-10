@@ -59,7 +59,6 @@ services:
     volumes:
       - .:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ~/omniverse_map:/omniverse_map:ro
       - /tmp/isaac-sim/cache/kit:/isaac-sim/kit/cache:rw
       - /tmp/isaac-sim/cache/ov:/root/.cache/ov:rw
       - /tmp/isaac-sim/cache/pip:/root/.cache/pip:rw
@@ -127,7 +126,6 @@ services:
     volumes:
       - .:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ~/omniverse_map:/omniverse_map:ro
       - /tmp/isaac-sim/cache/kit:/isaac-sim/kit/cache:rw
       - /tmp/isaac-sim/cache/ov:/root/.cache/ov:rw
       - /tmp/isaac-sim/cache/pip:/root/.cache/pip:rw

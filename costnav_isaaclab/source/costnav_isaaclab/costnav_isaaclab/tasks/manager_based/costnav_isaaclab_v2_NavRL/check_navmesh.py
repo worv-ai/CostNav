@@ -7,6 +7,7 @@ Usage:
 """
 
 import argparse
+import os
 import sys
 import time
 
@@ -55,7 +56,8 @@ sim = sim_utils.SimulationContext(sim_cfg)
 
 # Load the map
 print("\n[2/3] Loading map...")
-map_usd_path = "omniverse://10.50.2.21/Users/worv/map/temp.usd"
+OMNI_URL = os.environ.get("OMNI_URL", "omniverse://localhost")
+map_usd_path = f"{OMNI_URL}/Users/worv/map/temp.usd"
 print(f"  Map path: {map_usd_path}")
 
 cfg = sim_utils.UsdFileCfg(usd_path=map_usd_path)

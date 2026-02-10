@@ -1,10 +1,15 @@
 # ViNT Data Processing Configuration
 # Configuration for converting MediaRef bags to ViNT training format
 
+# Data paths (optional - can be overridden via command-line arguments)
+paths:
+  input_dir: # Enter your input directory here (ex. "/mnt/raid11/workspace/mediaref")
+  output_dir: # Enter your input directory here (ex. "/mnt/raid11/workspace/vint_training")
+
 # CostNav dataset configuration
 costnav:
   # Topic names in MediaRef bags
-  image_topic: "/front_stereo_camera/left/image_raw"  # MediaRef string topic
+  image_topic: "/front_stereo_camera/left/image_raw/compressed"  # MediaRef string topic
   odom_topic: "/chassis/odom"                         # nav_msgs/Odometry topic
 
   # Angle offset (radians) to apply to yaw values
@@ -23,6 +28,6 @@ processing:
   image_aspect_ratio: 1.333333  # 4/3
 
 # Default topic mappings (used when no config is provided)
-image_topic: "/front_stereo_camera/left/image_raw"
+image_topic: "/front_stereo_camera/left/image_raw/compressed"
 odom_topic: "/chassis/odom"
 ang_offset: 0.0

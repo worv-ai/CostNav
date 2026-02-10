@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import math
+import os
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
@@ -25,6 +26,8 @@ from . import mdp
 
 from isaaclab_assets.robots.cartpole import CARTPOLE_CFG  # isort:skip
 
+# Get Omniverse URL from environment
+OMNI_URL = os.environ.get("OMNI_URL", "omniverse://localhost")
 
 ##
 # Scene definition
@@ -38,7 +41,7 @@ class CostnavIsaaclabSceneCfg(InteractiveSceneCfg):
     # custom map
     custom_map = AssetBaseCfg(
         prim_path="/World/custom_map",
-        spawn=sim_utils.UsdFileCfg(usd_path="omniverse://10.50.2.21/Users/worv/map/Street_road.usd"),
+        spawn=sim_utils.UsdFileCfg(usd_path=f"{OMNI_URL}/Users/worv/map/Street_road.usd"),
     )
 
     # robot

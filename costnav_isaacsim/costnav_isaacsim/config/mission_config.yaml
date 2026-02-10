@@ -76,9 +76,6 @@ food:
   # Enable food spoilage evaluation (only works with segway_e1)
   enabled: true
 
-  # Path to the food USD asset
-  usd_path: "omniverse://10.50.2.21/Users/worv/costnav/foods/popcorn/popcorn.usd"
-
   # Prim path where the food is spawned in the stage
   prim_path: "/World/Food"
 

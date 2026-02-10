@@ -1,11 +1,19 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 build-vint run-ros2 run-isaac-sim run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros-ws build-ros2 build-vint run-ros2 run-isaac-sim run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
+
+# Load environment variables from .env file if it exists
+# Variables can still be overridden from command line
+ifneq (,$(wildcard .env))
+include .env
+export
+endif
 
 DOCKERFILE ?= Dockerfile
 DOCKER_BUILD ?= docker build
 DOCKER_COMPOSE ?= docker compose
 
+# Version defaults (can be overridden by .env or command line)
 ISAAC_SIM_VERSION ?= 5.1.0
-ISAAC_LAB_VERSION ?= 2.3.0
+ISAAC_LAB_VERSION ?= 2.2.0
 COSTNAV_VERSION ?= 0.1.0
 
 # ROS configuration
@@ -46,6 +54,13 @@ build-dev:
 build-all: build-isaac-sim build-isaac-lab build-dev
 
 # =============================================================================
+# Third-party Fetch
+# =============================================================================
+
+fetch-third-party:
+	@./scripts/fetch_third_party.sh
+
+# =============================================================================
 # ROS2 Workspace Build and Runtime Targets
 # =============================================================================
 
@@ -53,7 +68,7 @@ build-all: build-isaac-sim build-isaac-lab build-dev
 build-ros-ws:
 	@echo "==> Cleaning previous build_ws/$(ROS_DISTRO)..."
 	cd third_party/IsaacSim-ros_workspaces && \
-		docker run --rm -v $$(pwd)/build_ws:/build_ws ubuntu:22.04 rm -rf /build_ws/$(ROS_DISTRO)
+		docker run --rm -v $$(pwd)/build_ws:/build_ws ubuntu:$(UBUNTU_VERSION) rm -rf /build_ws/$(ROS_DISTRO)
 	@echo "==> Building ROS workspace for $(ROS_DISTRO) on Ubuntu $(UBUNTU_VERSION)..."
 	cd third_party/IsaacSim-ros_workspaces && ./build_ros.sh -d $(ROS_DISTRO) -v $(UBUNTU_VERSION)
 	@echo "==> Build complete!"
@@ -81,8 +96,20 @@ run-isaac-sim:
 	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) GOAL_IMAGE=$(GOAL_IMAGE) $(DOCKER_COMPOSE) --profile isaac-sim up
 
 # Run both Isaac Sim and ROS2 Nav2 navigation together (using combined 'nav2' profile)
-# Usage: make run-nav2 NUM_PEOPLE=5 SIM_ROBOT=nova_carter FOOD=1 TUNED=True AMCL=False
+# Usage: make run-nav2 NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True TUNED=True AMCL=False
 run-nav2:
+	@if ! docker image inspect $(ISAAC_SIM_IMAGE) >/dev/null 2>&1; then \
+		echo "==> Missing Isaac Sim image ($(ISAAC_SIM_IMAGE)); building..."; \
+		$(MAKE) build-isaac-sim; \
+	fi
+	@if [ ! -d third_party/IsaacSim-ros_workspaces/build_ws/$(ROS_DISTRO)/isaac_sim_ros_ws ]; then \
+		echo "==> Missing ROS workspace for $(ROS_DISTRO); building..."; \
+		$(MAKE) build-ros-ws; \
+	fi
+	@if ! docker image inspect $(COSTNAV_ROS2_IMAGE) >/dev/null 2>&1; then \
+		echo "==> Missing ROS2 image ($(COSTNAV_ROS2_IMAGE)); building..."; \
+		$(MAKE) build-ros2; \
+	fi
 	xhost +local:docker 2>/dev/null || true
 	SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile nav2 down
 	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) TUNED=$(TUNED) AMCL=$(AMCL) $(DOCKER_COMPOSE) --profile nav2 up
@@ -107,22 +134,9 @@ start-mission-record:
 	$(MAKE) run-rosbag
 	$(MAKE) start-mission
 
-ifeq (run-teleop,$(firstword $(MAKECMDGOALS)))
-ifneq ($(word 2,$(MAKECMDGOALS)),)
-SIM_ROBOT := $(word 2,$(MAKECMDGOALS))
-$(eval $(word 2,$(MAKECMDGOALS)):;@:)
-endif
-SIM_ROBOT := $(subst -,_,$(SIM_ROBOT))
-ifeq ($(SIM_ROBOT),segwaye1)
-SIM_ROBOT := segway_e1
-endif
-ifeq ($(SIM_ROBOT),segway)
-SIM_ROBOT := segway_e1
-endif
-endif
 
 # Run Isaac Sim + RViz, then launch teleop node interactively (curses UI visible)
-# Usage: make run-teleop NUM_PEOPLE=5 FOOD=1 GOAL_IMAGE=True
+# Usage: make run-teleop NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True GOAL_IMAGE=True
 run-teleop:
 	@if [ "$(SIM_ROBOT)" != "nova_carter" ] && [ "$(SIM_ROBOT)" != "segway_e1" ]; then \
 		echo "Unsupported robot: $(SIM_ROBOT). Use nova_carter or segway_e1."; \
@@ -252,3 +266,145 @@ run-eval-vint:
 	@echo "  Number of missions:  $(NUM_MISSIONS)"
 	@echo ""
 	@bash scripts/eval.sh vint $(TIMEOUT) $(NUM_MISSIONS)
+
+
+# =============================================================================
+# Asset Download Targets
+# =============================================================================
+
+# Download Omniverse assets to local ./assets/ directory
+# Runs inside Isaac Sim Docker container
+download-assets-omniverse:
+	@echo "Downloading Omniverse assets using Isaac Sim environment..."
+	$(DOCKER_COMPOSE) --profile isaac-sim run --rm isaac-sim \
+		/isaac-sim/python.sh /workspace/scripts/assets/download_assets_omniverse.py
+
+# Download assets from Hugging Face dataset
+# Runs inside dev Docker container with huggingface_hub
+download-assets-hf:
+	@echo "Downloading assets from Hugging Face..."
+	$(DOCKER_COMPOSE) --profile dev run --rm dev \
+		bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/scripts/assets/download_assets_hf.py"
+
+# Upload assets to Hugging Face dataset
+# Runs inside dev Docker container with huggingface_hub
+# Requires HF_TOKEN to be set in .env file
+upload-assets-hf:
+	@echo "Uploading assets to Hugging Face..."
+	$(DOCKER_COMPOSE) --profile dev run --rm dev \
+		bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/scripts/assets/upload_assets_hf.py"
+
+# =============================================================================
+# Nucleus Server Targets
+# =============================================================================
+
+# Nucleus server configuration
+NUCLEUS_STACK_DIR ?= .nucleus-stack
+NUCLEUS_STACK_VERSION ?= 2023.2.9
+NGC_CLI_VERSION ?= 3.41.4
+OMNI_USER ?= omniverse
+OMNI_PASS ?= costnav123
+
+# Start local Omniverse Nucleus server in Docker
+# Automatically downloads Nucleus stack if not present
+# Usage: make start-nucleus
+start-nucleus:
+	@echo "Starting Omniverse Nucleus server..."
+	@if [ ! -d "assets/Users" ]; then \
+		echo "ERROR: Assets not found at assets/Users"; \
+		echo ""; \
+		echo "Please download assets first:"; \
+		echo "  make download-assets-hf"; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(NUCLEUS_STACK_DIR)/base_stack/nucleus-stack-no-ssl.yml" ]; then \
+		echo "Nucleus stack not found. Downloading via Docker..."; \
+		mkdir -p $(NUCLEUS_STACK_DIR); \
+		docker run --rm \
+			-v $(PWD)/$(NUCLEUS_STACK_DIR):/output \
+			-v $(PWD)/.env:/workspace/.env:ro \
+			ubuntu:22.04 bash -c '\
+				set -e && \
+				apt-get update && apt-get install -y wget unzip && \
+				cd /tmp && \
+				wget -q "https://api.ngc.nvidia.com/v2/resources/nvidia/ngc-apps/ngc_cli/versions/$(NGC_CLI_VERSION)/files/ngccli_linux.zip" && \
+				unzip -q ngccli_linux.zip && \
+				chmod +x ngc-cli/ngc && \
+				. /workspace/.env && \
+				mkdir -p ~/.ngc && \
+				echo -e "[CURRENT]\napikey = $${NGC_PASS}\nformat_type = ascii\norg = nvidia" > ~/.ngc/config && \
+				./ngc-cli/ngc registry resource download-version "nvidia/omniverse/nucleus-compose-stack:$(NUCLEUS_STACK_VERSION)" --dest /tmp && \
+				tar xzf /tmp/nucleus-compose-stack_v$(NUCLEUS_STACK_VERSION)/*.tar.gz -C /output --strip-components=1 && \
+				chown -R $(shell id -u):$(shell id -g) /output && \
+				echo "Nucleus stack downloaded successfully"'; \
+	fi
+	@echo "Configuring Nucleus stack..."
+	@cd $(NUCLEUS_STACK_DIR)/base_stack && \
+		if [ ! -f nucleus-stack.env.configured ]; then \
+			cp nucleus-stack.env nucleus-stack.env.backup 2>/dev/null || true; \
+			sed -i 's/^#*ACCEPT_EULA=.*/ACCEPT_EULA=1/' nucleus-stack.env; \
+			sed -i 's/^#*SECURITY_REVIEWED=.*/SECURITY_REVIEWED=1/' nucleus-stack.env; \
+			sed -i 's/^#*SERVER_IP_OR_HOST=.*/SERVER_IP_OR_HOST=localhost/' nucleus-stack.env; \
+			sed -i 's|^#*DATA_ROOT=.*|DATA_ROOT=$(PWD)/$(NUCLEUS_STACK_DIR)/data|' nucleus-stack.env; \
+			sed -i 's/^#*MASTER_PASSWORD=.*/MASTER_PASSWORD=$(OMNI_PASS)/' nucleus-stack.env; \
+			sed -i 's/^#*SERVICE_PASSWORD=.*/SERVICE_PASSWORD=$(OMNI_PASS)/' nucleus-stack.env; \
+			if [ -f generate-sample-insecure-secrets.sh ]; then ./generate-sample-insecure-secrets.sh; fi; \
+			touch nucleus-stack.env.configured; \
+		fi
+	@echo "Logging into NGC registry..."
+	@bash -c 'source .env && echo "$${NGC_PASS}" | docker login nvcr.io -u "$${NGC_USER:-\$$oauthtoken}" --password-stdin'
+	@echo "Starting Nucleus containers..."
+	cd $(NUCLEUS_STACK_DIR)/base_stack && \
+		docker compose --env-file nucleus-stack.env -f nucleus-stack-no-ssl.yml up -d
+	@echo ""
+	@echo "Uploading assets to Nucleus using Isaac Sim container..."
+	@if docker image inspect $(ISAAC_SIM_IMAGE) >/dev/null 2>&1; then \
+		docker run --rm \
+			--network host \
+			--entrypoint /bin/bash \
+			-v $(PWD)/assets:/workspace/assets:ro \
+			-v $(PWD)/scripts:/workspace/scripts:ro \
+			-e "OMNI_USER=$(OMNI_USER)" \
+			-e "OMNI_PASS=$(OMNI_PASS)" \
+			$(ISAAC_SIM_IMAGE) \
+			-c "PYTHONPATH=/isaac-sim/kit/extscore/omni.client.lib:\$$PYTHONPATH /isaac-sim/python.sh /workspace/scripts/assets/upload_assets_to_nucleus.py \
+				--local-path /workspace/assets \
+				--nucleus-url omniverse://localhost \
+				--timeout 120"; \
+	else \
+		echo ""; \
+		echo "WARNING: Isaac Sim image not found: $(ISAAC_SIM_IMAGE)"; \
+		echo "Run 'make build-isaac-sim' first to enable automatic asset upload."; \
+		echo ""; \
+		echo "For now, please upload assets manually:"; \
+		echo "  1. Open http://localhost:8080"; \
+		echo "  2. Login with: $(OMNI_USER) / $(OMNI_PASS)"; \
+		echo "  3. Navigate to / and upload files from assets/"; \
+	fi
+	@echo ""
+	@echo "============================================================"
+	@echo "Nucleus server is ready!"
+	@echo ""
+	@echo "Web UI:     http://localhost:8080"
+	@echo "Omniverse:  omniverse://localhost"
+	@echo ""
+	@echo "Default credentials:"
+	@echo "  Username: $(OMNI_USER)"
+	@echo "  Password: $(OMNI_PASS)"
+	@echo ""
+	@echo "Main Assets available at:"
+	@echo "  omniverse://localhost/Users/worv/costnav/..."
+	@echo ""
+	@echo "To stop:    make stop-nucleus"
+	@echo "============================================================"
+
+# Stop local Omniverse Nucleus server
+stop-nucleus:
+	@echo "Stopping Omniverse Nucleus server..."
+	@if [ -f "$(NUCLEUS_STACK_DIR)/base_stack/nucleus-stack-no-ssl.yml" ]; then \
+		cd $(NUCLEUS_STACK_DIR)/base_stack && \
+		docker compose --env-file nucleus-stack.env -f nucleus-stack-no-ssl.yml down; \
+		echo "Nucleus server stopped."; \
+	else \
+		echo "Nucleus stack not found at $(NUCLEUS_STACK_DIR)"; \
+	fi

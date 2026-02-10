@@ -1,135 +1,75 @@
-# Template for Isaac Lab Projects
+## [Currently Deprecated] Running RL
 
-## Overview
+We have deprecated support on isaac-lab, due to limitations on physics dynamics fidelity on isaac-lab.
+RL might be explored using isaac-lab or isaac-sim in future work.
 
-This project/repository serves as a template for building projects or extensions based on Isaac Lab.
-It allows you to develop in an isolated environment, outside of the core Isaac Lab repository.
+### (Optional) Manual / bare-metal install
 
-**Key Features:**
-
-- `Isolation` Work outside the core Isaac Lab repository, ensuring that your development efforts remain self-contained.
-- `Flexibility` This template is set up to allow your code to be run as an extension in Omniverse.
-
-**Keywords:** extension, template, isaaclab
-
-## Installation
-
-- Install Isaac Lab by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html).
-  We recommend using the conda installation as it simplifies calling Python scripts from the terminal.
-
-- Clone or copy this project/repository separately from the Isaac Lab installation (i.e. outside the `IsaacLab` directory):
-
-- Using a python interpreter that has Isaac Lab installed, install the library in editable mode using:
-
-    ```bash
-    # use 'PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-    python -m pip install -e source/costnav_isaaclab
-
-- Verify that the extension is correctly installed by:
-
-    - Listing the available tasks:
-
-        Note: It the task name changes, it may be necessary to update the search pattern `"Template-"`
-        (in the `scripts/list_envs.py` file) so that it can be listed.
-
-        ```bash
-        # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-        python scripts/list_envs.py
-        ```
-
-    - Running a task:
-
-        ```bash
-        # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-        python scripts/<RL_LIBRARY>/train.py --task=<TASK_NAME>
-        ```
-
-    - Running a task with dummy agents:
-
-        These include dummy agents that output zero or random agents. They are useful to ensure that the environments are configured correctly.
-
-        - Zero-action agent
-
-            ```bash
-            # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-            python scripts/zero_agent.py --task=<TASK_NAME>
-            ```
-        - Random-action agent
-
-            ```bash
-            # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-            python scripts/random_agent.py --task=<TASK_NAME>
-            ```
-
-### Set up IDE (Optional)
-
-To setup the IDE, please follow these instructions:
-
-- Run VSCode Tasks, by pressing `Ctrl+Shift+P`, selecting `Tasks: Run Task` and running the `setup_python_env` in the drop down menu.
-  When running this task, you will be prompted to add the absolute path to your Isaac Sim installation.
-
-If everything executes correctly, it should create a file .python.env in the `.vscode` directory.
-The file contains the python paths to all the extensions provided by Isaac Sim and Omniverse.
-This helps in indexing all the python modules for intelligent suggestions while writing code.
-
-### Setup as Omniverse Extension (Optional)
-
-We provide an example UI extension that will load upon enabling your extension defined in `source/costnav_isaaclab/costnav_isaaclab/ui_extension_example.py`.
-
-To enable your extension, follow these steps:
-
-1. **Add the search path of this project/repository** to the extension manager:
-    - Navigate to the extension manager using `Window` -> `Extensions`.
-    - Click on the **Hamburger Icon**, then go to `Settings`.
-    - In the `Extension Search Paths`, enter the absolute path to the `source` directory of this project/repository.
-    - If not already present, in the `Extension Search Paths`, enter the path that leads to Isaac Lab's extension directory directory (`IsaacLab/source`)
-    - Click on the **Hamburger Icon**, then click `Refresh`.
-
-2. **Search and enable your extension**:
-    - Find your extension under the `Third Party` category.
-    - Toggle it to enable your extension.
-
-## Code formatting
-
-We have a pre-commit template to automatically format your code.
-To install pre-commit:
+If you already installed Isaac Lab into your Python environment:
 
 ```bash
-pip install pre-commit
+python -m pip install -e costnav_isaaclab/source/costnav_isaaclab
+python -m pip install -e ".[dev]"
+python costnav_isaaclab/scripts/list_envs.py
 ```
 
-Then you can run pre-commit with:
+
+### Training RL
+
+All commands assume `cd costnav_isaaclab` (which mirrors `/workspace/costnav_isaaclab` inside containers).
 
 ```bash
-pre-commit run --all-files
+# Inspect available environments
+python scripts/list_envs.py | grep Template-Costnav
+
+# PPO baseline on COCO sidewalk navigation (RGB-D input + cameras)
+python scripts/rl_games/train.py --task=Template-Costnav-Isaaclab-v2-NavRL --enable_cameras 2>&1 | tee run_log.txt
+python scripts/rl_games/train.py --task=Template-Costnav-Isaaclab-v2-NavRL --enable_cameras --headless 2>&1 | tee run_log.txt
+
+# Alternate curriculum / maps
+python scripts/rl_games/train.py --task=Template-Costnav-Isaaclab-v1-CustomMap
+python scripts/rl_games/train.py --task=Template-Costnav-Isaaclab-v0
+
+# Evaluate, demo, or play with trained checkpoints
+python scripts/rl_games/evaluate.py --task=Template-Costnav-Isaaclab-v2-NavRL --enable_cameras
+python scripts/rl_games/play.py --task=Template-Costnav-Isaaclab-v2-NavRL --enable_cameras
+
+# Deterministic controller + reward sanity checks
+python scripts/test_controller.py --task Template-Costnav-Isaaclab-v2-NavRL --enable_cameras
+python scripts/test_v2_rewards.py --task Template-Costnav-Isaaclab-v2-NavRL
+
+# Dummy zero or random agents to confirm scene wiring
+python scripts/zero_agent.py --task=Template-Costnav-Isaaclab-v2-NavRL
+python scripts/random_agent.py --task=Template-Costnav-Isaaclab-v2-NavRL
 ```
 
-## Troubleshooting
+### Safe position discovery and NavMesh debugging
 
-### Pylance Missing Indexing of Extensions
-
-In some VsCode versions, the indexing of part of the extensions is missing.
-In this case, add the path to your extension in `.vscode/settings.json` under the key `"python.analysis.extraPaths"`.
-
-```json
-{
-    "python.analysis.extraPaths": [
-        "<path-to-ext-repo>/source/costnav_isaaclab"
-    ]
-}
+```bash
+cd costnav_isaaclab/source/costnav_isaaclab/costnav_isaaclab/tasks/manager_based/costnav_isaaclab_v2_NavRL
+python find_safe_positions.py --visualize_raycasts
+python safe_area_validator.py               # validates a set of candidate poses
+python check_navmesh.py                     # optional NavMesh diagnostics
+python check_impulse.py                     # contact impulse sweeps
 ```
 
-### Pylance Crash
+Generated safe poses will be written back to `safe_positions_auto_generated.py`, which is consumed by both the command generator and environment reset hooks.
 
-If you encounter a crash in `pylance`, it is probable that too many files are indexed and you run out of memory.
-A possible solution is to exclude some of omniverse packages that are not used in your project.
-To do so, modify `.vscode/settings.json` and comment out packages under the key `"python.analysis.extraPaths"`
-Some examples of packages that can likely be excluded are:
+### Monitoring RL training
 
-```json
-"<path-to-isaac-sim>/extscache/omni.anim.*"         // Animation packages
-"<path-to-isaac-sim>/extscache/omni.kit.*"          // Kit UI tools
-"<path-to-isaac-sim>/extscache/omni.graph.*"        // Graph UI tools
-"<path-to-isaac-sim>/extscache/omni.services.*"     // Services tools
-...
+```bash
+python -m tensorboard.main --logdir costnav_isaaclab/logs/rl_games/<experiment>/summaries --port 6006
 ```
+
+TensorBoard logs include both standard RL metrics (success, distance, reward components) and cost-model summaries emitted as custom scalars.
+
+
+### SLURM / cluster runs
+
+Use the provided batch file to spin up per-job containers:
+
+```bash
+sbatch train.sbatch
+```
+
+`train.sbatch` derives the container name from `SLURM_JOB_ID`, pins GPUs via `NVIDIA_VISIBLE_DEVICES`, launches the `isaac-lab` compose profile, runs RL-Games training headlessly, and tears the container down when finished.

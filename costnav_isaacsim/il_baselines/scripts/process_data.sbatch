@@ -2,9 +2,8 @@
 #SBATCH --job-name=costnav-data
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --nodelist=DGX-H100-[11-12]
-#SBATCH --gpus-per-task=8
-#SBATCH --cpus-per-gpu=16
+#SBATCH --nodelist=DGX-H100-11
+#SBATCH --cpus-per-task=48
 #SBATCH --mem=500G
 #SBATCH --output=logs/slurm/process_data_%j.out
 #SBATCH --error=logs/slurm/process_data_%j.err
@@ -12,38 +11,45 @@
 set -euo pipefail
 
 # ── Paths ────────────────────────────────────────────────────────────────────
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COSTNAV_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+# Use SLURM_SUBMIT_DIR which is set to the directory where sbatch was called
+SCRIPT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 UV_PROJECT="$SCRIPT_DIR/.."
 
 # ── Environment ──────────────────────────────────────────────────────────────
-export PROJECT_ROOT="$COSTNAV_ROOT"
-
-# Create log directory
-mkdir -p "$COSTNAV_ROOT/logs/slurm"
+export PROJECT_ROOT
 
 echo "=== CostNav Data Processing ==="
-echo "COSTNAV_ROOT : $COSTNAV_ROOT"
+echo "PROJECT_ROOT : $PROJECT_ROOT"
 echo "UV_PROJECT   : $UV_PROJECT"
 echo "SLURM_JOB_ID : ${SLURM_JOB_ID:-local}"
 echo "================================"
 
+# Create log directory
+mkdir -p "$PROJECT_ROOT/logs/slurm"
 cd "$UV_PROJECT"
+
+# ── Setup Environment ────────────────────────────────────────────────────────
+echo "Running setup.sh to initialize environment..."
+bash "$SCRIPT_DIR/setup.sh"
+
+# ── Activate venv ────────────────────────────────────────────────────────
+# Ray workers inherit the Python executable from the main process.
+# Using `uv run` causes workers to invoke uv in their temp directory, where
+# the relative paths in pyproject.toml (e.g. ../../third_party/diffusion_policy)
+# do not exist.  Activating the venv directly avoids this.
+source "$UV_PROJECT/.venv/bin/activate"
 
 # ── Step 1: ROS Bag → MediaRef ───────────────────────────────────────────────
 echo "[Step 1] Converting ROS bags to MediaRef format..."
-uv run python -m il_baselines.data_processing.converters.ray_batch_convert \
---input_dir "$COSTNAV_ROOT/data/sample_rosbags/" \
---output_dir "$COSTNAV_ROOT/data/mediaref/" \
---config data_processing/configs/processing_config.yaml \
---num_workers 8
+python -m il_baselines.data_processing.converters.ray_batch_convert \
+--config data_processing/configs/processing_config.yaml
 
 # ── Step 2: MediaRef → ViNT Training Format ─────────────────────────────────
+echo ""
+echo "=========================================================================="
 echo "[Step 2] Converting MediaRef to ViNT training format..."
-uv run python -m il_baselines.data_processing.process_data.process_mediaref_bags \
---input-dir "$COSTNAV_ROOT/data/mediaref/" \
---output-dir "$COSTNAV_ROOT/data/vint_format/" \
---config data_processing/configs/vint_processing_config.yaml \
---sample-rate 4.0
+python -m il_baselines.data_processing.process_data.process_mediaref_bags \
+--config data_processing/configs/vint_processing_config.yaml
 
 echo "=== Data processing complete ==="

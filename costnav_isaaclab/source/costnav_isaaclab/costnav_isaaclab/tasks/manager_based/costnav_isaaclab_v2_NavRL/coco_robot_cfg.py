@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import MISSING
 
 import isaaclab.sim as sim_utils
@@ -23,10 +24,13 @@ from isaaclab.envs.mdp.actions import (
 from isaaclab.managers import ActionTerm, ActionTermCfg
 from isaaclab.utils import configclass
 
+# Get Omniverse URL from environment
+OMNI_URL = os.environ.get("OMNI_URL", "omniverse://localhost")
+
 # Robot instance
 COCO_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        usd_path="omniverse://10.50.2.21/Users/worv/coco_one_fix_prim.usd",
+        usd_path=f"{OMNI_URL}/Users/worv/coco_one_fix_prim.usd",
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
