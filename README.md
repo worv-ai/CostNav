@@ -11,7 +11,7 @@
   <img alt="Isaac Sim" src="https://img.shields.io/badge/Isaac%20Sim-5.1.0-76B900?style=flat&logo=nvidia">
   <img alt="Isaac Lab" src="https://img.shields.io/badge/Isaac%20Lab-2.3.0-4CAF50?style=flat&logo=nvidia">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white">
-  <a href="https://worv-ai.github.io/CostNav"><img alt="Documentation" src="https://img.shields.io/badge/docs-material-blue?style=flat&logo=materialformkdocs&logoColor=white"></a>
+  <!--<a href="https://worv-ai.github.io/CostNav"><img alt="Documentation" src="https://img.shields.io/badge/docs-material-blue?style=flat&logo=materialformkdocs&logoColor=white"></a>-->
 
   <h3>CostNav: A Navigation Benchmark for Real-World Economic-Cost Evaluation of Physical AI Agents</h3>
 </div>
@@ -24,11 +24,11 @@ CostNav introduces a **paradigm shift** in how we evaluate navigation systems: f
 
 Our key contributions are:
 
-1. **High-Fidelity Physics Simulation with Economically Grounded Dynamics.**
+1. **High-Fidelity Physics Simulation with Economically Grounded Dynamics.**  
    a. Supporting Segway E1 delivery robot, food cargo dynamics with popcorn, detailed collision dynamics, pedestrians
-2. **Real-world referenced Cost-Revenue Model with Break-Even Point Analysis.**
+2. **Real-world referenced Cost-Revenue Model with Break-Even Point Analysis.**  
    a. Supporting Energy Cost, Pedestrian Safety Cost, Property Damage Cost, Repair Cost
-3. **Rule based Navigation Evaluation (Coming up soon: Learning based Navigation Evaluation and Dataset)**
+3. **Rule based Navigation Evaluation (Coming up soon: Learning based Navigation Evaluation and Dataset)**  
    a. Comparing Profitability between Nav2 with GPS and Nav2 with AMCL localization
 
 You can find more details in our [technical report](https://arxiv.org/abs/2511.20216).
@@ -130,7 +130,7 @@ make run-eval-teleop # run evaluation in teleop mode
 
 ## Running IL Baselines (ViNT)
 
-1. Download checkpoint or train a model
+1. Download checkpoint or train a model  
    Link is from [visualnav-transformer](https://github.com/robodhruv/visualnav-transformer)
 
 ```
@@ -164,11 +164,13 @@ make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
 
 ## Contributing
 
-As we aim to be a large-scale endless-evolving benchmark, issues and pull requests are welcome!
+Help us build a large-scale, ever-expanding benchmark!  
+We highly encourage contributions via issues and pull requests.
 
 ## Contact
 
-Maintained by the worv.ai robotics research team. For research collaborations or enterprise deployments, please contact https://worv-ai.github.io/ or open an issue on GitHub.
+Maintained by the Maum.AI WoRV team.  
+For research collaborations or enterprise deployments, please contact https://worv-ai.github.io/.
 
 ## Citation
 
