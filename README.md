@@ -48,11 +48,7 @@ You can find more details in our [technical report](https://arxiv.org/abs/2511.2
 ```bash
 git clone https://github.com/worv-ai/CostNav.git
 cd CostNav
-```
-
-```bash
-cd third_party
-git submodule update --init --recursive
+make fetch-third-party # we use third-party submodules for reference or dependencies
 ```
 
 ### 3. Configure environment variables

@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all build-ros-ws build-ros2 build-vint run-ros2 run-isaac-sim run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros-ws build-ros2 build-vint run-ros2 run-isaac-sim run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
 
 # Load environment variables from .env file if it exists
 # Variables can still be overridden from command line
@@ -49,6 +49,13 @@ build-dev:
 	$(DOCKER_BUILD) -f $(DOCKERFILE) --target dev -t $(COSTNAV_DEV_IMAGE) .
 
 build-all: build-isaac-sim build-isaac-lab build-dev
+
+# =============================================================================
+# Third-party Fetch
+# =============================================================================
+
+fetch-third-party:
+	@./scripts/fetch_third_party.sh
 
 # =============================================================================
 # ROS2 Workspace Build and Runtime Targets
@@ -387,5 +394,3 @@ stop-nucleus:
 	else \
 		echo "Nucleus stack not found at $(NUCLEUS_STACK_DIR)"; \
 	fi
-
-
