@@ -162,7 +162,7 @@ make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
 ## What's next?
 
 - [x] Paper release
-- [x] isaac sim & nav2 support for rule-based navigation ([launch.py](costnav_isaacsim/launch.py))
+- [x] isaac sim & nav2 support for rule-based navigation
 - [ ] cost formula and reference sheet
 - [ ] imitation learning baseline, and collected dataset with teleoperation
 
