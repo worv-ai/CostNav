@@ -8,7 +8,6 @@ The folders in this directory mirror the external projects we draw inspiration o
 
 - `IsaacLab/` — reference checkout of NVIDIA's IsaacLab. Useful for reading upstream tasks, assets, and training utilities while building CostNav-specific environments.
 - `urban-sim/` — reference checkout of the Metadriverse urban simulator, used for the COCO robot configuration and related assets.
-- `IsaacSim-ros_workspaces/` — reference checkout of the Isaac Sim ROS workspaces. Contains two workspaces: `humble_ws` (ROS2 Humble) and `jazzy_ws` (ROS2 Jazzy). See [Isaac Sim documentation](https://docs.omniverse.nvidia.com/isaacsim/latest/installation/install_ros.html) for usage and installation instructions.
 - `PeopleAPI/` — reference checkout of the worv-ai PeopleAPI Isaac Sim extension for quick development while waiting on community extension updates.
 - `FoodAssets/` — reference checkout of the worv-ai FoodAssets Isaac Sim extension, used as a curated asset library for food-related scenes.
 

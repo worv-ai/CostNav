@@ -233,7 +233,6 @@ costnav_isaaclab/source/costnav_isaaclab/20*/
 costnav_isaacsim/il_baselines/training/visualnav_transformer/checkpoints
 wandb/
 
-/build_ws/
 data/
 
 # Ignore assets (but keep README)
