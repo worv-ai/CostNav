@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("costnav_mission_manager")
 from costnav_isaacsim.evaluation import EvaluationManager
 from costnav_isaacsim.evaluation import injury
+from costnav_isaacsim.evaluation import food
 
 
 class MissionState(Enum):
@@ -384,7 +385,7 @@ class MissionManager:
         self._eval.last_contact_count = None
         self._eval.last_total_impulse = None
         self._eval.last_people_contact_count = None
-        self._reset_impulse_health()
+        self._evaluation.reset_impulse_health()
         # Reset food tracking
         self._eval.initial_food_piece_count = 0
         self._eval.final_food_piece_count = None
@@ -460,12 +461,6 @@ class MissionManager:
         tilt_angle = math.acos(min(1.0, max(-1.0, gz_body_z)))
 
         return tilt_angle > limit_angle
-
-    def _reset_impulse_health(self) -> None:
-        self._evaluation.reset_impulse_health()
-
-    def _setup_contact_reporting(self) -> None:
-        self._evaluation.setup_contact_reporting()
 
     def _setup_goal_image_publisher(self, qos_profile) -> None:
         """Setup ROS2 publisher for goal images.
@@ -640,56 +635,6 @@ class MissionManager:
             logger.error(f"[GOAL_IMAGE] {traceback.format_exc()}")
             return False
 
-    def _classify_property_from_prim_path(self, prim_path: str) -> Optional[str]:
-        from costnav_isaacsim.evaluation import metrics
-
-        return metrics.classify_property_from_prim_path(prim_path)
-
-    def _record_property_contact_from_pair(
-        self,
-        actor0_path: str,
-        actor1_path: str,
-        impulse_amount: float,
-    ) -> Optional[str]:
-        """Record property contact from a pair of actor prim paths."""
-        from costnav_isaacsim.evaluation import metrics
-
-        return metrics.record_property_contact_from_pair(self._eval, actor0_path, actor1_path, impulse_amount)
-
-    def _apply_impulse_damage(
-        self, impulse_amount: float, injury_info: "tuple[float, float, float] | None" = None
-    ) -> None:
-        from costnav_isaacsim.evaluation import metrics
-
-        metrics.apply_impulse_damage(self._eval, impulse_amount, self._is_mission_active, injury_info)
-
-    @staticmethod
-    def _logistic_probability(intercept: float, slope: float, delta_v_mph: float) -> float:
-        """Compute logistic probability P(MAIS >= level)."""
-        return injury._logistic_probability(intercept, slope, delta_v_mph)
-
-    def _compute_mais_probabilities(self, delta_v_mps: float) -> dict:
-        """Compute MAIS level probabilities from delta-v using logistic regression."""
-        return injury.compute_mais_probabilities(self.config, delta_v_mps)
-
-    def _compute_expected_injury_cost(self, probabilities: dict) -> float:
-        """Compute expected injury cost from MAIS probabilities and configured costs."""
-        return injury.compute_expected_injury_cost(self.config, probabilities)
-
-    def _process_collision_injury(
-        self, impulse_amount: float, is_character_collision: bool
-    ) -> "tuple[float, float, float] | None":
-        """Compute delta-v from impulse/mass and calculate injury cost.
-
-        Returns:
-            A tuple of (delta_v_mps, injury_cost, total_injury_cost) if injury tracking
-            is enabled, otherwise None.
-        """
-        return injury.process_collision_injury(self._eval, self.config, impulse_amount, is_character_collision)
-
-    def _on_contact_report(self, contact_headers, contact_data) -> None:
-        self._evaluation.on_contact_report(contact_headers, contact_data)
-
     def handle_simulation_restart(self, stage_reloaded: bool = False) -> None:
         """Refresh cached sim handles after stop/reset or stage reload."""
         self._evaluation.handle_simulation_restart(stage_reloaded=stage_reloaded)
@@ -699,96 +644,6 @@ class MissionManager:
 
         if stage_reloaded:
             self._evaluation.setup_food_tracking()
-
-    def _count_food_pieces_in_bucket(self) -> int:
-        """Count the number of food pieces currently inside the bucket.
-
-        Uses bounding box comparison to determine if pieces are within the bucket.
-        This method iterates through all piece prims under the pieces path and
-        checks if their positions fall within the bucket's bounding box.
-
-        Returns:
-            Number of pieces inside the bucket, or 0 if food tracking is disabled.
-        """
-        return self._evaluation.count_food_pieces_in_bucket()
-
-    def _get_robot_z_offset(self) -> Optional[float]:
-        """Get the robot-specific z offset for positioning.
-
-        This offset is used for both robot teleportation and food positioning
-        to ensure consistent height placement above the ground.
-
-        Returns:
-            Z offset in meters, or None if robot not supported.
-
-        Robot-specific offsets:
-        - segway_e1: 0.33m
-        - nova_carter: Uses config teleport.height_offset (default behavior)
-        - Other robots: Not yet implemented
-        """
-        from costnav_isaacsim.evaluation import food
-
-        return food._get_robot_z_offset(self.config)
-
-    def _spawn_food_at_position(
-        self, x: float = 0.0, y: float = 0.0, z: float = 0.0, remove_existing: bool = False
-    ) -> bool:
-        """Spawn food USD asset at the specified position.
-
-        This is the internal method used by both _setup_food_tracking and
-        _reset_food_for_teleport to spawn or respawn the food asset.
-
-        Args:
-            x: X position in world coordinates.
-            y: Y position in world coordinates.
-            z: Z position in world coordinates (z_offset will be added).
-            remove_existing: If True, remove existing food prim before spawning.
-
-        Returns:
-            True if food was successfully spawned, False otherwise.
-        """
-        from costnav_isaacsim.evaluation import food
-
-        return food._spawn_food_at_position(
-            self._eval,
-            self.config,
-            x=x,
-            y=y,
-            z=z,
-            remove_existing=remove_existing,
-        )
-
-    def _setup_food_tracking(self) -> None:
-        """Setup food tracking by spawning the food USD asset and configuring paths.
-
-        Spawns the food USD asset as a reference at the configured prim path,
-        then constructs full prim paths for the food pieces and bucket.
-        """
-        self._evaluation.setup_food_tracking()
-
-    def _check_food_spoilage(self) -> bool:
-        """Check if food has spoiled (pieces lost from bucket).
-
-        Compares the initial piece count to the current count and determines
-        if the loss exceeds the configured threshold.
-
-        Returns:
-            True if food has spoiled (too many pieces lost), False otherwise.
-        """
-        return self._evaluation.check_food_spoilage()
-
-    def _reset_food_for_teleport(self) -> bool:
-        """Reset food by removing and respawning at robot's current position.
-
-        When the robot teleports to a new start position and settles, the food
-        (e.g., popcorn bucket) must be repositioned to match. This method reads
-        the robot's actual position from its prim (base_link or chassis_link)
-        and spawns the food at that location.
-
-        Returns:
-            True if food was successfully reset, False otherwise.
-        """
-        return self._evaluation.reset_food_for_teleport()
 
     def _handle_set_timeout(self, msg):
         """Handle dynamic timeout configuration.
@@ -1176,7 +1031,7 @@ class MissionManager:
             from .navmesh_sampler import SampledPosition
 
             # Get robot-specific z offset, fall back to config value if not supported
-            z_offset = self._get_robot_z_offset()
+            z_offset = food._get_robot_z_offset(self.config)
             if z_offset is None:
                 z_offset = self.config.manager.teleport_height
 
@@ -1279,7 +1134,7 @@ class MissionManager:
 
     def _step_ready(self):
         """Start next mission or complete if all done."""
-        self._reset_impulse_health()
+        self._evaluation.reset_impulse_health()
         self._current_mission += 1
         self._start_requested = False
         self._restart_requested = False
