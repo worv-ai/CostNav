@@ -30,7 +30,18 @@ dependencies = [
     "transforms3d>=0.4.2",
 ]
 
+[[tool.uv.index]]
+name = "pytorch-cu121"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true
+
 [tool.uv.sources]
+torch = [
+    { index = "pytorch-cu121" },
+]
+torchvision = [
+    { index = "pytorch-cu121" },
+]
 vint_train = { path = "../../third_party/visualnav-transformer/train", editable = true }
 warmup-scheduler = { git = "https://github.com/ildoonet/pytorch-gradual-warmup-lr.git" }
 
@@ -59,12 +70,6 @@ dev = [
     "mypy>=1.0.0",
     "ruff>=0.1.0",
 ]
-
-# Default checkpoint path for the ViNT model
-[tool.vint]
-default_checkpoint = "/workspace/checkpoints/vint_nova_carter.pth"
-default_model_config = "configs/vint_eval.yaml"
-default_robot_config = "configs/robot_carter.yaml"
 
 [tool.ruff]
 line-length = 120
