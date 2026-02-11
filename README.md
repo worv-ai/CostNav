@@ -24,7 +24,7 @@ CostNav introduces a **paradigm shift** in how we evaluate navigation systems: f
 
 Our key contributions are:
 
-1. **High-Fidelity Physics Simulation with Dynamics for effective Real-World Economic Scenarios.**  
+1. **High-Fidelity Physics Simulation for effective Real-World Economic Scenarios.**  
    a. Supporting Segway E1 delivery robot, food cargo dynamics with popcorn, detailed collision dynamics, pedestrians
 2. **Real-world referenced Cost-Revenue Model with Break-Even Point Analysis.**  
    a. Supporting Energy Cost, Pedestrian Safety Cost, Property Damage Cost, Repair Cost
