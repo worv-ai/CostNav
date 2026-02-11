@@ -15,9 +15,6 @@ RUN apt-get update && \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Disable PEP 668 externally-managed-environment check for pip
-RUN python3 -m pip config set global.break-system-packages true
-
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
@@ -31,10 +28,10 @@ COPY third_party/visualnav-transformer/train/vint_train /workspace/third_party/v
 COPY third_party/visualnav-transformer/train/setup.py /workspace/third_party/visualnav-transformer/train/
 COPY third_party/visualnav-transformer/train/README.md /workspace/third_party/visualnav-transformer/train/
 
-# Install dependencies system-wide (bypassing PEP 668 externally-managed check)
+# Install dependencies
 RUN --mount=type=cache,target=/root/.cache/uv \
     cd /workspace/costnav_isaacsim/il_evaluation && \
-    uv pip install --system --break-system-packages -e .
+    uv sync --no-dev --quiet
 
 COPY docker/ros_entrypoint.sh /ros_entrypoint.sh
 RUN chmod +x /ros_entrypoint.sh

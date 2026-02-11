@@ -19,13 +19,6 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /workspace
 
-COPY pyproject.toml ./
-COPY README.md ./
-
-# Core dev extras
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system --break-system-packages -e ".[dev]"
-
 # === Isaac Sim image ===
 ARG ISAAC_SIM_VERSION=5.1.0
 FROM nvcr.io/nvidia/isaac-sim:${ISAAC_SIM_VERSION} AS isaac-sim
@@ -67,8 +60,6 @@ ENV LD_LIBRARY_PATH="\
     ${ISAAC_PATH}/kit/exts:\
     ${LD_LIBRARY_PATH}"
 
-COPY pyproject.toml ./
-COPY README.md ./
 COPY costnav_isaacsim/costnav_isaacsim/ ./costnav_isaacsim/costnav_isaacsim/
 
 # python -> python3 shim
@@ -76,7 +67,8 @@ RUN ln -sf /isaac-sim/kit/python/bin/python3 /isaac-sim/kit/python/bin/python
 
 # Install costnav package (mission config, people manager, mission manager)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --python="${PYTHON_BIN}" --system -e ./costnav_isaacsim/costnav_isaacsim
+    cd costnav_isaacsim/costnav_isaacsim && \
+    uv sync --python="${PYTHON_BIN}" --no-dev --quiet
 
 # Install pre-commit for git hooks
 RUN --mount=type=cache,target=/root/.cache/uv \
