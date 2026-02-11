@@ -121,6 +121,21 @@ def load_config(config_path: Optional[Path]) -> dict:
         return yaml.safe_load(f)
 
 
+def get_mcap_path(bag_dir: Path) -> Optional[Path]:
+    """Get the first MCAP file path from a bag directory.
+
+    Args:
+        bag_dir: Path to a bag directory potentially containing .mcap files
+
+    Returns:
+        Path to the first .mcap file found, or None if no .mcap files exist
+    """
+    mcap_files = sorted(bag_dir.glob("*.mcap"))
+    if mcap_files:
+        return mcap_files[0]
+    return None
+
+
 def find_mediaref_bags(input_dir: Path) -> List[Path]:
     """Find all MediaRef-format bag directories in input directory."""
     bags = []
