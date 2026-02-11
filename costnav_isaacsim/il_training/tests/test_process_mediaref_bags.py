@@ -31,33 +31,7 @@ from il_training.data_processing.process_data.process_mediaref_bags import (
     is_backwards,
     load_config,
     process_image,
-    quat_to_yaw,
 )
-
-
-class TestQuatToYaw:
-    """Tests for quaternion to yaw conversion."""
-
-    def test_identity_quaternion_gives_zero_yaw(self):
-        """Test identity quaternion (no rotation) gives zero yaw."""
-        yaw = quat_to_yaw(0.0, 0.0, 0.0, 1.0)
-        assert np.isclose(yaw, 0.0, atol=1e-6)
-
-    def test_90_degree_rotation(self):
-        """Test 90 degree rotation around z-axis."""
-        # Quaternion for 90 degree rotation: (0, 0, sin(45°), cos(45°))
-        yaw = quat_to_yaw(0.0, 0.0, np.sin(np.pi / 4), np.cos(np.pi / 4))
-        assert np.isclose(yaw, np.pi / 2, atol=1e-6)
-
-    def test_180_degree_rotation(self):
-        """Test 180 degree rotation around z-axis."""
-        yaw = quat_to_yaw(0.0, 0.0, 1.0, 0.0)
-        assert np.isclose(abs(yaw), np.pi, atol=1e-6)
-
-    def test_negative_yaw(self):
-        """Test negative 90 degree rotation."""
-        yaw = quat_to_yaw(0.0, 0.0, -np.sin(np.pi / 4), np.cos(np.pi / 4))
-        assert np.isclose(yaw, -np.pi / 2, atol=1e-6)
 
 
 class TestIsBackwards:

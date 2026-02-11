@@ -42,6 +42,7 @@ dependencies = [
     "mediaref",
     "av",
     "pyyaml",
+    "transforms3d>=0.4.2",
 
     # ── Training utilities ───────────────────────────────────────────────
     "hydra-core",

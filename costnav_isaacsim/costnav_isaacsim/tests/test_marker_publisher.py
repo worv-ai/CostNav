@@ -5,8 +5,6 @@
 
 """Unit tests for RViz marker publisher module."""
 
-import math
-
 # Mock ROS2 dependencies for testing without ROS2 environment
 import sys
 from unittest.mock import MagicMock
@@ -101,33 +99,3 @@ class TestMarkerPublisherConfig:
         except Exception:
             # Expected to fail without ROS2, but we're testing the interface
             pass
-
-
-class TestQuaternionConversion:
-    """Tests for yaw to quaternion conversion."""
-
-    def test_yaw_to_quaternion_conversion(self):
-        """Test quaternion conversion for various yaw angles."""
-        # Zero yaw
-        yaw = 0.0
-        qz, qw = math.sin(yaw / 2.0), math.cos(yaw / 2.0)
-        assert abs(qz - 0.0) < 0.001
-        assert abs(qw - 1.0) < 0.001
-
-        # 90 degrees
-        yaw = math.pi / 2
-        qz, qw = math.sin(yaw / 2.0), math.cos(yaw / 2.0)
-        assert abs(qz - 0.707) < 0.01
-        assert abs(qw - 0.707) < 0.01
-
-        # 180 degrees
-        yaw = math.pi
-        qz, qw = math.sin(yaw / 2.0), math.cos(yaw / 2.0)
-        assert abs(qz - 1.0) < 0.001
-        assert abs(qw - 0.0) < 0.001
-
-        # -90 degrees
-        yaw = -math.pi / 2
-        qz, qw = math.sin(yaw / 2.0), math.cos(yaw / 2.0)
-        assert abs(qz - (-0.707)) < 0.01
-        assert abs(qw - 0.707) < 0.01

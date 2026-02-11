@@ -44,17 +44,11 @@ from mediaref import MediaRef, batch_decode
 from PIL import Image
 from rosbags.rosbag2 import Reader as Reader2
 from rosbags.typesys import Stores, get_typestore
+from transforms3d.euler import quat2euler
 
 # Image processing constants (from visualnav-transformer)
 IMAGE_SIZE = (160, 120)
 IMAGE_ASPECT_RATIO = 4 / 3
-
-
-def quat_to_yaw(x: float, y: float, z: float, w: float) -> float:
-    """Convert quaternion to yaw angle (rotation around z in radians)."""
-    t3 = 2.0 * (w * z + x * y)
-    t4 = 1.0 - 2.0 * (y * y + z * z)
-    return np.arctan2(t3, t4)
 
 
 def is_backwards(pos1: np.ndarray, yaw1: float, pos2: np.ndarray, eps: float = 1e-5) -> bool:
@@ -188,7 +182,8 @@ def get_images_and_odom_from_mediaref(
                 msg = deserialize(rawdata, connection.msgtype)
                 pos = msg.pose.pose.position
                 orient = msg.pose.pose.orientation
-                yaw = quat_to_yaw(orient.x, orient.y, orient.z, orient.w) + ang_offset
+                _, _, yaw = quat2euler([orient.w, orient.x, orient.y, orient.z])
+                yaw += ang_offset
                 odom_data.append((timestamp, (pos.x, pos.y), yaw))
 
     if not image_refs or not odom_data:
