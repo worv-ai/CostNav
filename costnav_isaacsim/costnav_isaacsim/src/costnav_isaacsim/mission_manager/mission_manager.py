@@ -559,9 +559,7 @@ class MissionManager:
             xform = UsdGeom.Xformable(self._goal_camera_prim)
 
             # Get or create translate operation
-            translate_ops = [
-                op for op in xform.GetOrderedXformOps() if op.GetOpType() == UsdGeom.XformOp.TypeTranslate
-            ]
+            translate_ops = [op for op in xform.GetOrderedXformOps() if op.GetOpType() == UsdGeom.XformOp.TypeTranslate]
             translate_op = translate_ops[0] if translate_ops else xform.AddTranslateOp()
 
             # Get or create orient operation
