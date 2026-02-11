@@ -1,8 +1,5 @@
 # Define a reusable block for ROS2 service configuration
 x-ros2-service: &ros2-service
-  build:
-    context: .
-    dockerfile: Dockerfile.ros
   image: costnav-ros2-jazzy:${COSTNAV_VERSION:-0.1.0}
   volumes:
     - ./costnav_isaacsim/nav2_params:/workspace/costnav_isaacsim/nav2_params
@@ -18,13 +15,6 @@ services:
   # Isaac Sim environment
   isaac-sim:
     profiles: ["isaac-sim", "nav2", "teleop", "vint"]
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: isaac-sim
-      args:
-        - ISAAC_SIM_VERSION=${ISAAC_SIM_VERSION}
-        - ISAAC_LAB_VERSION=${ISAAC_LAB_VERSION}
     image: costnav-isaacsim-${ISAAC_SIM_VERSION}:${COSTNAV_VERSION}
     container_name: costnav-isaac-sim
     deploy:
@@ -91,13 +81,6 @@ services:
   # Isaac Lab environment
   isaac-lab:
     profiles: ["isaac-lab"]
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: isaac-lab
-      args:
-        - ISAAC_SIM_VERSION=${ISAAC_SIM_VERSION}
-        - ISAAC_LAB_VERSION=${ISAAC_LAB_VERSION}
     image: costnav-isaaclab-${ISAAC_SIM_VERSION}-${ISAAC_LAB_VERSION}:${COSTNAV_VERSION}
     container_name: ${CONTAINER_NAME:-costnav-isaac-lab}
     user: "${ISAAC_UID:-1234}:${ISAAC_GID:-1234}"
@@ -139,10 +122,6 @@ services:
     # Development environment (minimal dependencies)
   dev:
     profiles: ["dev"]
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: dev
     image: costnav-dev:${COSTNAV_VERSION}
     container_name: costnav-dev
     env_file:
@@ -305,10 +284,7 @@ services:
   # ROS2 with ViNT policy
   ros2-vint:
     profiles: ["vint"]
-    build:
-      context: .
-      dockerfile: Dockerfile.ros_torch
-    image: costnav-ros2-vint:${COSTNAV_VERSION:-0.1.0}
+    image: costnav-ros2-torch:${COSTNAV_VERSION:-0.1.0}
     container_name: costnav-ros2-vint
     deploy:
       resources:
@@ -327,7 +303,6 @@ services:
       - DISPLAY=${DISPLAY:-:0}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
-      - UV_LINK_MODE=copy
       - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
       - MODEL_CHECKPOINT=${MODEL_CHECKPOINT:-checkpoints/vint.pth}
     volumes:
@@ -349,10 +324,7 @@ services:
   # ROS2 Trajectory Follower - MPC controller for executing ViNT trajectories
   ros2-vint-trajectory-follower:
     profiles: ["vint"]
-    build:
-      context: .
-      dockerfile: Dockerfile.ros_torch
-    image: costnav-ros2-vint:${COSTNAV_VERSION:-0.1.0}
+    image: costnav-ros2-torch:${COSTNAV_VERSION:-0.1.0}
     container_name: costnav-ros2-vint-trajectory-follower
     depends_on:
       isaac-sim:
@@ -362,7 +334,6 @@ services:
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
       - DISPLAY=${DISPLAY:-:0}
-      - UV_LINK_MODE=copy
       - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -383,10 +354,7 @@ services:
   # ROS2 with ViNT policy - for devcontainer development
   ros2-vint-dev:
     profiles: ["vint-dev"]
-    build:
-      context: .
-      dockerfile: Dockerfile.ros_torch
-    image: costnav-ros2-vint:${COSTNAV_VERSION:-0.1.0}
+    image: costnav-ros2-torch:${COSTNAV_VERSION:-0.1.0}
     container_name: costnav-ros2-vint-dev
     deploy:
       resources:
@@ -402,7 +370,6 @@ services:
       - DISPLAY=${DISPLAY:-:0}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
-      - UV_LINK_MODE=copy
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - .:/workspace

@@ -36,6 +36,7 @@ ISAAC_SIM_IMAGE ?= costnav-isaacsim-$(ISAAC_SIM_VERSION):$(COSTNAV_VERSION)
 ISAAC_LAB_IMAGE ?= costnav-isaaclab-$(ISAAC_SIM_VERSION)-$(ISAAC_LAB_VERSION):$(COSTNAV_VERSION)
 COSTNAV_DEV_IMAGE ?= costnav-dev:$(COSTNAV_VERSION)
 COSTNAV_ROS2_IMAGE ?= costnav-ros2-jazzy:$(COSTNAV_VERSION)
+COSTNAV_ROS2_TORCH_IMAGE ?= costnav-ros2-torch:$(COSTNAV_VERSION)
 
 build-isaac-sim:
 	$(DOCKER_BUILD) -f $(DOCKERFILE) --target isaac-sim \
@@ -66,7 +67,7 @@ fetch-third-party:
 
 # Build the ROS2 runtime Docker image
 build-ros2:
-	$(DOCKER_COMPOSE) --profile ros2 build ros2
+	$(DOCKER_BUILD) -f Dockerfile.ros -t $(COSTNAV_ROS2_IMAGE) .
 
 # Run the ROS2 runtime container
 run-ros2:
@@ -175,9 +176,9 @@ run-teleop:
 # IL Evaluation (ViNT) Targets
 # =============================================================================
 
-# Build the ViNT Docker image
+# Build the ROS2 + PyTorch Docker image (ViNT evaluation)
 build-vint:
-	$(DOCKER_COMPOSE) --profile vint build ros2-vint
+	$(DOCKER_BUILD) -f Dockerfile.ros_torch -t $(COSTNAV_ROS2_TORCH_IMAGE) .
 
 # Run Isaac Sim with ViNT policy node and trajectory follower for IL baseline evaluation
 # Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/vint.pth)
