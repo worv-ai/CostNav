@@ -442,6 +442,7 @@ class TrajectoryFollowerNode(Node):
     def __init__(
         self,
         robot_config: str,
+        trajectory_topic: str = "/vint_trajectory",
     ):
         super().__init__("trajectory_follower_node")
 
@@ -503,7 +504,7 @@ class TrajectoryFollowerNode(Node):
         )
 
         # Subscribers
-        self.trajectory_sub = self.create_subscription(Path, "/model_trajectory", self.trajectory_callback, 10)
+        self.trajectory_sub = self.create_subscription(Path, trajectory_topic, self.trajectory_callback, 10)
         self.odom_sub = self.create_subscription(Odometry, self.odom_topic, self.odom_callback, sensor_qos)
         self.enable_sub = self.create_subscription(Bool, "/trajectory_follower_enable", self.enable_callback, 10)
 
@@ -517,7 +518,7 @@ class TrajectoryFollowerNode(Node):
         self.get_logger().info(f"Trajectory follower node started. Control rate: {self.control_rate} Hz")
         self.get_logger().info("Controller: MPC (NavDP reference)")
         self.get_logger().info(f"Max velocities: linear={self.max_linear_vel}, angular={self.max_angular_vel}")
-        self.get_logger().info(f"Subscribing to: /model_trajectory, {self.odom_topic}")
+        self.get_logger().info(f"Subscribing to: {trajectory_topic}, {self.odom_topic}")
         self.get_logger().info("Publishing to: /cmd_vel")
 
     def trajectory_callback(self, msg: Path):
@@ -776,6 +777,12 @@ def parse_args():
         help="Path to robot configuration YAML (contains topics and trajectory_follower params)",
     )
     parser.add_argument(
+        "--trajectory_topic",
+        type=str,
+        default="/vint_trajectory",
+        help="Trajectory topic to subscribe to (default: /vint_trajectory)",
+    )
+    parser.add_argument(
         "--log_level",
         type=str,
         default="info",
@@ -794,6 +801,7 @@ def main():
     try:
         node = TrajectoryFollowerNode(
             robot_config=args.robot_config,
+            trajectory_topic=args.trajectory_topic,
         )
         # Set log level
         log_level_map = {

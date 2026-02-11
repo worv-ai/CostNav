@@ -1,0 +1,29 @@
+# Convert MediaRef-format bags to InternNav NavDP dataset structure
+paths:
+  input_dir: # MediaRef dataset root (recording_*_mediaref/)
+  output_dir: # Output NavDP dataset root
+
+topics:
+  image_topic: /front_stereo_camera/left/image_raw
+  odom_topic: /chassis/odom
+  depth_topic: # optional; if missing, constant depth is used
+
+processing:
+  sample_rate: 4.0
+  ang_offset: 0.0
+  group_name: costnav
+  scene_name: # if empty, uses bag name
+  min_length: 10
+  camera_height: 1.0
+  depth_m: 1.0
+  depth_scale: 10000.0
+  path_step: 1
+  filter_backwards: true
+  overwrite: false
+
+camera:
+  # If omitted, defaults are derived from image size.
+  fx:
+  fy:
+  cx:
+  cy:

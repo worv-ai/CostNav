@@ -22,7 +22,10 @@ export PROJECT_ROOT
 
 # ── 1. git submodules (only the ones il_training needs) ──────────────────────
 echo "▸ Initialising git submodules …"
-git -C "$PROJECT_ROOT" submodule update --init third_party/diffusion_policy third_party/visualnav-transformer
+git -C "$PROJECT_ROOT" submodule update --init \
+    third_party/diffusion_policy \
+    third_party/visualnav-transformer \
+    third_party/InternNav
 
 # ── 2. patch diffusion_policy ────────────────────────────────────────────────
 if [ ! -f "$DIFFUSION_POLICY_INIT" ]; then

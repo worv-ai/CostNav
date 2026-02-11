@@ -1,0 +1,39 @@
+# CostNav NavDP training overrides for InternNav
+# All relative paths are resolved against costnav_isaacsim/
+
+name: navdp_costnav
+
+# Outputs (relative to costnav_isaacsim/)
+output_dir: il_baselines/outputs/navdp/%s/ckpts
+tensorboard_dir: il_baselines/outputs/navdp/%s/tensorboard
+checkpoint_folder: il_baselines/outputs/navdp/%s/ckpts
+log_dir: il_baselines/outputs/navdp/%s/logs
+
+il:
+  # REQUIRED: update to your NavDP lerobot dataset paths
+  dataset_navdp: /ABS/PATH/TO/navdp_dataset_lerobot.json
+  root_dir: /ABS/PATH/TO/navdp/traj_data
+
+  # Common training knobs (defaults match InternNav)
+  epochs: 1000
+  batch_size: 32
+  lr: 1.0e-4
+  num_workers: 8
+  save_interval_epochs: 5
+  report_to: tensorboard
+
+  # Model/data shape
+  image_size: 224
+  memory_size: 8
+  predict_size: 24
+  pixel_channel: 4
+  temporal_depth: 16
+  heads: 8
+  token_dim: 384
+  channels: 3
+  dropout: 0.1
+
+  # Optional toggles
+  preload: false
+  random_digit: false
+  prior_sample: false

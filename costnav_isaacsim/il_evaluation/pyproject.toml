@@ -30,6 +30,9 @@ dependencies = [
     "scipy>=1.15.3",
     "casadi>=3.7.2",
     "transforms3d>=0.4.2",
+    # NavDP local inference
+    "diffusers",
+    "transformers",
 ]
 
 [[tool.uv.index]]
@@ -57,6 +60,8 @@ gnm_policy_node = "il_evaluation.nodes.gnm_policy_node:main"
 # Main NoMaD policy node entry point
 # Usage: nomad_policy_node --checkpoint /path/to/model.pth --model_config /path/to/config.yaml --robot_config /path/to/robot.yaml
 nomad_policy_node = "il_evaluation.nodes.nomad_policy_node:main"
+# NavDP policy node (local inference, no server)
+navdp_policy_node = "il_evaluation.nodes.navdp_policy_node:main"
 # Trajectory follower node for executing trajectories at high rate
 # Usage: trajectory_follower_node --robot_config configs/robot_carter.yaml
 trajectory_follower_node = "il_evaluation.nodes.trajectory_follower_node:main"
