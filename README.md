@@ -164,7 +164,7 @@ make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
 ## Contributing
 
 Help us build a large-scale, ever-expanding benchmark!  
-We highly encourage contributions via issues and pull requests.
+We highly encourage contributions via issues and pull requests, especially adding more navigation baselines!
 
 ## Contact
 
