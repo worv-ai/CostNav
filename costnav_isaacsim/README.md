@@ -84,7 +84,8 @@ costnav_isaacsim/
 │   ├── maps/                      # Occupancy grid maps
 │   ├── nova_carter/               # Nova Carter robot config
 │   └── segway_e1/                 # Segway E1 robot config
-├── il_baselines/                  # Imitation learning baselines
+├── il_training/                   # IL training (data processing + model training)
+├── il_evaluation/                 # IL evaluation (inference + ROS2 nodes)
 │   ├── data_processing/           # ROS bag to training data conversion
 │   ├── evaluation/                # ViNT evaluation package (pip install -e)
 │   └── training/                  # Model training scripts
@@ -179,7 +180,7 @@ make run-ros2
 Run the imitation learning baseline using ViNT (Visual Navigation Transformer):
 
 Download the pretrained model weights from Google Drive or train your model and place it to `checkpoints/`
-See [Download Pretrained Checkpoints](il_baselines/README.md#download-pretrained-checkpoints) for more information.
+See [Download Pretrained Checkpoints](il_training/README.md#download-pretrained-checkpoints) for more information.
 
 ```bash
 # Build ViNT Docker image (first time only)
@@ -908,11 +909,11 @@ This starts:
 
 ### Configuration Files
 
-- **Model config**: `il_baselines/evaluation/configs/vint_eval.yaml`
-- **Robot config**: `il_baselines/evaluation/configs/robot_segway.yaml`
-- **Training config**: `il_baselines/training/visualnav_transformer/configs/vint_costnav.yaml`
+- **Model config**: `il_evaluation/configs/vint_eval.yaml`
+- **Robot config**: `il_evaluation/configs/robot_segway.yaml`
+- **Training config**: `il_training/training/visualnav_transformer/configs/vint_costnav.yaml`
 
-> **See Also**: [IL Baselines Documentation](il_baselines/README.md) for detailed setup and usage.
+> **See Also**: [IL Training Documentation](il_training/README.md) | [IL Evaluation Documentation](il_evaluation/README.md) for detailed setup and usage.
 
 ---
 
@@ -922,8 +923,9 @@ This starts:
 - [Isaac Sim Launch Details](../docs/nav2/isaac_sim_launch.md) - Launch script documentation
 - [Architecture Overview](../docs/architecture.md) - CostNav system architecture
 - [Cost Model](../docs/cost_model.md) - Economic metrics for navigation evaluation
-- [IL Baselines](il_baselines/README.md) - Imitation learning baselines documentation
-- [IL Baselines Design](../docs/imitation_learning_baselines.md) - Detailed IL design document
+- [IL Training](il_training/README.md) - IL training documentation
+- [IL Evaluation](il_evaluation/README.md) - IL evaluation documentation
+- [IL Design](../docs/imitation_learning_baselines.md) - Detailed IL design document
 
 ## External References
 

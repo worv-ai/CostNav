@@ -66,17 +66,17 @@ Imitation learning offers complementary advantages:
 ```
 CostNav/
 ├── costnav_isaacsim/
-│   └── il_baselines/                        # Navigation Imitation Learning Module
+│   └── il_training/                        # IL Training (data processing & model training)
 │       ├── data_processing/                 # ROS2 bag → ViNT format conversion
 │       ├── training/                        # Model training scripts and configs
-│       └── evaluation/                      # ROS2 policy nodes for Isaac Sim evaluation
+├── il_evaluation/                       # IL Evaluation (inference & ROS2 nodes)
 │
-├── Dockerfile.vint                          # ViNT evaluation Docker image
+├── Dockerfile.ros_torch                     # IL evaluation Docker image (ROS2 + PyTorch)
 └── third_party/
     └── visualnav-transformer/               # ViNT/NoMaD/GNM training code (submodule)
 ```
 
-See [il_baselines/README.md](../costnav_isaacsim/il_baselines/README.md) for detailed directory structure.
+See [il_training/README.md](../costnav_isaacsim/il_training/README.md) for detailed directory structure.
 
 ---
 
@@ -132,8 +132,8 @@ frames = batch_decode(refs)  # Opens video once, reuses handle
 ### Step 1: Convert ROS Bags to MediaRef
 
 ```bash
-# From CostNav/costnav_isaacsim/il_baselines/
-uv run python -m il_baselines.data_processing.converters.ray_batch_convert \
+# From CostNav/costnav_isaacsim/il_training/
+uv run python -m il_training.data_processing.converters.ray_batch_convert \
     --config data_processing/configs/processing_config.yaml
 ```
 
@@ -145,8 +145,8 @@ This creates for each bag:
 ### Step 2: Convert to ViNT Format
 
 ```bash
-# From CostNav/costnav_isaacsim/il_baselines/
-uv run python -m il_baselines.data_processing.process_data.process_mediaref_bags \
+# From CostNav/costnav_isaacsim/il_training/
+uv run python -m il_training.data_processing.process_data.process_mediaref_bags \
     --config data_processing/configs/vint_processing_config.yaml
 ```
 
@@ -155,11 +155,11 @@ uv run python -m il_baselines.data_processing.process_data.process_mediaref_bags
 For large-scale processing on a cluster:
 
 ```bash
-cd costnav_isaacsim/il_baselines/scripts/
+cd costnav_isaacsim/il_training/scripts/
 sbatch process_data.sbatch
 ```
 
-See [il_baselines/README.md](../costnav_isaacsim/il_baselines/README.md) for detailed configuration options.
+See [il_training/README.md](../costnav_isaacsim/il_training/README.md) for detailed configuration options.
 
 ---
 
@@ -202,6 +202,7 @@ uv sync  # Installs PyTorch, visualnav-transformer, and all dependencies
 #### Environment Setup
 
 **Prerequisites:**
+
 - [uv](https://docs.astral.sh/uv/) package manager
 - CUDA 12.4+ capable GPU and drivers
 
@@ -228,6 +229,7 @@ uv run gdown --folder https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHet
 ```
 
 Expected structure:
+
 ```
 checkpoints/
 ├── vint.pth      # ViNT pretrained weights
@@ -239,8 +241,8 @@ checkpoints/
 
 ```bash
 # From CostNav/costnav_isaacsim/
-uv run python -m il_baselines.training.train_vint \
-    --config il_baselines/training/visualnav_transformer/configs/vint_costnav.yaml
+uv run python -m il_training.training.train_vint \
+    --config il_training/training/visualnav_transformer/configs/vint_costnav.yaml
 ```
 
 #### SLURM Training
@@ -248,7 +250,7 @@ uv run python -m il_baselines.training.train_vint \
 For cluster training:
 
 ```bash
-cd costnav_isaacsim/il_baselines/scripts/
+cd costnav_isaacsim/il_training/scripts/
 sbatch train_vint.sbatch
 ```
 
@@ -282,19 +284,21 @@ The sbatch script uses `uv run` — no manual venv activation needed.
 ### Phase 2: Training Framework ✅
 
 - [x] Create CostNav-specific training configs for ViNT/NoMaD/GNM
-  - Config: `costnav_isaacsim/il_baselines/training/visualnav_transformer/configs/vint_costnav.yaml`
-  - Training script: `costnav_isaacsim/il_baselines/training/train_vint.py`
+  - Config: `costnav_isaacsim/il_training/training/visualnav_transformer/configs/vint_costnav.yaml`
+  - Training script: `costnav_isaacsim/il_training/training/train_vint.py`
 - [x] Implement pre-trained model fine-tuning pipeline
 - [x] Test training with collected sidewalk navigation data ✅ **Training successful!**
 
 ### Phase 3: Evaluation & Comparison 🔄 (In Progress)
 
 **Current Status:**
+
 - ✅ ViNT model (trained on Nova Carter data) runs successfully in Isaac Sim
 - ✅ Two-node architecture implemented (policy node + trajectory follower)
 - ⚠️ Performance is limited without topological graph guidance
 
 **Remaining Tasks:**
+
 - [x] Setup uv environment + Slurm setup
 - [ ] Train and compare with Segway E1 data (2h, 4h, 6h training runs)
 - [ ] **(Critical)** Implement topological graph navigation
@@ -348,14 +352,14 @@ CostNav uses **ROS2** as its communication layer. The ViNT container runs two no
 
 **Key ROS2 Topics (between containers):**
 
-| Topic                                  | Type                  | Direction         | Description                      |
-| -------------------------------------- | --------------------- | ----------------- | -------------------------------- |
-| `/front_stereo_camera/left/image_raw`  | `sensor_msgs/Image`   | Isaac Sim → ViNT  | Camera images for policy         |
-| `/chassis/odom`                        | `nav_msgs/Odometry`   | Isaac Sim → ViNT  | Robot odometry for MPC           |
-| `/goal_image`                          | `sensor_msgs/Image`   | Isaac Sim → ViNT  | Goal image (ImageGoal mode)      |
-| `/cmd_vel`                             | `geometry_msgs/Twist` | ViNT → Isaac Sim  | Velocity commands to robot       |
-| `/vint_enable`                         | `std_msgs/Bool`       | Isaac Sim → ViNT  | Enable/disable policy execution  |
-| `/vint_trajectory`                     | `nav_msgs/Path`       | Internal (ViNT)   | Policy → Trajectory Follower     |
+| Topic                                 | Type                  | Direction        | Description                     |
+| ------------------------------------- | --------------------- | ---------------- | ------------------------------- |
+| `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image`   | Isaac Sim → ViNT | Camera images for policy        |
+| `/chassis/odom`                       | `nav_msgs/Odometry`   | Isaac Sim → ViNT | Robot odometry for MPC          |
+| `/goal_image`                         | `sensor_msgs/Image`   | Isaac Sim → ViNT | Goal image (ImageGoal mode)     |
+| `/cmd_vel`                            | `geometry_msgs/Twist` | ViNT → Isaac Sim | Velocity commands to robot      |
+| `/vint_enable`                        | `std_msgs/Bool`       | Isaac Sim → ViNT | Enable/disable policy execution |
+| `/vint_trajectory`                    | `nav_msgs/Path`       | Internal (ViNT)  | Policy → Trajectory Follower    |
 
 ### ROS2 Node Interface (Abstract)
 
@@ -409,7 +413,7 @@ class TrajectoryFollowerNode(Node):
         self.cmd_vel_pub.publish(self.create_twist(v, w))
 ```
 
-See [evaluation/README.md](../costnav_isaacsim/il_baselines/evaluation/README.md) for implementation details.
+See [evaluation/README.md](../costnav_isaacsim/il_training/evaluation/README.md) for implementation details.
 
 ---
 
@@ -460,16 +464,16 @@ ViNT (Visual Navigation Transformer) is being implemented as the reference basel
 **Evaluation (Implemented ✅):**
 
 - [x] Port ViNT agent from `third_party/NavDP/baselines/vint/vint_agent.py`
-  - Location: `costnav_isaacsim/il_baselines/evaluation/agents/vint_agent.py`
+  - Location: `costnav_isaacsim/il_training/evaluation/agents/vint_agent.py`
 - [x] Create ROS2 policy node that:
   - Subscribes to `/front_stereo_camera/left/image_raw` (sensor_msgs/Image)
   - Subscribes to `/goal_image` for ImageGoal mode
   - Publishes `/vint_trajectory` (nav_msgs/Path)
-  - Location: `costnav_isaacsim/il_baselines/evaluation/nodes/vint_policy_node.py`
+  - Location: `costnav_isaacsim/il_training/evaluation/nodes/vint_policy_node.py`
 - [x] Implement MPC trajectory follower node
   - Subscribes to `/vint_trajectory` and `/chassis/odom`
   - Publishes `/cmd_vel` directly
-  - Location: `costnav_isaacsim/il_baselines/evaluation/nodes/trajectory_follower_node.py`
+  - Location: `costnav_isaacsim/il_training/evaluation/nodes/trajectory_follower_node.py`
 
 #### 4.3 CostNav ROS2 Integration ✅
 
@@ -481,11 +485,12 @@ make run-vint
 ```
 
 This launches:
+
 - Isaac Sim with Nova Carter robot and ROS2 bridge
 - ViNT policy node (`vint_policy_node`)
 - Trajectory follower node (`trajectory_follower_node`)
 
-See [evaluation/README.md](../costnav_isaacsim/il_baselines/evaluation/README.md) for detailed usage and configuration options.
+See [evaluation/README.md](../costnav_isaacsim/il_training/evaluation/README.md) for detailed usage and configuration options.
 
 ---
 

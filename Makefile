@@ -172,7 +172,7 @@ run-teleop:
 	echo "Done."
 
 # =============================================================================
-# IL Baselines (ViNT) Targets
+# IL Evaluation (ViNT) Targets
 # =============================================================================
 
 # Build the ViNT Docker image

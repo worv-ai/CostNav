@@ -1,0 +1,117 @@
+[project]
+name = "costnav-il-training"
+version = "0.1.0"
+description = "CostNav Imitation Learning Training – data processing & model training"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "CostNav Authors" }]
+keywords = ["robotics", "navigation", "imitation-learning", "vint"]
+
+dependencies = [
+    # ── PyTorch (CUDA 12.4 index configured below) ──────────────────────
+    "torch>=2.5",
+    "torchvision",
+    "torchaudio",
+
+    # ── Core ML ──────────────────────────────────────────────────────────
+    "numpy",
+    "tqdm",
+    "opencv-python-headless",
+    "h5py",
+    "wandb",
+    "prettytable",
+    "lmdb",
+    "python-dotenv",
+
+    # ── Vision / Transformer ─────────────────────────────────────────────
+    "efficientnet-pytorch",
+    "vit-pytorch",
+    "positional-encodings[pytorch]",
+    "einops",
+    "timm",
+
+    # ── Diffusion ────────────────────────────────────────────────────────
+    "diffusers",
+    "warmup-scheduler",
+
+    # ── ROS Bag Processing ───────────────────────────────────────────────
+    "rosbags",
+    "rosbags-image",
+    "mcap",
+    "mcap-ros2-support",
+    "mediaref",
+    "av",
+    "pyyaml",
+
+    # ── Training utilities ───────────────────────────────────────────────
+    "hydra-core",
+    "omegaconf",
+    "tensorboard",
+    "scipy",
+    "scikit-learn",
+    "pillow",
+    "matplotlib",
+
+    # ── Ray (distributed data processing) ────────────────────────────────
+    "ray[default]",
+
+    # ── Console / logging ────────────────────────────────────────────────
+    "rich",
+
+    # ── Local editable packages (sources below) ─────────────────────────
+    "vint-train",
+    "diffusion-policy",
+
+    # ── Download checkpoints ─────────────────────────────────────────────
+    "gdown",
+]
+
+[project.urls]
+Repository = "https://github.com/worv-ai/CostNav"
+
+# ── Build system ────────────────────────────────────────────────────────────
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+# pyproject.toml lives inside il_training/ which IS the package.
+# Map "il_training" → current directory so `import il_training` works.
+where = [".."]
+include = ["il_training*"]
+
+# ── uv configuration ───────────────────────────────────────────────────────
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true          # only used when referenced in [tool.uv.sources]
+
+[tool.uv.sources]
+# PyTorch CUDA 12.4 – pin to the dedicated index
+torch = { index = "pytorch-cu124" }
+torchvision = { index = "pytorch-cu124" }
+torchaudio = { index = "pytorch-cu124" }
+# Local editable packages
+vint-train = { path = "../../third_party/visualnav-transformer/train", editable = true }
+diffusion-policy = { path = "../../third_party/diffusion_policy", editable = true }
+# warmup-scheduler has no PyPI release
+warmup-scheduler = { git = "https://github.com/ildoonet/pytorch-gradual-warmup-lr.git" }
+
+# ── Dev dependencies ───────────────────────────────────────────────────────
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.1.0",
+    "ipython",
+    "ipykernel",
+]
+
+# ── Ruff ────────────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E402", "E501"]

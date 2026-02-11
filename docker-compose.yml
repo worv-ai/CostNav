@@ -307,7 +307,7 @@ services:
     profiles: ["vint"]
     build:
       context: .
-      dockerfile: Dockerfile.vint
+      dockerfile: Dockerfile.ros_torch
     image: costnav-ros2-vint:${COSTNAV_VERSION:-0.1.0}
     container_name: costnav-ros2-vint
     deploy:
@@ -336,11 +336,11 @@ services:
     working_dir: /workspace
     command: >
       bash -c "if [ \"$${SIM_ROBOT}\" = \"nova_carter\" ]; then
-          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_baselines/evaluation/configs/robot_carter.yaml
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_carter.yaml
         else
-          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_baselines/evaluation/configs/robot_segway.yaml
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_segway.yaml
         fi &&
-        vint_policy_node --checkpoint $${MODEL_CHECKPOINT} --model_config /workspace/costnav_isaacsim/il_baselines/evaluation/configs/vint_eval.yaml --robot_config $${ROBOT_CONFIG} --inference_rate 10.0 --use_imagegoal"
+        vint_policy_node --checkpoint $${MODEL_CHECKPOINT} --model_config /workspace/costnav_isaacsim/il_evaluation/configs/vint_eval.yaml --robot_config $${ROBOT_CONFIG} --inference_rate 10.0 --use_imagegoal"
     network_mode: host
     ipc: host
     stdin_open: true
@@ -351,7 +351,7 @@ services:
     profiles: ["vint"]
     build:
       context: .
-      dockerfile: Dockerfile.vint
+      dockerfile: Dockerfile.ros_torch
     image: costnav-ros2-vint:${COSTNAV_VERSION:-0.1.0}
     container_name: costnav-ros2-vint-trajectory-follower
     depends_on:
@@ -370,9 +370,9 @@ services:
     working_dir: /workspace
     command: >
       bash -c "if [ \"$${SIM_ROBOT}\" = \"nova_carter\" ]; then
-          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_baselines/evaluation/configs/robot_carter.yaml
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_carter.yaml
         else
-          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_baselines/evaluation/configs/robot_segway.yaml
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_segway.yaml
         fi &&
         trajectory_follower_node --robot_config $${ROBOT_CONFIG} --control_rate 20.0 --max_linear_vel 0.5 --max_angular_vel 0.5"
     network_mode: host
@@ -385,7 +385,7 @@ services:
     profiles: ["vint-dev"]
     build:
       context: .
-      dockerfile: Dockerfile.vint
+      dockerfile: Dockerfile.ros_torch
     image: costnav-ros2-vint:${COSTNAV_VERSION:-0.1.0}
     container_name: costnav-ros2-vint-dev
     deploy:
