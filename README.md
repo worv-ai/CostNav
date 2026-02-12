@@ -177,12 +177,12 @@ To Cite CostNav, please use the following bibtex citation
 
 ```
 @misc{seong2026costnavnavigationbenchmarkrealworld,
-      title={CostNav: A Navigation Benchmark for Real-World Economic-Cost Evaluation of Physical AI Agents},
-      author={Haebin Seong and Sungmin Kim and Yongjun Cho and Myunchul Joe and Geunwoo Kim and Yubeen Park and Sunhoo Kim and Yoonshik Kim and Suhwan Choi and Jaeyoon Jung and Jiyong Youn and Jinmyung Kwak and Sunghee Ahn and Jaemin Lee and Younggil Do and Seungyeop Yi and Woojin Cheong and Minhyeok Oh and Minchan Kim and Yoonseok Kang and Seongjae Kang and Samwoo Seong and Youngjae Yu and Yunsung Lee},
+      title={CostNav: A Navigation Benchmark for Real-World Economic-Cost Evaluation of Physical AI Agents}, 
+      author={Haebin Seong and Sungmin Kim and Yongjun Cho and Myunchul Joe and Geunwoo Kim and Yubeen Park and Sunhoo Kim and Yoonshik Kim and Suhwan Choi and Jaeyoon Jung and Jiyong Youn and Jinmyung Kwak and Sunghee Ahn and Jaemin Lee and Younggil Do and Seungyeop Yi and Woojin Cheong and Minhyeok Oh and Minchan Kim and Seongjae Kang and Samwoo Seong and Youngjae Yu and Yunsung Lee},
       year={2026},
       eprint={2511.20216},
       archivePrefix={arXiv},
       primaryClass={cs.AI},
-      url={https://arxiv.org/abs/2511.20216},
+      url={https://arxiv.org/abs/2511.20216}, 
 }
 ```
