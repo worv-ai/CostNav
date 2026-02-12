@@ -65,10 +65,11 @@ COPY costnav_isaacsim/costnav_isaacsim/ ./costnav_isaacsim/costnav_isaacsim/
 # python -> python3 shim
 RUN ln -sf /isaac-sim/kit/python/bin/python3 /isaac-sim/kit/python/bin/python
 
-# Install costnav package (mission config, people manager, mission manager)
+# Install costnav package into Isaac Sim's site-packages directly.
+# Using --system because #!/isaac-sim/python.sh bypasses any venv.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    cd costnav_isaacsim/costnav_isaacsim && \
-    uv sync --python="${PYTHON_BIN}" --no-dev --quiet
+    uv pip install --python="${PYTHON_BIN}" --system \
+    -e ./costnav_isaacsim/costnav_isaacsim
 
 # Install pre-commit for git hooks
 RUN --mount=type=cache,target=/root/.cache/uv \
