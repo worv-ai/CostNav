@@ -43,7 +43,7 @@ services:
       - NUM_PEOPLE=${NUM_PEOPLE:-20}
       - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
       - FOOD=${FOOD:-True}
-      - GOAL_IMAGE=${GOAL_IMAGE:-False}
+      - TOPOMAP=${TOPOMAP:-True}
     volumes:
       - .:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -60,7 +60,7 @@ services:
     working_dir: /workspace
     command:
       - "-ic"
-      - "/workspace/costnav_isaacsim/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-20} --robot $${SIM_ROBOT:-segway_e1} --food-enabled $${FOOD:-True} --goal-image-enabled $${GOAL_IMAGE:-False}"
+      - "/workspace/costnav_isaacsim/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-20} --robot $${SIM_ROBOT:-segway_e1} --food-enabled $${FOOD:-True} --topomap-enabled $${TOPOMAP:-True}"
     healthcheck:
       test:
         [

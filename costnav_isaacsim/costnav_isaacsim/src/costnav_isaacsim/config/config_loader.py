@@ -118,6 +118,29 @@ class GoalImageConfig:
 
 
 @dataclass
+class TopoMapConfig:
+    """Configuration for NavMesh-based topological map generation.
+
+    Controls the TopomapGenerator which creates ViNT-compatible topomaps
+    by querying NavMesh shortest paths and capturing images along the route.
+    """
+
+    enabled: bool = False  # Enable topomap generation
+    waypoint_interval: float = 0.5  # Distance between waypoints in meters
+    camera_height_offset: float = 0.3  # Camera height above ground (meters)
+    image_width: int = 640  # Captured image width (pixels)
+    image_height: int = 360  # Captured image height (pixels)
+    output_dir: str = "/tmp/costnav_topomap"  # Default output directory
+    camera_prim_path: str = "/World/topomap_camera"  # USD prim path for topomap camera
+    render_settle_steps: int = 3  # Simulation steps per capture for render pipeline flush
+    # Camera intrinsics (matching rgb_left.usda parameters)
+    focal_length: float = 2.87343
+    horizontal_aperture: float = 5.76
+    vertical_aperture: float = 3.6
+    focus_distance: float = 0.6
+
+
+@dataclass
 class MissionManagerConfig:
     """Configuration for MissionManager runtime settings."""
 
@@ -155,6 +178,7 @@ class MissionConfig:
     food: FoodConfig = field(default_factory=FoodConfig)
     injury: InjuryConfig = field(default_factory=InjuryConfig)
     goal_image: GoalImageConfig = field(default_factory=GoalImageConfig)
+    topomap: TopoMapConfig = field(default_factory=TopoMapConfig)
     manager: MissionManagerConfig = field(default_factory=MissionManagerConfig)
 
     @classmethod
@@ -247,6 +271,23 @@ class MissionConfig:
             camera_prim_path=goal_image_data.get("camera_prim_path", "/World/goal_camera"),
         )
 
+        # Parse topomap config (NavMesh-based topological map generation)
+        topomap_data = data.get("topomap", {})
+        topomap_config = TopoMapConfig(
+            enabled=topomap_data.get("enabled", False),
+            waypoint_interval=topomap_data.get("waypoint_interval", 0.5),
+            camera_height_offset=topomap_data.get("camera_height_offset", 0.3),
+            image_width=topomap_data.get("image_width", 640),
+            image_height=topomap_data.get("image_height", 360),
+            output_dir=topomap_data.get("output_dir", "/tmp/costnav_topomap"),
+            camera_prim_path=topomap_data.get("camera_prim_path", "/World/topomap_camera"),
+            render_settle_steps=topomap_data.get("render_settle_steps", 3),
+            focal_length=topomap_data.get("focal_length", 2.87343),
+            horizontal_aperture=topomap_data.get("horizontal_aperture", 5.76),
+            vertical_aperture=topomap_data.get("vertical_aperture", 3.6),
+            focus_distance=topomap_data.get("focus_distance", 0.6),
+        )
+
         # Parse manager config (MissionManager runtime settings)
         manager_data = data.get("manager", {})
         manager_config = MissionManagerConfig(
@@ -274,6 +315,7 @@ class MissionConfig:
             food=food_config,
             injury=injury_config,
             goal_image=goal_image_config,
+            topomap=topomap_config,
             manager=manager_config,
         )
 

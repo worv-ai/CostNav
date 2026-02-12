@@ -29,6 +29,7 @@ from costnav_isaacsim.config import (
     Nav2Config,
     SamplingConfig,
     TeleportConfig,
+    TopoMapConfig,
     load_mission_config,
 )
 
@@ -237,6 +238,45 @@ class TestGoalImageConfig:
         assert config.camera_height_offset == 0.5
 
 
+class TestTopoMapConfig:
+    """Tests for TopoMapConfig dataclass."""
+
+    def test_default_values(self):
+        """Test TopoMapConfig default values."""
+        config = TopoMapConfig()
+        assert config.enabled is False
+        assert config.waypoint_interval == 0.5
+        assert config.camera_height_offset == 0.3
+        assert config.image_width == 640
+        assert config.image_height == 360
+        assert config.output_dir == "/tmp/costnav_topomap"
+        assert config.camera_prim_path == "/World/topomap_camera"
+        assert config.render_settle_steps == 3
+        assert config.focal_length == 2.87343
+        assert config.horizontal_aperture == 5.76
+        assert config.vertical_aperture == 3.6
+        assert config.focus_distance == 0.6
+
+    def test_custom_values(self):
+        """Test TopoMapConfig with custom values."""
+        config = TopoMapConfig(
+            enabled=True,
+            waypoint_interval=1.0,
+            camera_height_offset=0.5,
+            image_width=1280,
+            image_height=720,
+            output_dir="/custom/topomap",
+            render_settle_steps=5,
+        )
+        assert config.enabled is True
+        assert config.waypoint_interval == 1.0
+        assert config.camera_height_offset == 0.5
+        assert config.image_width == 1280
+        assert config.image_height == 720
+        assert config.output_dir == "/custom/topomap"
+        assert config.render_settle_steps == 5
+
+
 class TestMissionManagerConfig:
     """Tests for MissionManagerConfig dataclass."""
 
@@ -298,6 +338,7 @@ class TestMissionConfig:
         assert isinstance(config.food, FoodConfig)
         assert isinstance(config.injury, InjuryConfig)
         assert isinstance(config.goal_image, GoalImageConfig)
+        assert isinstance(config.topomap, TopoMapConfig)
         assert isinstance(config.manager, MissionManagerConfig)
 
     def test_custom_values(self):
@@ -471,6 +512,46 @@ class TestMissionConfigFromDict:
         assert config.goal_image.height == 720
         assert config.goal_image.camera_height_offset == 0.5
         assert config.goal_image.camera_prim_path == "/World/custom_camera"
+
+    def test_topomap_parsing(self):
+        """Test topomap config parsing from dict."""
+        data = {
+            "topomap": {
+                "enabled": True,
+                "waypoint_interval": 1.0,
+                "camera_height_offset": 0.5,
+                "image_width": 1280,
+                "image_height": 720,
+                "output_dir": "/custom/topomap",
+                "camera_prim_path": "/World/custom_topomap_camera",
+                "render_settle_steps": 5,
+                "focal_length": 3.0,
+                "horizontal_aperture": 6.0,
+                "vertical_aperture": 4.0,
+                "focus_distance": 1.0,
+            }
+        }
+        config = MissionConfig.from_dict(data)
+        assert config.topomap.enabled is True
+        assert config.topomap.waypoint_interval == 1.0
+        assert config.topomap.camera_height_offset == 0.5
+        assert config.topomap.image_width == 1280
+        assert config.topomap.image_height == 720
+        assert config.topomap.output_dir == "/custom/topomap"
+        assert config.topomap.camera_prim_path == "/World/custom_topomap_camera"
+        assert config.topomap.render_settle_steps == 5
+        assert config.topomap.focal_length == 3.0
+        assert config.topomap.horizontal_aperture == 6.0
+        assert config.topomap.vertical_aperture == 4.0
+        assert config.topomap.focus_distance == 1.0
+
+    def test_topomap_defaults_when_missing(self):
+        """Test that topomap config uses defaults when section is missing."""
+        config = MissionConfig.from_dict({})
+        assert config.topomap.enabled is False
+        assert config.topomap.waypoint_interval == 0.5
+        assert config.topomap.image_width == 640
+        assert config.topomap.image_height == 360
 
     def test_manager_parsing(self):
         """Test manager config parsing from dict."""
