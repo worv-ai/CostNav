@@ -122,6 +122,37 @@ goal_image:
   # USD prim path for goal camera
   camera_prim_path: "/World/goal_camera"
 
+# Topomap generation settings (NavMesh-based)
+# Generates ViNT-compatible topological maps by capturing images along NavMesh shortest paths
+topomap:
+  # Enable automatic topomap generation from NavMesh paths
+  enabled: false
+
+  # Distance between waypoints along the path (meters)
+  waypoint_interval: 0.5
+
+  # Camera height offset from ground (meters)
+  camera_height_offset: 0.3
+
+  # Image dimensions (matches ViNT input)
+  image_width: 640
+  image_height: 360
+
+  # Output directory for generated topomap images
+  output_dir: "/tmp/costnav_topomap"
+
+  # USD prim path for topomap camera
+  camera_prim_path: "/World/topomap_camera"
+
+  # Number of simulation steps per image capture (for render pipeline flush)
+  render_settle_steps: 3
+
+  # Camera intrinsics (matching rgb_left.usda)
+  focal_length: 2.87343
+  horizontal_aperture: 5.76
+  vertical_aperture: 3.6
+  focus_distance: 0.6
+
 # MissionManager runtime settings
 # These control the mission execution behavior
 manager:
