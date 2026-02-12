@@ -7,6 +7,32 @@
 This node subscribes to camera images, runs ViNT inference,
 and publishes trajectory to /vint_trajectory for the trajectory follower node.
 
+Supports three navigation modes:
+1. **NoGoal** (default) — exploration without a goal image.
+2. **ImageGoal** (``--use_imagegoal``) — navigate toward a single goal image.
+3. **Topomap** (``--use_topomap``) — follow a topological map generated
+   online in simulation by the NavMesh-to-Topomap pipeline
+   (see ``TOPOMAP_PIPELINE.md``).
+
+Topomap Navigation
+------------------
+The topomap is a directory of sequentially numbered PNGs (``0.png``, ``1.png``,
+…, ``N.png``) produced by ``TopomapGenerator``.  At each inference step the node:
+
+1. Selects a local window of subgoal images around ``closest_node``
+   (controlled by ``--topomap_radius``).
+2. Runs batched ViNT inference to predict distances from the current
+   observation to each subgoal in the window.
+3. Localises to the closest node (``argmin`` of predicted distances).
+4. If the distance to the closest node is below ``--topomap_close_threshold``,
+   advances ``closest_node`` by one.
+5. Publishes the trajectory toward the chosen subgoal.
+6. Publishes ``reached_goal=True`` on ``/vint_reached_goal`` when
+   ``closest_node == goal_node``.
+
+This mirrors the navigation loop in ViNT's ``navigate.py`` but runs inside
+the CostNav ROS 2 stack.
+
 For ImageGoal mode, the node receives goal images via:
 1. /goal_image topic - Published by the mission manager when a new mission starts
 2. /set_goal_image service - Service to set the goal image programmatically
@@ -16,16 +42,26 @@ Following the NavDP pattern, when a new goal image is received:
 - The new goal image is stored and used for subsequent inference
 
 Usage:
-    python3 vint_policy_node.py \
-        --checkpoint /path/to/model.pth \
-        --model_config /path/to/config.yaml \
-        --robot_config /path/to/robot.yaml \
+    # ImageGoal mode
+    python3 vint_policy_node.py \\
+        --checkpoint /path/to/model.pth \\
+        --model_config /path/to/config.yaml \\
+        --robot_config /path/to/robot.yaml \\
         --use_imagegoal
+
+    # Topomap mode
+    python3 vint_policy_node.py \\
+        --checkpoint /path/to/model.pth \\
+        --model_config /path/to/config.yaml \\
+        --robot_config /path/to/robot.yaml \\
+        --use_topomap --topomap_dir /tmp/costnav_topomap
 """
 
 import argparse
 import os
-from typing import Optional
+from typing import List, Optional
+
+from PIL import Image as PILImage
 
 import numpy as np
 import rclpy
@@ -45,17 +81,25 @@ from il_evaluation.agents.vint_agent import ViNTAgent
 class ViNTPolicyNode(Node):
     """ROS2 Node for ViNT policy inference.
 
+    Supports three navigation modes (mutually exclusive):
+
+    * **NoGoal** — exploration without a goal.
+    * **ImageGoal** — navigate toward a single goal image received on a topic.
+    * **Topomap** — follow a topological map (directory of numbered PNGs).
+      The topomap is generated online in simulation by ``TopomapGenerator``
+      from the NavMesh-to-Topomap pipeline.
+
     Subscribes to:
         - /front_stereo_camera/left/image_raw (sensor_msgs/Image)
         - /goal_image (sensor_msgs/Image) - for ImageGoal mode (latched/transient local QoS)
         - /vint_enable (std_msgs/Bool) - enable/disable policy execution
 
     Services:
-        - /set_goal_image (std_srvs/SetGoalImage) - set goal image programmatically
-        - /reset_agent (std_srvs/Trigger) - reset agent memory queue for new mission
+        - /vint_reset_agent (std_srvs/Trigger) - reset agent memory queue for new mission
 
     Publishes:
         - /vint_trajectory (nav_msgs/Path) - full trajectory for trajectory follower node
+        - /vint_reached_goal (std_msgs/Bool) - True when topomap goal node is reached
 
     Parameters:
         - checkpoint: Path to trained model weights
@@ -64,6 +108,11 @@ class ViNTPolicyNode(Node):
         - inference_rate: Inference frequency in Hz (default: 10.0)
         - image_topic: Camera image topic (default: /front_stereo_camera/left/image_raw)
         - use_imagegoal: Whether to use image goal navigation (default: False)
+        - use_topomap: Whether to use topomap navigation (default: False)
+        - topomap_dir: Directory containing numbered PNG images for topomap mode
+        - topomap_goal_node: Goal node index (-1 = last node)
+        - topomap_radius: Number of local nodes to consider for localization
+        - topomap_close_threshold: Temporal distance threshold to advance closest node
     """
 
     def __init__(
@@ -77,6 +126,11 @@ class ViNTPolicyNode(Node):
         device: str = "cuda:0",
         goal_image_topic: str = "/goal_image",
         visualize_goal_image: bool = False,
+        use_topomap: bool = False,
+        topomap_dir: str = "",
+        topomap_goal_node: int = -1,
+        topomap_radius: int = 4,
+        topomap_close_threshold: float = 3.0,
     ):
         super().__init__("vint_policy_node")
 
@@ -85,6 +139,7 @@ class ViNTPolicyNode(Node):
         self.use_imagegoal = use_imagegoal
         self.goal_image_topic = goal_image_topic
         self.visualize_goal_image = visualize_goal_image
+        self.use_topomap = use_topomap
 
         # Validate parameters
         if not checkpoint or not os.path.exists(checkpoint):
@@ -116,6 +171,22 @@ class ViNTPolicyNode(Node):
         self.goal_image: Optional[np.ndarray] = None
         self.enabled = True  # Control enable flag
         self._goal_image_received = False  # Track if goal image was received for current mission
+
+        # Topomap state
+        self.topomap: List[PILImage.Image] = []
+        self._topomap_closest_node: int = 0
+        self._topomap_goal_node: int = 0
+        self._topomap_radius: int = topomap_radius
+        self._topomap_close_threshold: float = topomap_close_threshold
+        self._topomap_reached_goal: bool = False
+
+        if self.use_topomap:
+            if use_imagegoal:
+                self.get_logger().warn(
+                    "Both --use_topomap and --use_imagegoal set. Topomap mode takes priority."
+                )
+                self.use_imagegoal = False
+            self._load_topomap(topomap_dir, topomap_goal_node)
 
         # Logging counters for interval-based logging
         self._trajectory_publish_count = 0
@@ -156,6 +227,7 @@ class ViNTPolicyNode(Node):
 
         # Publishers
         self.trajectory_pub = self.create_publisher(Path, "/vint_trajectory", 10)
+        self.reached_goal_pub = self.create_publisher(Bool, "/vint_reached_goal", 10)
 
         # Debug publisher for visualizing received goal image
         self._received_goal_image_pub = None
@@ -170,8 +242,67 @@ class ViNTPolicyNode(Node):
         self.get_logger().info(f"ViNT policy node started. Inference rate: {self.inference_rate} Hz")
         self.get_logger().info(f"Subscribing to: {image_topic}")
         self.get_logger().info("Publishing trajectory to: /vint_trajectory")
-        if self.use_imagegoal:
+        if self.use_topomap:
+            self.get_logger().info(
+                f"Topomap mode: {len(self.topomap)} nodes, "
+                f"goal_node={self._topomap_goal_node}, radius={self._topomap_radius}"
+            )
+        elif self.use_imagegoal:
             self.get_logger().info("Waiting for goal image to start image-goal navigation...")
+
+    # ------------------------------------------------------------------
+    # Topomap helpers
+    # ------------------------------------------------------------------
+
+    def _load_topomap(self, topomap_dir: str, goal_node: int) -> None:
+        """Load a topomap from a directory of numbered PNG images.
+
+        Images are sorted by their integer filename prefix (``0.png``,
+        ``1.png``, …) which matches the format produced by
+        ``TopomapGenerator`` and expected by ViNT's ``navigate.py``.
+
+        Args:
+            topomap_dir: Path to the directory containing topomap images.
+            goal_node: Goal node index.  ``-1`` means the last node.
+
+        Raises:
+            ValueError: If the directory is empty or does not exist.
+        """
+        if not topomap_dir or not os.path.isdir(topomap_dir):
+            raise ValueError(f"Topomap directory not found: {topomap_dir}")
+
+        filenames = sorted(
+            os.listdir(topomap_dir),
+            key=lambda x: int(x.split(".")[0]),
+        )
+        if not filenames:
+            raise ValueError(f"Topomap directory is empty: {topomap_dir}")
+
+        self.topomap = []
+        for fname in filenames:
+            img_path = os.path.join(topomap_dir, fname)
+            self.topomap.append(PILImage.open(img_path).convert("RGB"))
+
+        num_nodes = len(self.topomap)
+        if goal_node == -1:
+            self._topomap_goal_node = num_nodes - 1
+        else:
+            assert 0 <= goal_node < num_nodes, (
+                f"Invalid goal_node {goal_node} for topomap with {num_nodes} nodes"
+            )
+            self._topomap_goal_node = goal_node
+
+        self._topomap_closest_node = 0
+        self._topomap_reached_goal = False
+
+        self.get_logger().info(
+            f"Loaded topomap from {topomap_dir}: {num_nodes} nodes, "
+            f"goal_node={self._topomap_goal_node}"
+        )
+
+    # ------------------------------------------------------------------
+    # ROS callbacks
+    # ------------------------------------------------------------------
 
     def image_callback(self, msg: Image):
         """Process incoming camera image."""
@@ -233,6 +364,9 @@ class ViNTPolicyNode(Node):
             self.agent.reset(batch_size=1)
             self.goal_image = None
             self._goal_image_received = False
+            # Reset topomap navigation state
+            self._topomap_closest_node = 0
+            self._topomap_reached_goal = False
             response.success = True
             response.message = "ViNT agent memory queue reset successfully"
             self.get_logger().info("Agent reset via service call")
@@ -258,39 +392,141 @@ class ViNTPolicyNode(Node):
 
         # In imagegoal mode, wait for goal image before starting inference
         if self.use_imagegoal and self.goal_image is None:
-            # Don't log every iteration, just skip silently
             return
 
         try:
-            # Run inference based on mode
-            if self.use_imagegoal and self.goal_image is not None:
-                _, trajectory, distance = self.agent.step_imagegoal([self.goal_image], [self.current_image])
+            if self.use_topomap:
+                self._inference_topomap()
+            elif self.use_imagegoal and self.goal_image is not None:
+                self._inference_imagegoal()
             else:
-                _, trajectory = self.agent.step_nogoal([self.current_image])
-                distance = None
-
-            # Publish full trajectory for trajectory follower node
-            trajectory_msg = self.trajectory_to_path(trajectory[0])
-            self.trajectory_pub.publish(trajectory_msg)
-
-            # Log trajectory publish at interval
-            self._trajectory_publish_count += 1
-            if self._trajectory_publish_count % self._log_interval == 0:
-                traj = trajectory[0]
-                if hasattr(traj, "cpu"):
-                    traj = traj.cpu().numpy()
-                traj_len = len(traj)
-                # Get last waypoint from smoothed trajectory
-                last_wp = traj[-1] if traj_len > 0 else [0, 0]
-
-                dist_str = f", dist={float(distance[0]):.2f}" if distance is not None else ""
-                self.get_logger().info(
-                    f"[ViNT] #{self._trajectory_publish_count}: "
-                    f"traj_last=({last_wp[0]:.2f}, {last_wp[1]:.2f}){dist_str}"
-                )
-
+                self._inference_nogoal()
         except Exception as e:
             self.get_logger().error(f"Inference error: {e}")
+
+    # ------------------------------------------------------------------
+    # Per-mode inference helpers
+    # ------------------------------------------------------------------
+
+    def _inference_imagegoal(self) -> None:
+        """ImageGoal mode: navigate toward a single goal image."""
+        _, trajectory, distance = self.agent.step_imagegoal(
+            [self.goal_image], [self.current_image]
+        )
+        self._publish_trajectory(trajectory[0], distance=float(distance[0]))
+
+    def _inference_nogoal(self) -> None:
+        """NoGoal mode: exploration without a goal."""
+        _, trajectory = self.agent.step_nogoal([self.current_image])
+        self._publish_trajectory(trajectory[0])
+
+    def _inference_topomap(self) -> None:
+        """Topomap mode: follow a topological map.
+
+        Implements the navigation loop from ViNT's ``navigate.py``:
+        1. Select a local window of subgoal images around ``closest_node``.
+        2. Run batched inference to predict distances to each subgoal.
+        3. Localise to the closest node and optionally advance.
+        4. Publish the trajectory toward the chosen subgoal.
+        5. Publish ``reached_goal`` status.
+        """
+        if self._topomap_reached_goal:
+            # Already reached goal — keep publishing reached_goal=True
+            goal_msg = Bool()
+            goal_msg.data = True
+            self.reached_goal_pub.publish(goal_msg)
+            return
+
+        # Build local window around closest_node
+        start = max(self._topomap_closest_node - self._topomap_radius, 0)
+        end = min(
+            self._topomap_closest_node + self._topomap_radius + 1,
+            self._topomap_goal_node,
+        )
+        subgoal_images = self.topomap[start : end + 1]
+
+        if not subgoal_images:
+            return
+
+        # Batched inference against the subgoal window
+        _, trajectory, distances_np, chosen_idx = self.agent.step_topomap(
+            [self.current_image],
+            subgoal_images,
+            close_threshold=self._topomap_close_threshold,
+        )
+
+        # Update closest_node in global topomap coordinates
+        min_dist_idx = int(np.argmin(distances_np))
+        min_dist = float(distances_np[min_dist_idx])
+        if min_dist > self._topomap_close_threshold:
+            action = "track"
+            self._topomap_closest_node = start + min_dist_idx
+        else:
+            action = "advance"
+            self._topomap_closest_node = min(
+                start + min_dist_idx + 1, self._topomap_goal_node
+            )
+
+        # Enhanced logging for topomap inference
+        if self._trajectory_publish_count % self._log_interval == 0:
+            dists_str = ", ".join(f"{d:.2f}" for d in distances_np)
+            self.get_logger().info(
+                f"[Topomap] window=[{start}:{end}] ({len(subgoal_images)} nodes), "
+                f"distances=[{dists_str}], "
+                f"min_dist={min_dist:.2f} @local={min_dist_idx} "
+                f"(global={start + min_dist_idx}), "
+                f"chosen_idx={chosen_idx} (global={start + chosen_idx}), "
+                f"action={action}, "
+                f"closest_node={self._topomap_closest_node}/{self._topomap_goal_node}"
+            )
+
+        # Check if goal reached
+        self._topomap_reached_goal = (
+            self._topomap_closest_node == self._topomap_goal_node
+        )
+
+        # Publish trajectory
+        self._publish_trajectory(
+            trajectory[0],
+            distance=float(distances_np[chosen_idx]),
+            closest_node=self._topomap_closest_node,
+        )
+
+        # Publish reached_goal status
+        goal_msg = Bool()
+        goal_msg.data = self._topomap_reached_goal
+        self.reached_goal_pub.publish(goal_msg)
+
+        if self._topomap_reached_goal:
+            self.get_logger().info("Topomap goal reached!")
+
+    def _publish_trajectory(
+        self,
+        trajectory,
+        distance: Optional[float] = None,
+        closest_node: Optional[int] = None,
+    ) -> None:
+        """Publish trajectory and log at interval."""
+        trajectory_msg = self.trajectory_to_path(trajectory)
+        self.trajectory_pub.publish(trajectory_msg)
+
+        self._trajectory_publish_count += 1
+        if self._trajectory_publish_count % self._log_interval == 0:
+            traj = trajectory
+            if hasattr(traj, "cpu"):
+                traj = traj.cpu().numpy()
+            traj_len = len(traj)
+            last_wp = traj[-1] if traj_len > 0 else [0, 0]
+
+            extra = ""
+            if distance is not None:
+                extra += f", dist={distance:.2f}"
+            if closest_node is not None:
+                extra += f", node={closest_node}/{self._topomap_goal_node}"
+            self.get_logger().info(
+                f"[ViNT] #{self._trajectory_publish_count}: "
+                f"traj_last=({last_wp[0]:.2f}, {last_wp[1]:.2f}){extra}"
+            )
 
     def trajectory_to_path(self, trajectory: np.ndarray) -> Path:
         """Convert ViNT trajectory output to nav_msgs/Path message.
@@ -391,6 +627,36 @@ def parse_args():
         action="store_true",
         help="Publish received goal image to /received_goal_image for debugging (default: False)",
     )
+    # Topomap navigation arguments
+    parser.add_argument(
+        "--use_topomap",
+        action="store_true",
+        help="Use topomap navigation mode (directory of numbered PNGs)",
+    )
+    parser.add_argument(
+        "--topomap_dir",
+        type=str,
+        default="/tmp/costnav_topomap",
+        help="Directory containing topomap images (default: /tmp/costnav_topomap)",
+    )
+    parser.add_argument(
+        "--topomap_goal_node",
+        type=int,
+        default=-1,
+        help="Goal node index in the topomap (-1 = last node) (default: -1)",
+    )
+    parser.add_argument(
+        "--topomap_radius",
+        type=int,
+        default=4,
+        help="Number of local nodes to consider for localization (default: 4)",
+    )
+    parser.add_argument(
+        "--topomap_close_threshold",
+        type=float,
+        default=3.0,
+        help="Temporal distance threshold to advance closest node (default: 3.0)",
+    )
     parser.add_argument(
         "--log_level",
         type=str,
@@ -418,6 +684,11 @@ def main():
             device=args.device,
             goal_image_topic=args.goal_image_topic,
             visualize_goal_image=args.visualize_goal_image,
+            use_topomap=args.use_topomap,
+            topomap_dir=args.topomap_dir,
+            topomap_goal_node=args.topomap_goal_node,
+            topomap_radius=args.topomap_radius,
+            topomap_close_threshold=args.topomap_close_threshold,
         )
         # Set log level
         log_level_map = {

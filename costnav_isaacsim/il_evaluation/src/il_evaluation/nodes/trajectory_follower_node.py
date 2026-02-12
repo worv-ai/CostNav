@@ -48,6 +48,7 @@ from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from scipy.interpolate import interp1d
 from std_msgs.msg import Bool
 from transforms3d.euler import quat2euler
+from transforms3d.quaternions import quat2mat
 
 
 class MPCController:
@@ -393,7 +394,11 @@ class TrajectoryFollowerNode(Node):
             self.get_logger().error(f"Failed to process trajectory: {e}")
 
     def _transform_to_world_frame(self, local_trajectory: np.ndarray) -> np.ndarray:
-        """Transform trajectory from robot-local frame to world frame.
+        """Transform trajectory from robot-local frame to world frame using full 3D rotation.
+
+        Uses the full quaternion-based 3D rotation matrix instead of yaw-only
+        2D rotation, so that the transformation remains accurate even when the
+        robot has non-zero roll or pitch (e.g. on slopes).
 
         Args:
             local_trajectory: Trajectory [N, 2] in robot-local frame.
@@ -409,20 +414,19 @@ class TrajectoryFollowerNode(Node):
         quat = self.current_odom.pose.pose.orientation
         robot_x, robot_y = pos.x, pos.y
 
-        # Convert quaternion to yaw angle using transforms3d
-        # transforms3d uses (w, x, y, z) order, returns (ai, aj, ak) = (roll, pitch, yaw) for 'sxyz' axes
-        _, _, robot_theta = quat2euler([quat.w, quat.x, quat.y, quat.z])
+        # Get full 3D rotation matrix from quaternion
+        # transforms3d quat2mat uses (w, x, y, z) order → 3×3 rotation matrix
+        rotation_matrix = quat2mat([quat.w, quat.x, quat.y, quat.z])
 
-        # Rotation matrix
-        cos_theta = np.cos(robot_theta)
-        sin_theta = np.sin(robot_theta)
-
-        # Transform each point
+        # Transform each point using full 3D rotation
         world_trajectory = np.zeros_like(local_trajectory)
         for i, point in enumerate(local_trajectory):
-            # Rotate and translate
-            world_trajectory[i, 0] = robot_x + cos_theta * point[0] - sin_theta * point[1]
-            world_trajectory[i, 1] = robot_y + sin_theta * point[0] + cos_theta * point[1]
+            # Extend 2D point to 3D (z=0 for ground-plane trajectory)
+            point_3d = np.array([point[0], point[1], 0.0])
+            # Apply rotation and translation
+            rotated = rotation_matrix @ point_3d
+            world_trajectory[i, 0] = robot_x + rotated[0]
+            world_trajectory[i, 1] = robot_y + rotated[1]
 
         return world_trajectory
 
