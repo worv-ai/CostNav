@@ -126,13 +126,14 @@ class TopoMapConfig:
     """
 
     enabled: bool = False  # Enable topomap generation
-    waypoint_interval: float = 0.5  # Distance between waypoints in meters
+    waypoint_interval: float = 2.0  # Distance between waypoints in meters
     camera_height_offset: float = 0.3  # Camera height above ground (meters)
     image_width: int = 640  # Captured image width (pixels)
     image_height: int = 360  # Captured image height (pixels)
     output_dir: str = "/tmp/costnav_topomap"  # Default output directory
     camera_prim_path: str = "/World/topomap_camera"  # USD prim path for topomap camera
     render_settle_steps: int = 3  # Simulation steps per capture for render pipeline flush
+    robot_prim_path: Optional[str] = None  # Robot prim path to hide during capture
     # Camera intrinsics (matching rgb_left.usda parameters)
     focal_length: float = 2.87343
     horizontal_aperture: float = 5.76
@@ -275,13 +276,14 @@ class MissionConfig:
         topomap_data = data.get("topomap", {})
         topomap_config = TopoMapConfig(
             enabled=topomap_data.get("enabled", False),
-            waypoint_interval=topomap_data.get("waypoint_interval", 0.5),
+            waypoint_interval=topomap_data.get("waypoint_interval", 2.0),
             camera_height_offset=topomap_data.get("camera_height_offset", 0.3),
             image_width=topomap_data.get("image_width", 640),
             image_height=topomap_data.get("image_height", 360),
             output_dir=topomap_data.get("output_dir", "/tmp/costnav_topomap"),
             camera_prim_path=topomap_data.get("camera_prim_path", "/World/topomap_camera"),
             render_settle_steps=topomap_data.get("render_settle_steps", 3),
+            robot_prim_path=topomap_data.get("robot_prim_path", teleport_data.get("robot_prim")),
             focal_length=topomap_data.get("focal_length", 2.87343),
             horizontal_aperture=topomap_data.get("horizontal_aperture", 5.76),
             vertical_aperture=topomap_data.get("vertical_aperture", 3.6),
