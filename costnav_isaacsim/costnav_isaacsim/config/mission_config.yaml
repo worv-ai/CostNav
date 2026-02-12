@@ -129,7 +129,7 @@ topomap:
   enabled: false
 
   # Distance between waypoints along the path (meters)
-  waypoint_interval: 0.5
+  waypoint_interval: 2.0
 
   # Camera height offset from ground (meters)
   camera_height_offset: 0.3
@@ -146,6 +146,10 @@ topomap:
 
   # Number of simulation steps per image capture (for render pipeline flush)
   render_settle_steps: 3
+
+  # Robot prim path to hide during image capture (prevents robot from appearing in images)
+  # If not set, falls back to teleport.robot_prim
+  # robot_prim_path: "/World/Nova_Carter_ROS"
 
   # Camera intrinsics (matching rgb_left.usda)
   focal_length: 2.87343

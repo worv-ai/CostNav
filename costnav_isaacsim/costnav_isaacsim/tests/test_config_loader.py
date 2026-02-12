@@ -245,13 +245,14 @@ class TestTopoMapConfig:
         """Test TopoMapConfig default values."""
         config = TopoMapConfig()
         assert config.enabled is False
-        assert config.waypoint_interval == 0.5
+        assert config.waypoint_interval == 2.0
         assert config.camera_height_offset == 0.3
         assert config.image_width == 640
         assert config.image_height == 360
         assert config.output_dir == "/tmp/costnav_topomap"
         assert config.camera_prim_path == "/World/topomap_camera"
         assert config.render_settle_steps == 3
+        assert config.robot_prim_path is None
         assert config.focal_length == 2.87343
         assert config.horizontal_aperture == 5.76
         assert config.vertical_aperture == 3.6
@@ -549,7 +550,7 @@ class TestMissionConfigFromDict:
         """Test that topomap config uses defaults when section is missing."""
         config = MissionConfig.from_dict({})
         assert config.topomap.enabled is False
-        assert config.topomap.waypoint_interval == 0.5
+        assert config.topomap.waypoint_interval == 2.0
         assert config.topomap.image_width == 640
         assert config.topomap.image_height == 360
 

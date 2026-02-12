@@ -21,6 +21,7 @@ Reference:
 
 from __future__ import annotations
 
+import glob
 import logging
 import math
 import os
@@ -45,7 +46,7 @@ class TopomapGenerator:
         from costnav_isaacsim.mission_manager import NavMeshSampler, TopomapGenerator
 
         sampler = NavMeshSampler(min_distance=5.0, max_distance=50.0)
-        config = TopoMapConfig(enabled=True, waypoint_interval=0.5)
+        config = TopoMapConfig(enabled=True, waypoint_interval=2.0)
         generator = TopomapGenerator(sampler, config, simulation_context)
 
         start, goal = sampler.sample_start_goal_pair()
@@ -146,43 +147,78 @@ class TopomapGenerator:
     @staticmethod
     def interpolate_waypoints(
         sparse_points: List[SampledPosition],
-        interval: float = 0.5,
+        interval: float = 2.0,
     ) -> List[SampledPosition]:
-        """Interpolate sparse waypoints at fixed distance intervals.
+        """Resample waypoints along the polyline at fixed arc-length intervals.
 
-        Inserts intermediate points between consecutive sparse waypoints
-        so that the resulting list has approximately uniform spacing.
-        Heading at each point is computed as the direction toward the next point.
+        Walks along the entire polyline defined by *sparse_points* and emits
+        a new waypoint every *interval* meters of arc length.  This both
+        **interpolates** (adds points on long segments) and **decimates**
+        (skips original vertices that are closer than *interval*).
+
+        Heading at each emitted point is the direction of the segment it
+        falls on.
 
         Args:
             sparse_points: Sparse waypoints from NavMesh path query.
-            interval: Distance between interpolated waypoints (meters).
+            interval: Target distance between resampled waypoints (meters).
 
         Returns:
-            Dense list of SampledPosition with headings set.
+            List of uniformly-spaced SampledPosition with headings set.
         """
         if len(sparse_points) < 2:
             return list(sparse_points)
 
+        # --- Build cumulative arc-length table --------------------------------
+        seg_lengths: List[float] = []
+        for i in range(len(sparse_points) - 1):
+            p0 = sparse_points[i]
+            p1 = sparse_points[i + 1]
+            dx = p1.x - p0.x
+            dy = p1.y - p0.y
+            seg_lengths.append(math.sqrt(dx * dx + dy * dy))
+
+        total_length = sum(seg_lengths)
+        if total_length < 1e-6:
+            return [sparse_points[0], sparse_points[-1]]
+
+        # --- Walk along the polyline, emitting a point every *interval* m -----
         dense_points: List[SampledPosition] = []
 
-        for seg_idx in range(len(sparse_points) - 1):
+        # Always emit the start point
+        first = sparse_points[0]
+        dx0 = sparse_points[1].x - first.x
+        dy0 = sparse_points[1].y - first.y
+        dense_points.append(
+            SampledPosition(
+                x=first.x,
+                y=first.y,
+                z=first.z,
+                heading=math.atan2(dy0, dx0),
+            )
+        )
+
+        next_emit_dist = interval  # arc-length at which the next point fires
+        cumulative = 0.0  # arc-length consumed so far
+
+        for seg_idx, seg_len in enumerate(seg_lengths):
+            if seg_len < 1e-9:
+                cumulative += seg_len
+                continue
+
             p0 = sparse_points[seg_idx]
             p1 = sparse_points[seg_idx + 1]
-
             dx = p1.x - p0.x
             dy = p1.y - p0.y
             dz = p1.z - p0.z
-            seg_len = math.sqrt(dx * dx + dy * dy)
-
-            if seg_len < 1e-6:
-                continue
-
             heading = math.atan2(dy, dx)
-            num_steps = max(1, int(seg_len / interval))
 
-            for step in range(num_steps):
-                t = step / num_steps
+            seg_start_cum = cumulative
+            seg_end_cum = cumulative + seg_len
+
+            # Emit all threshold crossings that fall inside this segment
+            while next_emit_dist <= seg_end_cum:
+                t = (next_emit_dist - seg_start_cum) / seg_len
                 dense_points.append(
                     SampledPosition(
                         x=p0.x + t * dx,
@@ -191,22 +227,22 @@ class TopomapGenerator:
                         heading=heading,
                     )
                 )
+                next_emit_dist += interval
 
-        # Add the final goal point with heading from the last segment
+            cumulative = seg_end_cum
+
+        # Always include the final goal point
         last = sparse_points[-1]
-        if len(sparse_points) >= 2:
-            prev = sparse_points[-2]
-            last_heading = math.atan2(last.y - prev.y, last.x - prev.x)
+        prev = sparse_points[-2]
+        last_heading = math.atan2(last.y - prev.y, last.x - prev.x)
+        # Avoid duplicate if the last emitted point is very close to the goal
+        if dense_points:
+            lp = dense_points[-1]
+            dist_to_last = math.sqrt((last.x - lp.x) ** 2 + (last.y - lp.y) ** 2)
+            if dist_to_last > interval * 0.1:
+                dense_points.append(SampledPosition(x=last.x, y=last.y, z=last.z, heading=last_heading))
         else:
-            last_heading = 0.0
-        dense_points.append(
-            SampledPosition(
-                x=last.x,
-                y=last.y,
-                z=last.z,
-                heading=last_heading,
-            )
-        )
+            dense_points.append(SampledPosition(x=last.x, y=last.y, z=last.z, heading=last_heading))
 
         logger.info(
             f"Interpolated {len(sparse_points)} sparse → {len(dense_points)} dense " f"waypoints (interval={interval}m)"
@@ -312,9 +348,11 @@ class TopomapGenerator:
 
             # Convert heading (yaw) to quaternion
             # euler2quat returns (w, x, y, z)
-            q = euler2quat(0, 0, position.heading)
+            # Add π to heading so the camera faces forward (toward the next
+            # waypoint) instead of backward.
+            q = euler2quat(0, 0, position.heading + math.pi)
             yaw_quat = Gf.Quatd(q[0], Gf.Vec3d(q[1], q[2], q[3]))
-            # Base camera orientation (ROS convention + 180deg rotation)
+            # Base camera orientation (USD camera -Z to ROS +X convention)
             base_quat = Gf.Quatd(0.5, Gf.Vec3d(0.5, 0.5, 0.5))
             final_quat = yaw_quat * base_quat
             orient_op.Set(final_quat)
@@ -388,6 +426,14 @@ class TopomapGenerator:
         from PIL import Image
 
         out_dir = output_dir or self._config.output_dir
+
+        # Clean previous topomap images so stale files from earlier missions
+        # don't persist and confuse the ViNT node when it reloads.
+        if os.path.isdir(out_dir):
+            for old_img in glob.glob(os.path.join(out_dir, "*.png")):
+                os.remove(old_img)
+            logger.info(f"[TOPOMAP] Cleaned previous images from {out_dir}")
+
         os.makedirs(out_dir, exist_ok=True)
 
         # Step 1: Query shortest path
@@ -397,6 +443,10 @@ class TopomapGenerator:
             return []
 
         # Step 2: Interpolate waypoints
+        logger.info(
+            f"[TOPOMAP] Using waypoint_interval={self._config.waypoint_interval}m, "
+            f"robot_prim_path={getattr(self._config, 'robot_prim_path', None)}"
+        )
         dense_waypoints = self.interpolate_waypoints(
             sparse_waypoints,
             self._config.waypoint_interval,
@@ -411,9 +461,13 @@ class TopomapGenerator:
         self.setup_camera()
 
         # Step 4 & 5: Capture and save images
+        # Skip the first waypoint (index 0) so the topomap starts at a safe
+        # distance from the robot, preventing the robot from appearing in the
+        # first captured image.  Saved images are still numbered from 0.png.
+        waypoints_to_capture = dense_waypoints[1:]
         saved_paths: List[str] = []
         try:
-            for i, waypoint in enumerate(dense_waypoints):
+            for i, waypoint in enumerate(waypoints_to_capture):
                 rgb_data = self.capture_image_at_position(waypoint)
                 if rgb_data is None:
                     logger.warning(f"[TOPOMAP] Skipping waypoint {i}: capture failed")
@@ -424,8 +478,8 @@ class TopomapGenerator:
                 img.save(img_path)
                 saved_paths.append(img_path)
 
-                if (i + 1) % 50 == 0 or i == len(dense_waypoints) - 1:
-                    logger.info(f"[TOPOMAP] Progress: {i + 1}/{len(dense_waypoints)} images saved")
+                if (i + 1) % 50 == 0 or i == len(waypoints_to_capture) - 1:
+                    logger.info(f"[TOPOMAP] Progress: {i + 1}/{len(waypoints_to_capture)} images saved")
         finally:
             # Step 6: Cleanup
             self.cleanup_camera()

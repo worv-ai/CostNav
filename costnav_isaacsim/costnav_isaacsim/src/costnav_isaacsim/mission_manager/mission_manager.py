@@ -125,6 +125,9 @@ class MissionManager:
         self._vint_enable_pub = None
         self._trajectory_follower_enable_pub = None
 
+        # ViNT topomap reload service client (initialized in _initialize)
+        self._vint_load_topomap_srv = None
+
         # Nav2 costmap clear service clients (initialized in _initialize)
         self._clear_costmap_global_srv = None
         self._clear_costmap_local_srv = None
@@ -175,6 +178,9 @@ class MissionManager:
         self._goal_render_product = None  # Omni replicator render product
         self._goal_rgb_annotator = None  # RGB annotator for goal image capture
         self._goal_image_pub = None  # ROS2 publisher for goal images
+
+        # Topomap generator (NavMesh-based topological map for ViNT)
+        self._topomap_generator = None
 
     def _get_current_time_seconds(self) -> float:
         """Get current time in seconds from ROS clock.
@@ -328,6 +334,12 @@ class MissionManager:
             if self.config.goal_image.enabled:
                 self._setup_goal_image_publisher(pose_qos)
                 self._setup_goal_camera()
+
+            # Setup topomap generator if enabled
+            if self.config.topomap.enabled:
+                self._setup_topomap_generator()
+                # Service client to tell the ViNT node to (re)load the topomap
+                self._vint_load_topomap_srv = self._node.create_client(Trigger, "/vint_load_topomap")
 
             # Setup food tracking if enabled
             self._evaluation.setup_food_tracking()
@@ -629,6 +641,76 @@ class MissionManager:
 
             logger.error(f"[GOAL_IMAGE] {traceback.format_exc()}")
             return False
+
+    def _setup_topomap_generator(self) -> None:
+        """Initialize the TopomapGenerator for NavMesh-based topomap generation."""
+        try:
+            from .topomap_generator import TopomapGenerator
+
+            self._topomap_generator = TopomapGenerator(
+                sampler=self._sampler,
+                config=self.config.topomap,
+                simulation_context=self.simulation_context,
+            )
+            logger.info("[TOPOMAP] TopomapGenerator initialized")
+        except Exception as exc:
+            logger.error(f"[TOPOMAP] Failed to initialize TopomapGenerator: {exc}")
+            import traceback
+
+            logger.error(f"[TOPOMAP] {traceback.format_exc()}")
+            self._topomap_generator = None
+            self.config.topomap.enabled = False
+
+    def _generate_topomap(self, start, goal) -> None:
+        """Generate topomap images along NavMesh shortest path from start to goal.
+
+        After generating the images, calls the ``/vint_load_topomap`` service
+        so the ViNT policy node loads the fresh topomap for this mission.
+
+        Args:
+            start: Start position (SampledPosition).
+            goal: Goal position (SampledPosition).
+        """
+        try:
+            saved_paths = self._topomap_generator.generate_topomap(start, goal)
+            if saved_paths:
+                logger.info(f"[TOPOMAP] Generated {len(saved_paths)} images → {self.config.topomap.output_dir}")
+                # Tell the ViNT node to (re)load the topomap
+                self._call_vint_load_topomap()
+            else:
+                logger.warning("[TOPOMAP] Topomap generation returned no images")
+        except Exception as exc:
+            logger.error(f"[TOPOMAP] Failed to generate topomap: {exc}")
+            import traceback
+
+            logger.error(f"[TOPOMAP] {traceback.format_exc()}")
+
+    def _call_vint_load_topomap(self) -> None:
+        """Call /vint_load_topomap service to make the ViNT node reload the topomap."""
+        if self._vint_load_topomap_srv is None:
+            return
+
+        from std_srvs.srv import Trigger
+
+        if not self._vint_load_topomap_srv.wait_for_service(timeout_sec=5.0):
+            logger.warning("[TOPOMAP] /vint_load_topomap service not available (timeout)")
+            return
+
+        future = self._vint_load_topomap_srv.call_async(Trigger.Request())
+        # Spin until the response arrives (bounded wait)
+        try:
+            rclpy = __import__("rclpy")
+            rclpy.spin_until_future_complete(self._node, future, timeout_sec=10.0)
+            if future.result() is not None:
+                resp = future.result()
+                if resp.success:
+                    logger.info(f"[TOPOMAP] ViNT topomap reloaded: {resp.message}")
+                else:
+                    logger.warning(f"[TOPOMAP] ViNT topomap reload failed: {resp.message}")
+            else:
+                logger.warning("[TOPOMAP] /vint_load_topomap service call timed out")
+        except Exception as exc:
+            logger.error(f"[TOPOMAP] Error calling /vint_load_topomap: {exc}")
 
     def handle_simulation_restart(self, stage_reloaded: bool = False) -> None:
         """Refresh cached sim handles after stop/reset or stage reload."""
@@ -1274,6 +1356,10 @@ class MissionManager:
             # Capture and publish goal image for ViNT ImageGoal mode
             if self.config.goal_image.enabled:
                 self._capture_and_publish_goal_image(self._current_goal)
+
+            # Generate topomap for ViNT navigation
+            if self.config.topomap.enabled and self._topomap_generator is not None:
+                self._generate_topomap(self._current_start, self._current_goal)
 
             # Update RViz markers
             self._marker_publisher.publish_start_goal_from_sampled(self._current_start, self._current_goal)
