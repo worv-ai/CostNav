@@ -7,6 +7,7 @@ FROM ubuntu:24.04 AS base
 
 # uv handles Python installs
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+ENV UV_LINK_MODE=copy
 
 # System packages
 RUN apt-get update && apt-get install -y \
@@ -25,6 +26,7 @@ FROM nvcr.io/nvidia/isaac-sim:${ISAAC_SIM_VERSION} AS isaac-sim
 
 # Reuse uv binary
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+ENV UV_LINK_MODE=copy
 
 # Install git for version control
 USER root
@@ -92,6 +94,7 @@ FROM nvcr.io/nvidia/isaac-sim:${ISAAC_SIM_VERSION} AS isaac-lab
 
 # uv + git for installs
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+ENV UV_LINK_MODE=copy
 
 USER root
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*

@@ -6,6 +6,7 @@ FROM osrf/ros:jazzy-desktop
 ENV ROS_DISTRO=jazzy
 ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 ENV DEBIAN_FRONTEND=noninteractive
+ENV UV_LINK_MODE=copy
 
 # Install system packages
 RUN apt-get update && \
