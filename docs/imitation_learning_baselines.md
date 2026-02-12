@@ -353,7 +353,7 @@ CostNav uses **ROS2** as its communication layer. The ViNT container runs two no
 **Key ROS2 Topics (between containers):**
 
 | Topic                                 | Type                  | Direction        | Description                     |
-| ------------------------------------- | --------------------- | ---------------- | ------------------------------- |
+| :------------------------------------ | :-------------------- | :--------------- | :------------------------------ |
 | `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image`   | Isaac Sim → ViNT | Camera images for policy        |
 | `/chassis/odom`                       | `nav_msgs/Odometry`   | Isaac Sim → ViNT | Robot odometry for MPC          |
 | `/goal_image`                         | `sensor_msgs/Image`   | Isaac Sim → ViNT | Goal image (ImageGoal mode)     |
@@ -413,7 +413,7 @@ class TrajectoryFollowerNode(Node):
         self.cmd_vel_pub.publish(self.create_twist(v, w))
 ```
 
-See [evaluation/README.md](../costnav_isaacsim/il_training/evaluation/README.md) for implementation details.
+See [evaluation/README.md](../costnav_isaacsim/il_evaluation/README.md) for implementation details.
 
 ---
 
@@ -490,7 +490,7 @@ This launches:
 - ViNT policy node (`vint_policy_node`)
 - Trajectory follower node (`trajectory_follower_node`)
 
-See [evaluation/README.md](../costnav_isaacsim/il_training/evaluation/README.md) for detailed usage and configuration options.
+See [evaluation/README.md](../costnav_isaacsim/il_evaluation/README.md) for detailed usage and configuration options.
 
 ---
 

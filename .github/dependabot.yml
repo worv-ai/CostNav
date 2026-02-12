@@ -19,15 +19,6 @@ updates:
       docker:
         patterns: ["*"]
 
-  # ── Python: root pyproject.toml ───────────────────────────────────────────
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    groups:
-      python-root:
-        patterns: ["*"]
-
   # ── Python: costnav_isaacsim ──────────────────────────────────────────────
   - package-ecosystem: "pip"
     directory: "/costnav_isaacsim/costnav_isaacsim"
