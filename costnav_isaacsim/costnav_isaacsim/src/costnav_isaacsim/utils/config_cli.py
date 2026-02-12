@@ -51,8 +51,13 @@ def load_and_override_config(args, robot_name: str) -> "MissionConfig":
     if args.goal_image_enabled is not None:
         config.goal_image.enabled = args.goal_image_enabled.lower() in ("true", "1")
 
-    # Set robot-specific goal camera height
+    # Topomap overrides (NavMesh-based topological map generation)
+    if args.topomap_enabled is not None:
+        config.topomap.enabled = args.topomap_enabled.lower() in ("true", "1")
+
+    # Set robot-specific camera heights
     if robot_name in DEFAULT_GOAL_CAMERA_HEIGHTS:
         config.goal_image.camera_height_offset = DEFAULT_GOAL_CAMERA_HEIGHTS[robot_name]
+        config.topomap.camera_height_offset = DEFAULT_GOAL_CAMERA_HEIGHTS[robot_name]
 
     return config

@@ -44,7 +44,24 @@ Start/Goal positions
 └──────────────────────┘
 ```
 
-## Quick Start
+## Enable via Makefile
+
+The topomap pipeline is controlled by the `TOPOMAP` Make variable (default: `False`):
+
+```bash
+# Enable topomap generation for Isaac Sim
+make run-isaac-sim TOPOMAP=True
+
+# Enable for teleop mode
+make run-teleop TOPOMAP=True
+
+# ViNT profile (always enables topomap)
+make run-vint
+```
+
+The `TOPOMAP` variable flows through `docker-compose.yml` and maps to the existing `--goal-image-enabled` CLI argument internally.
+
+## Quick Start (Python API)
 
 ```python
 from costnav_isaacsim.config import TopoMapConfig

@@ -792,6 +792,16 @@ class TestConfigUsageInLaunch:
         config.goal_image.enabled = goal_image_enabled_str.lower() in ("true", "1")
         assert config.goal_image.enabled is True
 
+    def test_cli_override_topomap_enabled(self):
+        """Test CLI override for topomap enabled flag."""
+        config = load_mission_config()
+        assert config.topomap.enabled is False
+
+        # Simulate CLI override with string parsing
+        topomap_enabled_str = "True"
+        config.topomap.enabled = topomap_enabled_str.lower() in ("true", "1")
+        assert config.topomap.enabled is True
+
     def test_config_teleport_robot_prim_update(self):
         """Test updating teleport.robot_prim (used in launcher)."""
         config = load_mission_config()
