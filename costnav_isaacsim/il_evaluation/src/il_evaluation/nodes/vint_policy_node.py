@@ -42,14 +42,13 @@ Following the NavDP pattern, when a new goal image is received:
 - The new goal image is stored and used for subsequent inference
 
 Usage:
-    # ImageGoal mode
+    # Default (NoGoal exploration, or ImageGoal if use_imagegoal=true in model config)
     python3 vint_policy_node.py \\
         --checkpoint /path/to/model.pth \\
         --model_config /path/to/config.yaml \\
-        --robot_config /path/to/robot.yaml \\
-        --use_imagegoal
+        --robot_config /path/to/robot.yaml
 
-    # Topomap mode
+    # Topomap mode (--use_topomap and --topomap_dir are docker-compose injected)
     python3 vint_policy_node.py \\
         --checkpoint /path/to/model.pth \\
         --model_config /path/to/config.yaml \\
@@ -101,18 +100,19 @@ class ViNTPolicyNode(Node):
         - /vint_trajectory (nav_msgs/Path) - full trajectory for trajectory follower node
         - /vint_reached_goal (std_msgs/Bool) - True when topomap goal node is reached
 
-    Parameters:
+    CLI Parameters:
         - checkpoint: Path to trained model weights
-        - model_config: Path to model configuration YAML
-        - robot_config: Path to robot configuration YAML
-        - inference_rate: Inference frequency in Hz (default: 10.0)
-        - image_topic: Camera image topic (default: /front_stereo_camera/left/image_raw)
-        - use_imagegoal: Whether to use image goal navigation (default: False)
-        - use_topomap: Whether to use topomap navigation (default: False)
-        - topomap_dir: Directory containing numbered PNG images for topomap mode
-        - topomap_goal_node: Goal node index (-1 = last node)
-        - topomap_radius: Number of local nodes to consider for localization
-        - topomap_close_threshold: Temporal distance threshold to advance closest node
+        - model_config: Path to model configuration YAML (inference params)
+        - robot_config: Path to robot configuration YAML (topics)
+        - use_topomap: Enable topomap navigation mode (docker-compose injected)
+        - topomap_dir: Directory containing topomap images (docker-compose injected)
+
+    From model_config (vint_eval.yaml):
+        - inference_rate, device, use_imagegoal, visualize_goal_image
+        - topomap_goal_node, topomap_radius, topomap_close_threshold
+
+    From robot_config (robot_*.yaml):
+        - image topic, goal_image topic
     """
 
     def __init__(
@@ -120,28 +120,12 @@ class ViNTPolicyNode(Node):
         checkpoint: str,
         model_config: str,
         robot_config: str,
-        inference_rate: float = 4.0,
-        image_topic: str = "/front_stereo_camera/left/image_raw",
-        use_imagegoal: bool = False,
-        device: str = "cuda:0",
-        goal_image_topic: str = "/goal_image",
-        visualize_goal_image: bool = False,
         use_topomap: bool = False,
         topomap_dir: str = "",
-        topomap_goal_node: int = -1,
-        topomap_radius: int = 4,
-        topomap_close_threshold: float = 3.0,
     ):
         super().__init__("vint_policy_node")
 
-        # Store parameters
-        self.inference_rate = inference_rate
-        self.use_imagegoal = use_imagegoal
-        self.goal_image_topic = goal_image_topic
-        self.visualize_goal_image = visualize_goal_image
-        self.use_topomap = use_topomap
-
-        # Validate parameters
+        # Validate file paths
         if not checkpoint or not os.path.exists(checkpoint):
             self.get_logger().error(f"Checkpoint not found: {checkpoint}")
             raise ValueError("Invalid checkpoint path")
@@ -151,6 +135,30 @@ class ViNTPolicyNode(Node):
         if not robot_config or not os.path.exists(robot_config):
             self.get_logger().error(f"Robot config not found: {robot_config}")
             raise ValueError("Invalid robot config path")
+
+        # Load model config — inference parameters live here
+        import yaml
+
+        with open(model_config, "r") as f:
+            model_cfg = yaml.safe_load(f)
+        with open(robot_config, "r") as f:
+            robot_cfg = yaml.safe_load(f)
+
+        # Parameters from model config
+        self.inference_rate = model_cfg.get("inference_rate", 4.0)
+        device = model_cfg.get("device", "cuda:0")
+        self.use_imagegoal = model_cfg.get("use_imagegoal", False)
+        self.visualize_goal_image = model_cfg.get("visualize_goal_image", False)
+        topomap_goal_node = model_cfg.get("topomap_goal_node", -1)
+        topomap_radius = model_cfg.get("topomap_radius", 4)
+        topomap_close_threshold = model_cfg.get("topomap_close_threshold", 3.0)
+
+        # Parameters from robot config
+        topics = robot_cfg.get("topics", {})
+        image_topic = topics.get("image", "/front_stereo_camera/left/image_raw")
+        self.goal_image_topic = topics.get("goal_image", "/goal_image")
+
+        self.use_topomap = use_topomap
 
         # Initialize ViNT agent
         self.get_logger().info(f"Loading ViNT model from {checkpoint}")
@@ -187,7 +195,7 @@ class ViNTPolicyNode(Node):
         self._topomap_goal_node_param: int = topomap_goal_node
 
         if self.use_topomap:
-            if use_imagegoal:
+            if self.use_imagegoal:
                 self.get_logger().warn("Both --use_topomap and --use_imagegoal set. Topomap mode takes priority.")
                 self.use_imagegoal = False
 
@@ -599,7 +607,12 @@ class ViNTPolicyNode(Node):
 
 
 def parse_args():
-    """Parse command line arguments."""
+    """Parse command line arguments.
+
+    Most parameters are read from model_config (vint_eval.yaml) and
+    robot_config (robot_*.yaml).  Only the file paths, docker-compose-injected
+    flags, and log level remain as CLI arguments.
+    """
     parser = argparse.ArgumentParser(description="ViNT ROS2 Policy Node for CostNav")
     parser.add_argument(
         "--checkpoint",
@@ -611,49 +624,15 @@ def parse_args():
         "--model_config",
         type=str,
         required=True,
-        help="Path to model configuration YAML",
+        help="Path to model configuration YAML (contains inference params)",
     )
     parser.add_argument(
         "--robot_config",
         type=str,
         required=True,
-        help="Path to robot configuration YAML",
+        help="Path to robot configuration YAML (contains topics)",
     )
-    parser.add_argument(
-        "--inference_rate",
-        type=float,
-        default=4.0,
-        help="Inference frequency in Hz (default: 4.0, matches training sample_rate)",
-    )
-    parser.add_argument(
-        "--image_topic",
-        type=str,
-        default="/front_stereo_camera/left/image_raw",
-        help="Camera image topic (default: /front_stereo_camera/left/image_raw)",
-    )
-    parser.add_argument(
-        "--use_imagegoal",
-        action="store_true",
-        help="Use image goal navigation mode",
-    )
-    parser.add_argument(
-        "--goal_image_topic",
-        type=str,
-        default="/goal_image",
-        help="Goal image topic for ImageGoal mode (default: /goal_image)",
-    )
-    parser.add_argument(
-        "--device",
-        type=str,
-        default="cuda:0",
-        help="Device for inference (default: cuda:0)",
-    )
-    parser.add_argument(
-        "--visualize_goal_image",
-        action="store_true",
-        help="Publish received goal image to /received_goal_image for debugging (default: False)",
-    )
-    # Topomap navigation arguments
+    # Docker-compose injected flags
     parser.add_argument(
         "--use_topomap",
         action="store_true",
@@ -664,24 +643,6 @@ def parse_args():
         type=str,
         default="/tmp/costnav_topomap",
         help="Directory containing topomap images (default: /tmp/costnav_topomap)",
-    )
-    parser.add_argument(
-        "--topomap_goal_node",
-        type=int,
-        default=-1,
-        help="Goal node index in the topomap (-1 = last node) (default: -1)",
-    )
-    parser.add_argument(
-        "--topomap_radius",
-        type=int,
-        default=4,
-        help="Number of local nodes to consider for localization (default: 4)",
-    )
-    parser.add_argument(
-        "--topomap_close_threshold",
-        type=float,
-        default=3.0,
-        help="Temporal distance threshold to advance closest node (default: 3.0)",
     )
     parser.add_argument(
         "--log_level",
@@ -704,17 +665,8 @@ def main():
             checkpoint=args.checkpoint,
             model_config=args.model_config,
             robot_config=args.robot_config,
-            inference_rate=args.inference_rate,
-            image_topic=args.image_topic,
-            use_imagegoal=args.use_imagegoal,
-            device=args.device,
-            goal_image_topic=args.goal_image_topic,
-            visualize_goal_image=args.visualize_goal_image,
             use_topomap=args.use_topomap,
             topomap_dir=args.topomap_dir,
-            topomap_goal_node=args.topomap_goal_node,
-            topomap_radius=args.topomap_radius,
-            topomap_close_threshold=args.topomap_close_threshold,
         )
         # Set log level
         log_level_map = {

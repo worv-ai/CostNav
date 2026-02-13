@@ -33,9 +33,7 @@ MPC reuse:
 
 Usage:
     python3 trajectory_follower_node.py \
-        --control_rate 20.0 \
-        --max_linear_vel 2.0 \
-        --max_angular_vel 0.5
+        --robot_config configs/robot_carter.yaml
 """
 
 import argparse
@@ -270,25 +268,22 @@ class TrajectoryFollowerNode(Node):
     def __init__(
         self,
         robot_config: str,
-        control_rate: float = 20.0,
-        max_linear_vel: float = 2.0,
-        max_angular_vel: float = 0.5,
-        trajectory_timeout: float = 0.5,
     ):
         super().__init__("trajectory_follower_node")
 
-        # Load robot config
+        # Load robot config — all parameters come from here
         with open(robot_config, "r") as f:
             robot_cfg = yaml.safe_load(f)
 
         # Get odom topic from config (default: /chassis/odom)
         self.odom_topic = robot_cfg.get("topics", {}).get("odom", "/chassis/odom")
 
-        # Control parameters
-        self.control_rate = control_rate
-        self.max_linear_vel = max_linear_vel
-        self.max_angular_vel = max_angular_vel
-        self.trajectory_timeout = trajectory_timeout
+        # Trajectory follower parameters from config
+        follower_cfg = robot_cfg.get("trajectory_follower", {})
+        self.control_rate = follower_cfg.get("control_rate", 20.0)
+        self.max_linear_vel = follower_cfg.get("max_linear_vel", 2.0)
+        self.max_angular_vel = follower_cfg.get("max_angular_vel", 0.5)
+        self.trajectory_timeout = follower_cfg.get("trajectory_timeout", 0.5)
 
         # MPC parameters (matching NavDP defaults)
         self.mpc_horizon = 15
@@ -561,26 +556,7 @@ def parse_args():
         "--robot_config",
         type=str,
         required=True,
-        help="Path to robot configuration YAML (contains odom topic)",
-    )
-    parser.add_argument("--control_rate", type=float, default=20.0, help="Control frequency in Hz (default: 20.0)")
-    parser.add_argument(
-        "--max_linear_vel",
-        type=float,
-        default=2.0,
-        help="Maximum linear velocity m/s (default: 2.0)",
-    )
-    parser.add_argument(
-        "--max_angular_vel",
-        type=float,
-        default=0.5,
-        help="Maximum angular velocity rad/s (default: 0.5, matching NavDP)",
-    )
-    parser.add_argument(
-        "--trajectory_timeout",
-        type=float,
-        default=0.5,
-        help="Trajectory validity timeout in seconds (default: 0.5)",
+        help="Path to robot configuration YAML (contains topics and trajectory_follower params)",
     )
     parser.add_argument(
         "--log_level",
@@ -601,10 +577,6 @@ def main():
     try:
         node = TrajectoryFollowerNode(
             robot_config=args.robot_config,
-            control_rate=args.control_rate,
-            max_linear_vel=args.max_linear_vel,
-            max_angular_vel=args.max_angular_vel,
-            trajectory_timeout=args.trajectory_timeout,
         )
         # Set log level
         log_level_map = {

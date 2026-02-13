@@ -148,25 +148,25 @@ This approach is useful for development and debugging within the devcontainer.
 
 ### ViNT Policy Node
 
-| Parameter          | Type   | Default                               | Description                                                       |
-| ------------------ | ------ | ------------------------------------- | ----------------------------------------------------------------- |
-| `--checkpoint`     | string | (required)                            | Path to trained model weights                                     |
-| `--model_config`   | string | `configs/vint_eval.yaml`              | Path to model config                                              |
-| `--robot_config`   | string | `configs/robot_carter.yaml`           | Path to robot config (used by trajectory follower for odom topic) |
-| `--inference_rate` | float  | 4.0                                   | Inference frequency (Hz), must match training `sample_rate`       |
-| `--image_topic`    | string | `/front_stereo_camera/left/image_raw` | Camera topic                                                      |
-| `--use_imagegoal`  | flag   | false                                 | Use image goal navigation                                         |
-| `--device`         | string | `cuda:0`                              | PyTorch device                                                    |
+| Parameter        | Type   | Default                | Description                                               |
+| ---------------- | ------ | ---------------------- | --------------------------------------------------------- |
+| `--checkpoint`   | string | (required)             | Path to trained model weights                             |
+| `--model_config` | string | (required)             | Path to model config YAML (inference + navigation params) |
+| `--robot_config` | string | (required)             | Path to robot config YAML (topics)                        |
+| `--use_topomap`  | flag   | false                  | Enable topomap navigation (docker-compose injected)       |
+| `--topomap_dir`  | string | `/tmp/costnav_topomap` | Topomap image directory (docker-compose injected)         |
+| `--log_level`    | string | `info`                 | Log level (`debug`, `info`, `warn`, `error`, `fatal`)     |
+
+All other parameters (`inference_rate`, `device`, `use_imagegoal`, `visualize_goal_image`, `topomap_goal_node`, `topomap_radius`, `topomap_close_threshold`) are read from `vint_eval.yaml`. Topic names (`image`, `goal_image`) are read from the robot config YAML.
 
 ### Trajectory Follower Node
 
-| Parameter              | Type   | Default                     | Description                      |
-| ---------------------- | ------ | --------------------------- | -------------------------------- |
-| `--robot_config`       | string | `configs/robot_carter.yaml` | Path to robot config             |
-| `--control_rate`       | float  | 20.0                        | Control loop frequency (Hz)      |
-| `--max_linear_vel`     | float  | 2.0                         | Maximum linear velocity (m/s)    |
-| `--max_angular_vel`    | float  | 0.5                         | Maximum angular velocity (rad/s) |
-| `--trajectory_timeout` | float  | 0.5                         | Trajectory timeout (s)           |
+| Parameter        | Type   | Default    | Description                                                     |
+| ---------------- | ------ | ---------- | --------------------------------------------------------------- |
+| `--robot_config` | string | (required) | Path to robot config YAML (topics + trajectory_follower params) |
+| `--log_level`    | string | `info`     | Log level (`debug`, `info`, `warn`, `error`, `fatal`)           |
+
+All control parameters (`control_rate`, `max_linear_vel`, `max_angular_vel`, `trajectory_timeout`) are read from the `trajectory_follower` section of the robot config YAML.
 
 ## Evaluation
 
@@ -397,7 +397,7 @@ The denormalization scale (`denorm_scale`) is computed in `base_agent.py` direct
 denorm_scale = metric_waypoint_spacing * waypoint_spacing  # 0.25 * 1 = 0.25 m
 ```
 
-The source-of-truth training parameters (`waypoint_spacing`, `metric_waypoint_spacing`) live in `vint_eval.yaml` and must match the training config `vint_costnav.yaml`. Velocity limits (`max_linear_vel`, `max_angular_vel`) are **not** involved in denormalization — they are only used by the trajectory follower for MPC control.
+The source-of-truth training parameters (`waypoint_spacing`, `metric_waypoint_spacing`) live in `vint_eval.yaml` and must match the training config `vint_costnav.yaml`. Velocity limits (`max_linear_vel`, `max_angular_vel`) are **not** involved in denormalization — they are only used by the trajectory follower for MPC control (configured in the robot config YAML under `trajectory_follower`).
 
 ### Inference Rate
 
@@ -405,35 +405,50 @@ The inference rate (`--inference_rate`, default **4.0 Hz**) must match the train
 
 ## Configuration Reference
 
-### vint_eval.yaml (Model Config)
+### vint_eval.yaml (Model + Inference Config)
 
 ```yaml
 # Model architecture parameters
-context_size: 5 # Number of past frames for temporal context
-len_traj_pred: 5 # Number of waypoints to predict
-learn_angle: true # Predict heading angles
-obs_encoder: "efficientnet-b0" # Image encoder backbone
-obs_encoding_size: 512 # Encoding dimension
-late_fusion: false # Early fusion of obs+goal
-mha_num_attention_heads: 4 # Transformer attention heads
-mha_num_attention_layers: 4 # Transformer layers
-mha_ff_dim_factor: 4 # Feedforward dimension factor
+context_size: 5
+len_traj_pred: 5
+learn_angle: true
+obs_encoder: "efficientnet-b0"
 image_size: [85, 64] # [width, height] - matches training
 
 # Action normalization (must match training config vint_costnav.yaml)
-normalize: true # Normalize actions by max velocity
-waypoint_spacing: 1 # Waypoint spacing multiplier (training param)
-metric_waypoint_spacing: 0.25 # Physical spacing between waypoints in meters
+normalize: true
+waypoint_spacing: 1
+metric_waypoint_spacing: 0.25
+
+# Inference parameters
+inference_rate: 4.0 # Hz, must match training sample_rate
+device: "cuda:0"
+
+# Navigation mode
+use_imagegoal: false
+visualize_goal_image: false
+
+# Topomap parameters (used when --use_topomap is passed on CLI)
+topomap_goal_node: -1
+topomap_radius: 4
+topomap_close_threshold: 3.0
 ```
 
 ### robot_carter.yaml / robot_segway.yaml (Robot Parameters)
 
 ```yaml
-# Robot config is used by the trajectory follower for the odom topic.
-# Velocity limits are NOT here — they are trajectory follower CLI arguments
-# (--max_linear_vel, --max_angular_vel).
+# Topics
 topics:
-  odom: /chassis/odom # Odometry topic for trajectory follower
+  odom: /chassis/odom
+  image: /front_stereo_camera/left/image_raw
+  goal_image: /goal_image
+
+# Trajectory follower parameters
+trajectory_follower:
+  control_rate: 20.0
+  max_linear_vel: 2.0
+  max_angular_vel: 0.5
+  trajectory_timeout: 0.5
 ```
 
 ## Troubleshooting

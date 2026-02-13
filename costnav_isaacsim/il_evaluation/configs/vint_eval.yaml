@@ -1,5 +1,5 @@
 # ViNT Evaluation Configuration for CostNav
-# This config is used by the ViNT agent during inference
+# This config is used by the ViNT agent and policy node during inference.
 
 # Model architecture parameters
 context_size: 5                    # Number of past frames for temporal context
@@ -24,3 +24,16 @@ image_size: [85, 64]               # [width, height] - matches training
 normalize: true                    # Denormalize predicted waypoints to metric coordinates
 waypoint_spacing: 1                # Subsampling stride over trajectory frames (training-time constant)
 metric_waypoint_spacing: 0.25      # Physical distance between consecutive frames in meters (training-time constant)
+
+# Inference parameters
+inference_rate: 4.0                # Inference frequency (Hz), must match training sample_rate
+device: "cuda:0"                   # PyTorch device for inference
+
+# Navigation mode
+use_imagegoal: false               # Use image goal navigation mode
+visualize_goal_image: false        # Publish received goal image to /received_goal_image for debugging
+
+# Topomap parameters (used when --use_topomap is passed on CLI)
+topomap_goal_node: -1              # Goal node index in the topomap (-1 = last node)
+topomap_radius: 4                  # Number of local nodes to consider for localization
+topomap_close_threshold: 3.0       # Temporal distance threshold to advance closest node
