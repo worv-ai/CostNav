@@ -21,26 +21,17 @@ class BaseAgent:
 
     Args:
         model_config_path: Path to model configuration YAML file.
-        robot_config_path: Path to robot configuration YAML file.
         device: PyTorch device to use for inference.
     """
 
     def __init__(
         self,
         model_config_path: str,
-        robot_config_path: str,
         device: str = "cuda:0",
     ):
         self.device = device
         self.model_config_path = model_config_path
 
-        # Load robot config
-        with open(robot_config_path, "r") as f:
-            robot_config = yaml.safe_load(f)
-        self.MAX_V = robot_config["max_v"]
-        self.MAX_W = robot_config["max_w"]
-        self.RATE = robot_config["frame_rate"]
-        self.DT = 1 / self.RATE
         self.EPS = 1e-8
 
         # Load model config
@@ -49,6 +40,14 @@ class BaseAgent:
         self.memory_size = self.cfg["context_size"]
         self.image_size = self.cfg["image_size"]  # [width, height]
         self.normalize = self.cfg.get("normalize", True)
+
+        # Waypoint denormalization scale.
+        # During training, waypoints are normalized by dividing by
+        # (metric_waypoint_spacing * waypoint_spacing).  At inference we
+        # multiply by the same factor to recover metric coordinates.
+        metric_ws = self.cfg.get("metric_waypoint_spacing", 0.25)
+        ws = self.cfg.get("waypoint_spacing", 1)
+        self.denorm_scale = metric_ws * ws  # 0.25 * 1 = 0.25 m
 
         # Memory queue for temporal context (initialized in reset)
         self.batch_size = 1

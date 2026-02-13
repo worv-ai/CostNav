@@ -16,4 +16,11 @@ mha_ff_dim_factor: 4               # Feedforward dimension factor
 image_size: [85, 64]               # [width, height] - matches training
 
 # Action normalization
-normalize: true                    # Normalize actions by max velocity
+# WARNING: waypoint_spacing and metric_waypoint_spacing are training-time constants.
+# They MUST exactly match the values in the training config (vint_costnav.yaml).
+# Changing them here without retraining will silently break waypoint scale.
+# See: training normalization  →  actions[:, :2] /= metric_waypoint_spacing * waypoint_spacing
+#      eval denormalization    →  waypoints[:, :, :2] *= metric_waypoint_spacing * waypoint_spacing
+normalize: true                    # Denormalize predicted waypoints to metric coordinates
+waypoint_spacing: 1                # Subsampling stride over trajectory frames (training-time constant)
+metric_waypoint_spacing: 0.25      # Physical distance between consecutive frames in meters (training-time constant)

@@ -317,7 +317,7 @@ services:
         else
           ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_segway.yaml
         fi &&
-        vint_policy_node --checkpoint $${MODEL_CHECKPOINT} --model_config /workspace/costnav_isaacsim/il_evaluation/configs/vint_eval.yaml --robot_config $${ROBOT_CONFIG} --inference_rate 10.0 --use_topomap --topomap_dir /tmp/costnav_topomap"
+        vint_policy_node --checkpoint $${MODEL_CHECKPOINT} --model_config /workspace/costnav_isaacsim/il_evaluation/configs/vint_eval.yaml --robot_config $${ROBOT_CONFIG} --use_topomap --topomap_dir /tmp/costnav_topomap"
     network_mode: host
     ipc: host
     stdin_open: true
@@ -347,7 +347,7 @@ services:
         else
           ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_segway.yaml
         fi &&
-        trajectory_follower_node --robot_config $${ROBOT_CONFIG} --control_rate 20.0 --max_linear_vel 0.5 --max_angular_vel 0.5"
+        trajectory_follower_node --robot_config $${ROBOT_CONFIG}"
     network_mode: host
     ipc: host
     stdin_open: true
