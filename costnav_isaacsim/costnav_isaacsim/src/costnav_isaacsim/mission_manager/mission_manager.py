@@ -42,6 +42,7 @@ class MissionState(Enum):
     PUBLISHING_INITIAL_POSE = "publishing_initial_pose"
     CLEARING_COSTMAPS = "clearing_costmaps"
     PUBLISHING_GOAL = "publishing_goal"
+    LOADING_TOPOMAP = "loading_topomap"  # Waiting for ViNT to reload topomap
     WAITING_FOR_COMPLETION = "waiting_for_completion"
     COMPLETED = "completed"
 
@@ -127,6 +128,8 @@ class MissionManager:
 
         # ViNT topomap reload service client (initialized in _initialize)
         self._vint_load_topomap_srv = None
+        self._vint_load_topomap_future = None  # Pending async future for topomap reload
+        self._vint_load_topomap_start_time = None  # Wall time when async call was fired
 
         # Nav2 costmap clear service clients (initialized in _initialize)
         self._clear_costmap_global_srv = None
@@ -221,6 +224,8 @@ class MissionManager:
             self._step_clearing_costmaps()
         elif self._state == MissionState.PUBLISHING_GOAL:
             self._step_publishing_goal()
+        elif self._state == MissionState.LOADING_TOPOMAP:
+            self._step_loading_topomap()
         elif self._state == MissionState.WAITING_FOR_COMPLETION:
             self._step_waiting_for_completion()
         elif self._state == MissionState.COMPLETED:
@@ -372,6 +377,7 @@ class MissionManager:
             MissionState.PUBLISHING_INITIAL_POSE,
             MissionState.CLEARING_COSTMAPS,
             MissionState.PUBLISHING_GOAL,
+            MissionState.LOADING_TOPOMAP,
             MissionState.WAITING_FOR_COMPLETION,
         }
 
@@ -400,6 +406,10 @@ class MissionManager:
         # Reset costmap clear tracking
         self._costmap_clear_futures = {}
         self._costmap_clear_start_time = None
+
+        # Reset topomap reload tracking
+        self._vint_load_topomap_future = None
+        self._vint_load_topomap_start_time = None
 
     def _odom_callback(self, msg) -> None:
         """Handle odometry messages for robot position and orientation tracking."""
@@ -661,56 +671,98 @@ class MissionManager:
             self._topomap_generator = None
             self.config.topomap.enabled = False
 
-    def _generate_topomap(self, start, goal) -> None:
-        """Generate topomap images along NavMesh shortest path from start to goal.
+    def _generate_topomap(self, start, goal) -> bool:
+        """Generate topomap images and kick off async reload on the ViNT node.
 
-        After generating the images, calls the ``/vint_load_topomap`` service
-        so the ViNT policy node loads the fresh topomap for this mission.
+        After generating the images, fires a **non-blocking** async call to
+        ``/vint_load_topomap``.  The caller must subsequently poll
+        ``_check_vint_load_topomap_done()`` (e.g. in ``_step_loading_topomap``)
+        to know when the ViNT node has finished reloading.
 
         Args:
             start: Start position (SampledPosition).
             goal: Goal position (SampledPosition).
+
+        Returns:
+            True if topomap images were generated (async reload may still be
+            in-flight), False on generation failure.
         """
         try:
             saved_paths = self._topomap_generator.generate_topomap(start, goal)
             if saved_paths:
                 logger.info(f"[TOPOMAP] Generated {len(saved_paths)} images → {self.config.topomap.output_dir}")
-                # Tell the ViNT node to (re)load the topomap
-                self._call_vint_load_topomap()
+                # Fire async reload — completion is checked in _step_loading_topomap
+                self._call_vint_load_topomap_async()
+                return True
             else:
                 logger.warning("[TOPOMAP] Topomap generation returned no images")
+                return False
         except Exception as exc:
             logger.error(f"[TOPOMAP] Failed to generate topomap: {exc}")
             import traceback
 
             logger.error(f"[TOPOMAP] {traceback.format_exc()}")
+            return False
 
-    def _call_vint_load_topomap(self) -> None:
-        """Call /vint_load_topomap service to make the ViNT node reload the topomap."""
+    def _call_vint_load_topomap_async(self) -> bool:
+        """Kick off a non-blocking /vint_load_topomap service call.
+
+        Stores the future in ``self._vint_load_topomap_future`` so that
+        ``_step_loading_topomap`` can poll for completion without blocking
+        the executor (and therefore without blocking ``/get_mission_result``).
+
+        Returns:
+            True if the async call was successfully fired (or the service
+            client is not configured), False if the service is unavailable.
+        """
+        self._vint_load_topomap_future = None
+        self._vint_load_topomap_start_time = None
+
         if self._vint_load_topomap_srv is None:
-            return
+            return True  # Nothing to do — not a failure
 
         from std_srvs.srv import Trigger
 
-        if not self._vint_load_topomap_srv.wait_for_service(timeout_sec=5.0):
-            logger.warning("[TOPOMAP] /vint_load_topomap service not available (timeout)")
-            return
+        if not self._vint_load_topomap_srv.service_is_ready():
+            logger.warning("[TOPOMAP] /vint_load_topomap service not yet available")
+            return False
 
-        future = self._vint_load_topomap_srv.call_async(Trigger.Request())
-        # Spin until the response arrives (bounded wait)
+        self._vint_load_topomap_future = self._vint_load_topomap_srv.call_async(Trigger.Request())
+        self._vint_load_topomap_start_time = self._get_current_time_seconds()
+        logger.info("[TOPOMAP] Async /vint_load_topomap call fired")
+        return True
+
+    def _check_vint_load_topomap_done(self) -> bool:
+        """Check whether the pending topomap-reload future has completed.
+
+        Returns:
+            True if the future is done (or was never started), False if
+            still pending.  On completion the result is logged and the
+            future is cleared.
+        """
+        if self._vint_load_topomap_future is None:
+            return True  # Nothing pending
+
+        if not self._vint_load_topomap_future.done():
+            return False
+
+        # Future completed — inspect result
         try:
-            rclpy = __import__("rclpy")
-            rclpy.spin_until_future_complete(self._node, future, timeout_sec=10.0)
-            if future.result() is not None:
-                resp = future.result()
+            resp = self._vint_load_topomap_future.result()
+            if resp is not None:
                 if resp.success:
                     logger.info(f"[TOPOMAP] ViNT topomap reloaded: {resp.message}")
                 else:
                     logger.warning(f"[TOPOMAP] ViNT topomap reload failed: {resp.message}")
             else:
-                logger.warning("[TOPOMAP] /vint_load_topomap service call timed out")
+                logger.warning("[TOPOMAP] /vint_load_topomap service returned None")
         except Exception as exc:
-            logger.error(f"[TOPOMAP] Error calling /vint_load_topomap: {exc}")
+            logger.error(f"[TOPOMAP] Error from /vint_load_topomap: {exc}")
+        finally:
+            self._vint_load_topomap_future = None
+            self._vint_load_topomap_start_time = None
+
+        return True
 
     def handle_simulation_restart(self, stage_reloaded: bool = False) -> None:
         """Refresh cached sim handles after stop/reset or stage reload."""
@@ -1357,27 +1409,60 @@ class MissionManager:
             if self.config.goal_image.enabled:
                 self._capture_and_publish_goal_image(self._current_goal)
 
-            # Generate topomap for ViNT navigation
+            # Generate topomap for ViNT navigation (non-blocking)
             if self.config.topomap.enabled and self._topomap_generator is not None:
                 self._generate_topomap(self._current_start, self._current_goal)
+                # Transition to LOADING_TOPOMAP — the async reload future will
+                # be polled there so that _spin_ros_once keeps running and
+                # /get_mission_result stays responsive.
+                self._state = MissionState.LOADING_TOPOMAP
+                return
 
-            # Update RViz markers
-            self._marker_publisher.publish_start_goal_from_sampled(self._current_start, self._current_goal)
+            # No topomap — finish mission setup immediately
+            self._finalize_mission_setup()
 
-            # Record initial food piece count for spoilage evaluation
-            if self.config.food.enabled:
-                self._eval.initial_food_piece_count = self._evaluation.count_food_pieces_in_bucket()
-                logger.info(f"[FOOD] Initial piece count: {self._eval.initial_food_piece_count}")
+    def _step_loading_topomap(self):
+        """Poll for ViNT topomap reload completion (non-blocking).
 
-            # Enable IL baseline nodes now that mission setup is complete
-            self._enable_il_baseline_nodes()
+        This state exists so that the main ``step()`` loop keeps calling
+        ``_spin_ros_once()`` while the ``/vint_load_topomap`` async service
+        call is in-flight.  Without this, the executor would be blocked and
+        ``/get_mission_result`` requests from ``eval.sh`` would go unanswered.
+        """
+        _TOPOMAP_LOAD_TIMEOUT = 15.0  # seconds
 
-            logger.info(f"[{self._state.name}] Mission {self._current_mission} initiated successfully")
-            self._mission_start_time = self._get_current_time_seconds()
-            # Reset distance tracking for this mission
-            self._traveled_distance = 0.0
-            self._prev_robot_position = self._robot_position
-            self._state = MissionState.WAITING_FOR_COMPLETION
+        if self._check_vint_load_topomap_done():
+            self._finalize_mission_setup()
+            return
+
+        # Safety timeout so we don't get stuck forever
+        if self._vint_load_topomap_start_time is not None:
+            waited = self._get_current_time_seconds() - self._vint_load_topomap_start_time
+            if waited >= _TOPOMAP_LOAD_TIMEOUT:
+                logger.warning(f"[TOPOMAP] /vint_load_topomap timed out after {waited:.1f}s — proceeding anyway")
+                self._vint_load_topomap_future = None
+                self._vint_load_topomap_start_time = None
+                self._finalize_mission_setup()
+
+    def _finalize_mission_setup(self):
+        """Common tail of mission setup shared by PUBLISHING_GOAL and LOADING_TOPOMAP."""
+        # Update RViz markers
+        self._marker_publisher.publish_start_goal_from_sampled(self._current_start, self._current_goal)
+
+        # Record initial food piece count for spoilage evaluation
+        if self.config.food.enabled:
+            self._eval.initial_food_piece_count = self._evaluation.count_food_pieces_in_bucket()
+            logger.info(f"[FOOD] Initial piece count: {self._eval.initial_food_piece_count}")
+
+        # Enable IL baseline nodes now that mission setup is complete
+        self._enable_il_baseline_nodes()
+
+        logger.info(f"[{self._state.name}] Mission {self._current_mission} initiated successfully")
+        self._mission_start_time = self._get_current_time_seconds()
+        # Reset distance tracking for this mission
+        self._traveled_distance = 0.0
+        self._prev_robot_position = self._robot_position
+        self._state = MissionState.WAITING_FOR_COMPLETION
 
     def _step_waiting_for_completion(self):
         """Wait for goal completion, timeout, or robot fall.
