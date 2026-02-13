@@ -147,6 +147,9 @@ topomap:
   # Number of simulation steps per image capture (for render pipeline flush)
   render_settle_steps: 3
 
+  # Extra simulation steps for the first image capture to eliminate render noise
+  first_image_extra_settle_steps: 10
+
   # Robot prim path to hide during image capture (prevents robot from appearing in images)
   # If not set, falls back to teleport.robot_prim
   # robot_prim_path: "/World/Nova_Carter_ROS"

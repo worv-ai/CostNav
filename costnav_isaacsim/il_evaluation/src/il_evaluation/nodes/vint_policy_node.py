@@ -72,7 +72,9 @@ from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPo
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool
 from std_srvs.srv import Trigger
+import tf2_ros
 from transforms3d.euler import euler2quat
+from transforms3d.quaternions import qmult, quat2mat
 
 from il_evaluation.agents.vint_agent import ViNTAgent
 
@@ -241,8 +243,13 @@ class ViNTPolicyNode(Node):
         if self.use_topomap:
             self._load_topomap_service = self.create_service(Trigger, "/vint_load_topomap", self._handle_load_topomap)
 
+        # TF2 buffer and listener for base_link -> map transform (RViz visualization)
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+
         # Publishers
         self.trajectory_pub = self.create_publisher(Path, "/vint_trajectory", 10)
+        self.trajectory_map_pub = self.create_publisher(Path, "/vint_trajectory_map", 10)
         self.reached_goal_pub = self.create_publisher(Bool, "/vint_reached_goal", 10)
 
         # Debug publisher for visualizing received goal image
@@ -414,10 +421,28 @@ class ViNTPolicyNode(Node):
         return response
 
     def enable_callback(self, msg: Bool):
-        """Enable/disable policy execution."""
+        """Enable/disable policy execution.
+
+        In topomap mode, transitioning from disabled → enabled triggers a
+        topomap reload.  The mission manager publishes ``True`` on
+        ``/vint_enable`` at the start of every mission (after generating a
+        fresh topomap), so this is the reliable per-mission reload hook.
+        """
+        was_enabled = self.enabled
         self.enabled = msg.data
         status = "enabled" if self.enabled else "disabled"
         self.get_logger().info(f"ViNT policy {status}")
+
+        # Reload topomap on every disabled → enabled transition
+        if self.use_topomap and self.enabled and not was_enabled:
+            try:
+                self._load_topomap(self._topomap_dir, self._topomap_goal_node_param)
+                self.agent.reset(batch_size=1)
+                self.get_logger().info(
+                    f"Topomap reloaded on enable: {len(self.topomap)} nodes " f"from {self._topomap_dir}"
+                )
+            except Exception as e:
+                self.get_logger().error(f"Failed to reload topomap on enable: {e}")
 
     def inference_callback(self):
         """Run ViNT inference and publish trajectory."""
@@ -545,6 +570,9 @@ class ViNTPolicyNode(Node):
         trajectory_msg = self.trajectory_to_path(trajectory)
         self.trajectory_pub.publish(trajectory_msg)
 
+        # Also publish in map frame for RViz visualization
+        self._publish_trajectory_map(trajectory_msg)
+
         self._trajectory_publish_count += 1
         if self._trajectory_publish_count % self._log_interval == 0:
             traj = trajectory
@@ -604,6 +632,53 @@ class ViNTPolicyNode(Node):
             path_msg.poses.append(pose_stamped)
 
         return path_msg
+
+    def _publish_trajectory_map(self, base_link_path: Path) -> None:
+        """Publish trajectory transformed to map frame for RViz visualization.
+
+        Looks up the latest base_link -> map transform via TF2 and applies it
+        to every pose in *base_link_path*.  Published on ``/vint_trajectory_map``.
+        """
+        try:
+            transform = self.tf_buffer.lookup_transform("map", "base_link", rclpy.time.Time())
+        except (
+            tf2_ros.LookupException,
+            tf2_ros.ConnectivityException,
+            tf2_ros.ExtrapolationException,
+        ):
+            return
+
+        t = transform.transform.translation
+        q = transform.transform.rotation
+        tf_quat = [q.w, q.x, q.y, q.z]
+        rot_matrix = quat2mat(tf_quat)
+
+        map_path = Path()
+        map_path.header.stamp = base_link_path.header.stamp
+        map_path.header.frame_id = "map"
+
+        for pose_stamped in base_link_path.poses:
+            p = pose_stamped.pose.position
+            rotated = rot_matrix @ np.array([p.x, p.y, 0.0])
+
+            map_pose = PoseStamped()
+            map_pose.header = map_path.header
+            map_pose.pose.position.x = t.x + rotated[0]
+            map_pose.pose.position.y = t.y + rotated[1]
+            map_pose.pose.position.z = 0.0
+
+            # Compose orientations: q_map = q_tf * q_local
+            o = pose_stamped.pose.orientation
+            local_quat = [o.w, o.x, o.y, o.z]
+            map_quat = qmult(tf_quat, local_quat)
+            map_pose.pose.orientation.w = map_quat[0]
+            map_pose.pose.orientation.x = map_quat[1]
+            map_pose.pose.orientation.y = map_quat[2]
+            map_pose.pose.orientation.z = map_quat[3]
+
+            map_path.poses.append(map_pose)
+
+        self.trajectory_map_pub.publish(map_path)
 
 
 def parse_args():

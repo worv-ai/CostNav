@@ -1411,7 +1411,16 @@ class MissionManager:
 
             # Generate topomap for ViNT navigation (non-blocking)
             if self.config.topomap.enabled and self._topomap_generator is not None:
-                self._generate_topomap(self._current_start, self._current_goal)
+                if not self._generate_topomap(self._current_start, self._current_goal):
+                    # Topomap generation failed — restart the mission
+                    # (decrement counter so this attempt doesn't count)
+                    logger.warning(
+                        f"[PUBLISHING_GOAL] Mission {self._current_mission} restarting: "
+                        "topomap generation failed (no images captured)"
+                    )
+                    self._current_mission -= 1
+                    self._state = MissionState.READY
+                    return
                 # Transition to LOADING_TOPOMAP — the async reload future will
                 # be polled there so that _spin_ros_once keeps running and
                 # /get_mission_result stays responsive.
