@@ -75,7 +75,7 @@ config = TopoMapConfig(
     enabled=True,
     waypoint_interval=0.5,       # one image every 0.5 m
     image_width=640,
-    image_height=360,
+    image_height=400,
     output_dir="/tmp/my_topomap",
 )
 
@@ -111,15 +111,13 @@ topomap:
   waypoint_interval: 0.5 # Distance between waypoints (meters)
   camera_height_offset: 0.3 # Camera height above ground (meters)
   image_width: 640 # Image width in pixels
-  image_height: 360 # Image height in pixels
+  image_height: 400 # Image height in pixels
   output_dir: "/tmp/costnav_topomap"
   camera_prim_path: "/World/topomap_camera"
   render_settle_steps: 3 # Sim steps per capture (render flush)
-  # Camera intrinsics (matching rgb_left.usda)
-  focal_length: 2.87343
-  horizontal_aperture: 5.76
-  vertical_aperture: 3.6
-  focus_distance: 0.6
+  # Camera USD asset path (required — loaded from USD reference)
+  # Set automatically per robot via DEFAULT_CAMERA_USD_PATHS in robot_config.py
+  # camera_usd_path: "omniverse://localhost/Users/worv/costnav/SegwayE1/camera.usd"
 ```
 
 You can also override any field programmatically:
@@ -141,7 +139,7 @@ config.topomap.output_dir = "/data/topomaps/run_01"
 | `waypoint_interval`    | `float` | `0.5`                     | Distance between interpolated waypoints (meters). Smaller = more images, higher fidelity                 |
 | `camera_height_offset` | `float` | `0.3`                     | Camera height above the NavMesh ground plane (meters)                                                    |
 | `image_width`          | `int`   | `640`                     | Captured image width in pixels                                                                           |
-| `image_height`         | `int`   | `360`                     | Captured image height in pixels                                                                          |
+| `image_height`         | `int`   | `400`                     | Captured image height in pixels (16:10 to match aperture ratio)                                          |
 | `output_dir`           | `str`   | `"/tmp/costnav_topomap"`  | Directory where numbered PNGs are saved                                                                  |
 | `camera_prim_path`     | `str`   | `"/World/topomap_camera"` | USD prim path for the virtual camera                                                                     |
 | `render_settle_steps`  | `int`   | `3`                       | Number of `simulation_context.step(render=True)` calls per capture. Increase if images appear incomplete |

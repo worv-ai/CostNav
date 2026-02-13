@@ -253,11 +253,13 @@ class TopomapGenerator:
         This must be called before capture_image_at_position(). It creates
         a Camera prim in the USD stage with properties matching the robot's
         rgb_left camera, and sets up the Omni Replicator render product.
+
+        The camera prim and render product are kept alive across missions
+        to avoid orphaned render products that fall back to the perspective
+        camera.  Only the annotator is re-created per mission.
         """
         try:
             import omni.replicator.core as rep
-            from isaacsim.core.utils import prims as prim_utils
-            from pxr import Gf, UsdGeom
 
             cfg = self._config
             cam_prim_path = cfg.camera_prim_path
@@ -269,33 +271,41 @@ class TopomapGenerator:
 
                 self._stage = omni.usd.get_context().get_stage()
 
-            existing_prim = self._stage.GetPrimAtPath(cam_prim_path)
-            if existing_prim.IsValid():
-                logger.info(f"[TOPOMAP] Reusing existing camera at {cam_prim_path}")
-                self._camera_prim = existing_prim
+            # --- Camera prim (reuse across missions) ---
+            if self._camera_prim is not None and self._camera_prim.IsValid():
+                logger.info(f"[TOPOMAP] Reusing camera prim at {self._camera_prim.GetPath()}")
             else:
-                self._camera_prim = prim_utils.create_prim(
-                    cam_prim_path,
-                    prim_type="Camera",
-                    translation=(0.0, 0.0, cfg.camera_height_offset),
-                    orientation=(0.5, 0.5, 0.5, 0.5),
+                existing_prim = self._stage.GetPrimAtPath(cam_prim_path)
+                if existing_prim.IsValid():
+                    logger.info(f"[TOPOMAP] Reusing existing camera at {cam_prim_path}")
+                    self._camera_prim = existing_prim
+                elif cfg.camera_usd_path:
+                    # Load camera from USD reference (duplicates the camera asset)
+                    self._camera_prim = self._create_camera_from_usd(cam_prim_path, cfg.camera_usd_path)
+                else:
+                    raise RuntimeError(
+                        "[TOPOMAP] camera_usd_path is required. "
+                        "Set it in mission_config.yaml or via DEFAULT_CAMERA_USD_PATHS in robot_config.py."
+                    )
+
+            # Use the actual camera prim path (may differ from cam_prim_path
+            # when camera_usd_path is used and the Camera is a descendant)
+            actual_cam_path = str(self._camera_prim.GetPath())
+
+            # --- Render product (reuse across missions) ---
+            if self._render_product is None:
+                self._render_product = rep.create.render_product(
+                    actual_cam_path,
+                    resolution=resolution,
                 )
-                camera_geom = UsdGeom.Camera(self._camera_prim)
-                camera_geom.GetFocalLengthAttr().Set(cfg.focal_length)
-                camera_geom.GetFocusDistanceAttr().Set(cfg.focus_distance)
-                camera_geom.GetHorizontalApertureAttr().Set(cfg.horizontal_aperture)
-                camera_geom.GetVerticalApertureAttr().Set(cfg.vertical_aperture)
-                camera_geom.GetClippingRangeAttr().Set(Gf.Vec2f(0.076, 100000.0))
-                logger.info(f"[TOPOMAP] Created camera at {cam_prim_path}")
+                logger.info(f"[TOPOMAP] Created render product for {actual_cam_path}")
 
-            self._render_product = rep.create.render_product(
-                cam_prim_path,
-                resolution=resolution,
-            )
-            self._rgb_annotator = rep.AnnotatorRegistry.get_annotator("rgb", device="cpu")
-            self._rgb_annotator.attach(self._render_product)
+            # --- Annotator (re-created each mission) ---
+            if self._rgb_annotator is None:
+                self._rgb_annotator = rep.AnnotatorRegistry.get_annotator("rgb", device="cpu")
+                self._rgb_annotator.attach(self._render_product)
 
-            logger.info(f"[TOPOMAP] Camera setup complete: {resolution[0]}x{resolution[1]} " f"@ {cam_prim_path}")
+            logger.info(f"[TOPOMAP] Camera setup complete: {resolution[0]}x{resolution[1]} " f"@ {actual_cam_path}")
 
         except ImportError as exc:
             logger.error(f"[TOPOMAP] Isaac Sim modules not available: {exc}")
@@ -303,6 +313,43 @@ class TopomapGenerator:
         except Exception as exc:
             logger.error(f"[TOPOMAP] Failed to setup camera: {exc}")
             raise
+
+    def _create_camera_from_usd(self, cam_prim_path: str, camera_usd_path: str):
+        """Create a camera prim by referencing an external camera USD asset.
+
+        Loads the camera USD file and finds the Camera prim within it.
+        The resulting prim inherits all camera intrinsics (focal_length,
+        aperture, etc.) from the referenced USD, ensuring exact match
+        with the robot's actual camera.
+
+        Args:
+            cam_prim_path: USD stage path for the new camera prim.
+            camera_usd_path: Asset path to the camera USD file
+                (e.g. ``omniverse://localhost/.../camera.usd``).
+
+        Returns:
+            The Camera prim (may be a child of the referenced root).
+        """
+        from pxr import Usd, UsdGeom
+
+        # Create a container prim and add the camera USD as a reference
+        prim = self._stage.DefinePrim(cam_prim_path)
+        prim.GetReferences().AddReference(camera_usd_path)
+        logger.info(f"[TOPOMAP] Added camera USD reference: {camera_usd_path} → {cam_prim_path}")
+
+        # Find the actual Camera prim (may be the prim itself or a descendant)
+        if prim.IsA(UsdGeom.Camera):
+            logger.info(f"[TOPOMAP] Camera prim loaded at {cam_prim_path}")
+            return prim
+
+        for descendant in Usd.PrimRange(prim):
+            if descendant.IsA(UsdGeom.Camera):
+                logger.info(f"[TOPOMAP] Found Camera prim at {descendant.GetPath()}")
+                return descendant
+
+        # No Camera found — fall back to using the root prim and log a warning
+        logger.warning(f"[TOPOMAP] No Camera prim found in {camera_usd_path}; " f"using root prim at {cam_prim_path}")
+        return prim
 
     def capture_image_at_position(self, position: SampledPosition, extra_settle_steps: int = 0):
         """Capture an RGB image at the given position and heading.
@@ -391,13 +438,14 @@ class TopomapGenerator:
             return None
 
     def cleanup_camera(self) -> None:
-        """Remove the topomap camera prim and release render resources.
+        """Release per-mission render resources while keeping infrastructure alive.
 
-        Note: We intentionally do NOT call ``rep.orchestrator.stop()`` here
-        because that stops the entire simulation, which breaks teleportation
-        and odom/tf publishing for subsequent missions.  Instead we detach
-        the annotator and release references so the render product can be
-        garbage-collected without disrupting the running simulation.
+        The camera prim and render product are intentionally kept alive so
+        that subsequent missions can reuse them without creating orphaned
+        render products that fall back to the perspective camera.
+
+        Only the RGB annotator is detached here to free captured-image
+        memory.  It will be re-created in the next ``setup_camera()`` call.
         """
         try:
             if self._rgb_annotator is not None:
@@ -405,16 +453,7 @@ class TopomapGenerator:
                     self._rgb_annotator.detach(self._render_product)
                 except Exception:
                     pass  # best-effort detach
-
-            self._render_product = None
-
-            if self._camera_prim is not None and self._stage is not None:
-                cam_path = self._config.camera_prim_path
-                self._stage.RemovePrim(cam_path)
-                logger.info(f"[TOPOMAP] Removed camera prim at {cam_path}")
-
-            self._camera_prim = None
-            self._rgb_annotator = None
+                self._rgb_annotator = None
         except Exception as exc:
             logger.warning(f"[TOPOMAP] Cleanup warning: {exc}")
 

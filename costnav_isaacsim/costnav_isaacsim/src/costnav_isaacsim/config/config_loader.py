@@ -115,6 +115,7 @@ class GoalImageConfig:
     height: int = 360  # Goal image height (matches ViNT input)
     camera_height_offset: float = 0.3  # Camera height offset from ground (meters)
     camera_prim_path: str = "/World/goal_camera"  # USD prim path for goal camera
+    camera_usd_path: Optional[str] = None  # USD asset path to load camera from (e.g. omniverse://...camera.usd)
 
 
 @dataclass
@@ -129,17 +130,13 @@ class TopoMapConfig:
     waypoint_interval: float = 2.0  # Distance between waypoints in meters
     camera_height_offset: float = 0.3  # Camera height above ground (meters)
     image_width: int = 640  # Captured image width (pixels)
-    image_height: int = 360  # Captured image height (pixels)
+    image_height: int = 400  # Captured image height (pixels) — aspect ratio must match aperture (5.76/3.6 = 16:10)
     output_dir: str = "/tmp/costnav_topomap"  # Default output directory
     camera_prim_path: str = "/World/topomap_camera"  # USD prim path for topomap camera
     render_settle_steps: int = 3  # Simulation steps per capture for render pipeline flush
     first_image_extra_settle_steps: int = 10  # Extra simulation steps for the first capture to eliminate render noise
     robot_prim_path: Optional[str] = None  # Robot prim path to hide during capture
-    # Camera intrinsics (matching rgb_left.usda parameters)
-    focal_length: float = 2.87343
-    horizontal_aperture: float = 5.76
-    vertical_aperture: float = 3.6
-    focus_distance: float = 0.6
+    camera_usd_path: Optional[str] = None  # USD asset path to load camera from (e.g. omniverse://...camera.usd)
 
 
 @dataclass
@@ -271,6 +268,7 @@ class MissionConfig:
             height=goal_image_data.get("height", 360),
             camera_height_offset=goal_image_data.get("camera_height_offset", 0.3),
             camera_prim_path=goal_image_data.get("camera_prim_path", "/World/goal_camera"),
+            camera_usd_path=goal_image_data.get("camera_usd_path"),
         )
 
         # Parse topomap config (NavMesh-based topological map generation)
@@ -280,16 +278,13 @@ class MissionConfig:
             waypoint_interval=topomap_data.get("waypoint_interval", 2.0),
             camera_height_offset=topomap_data.get("camera_height_offset", 0.3),
             image_width=topomap_data.get("image_width", 640),
-            image_height=topomap_data.get("image_height", 360),
+            image_height=topomap_data.get("image_height", 400),
             output_dir=topomap_data.get("output_dir", "/tmp/costnav_topomap"),
             camera_prim_path=topomap_data.get("camera_prim_path", "/World/topomap_camera"),
             render_settle_steps=topomap_data.get("render_settle_steps", 3),
             first_image_extra_settle_steps=topomap_data.get("first_image_extra_settle_steps", 10),
             robot_prim_path=topomap_data.get("robot_prim_path", teleport_data.get("robot_prim")),
-            focal_length=topomap_data.get("focal_length", 2.87343),
-            horizontal_aperture=topomap_data.get("horizontal_aperture", 5.76),
-            vertical_aperture=topomap_data.get("vertical_aperture", 3.6),
-            focus_distance=topomap_data.get("focus_distance", 0.6),
+            camera_usd_path=topomap_data.get("camera_usd_path"),
         )
 
         # Parse manager config (MissionManager runtime settings)

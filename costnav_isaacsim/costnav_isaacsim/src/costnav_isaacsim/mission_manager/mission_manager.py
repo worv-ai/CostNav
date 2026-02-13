@@ -498,8 +498,6 @@ class MissionManager:
         """
         try:
             import omni.replicator.core as rep
-            from isaacsim.core.utils import prims as prim_utils
-            from pxr import Gf, UsdGeom
 
             goal_image_cfg = self.config.goal_image
             cam_prim_path = goal_image_cfg.camera_prim_path
@@ -517,32 +515,28 @@ class MissionManager:
             if existing_prim.IsValid():
                 logger.info(f"[GOAL_IMAGE] Reusing existing camera at {cam_prim_path}")
                 self._goal_camera_prim = existing_prim
-            else:
-                # Create camera prim at a default position (will be moved to goal pose)
-                # Orientation includes 180-degree rotation around viewing axis to match rgb_left camera
-                self._goal_camera_prim = prim_utils.create_prim(
-                    cam_prim_path,
-                    prim_type="Camera",
-                    translation=(0.0, 0.0, goal_image_cfg.camera_height_offset),
-                    orientation=(0.5, 0.5, 0.5, 0.5),  # ROS convention + 180deg rotation
+            elif goal_image_cfg.camera_usd_path:
+                # Load camera from USD reference (duplicates the camera asset)
+                self._goal_camera_prim = self._create_camera_from_usd(
+                    stage, cam_prim_path, goal_image_cfg.camera_usd_path, label="GOAL_IMAGE"
                 )
-                # Configure camera properties (matching rgb_left.usda parameters)
-                camera_geom = UsdGeom.Camera(self._goal_camera_prim)
-                camera_geom.GetFocalLengthAttr().Set(2.87343)
-                camera_geom.GetFocusDistanceAttr().Set(0.6)
-                camera_geom.GetHorizontalApertureAttr().Set(5.76)
-                camera_geom.GetVerticalApertureAttr().Set(3.6)
-                camera_geom.GetClippingRangeAttr().Set(Gf.Vec2f(0.076, 100000.0))
-                logger.info(f"[GOAL_IMAGE] Created goal camera at {cam_prim_path}")
+            else:
+                raise RuntimeError(
+                    "[GOAL_IMAGE] camera_usd_path is required. "
+                    "Set it in mission_config.yaml or via DEFAULT_CAMERA_USD_PATHS in robot_config.py."
+                )
+
+            # Use actual camera prim path (may differ when loaded from USD reference)
+            actual_cam_path = str(self._goal_camera_prim.GetPath())
 
             # Create render product for the camera
-            self._goal_render_product = rep.create.render_product(cam_prim_path, resolution=resolution)
+            self._goal_render_product = rep.create.render_product(actual_cam_path, resolution=resolution)
 
             # Create RGB annotator and attach to render product
             self._goal_rgb_annotator = rep.AnnotatorRegistry.get_annotator("rgb", device="cpu")
             self._goal_rgb_annotator.attach(self._goal_render_product)
 
-            logger.info(f"[GOAL_IMAGE] Goal camera setup complete: {resolution[0]}x{resolution[1]} @ {cam_prim_path}")
+            logger.info(f"[GOAL_IMAGE] Goal camera setup complete: {resolution[0]}x{resolution[1]} @ {actual_cam_path}")
 
         except ImportError as exc:
             logger.warning(f"[GOAL_IMAGE] Isaac Sim modules not available: {exc}")
@@ -553,6 +547,45 @@ class MissionManager:
 
             logger.error(f"[GOAL_IMAGE] {traceback.format_exc()}")
             self.config.goal_image.enabled = False
+
+    @staticmethod
+    def _create_camera_from_usd(stage, cam_prim_path: str, camera_usd_path: str, label: str = "CAMERA"):
+        """Create a camera prim by referencing an external camera USD asset.
+
+        Loads the camera USD file and finds the Camera prim within it.
+        The resulting prim inherits all camera intrinsics (focal_length,
+        aperture, etc.) from the referenced USD, ensuring exact match
+        with the robot's actual camera.
+
+        Args:
+            stage: USD stage to create the prim on.
+            cam_prim_path: USD stage path for the new camera prim.
+            camera_usd_path: Asset path to the camera USD file
+                (e.g. ``omniverse://localhost/.../camera.usd``).
+            label: Log label for messages (e.g. "GOAL_IMAGE", "TOPOMAP").
+
+        Returns:
+            The Camera prim (may be a child of the referenced root).
+        """
+        from pxr import Usd, UsdGeom
+
+        prim = stage.DefinePrim(cam_prim_path)
+        prim.GetReferences().AddReference(camera_usd_path)
+        logger.info(f"[{label}] Added camera USD reference: {camera_usd_path} → {cam_prim_path}")
+
+        # Find the actual Camera prim (may be the prim itself or a descendant)
+        if prim.IsA(UsdGeom.Camera):
+            logger.info(f"[{label}] Camera prim loaded at {cam_prim_path}")
+            return prim
+
+        for descendant in Usd.PrimRange(prim):
+            if descendant.IsA(UsdGeom.Camera):
+                logger.info(f"[{label}] Found Camera prim at {descendant.GetPath()}")
+                return descendant
+
+        # No Camera found — fall back to using the root prim and log a warning
+        logger.warning(f"[{label}] No Camera prim found in {camera_usd_path}; " f"using root prim at {cam_prim_path}")
+        return prim
 
     def _capture_and_publish_goal_image(self, goal_position) -> bool:
         """Capture goal image from camera at goal position and publish to ROS2.
