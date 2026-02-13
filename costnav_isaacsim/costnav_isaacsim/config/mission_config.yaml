@@ -122,6 +122,10 @@ goal_image:
   # USD prim path for goal camera
   camera_prim_path: "/World/goal_camera"
 
+  # Camera USD asset path (required — loaded from USD reference)
+  # Set automatically per robot via DEFAULT_CAMERA_USD_PATHS in robot_config.py
+  # camera_usd_path: "omniverse://localhost/Users/worv/costnav/SegwayE1/camera.usd"
+
 # Topomap generation settings (NavMesh-based)
 # Generates ViNT-compatible topological maps by capturing images along NavMesh shortest paths
 topomap:
@@ -134,9 +138,9 @@ topomap:
   # Camera height offset from ground (meters)
   camera_height_offset: 0.3
 
-  # Image dimensions (matches ViNT input)
+  # Image dimensions (aspect ratio must match aperture: 5.76/3.6 = 16:10)
   image_width: 640
-  image_height: 360
+  image_height: 400
 
   # Output directory for generated topomap images
   output_dir: "/tmp/costnav_topomap"
@@ -154,11 +158,9 @@ topomap:
   # If not set, falls back to teleport.robot_prim
   # robot_prim_path: "/World/Nova_Carter_ROS"
 
-  # Camera intrinsics (matching rgb_left.usda)
-  focal_length: 2.87343
-  horizontal_aperture: 5.76
-  vertical_aperture: 3.6
-  focus_distance: 0.6
+  # Camera USD asset path (required — loaded from USD reference)
+  # Set automatically per robot via DEFAULT_CAMERA_USD_PATHS in robot_config.py
+  # camera_usd_path: "omniverse://localhost/Users/worv/costnav/SegwayE1/camera.usd"
 
 # MissionManager runtime settings
 # These control the mission execution behavior

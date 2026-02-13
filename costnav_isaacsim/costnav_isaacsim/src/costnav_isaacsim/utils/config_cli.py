@@ -7,7 +7,7 @@
 
 from typing import TYPE_CHECKING
 
-from .robot_config import DEFAULT_GOAL_CAMERA_HEIGHTS
+from .robot_config import DEFAULT_CAMERA_USD_PATHS, DEFAULT_GOAL_CAMERA_HEIGHTS
 
 if TYPE_CHECKING:
     from costnav_isaacsim.config import MissionConfig
@@ -59,5 +59,13 @@ def load_and_override_config(args, robot_name: str) -> "MissionConfig":
     if robot_name in DEFAULT_GOAL_CAMERA_HEIGHTS:
         config.goal_image.camera_height_offset = DEFAULT_GOAL_CAMERA_HEIGHTS[robot_name]
         config.topomap.camera_height_offset = DEFAULT_GOAL_CAMERA_HEIGHTS[robot_name]
+
+    # Set robot-specific camera USD paths (for topomap and goal_image cameras)
+    if robot_name in DEFAULT_CAMERA_USD_PATHS:
+        camera_usd = DEFAULT_CAMERA_USD_PATHS[robot_name]
+        if config.topomap.camera_usd_path is None:
+            config.topomap.camera_usd_path = camera_usd
+        if config.goal_image.camera_usd_path is None:
+            config.goal_image.camera_usd_path = camera_usd
 
     return config

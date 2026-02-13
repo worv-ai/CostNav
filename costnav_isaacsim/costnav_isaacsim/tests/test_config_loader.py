@@ -221,6 +221,7 @@ class TestGoalImageConfig:
         assert config.height == 360
         assert config.camera_height_offset == 0.3
         assert config.camera_prim_path == "/World/goal_camera"
+        assert config.camera_usd_path is None
 
     def test_custom_values(self):
         """Test GoalImageConfig with custom values."""
@@ -248,15 +249,12 @@ class TestTopoMapConfig:
         assert config.waypoint_interval == 2.0
         assert config.camera_height_offset == 0.3
         assert config.image_width == 640
-        assert config.image_height == 360
+        assert config.image_height == 400
         assert config.output_dir == "/tmp/costnav_topomap"
         assert config.camera_prim_path == "/World/topomap_camera"
         assert config.render_settle_steps == 3
         assert config.robot_prim_path is None
-        assert config.focal_length == 2.87343
-        assert config.horizontal_aperture == 5.76
-        assert config.vertical_aperture == 3.6
-        assert config.focus_distance == 0.6
+        assert config.camera_usd_path is None
 
     def test_custom_values(self):
         """Test TopoMapConfig with custom values."""
@@ -513,6 +511,19 @@ class TestMissionConfigFromDict:
         assert config.goal_image.height == 720
         assert config.goal_image.camera_height_offset == 0.5
         assert config.goal_image.camera_prim_path == "/World/custom_camera"
+        assert config.goal_image.camera_usd_path is None  # Not set in data
+
+    def test_goal_image_parsing_with_camera_usd_path(self):
+        """Test goal image config parsing with camera_usd_path."""
+        data = {
+            "goal_image": {
+                "enabled": True,
+                "camera_usd_path": "omniverse://localhost/Users/worv/costnav/SegwayE1/camera.usd",
+            }
+        }
+        config = MissionConfig.from_dict(data)
+        assert config.goal_image.enabled is True
+        assert config.goal_image.camera_usd_path == "omniverse://localhost/Users/worv/costnav/SegwayE1/camera.usd"
 
     def test_topomap_parsing(self):
         """Test topomap config parsing from dict."""
@@ -526,10 +537,6 @@ class TestMissionConfigFromDict:
                 "output_dir": "/custom/topomap",
                 "camera_prim_path": "/World/custom_topomap_camera",
                 "render_settle_steps": 5,
-                "focal_length": 3.0,
-                "horizontal_aperture": 6.0,
-                "vertical_aperture": 4.0,
-                "focus_distance": 1.0,
             }
         }
         config = MissionConfig.from_dict(data)
@@ -541,10 +548,19 @@ class TestMissionConfigFromDict:
         assert config.topomap.output_dir == "/custom/topomap"
         assert config.topomap.camera_prim_path == "/World/custom_topomap_camera"
         assert config.topomap.render_settle_steps == 5
-        assert config.topomap.focal_length == 3.0
-        assert config.topomap.horizontal_aperture == 6.0
-        assert config.topomap.vertical_aperture == 4.0
-        assert config.topomap.focus_distance == 1.0
+        assert config.topomap.camera_usd_path is None  # Not set in data
+
+    def test_topomap_parsing_with_camera_usd_path(self):
+        """Test topomap config parsing with camera_usd_path."""
+        data = {
+            "topomap": {
+                "enabled": True,
+                "camera_usd_path": "omniverse://localhost/Users/worv/costnav/SegwayE1/camera.usd",
+            }
+        }
+        config = MissionConfig.from_dict(data)
+        assert config.topomap.enabled is True
+        assert config.topomap.camera_usd_path == "omniverse://localhost/Users/worv/costnav/SegwayE1/camera.usd"
 
     def test_topomap_defaults_when_missing(self):
         """Test that topomap config uses defaults when section is missing."""
@@ -552,7 +568,8 @@ class TestMissionConfigFromDict:
         assert config.topomap.enabled is False
         assert config.topomap.waypoint_interval == 2.0
         assert config.topomap.image_width == 640
-        assert config.topomap.image_height == 360
+        assert config.topomap.image_height == 400
+        assert config.topomap.camera_usd_path is None
 
     def test_manager_parsing(self):
         """Test manager config parsing from dict."""

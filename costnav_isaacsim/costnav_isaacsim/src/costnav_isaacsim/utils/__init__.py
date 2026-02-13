@@ -15,6 +15,7 @@ from .prim_utils import (
     set_prim_world_translation,
 )
 from .robot_config import (
+    DEFAULT_CAMERA_USD_PATHS,
     DEFAULT_GOAL_CAMERA_HEIGHTS,
     DEFAULT_PHYSICS_DT,
     DEFAULT_RENDERING_DT,
@@ -39,6 +40,7 @@ __all__ = [
     "resolve_robot_prim_path",
     "set_prim_world_translation",
     # robot_config
+    "DEFAULT_CAMERA_USD_PATHS",
     "DEFAULT_GOAL_CAMERA_HEIGHTS",
     "DEFAULT_PHYSICS_DT",
     "DEFAULT_RENDERING_DT",
