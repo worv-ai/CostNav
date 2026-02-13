@@ -32,7 +32,7 @@ device: "cuda:0"                   # PyTorch device for inference
 # Navigation mode
 use_imagegoal: false               # Use image goal navigation mode
 visualize_goal_image: false        # Publish received goal image to /received_goal_image for debugging
-visualize_debug_images: false      # Publish /vint_goal_image and /vint_localization_image for debugging
+visualize_debug_images: true       # Publish /vint_goal_image and /vint_localization_image for debugging
 
 # Topomap parameters (used when --use_topomap is passed on CLI)
 topomap_goal_node: -1              # Goal node index in the topomap (-1 = last node)
