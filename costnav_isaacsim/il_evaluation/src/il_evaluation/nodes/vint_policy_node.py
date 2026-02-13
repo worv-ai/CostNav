@@ -120,7 +120,7 @@ class ViNTPolicyNode(Node):
         checkpoint: str,
         model_config: str,
         robot_config: str,
-        inference_rate: float = 10.0,
+        inference_rate: float = 4.0,
         image_topic: str = "/front_stereo_camera/left/image_raw",
         use_imagegoal: bool = False,
         device: str = "cuda:0",
@@ -157,7 +157,6 @@ class ViNTPolicyNode(Node):
         self.agent = ViNTAgent(
             model_path=checkpoint,
             model_config_path=model_config,
-            robot_config_path=robot_config,
             device=device,
         )
         self.agent.reset(batch_size=1)
@@ -623,8 +622,8 @@ def parse_args():
     parser.add_argument(
         "--inference_rate",
         type=float,
-        default=10.0,
-        help="Inference frequency in Hz (default: 10.0)",
+        default=4.0,
+        help="Inference frequency in Hz (default: 4.0, matches training sample_rate)",
     )
     parser.add_argument(
         "--image_topic",

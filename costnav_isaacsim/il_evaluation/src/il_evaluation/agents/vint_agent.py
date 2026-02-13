@@ -77,7 +77,6 @@ class ViNTAgent(BaseAgent):
     Args:
         model_path: Path to trained ViNT model weights.
         model_config_path: Path to model configuration YAML.
-        robot_config_path: Path to robot configuration YAML.
         device: PyTorch device for inference.
     """
 
@@ -85,10 +84,9 @@ class ViNTAgent(BaseAgent):
         self,
         model_path: str,
         model_config_path: str,
-        robot_config_path: str,
         device: str = "cuda:0",
     ):
-        super().__init__(model_config_path, robot_config_path, device)
+        super().__init__(model_config_path, device)
 
         self.model_path = model_path
 
@@ -151,7 +149,7 @@ class ViNTAgent(BaseAgent):
 
             # Apply normalization if configured
             if self.normalize:
-                waypoints[:, :, :2] *= self.MAX_V / self.RATE
+                waypoints[:, :, :2] *= self.denorm_scale
 
             # Stop if far from goal (distance > 7.0)
             stop_mask = (distances > 7.0).unsqueeze(1).float()
@@ -195,8 +193,7 @@ class ViNTAgent(BaseAgent):
 
             # Transform observation context (single batch element)
             input_image = [
-                transform_images(imgs, self.image_size, center_crop=False).to(self.device)
-                for imgs in self.memory_queue
+                transform_images(imgs, self.image_size, center_crop=False).to(self.device) for imgs in self.memory_queue
             ]
             input_image = torch.concat(input_image, dim=0)  # [1, C*(ctx+1), H, W]
 
@@ -211,13 +208,11 @@ class ViNTAgent(BaseAgent):
             obs_batch = input_image.repeat(len(subgoal_images), 1, 1, 1)  # [N, C*(ctx+1), H, W]
 
             # Batched inference
-            distances, waypoints = self.vint_policy.predict_imagegoal_distance_and_action(
-                obs_batch, goal_batch
-            )
+            distances, waypoints = self.vint_policy.predict_imagegoal_distance_and_action(obs_batch, goal_batch)
 
             # Apply normalization
             if self.normalize:
-                waypoints[:, :, :2] *= self.MAX_V / self.RATE
+                waypoints[:, :, :2] *= self.denorm_scale
 
             distances_np = to_numpy(distances.flatten())  # [N]
 
@@ -262,7 +257,7 @@ class ViNTAgent(BaseAgent):
 
             # Apply normalization if configured
             if self.normalize:
-                waypoints[:, :, :2] *= self.MAX_V / self.RATE
+                waypoints[:, :, :2] *= self.denorm_scale
 
             trajectory = self.traj_generate.TrajGeneratorFromPFreeRot(waypoints[:, :, 0:3], step=0.1)
 
@@ -279,10 +274,9 @@ class NoGoalViNTAgent(BaseAgent):
         self,
         model_path: str,
         model_config_path: str,
-        robot_config_path: str,
         device: str = "cuda:0",
     ):
-        super().__init__(model_config_path, robot_config_path, device)
+        super().__init__(model_config_path, device)
 
         self.model_path = model_path
 
@@ -322,7 +316,7 @@ class NoGoalViNTAgent(BaseAgent):
             waypoints = self.vint_policy.predict_nogoal_action(input_image)
 
             if self.normalize:
-                waypoints[:, :, :2] *= self.MAX_V / self.RATE
+                waypoints[:, :, :2] *= self.denorm_scale
 
             trajectory = self.traj_generate.TrajGeneratorFromPFreeRot(waypoints[:, :, 0:3], step=0.1)
 

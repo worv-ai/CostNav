@@ -23,13 +23,18 @@ Key features from NavDP:
     - When MPC is None, skip control iteration (matching NavDP behavior)
 
 Architecture:
-    - ViNT policy node: runs inference at ~10 Hz, publishes full trajectory
+    - ViNT policy node: runs inference at ~4 Hz, publishes full trajectory
     - Trajectory follower node: receives trajectory, publishes cmd_vel at ~20 Hz
+
+MPC reuse:
+    The CasADi optimization problem is built once on the first trajectory.
+    Subsequent trajectories update the reference path without rebuilding the
+    problem, preserving the IPOPT warm-start for faster convergence.
 
 Usage:
     python3 trajectory_follower_node.py \
         --control_rate 20.0 \
-        --max_linear_vel 0.5 \
+        --max_linear_vel 2.0 \
         --max_angular_vel 0.5
 """
 
@@ -266,7 +271,7 @@ class TrajectoryFollowerNode(Node):
         self,
         robot_config: str,
         control_rate: float = 20.0,
-        max_linear_vel: float = 0.5,
+        max_linear_vel: float = 2.0,
         max_angular_vel: float = 0.5,
         trajectory_timeout: float = 0.5,
     ):
@@ -365,15 +370,20 @@ class TrajectoryFollowerNode(Node):
                 else:
                     world_trajectory = trajectory
 
-                self.mpc_controller = MPCController(
-                    trajectory=world_trajectory,
-                    N=self.mpc_horizon,
-                    desired_v=self.max_linear_vel,
-                    v_max=self.max_linear_vel,
-                    w_max=self.max_angular_vel,
-                    ref_gap=self.mpc_ref_gap,
-                    dt=self.mpc_dt,
-                )
+                if self.mpc_controller is None:
+                    # First trajectory — build the CasADi problem once
+                    self.mpc_controller = MPCController(
+                        trajectory=world_trajectory,
+                        N=self.mpc_horizon,
+                        desired_v=self.max_linear_vel,
+                        v_max=self.max_linear_vel,
+                        w_max=self.max_angular_vel,
+                        ref_gap=self.mpc_ref_gap,
+                        dt=self.mpc_dt,
+                    )
+                else:
+                    # Reuse existing MPC: update ref trajectory, keep warm start
+                    self.mpc_controller.ref_traj = self.mpc_controller._make_ref_denser(world_trajectory)
 
                 # Log trajectory receive at interval
                 self._trajectory_receive_count += 1
@@ -557,8 +567,8 @@ def parse_args():
     parser.add_argument(
         "--max_linear_vel",
         type=float,
-        default=0.5,
-        help="Maximum linear velocity m/s (default: 0.5, matching NavDP)",
+        default=2.0,
+        help="Maximum linear velocity m/s (default: 2.0)",
     )
     parser.add_argument(
         "--max_angular_vel",
