@@ -281,7 +281,7 @@ class TrajectoryFollowerNode(Node):
         # Trajectory follower parameters from config
         follower_cfg = robot_cfg.get("trajectory_follower", {})
         self.control_rate = follower_cfg.get("control_rate", 20.0)
-        self.max_linear_vel = follower_cfg.get("max_linear_vel", 2.0)
+        self.max_linear_vel = follower_cfg.get("max_linear_vel", 0.8)
         self.max_angular_vel = follower_cfg.get("max_angular_vel", 0.5)
         self.trajectory_timeout = follower_cfg.get("trajectory_timeout", 0.5)
 

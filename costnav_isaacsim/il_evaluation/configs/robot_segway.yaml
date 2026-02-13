@@ -12,6 +12,6 @@ topics:
 # Trajectory follower parameters
 trajectory_follower:
   control_rate: 20.0        # Control loop frequency (Hz)
-  max_linear_vel: 2.0       # Maximum linear velocity (m/s)
+  max_linear_vel: 0.8       # Maximum linear velocity (m/s)
   max_angular_vel: 0.5      # Maximum angular velocity (rad/s)
   trajectory_timeout: 0.5   # Trajectory validity timeout (s)

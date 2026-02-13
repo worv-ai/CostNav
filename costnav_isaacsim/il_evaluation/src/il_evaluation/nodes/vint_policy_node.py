@@ -110,7 +110,8 @@ class ViNTPolicyNode(Node):
         - topomap_dir: Directory containing topomap images (docker-compose injected)
 
     From model_config (vint_eval.yaml):
-        - inference_rate, device, use_imagegoal, visualize_goal_image
+        - inference_rate, device, use_imagegoal, visualize_goal_image,
+          visualize_debug_images
         - topomap_goal_node, topomap_radius, topomap_close_threshold
 
     From robot_config (robot_*.yaml):
@@ -151,6 +152,7 @@ class ViNTPolicyNode(Node):
         device = model_cfg.get("device", "cuda:0")
         self.use_imagegoal = model_cfg.get("use_imagegoal", False)
         self.visualize_goal_image = model_cfg.get("visualize_goal_image", False)
+        self.visualize_debug_images = model_cfg.get("visualize_debug_images", False)
         topomap_goal_node = model_cfg.get("topomap_goal_node", -1)
         topomap_radius = model_cfg.get("topomap_radius", 4)
         topomap_close_threshold = model_cfg.get("topomap_close_threshold", 3.0)
@@ -257,6 +259,16 @@ class ViNTPolicyNode(Node):
         if self.visualize_goal_image:
             self._received_goal_image_pub = self.create_publisher(Image, "/received_goal_image", 10)
             self.get_logger().info("Goal image visualization enabled. Publishing to: /received_goal_image")
+
+        # Debug publishers for current goal and localization images
+        self._goal_image_pub = None
+        self._localization_image_pub = None
+        if self.visualize_debug_images:
+            self._goal_image_pub = self.create_publisher(Image, "/vint_goal_image", 10)
+            self._localization_image_pub = self.create_publisher(Image, "/vint_localization_image", 10)
+            self.get_logger().info(
+                "Debug image visualization enabled. " "Publishing to: /vint_goal_image, /vint_localization_image"
+            )
 
         # Inference timer
         timer_period = 1.0 / self.inference_rate
@@ -479,6 +491,10 @@ class ViNTPolicyNode(Node):
         _, trajectory, distance = self.agent.step_imagegoal([self.goal_image], [self.current_image])
         self._publish_trajectory(trajectory[0], distance=float(distance[0]))
 
+        # Publish goal image for visualization
+        if self._goal_image_pub is not None:
+            self._publish_debug_image(self._goal_image_pub, self.goal_image, "goal_image")
+
     def _inference_nogoal(self) -> None:
         """NoGoal mode: exploration without a goal."""
         _, trajectory = self.agent.step_nogoal([self.current_image])
@@ -559,6 +575,34 @@ class ViNTPolicyNode(Node):
 
         if self._topomap_reached_goal:
             self.get_logger().info("Topomap goal reached!")
+
+        # Publish goal (chosen subgoal) and localization (closest node) images
+        if self._goal_image_pub is not None:
+            chosen_global_idx = start + chosen_idx
+            if 0 <= chosen_global_idx < len(self.topomap):
+                goal_img_np = np.array(self.topomap[chosen_global_idx])
+                self._publish_debug_image(self._goal_image_pub, goal_img_np, "goal_image")
+        if self._localization_image_pub is not None:
+            closest_node = self._topomap_closest_node
+            if 0 <= closest_node < len(self.topomap):
+                loc_img_np = np.array(self.topomap[closest_node])
+                self._publish_debug_image(self._localization_image_pub, loc_img_np, "localization_image")
+
+    def _publish_debug_image(self, publisher, image_np: np.ndarray, frame_id: str) -> None:
+        """Publish a debug image on the given publisher.
+
+        Args:
+            publisher: ROS2 image publisher.
+            image_np: RGB numpy image (H, W, 3).
+            frame_id: Frame ID string for the image header.
+        """
+        try:
+            msg = self.bridge.cv2_to_imgmsg(image_np, "rgb8")
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.header.frame_id = frame_id
+            publisher.publish(msg)
+        except Exception as e:
+            self.get_logger().warn(f"Failed to publish debug image ({frame_id}): {e}")
 
     def _publish_trajectory(
         self,
