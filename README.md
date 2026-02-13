@@ -24,11 +24,11 @@ CostNav introduces a **paradigm shift** in how we evaluate navigation systems: f
 
 Our key contributions are:
 
-1. **High-Fidelity Physics Simulation for effective Real-World Economic Scenarios.**  
+1. **High-Fidelity Physics Simulation with Dynamics for effective Real-World Economic Scenarios.**
    a. Supporting Segway E1 delivery robot, food cargo dynamics with popcorn, detailed collision dynamics, pedestrians
-2. **Real-world referenced Cost-Revenue Model with Break-Even Point Analysis.**  
+2. **Real-world referenced Cost-Revenue Model with Break-Even Point Analysis.**
    a. Supporting Energy Cost, Pedestrian Safety Cost, Property Damage Cost, Repair Cost
-3. **Rule based Navigation Evaluation (Coming up soon: Learning based Navigation Evaluation and Dataset)**  
+3. **Rule based Navigation Evaluation (Coming up soon: Learning based Navigation Evaluation and Dataset)**
    a. Comparing Profitability between Nav2 with GPS and Nav2 with AMCL localization
 
 You can find more details in our [technical report](https://arxiv.org/abs/2511.20216).
@@ -127,9 +127,35 @@ make run-eval-teleop # run evaluation in teleop mode
 
 > **Tip:** Press **Ctrl+C once** to stop teleop. The teardown will run automatically — do not press Ctrl+C again while containers are being cleaned up.
 
+## Project Structure
+
+```
+CostNav/
+├── costnav_isaacsim/
+│   ├── costnav_isaacsim/          # Isaac Sim simulation & mission management
+│   ├── il_training/               # IL data processing + model training
+│   ├── il_evaluation/             # IL inference + ROS2 policy nodes
+│   ├── isaac_sim_teleop_ros2/     # ROS2 teleoperation package
+│   └── nav2_params/               # Nav2 launch files & parameters
+├── Dockerfile                     # Isaac Sim & Isaac Lab (multi-stage)
+├── Dockerfile.ros                 # ROS2 Jazzy (teleop + nav2)
+├── Dockerfile.ros_torch           # ROS2 Jazzy + PyTorch (IL evaluation)
+└── docker-compose.yml
+```
+
+### Component Environments
+
+| Component               | Test Environment               | Runtime                | Notes                                          |
+| ----------------------- | ------------------------------ | ---------------------- | ---------------------------------------------- |
+| `costnav_isaacsim`      | `Dockerfile` (isaac-sim stage) | NVIDIA Isaac Sim 5.1.0 | Requires NGC + GPU                             |
+| `il_training`           | `uv`                           | Bare-metal / SLURM     | CPU-only for data processing; GPU for training |
+| `il_evaluation`         | `Dockerfile.ros_torch`         | ROS2 Jazzy + PyTorch   | GPU inference                                  |
+| `isaac_sim_teleop_ros2` | `Dockerfile.ros`               | ROS2 Jazzy             | Joystick teleoperation                         |
+| `nav2_params`           | `Dockerfile.ros`               | ROS2 Jazzy             | Launch files only, no unit tests               |
+
 ## Running IL Baselines (ViNT)
 
-1. Download checkpoint or train a model  
+1. Download checkpoint or train a model
    Link is from [visualnav-transformer](https://github.com/robodhruv/visualnav-transformer)
 
 ```
@@ -144,7 +170,7 @@ Place the downloaded model files (e.g., `vint.pth`, `gnm.pth`, `nomad.pth`) in t
 make build-vint
 ```
 
-4. Run the evaluation
+3. Run the evaluation
 
 ```bash
 # Terminal 1: Start the ViNT stack
@@ -153,6 +179,12 @@ MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
 # Terminal 2: Run evaluation
 make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
 ```
+
+For detailed IL training and evaluation documentation, see:
+
+- [IL Training README](costnav_isaacsim/il_training/README.md)
+- [IL Evaluation README](costnav_isaacsim/il_evaluation/README.md)
+- [IL Design Document](docs/imitation_learning_baselines.md)
 
 ## What's next?
 
@@ -165,12 +197,12 @@ make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
 
 ## Contributing
 
-Help us build a large-scale, ever-expanding benchmark!  
+Help us build a large-scale, ever-expanding benchmark!
 We highly encourage contributions via issues and pull requests, especially adding more navigation baselines!
 
 ## Contact
 
-Maintained by the Maum.AI WoRV team.  
+Maintained by the Maum.AI WoRV team.
 For research collaborations or enterprise deployments, please contact https://worv-ai.github.io/.
 
 ## Citation
@@ -179,12 +211,12 @@ To Cite CostNav, please use the following bibtex citation
 
 ```
 @misc{seong2026costnavnavigationbenchmarkrealworld,
-      title={CostNav: A Navigation Benchmark for Real-World Economic-Cost Evaluation of Physical AI Agents}, 
+      title={CostNav: A Navigation Benchmark for Real-World Economic-Cost Evaluation of Physical AI Agents},
       author={Haebin Seong and Sungmin Kim and Yongjun Cho and Myunchul Joe and Geunwoo Kim and Yubeen Park and Sunhoo Kim and Yoonshik Kim and Suhwan Choi and Jaeyoon Jung and Jiyong Youn and Jinmyung Kwak and Sunghee Ahn and Jaemin Lee and Younggil Do and Seungyeop Yi and Woojin Cheong and Minhyeok Oh and Minchan Kim and Seongjae Kang and Samwoo Seong and Youngjae Yu and Yunsung Lee},
       year={2026},
       eprint={2511.20216},
       archivePrefix={arXiv},
       primaryClass={cs.AI},
-      url={https://arxiv.org/abs/2511.20216}, 
+      url={https://arxiv.org/abs/2511.20216},
 }
 ```

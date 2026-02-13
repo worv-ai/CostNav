@@ -15,8 +15,6 @@ Note:
     They test the configuration and logic, not the actual ROS2 communication.
 """
 
-import math
-
 # Mock ROS2 and other dependencies
 import sys
 from unittest.mock import MagicMock, patch
@@ -32,6 +30,8 @@ sys.modules["visualization_msgs"] = MagicMock()
 sys.modules["visualization_msgs.msg"] = MagicMock()
 sys.modules["std_msgs"] = MagicMock()
 sys.modules["std_msgs.msg"] = MagicMock()
+
+from transforms3d.euler import euler2quat  # noqa: E402
 
 from costnav_isaacsim.config import MissionManagerConfig  # noqa: E402
 from costnav_isaacsim.mission_manager.navmesh_sampler import SampledPosition  # noqa: E402
@@ -69,24 +69,6 @@ class TestMissionManagerConfig:
         assert config_custom.goal_delay == 1.0
         assert config_custom.teleport_height == 0.2
         assert config_custom.robot_prim_path == "/World/Nova_Carter_ROS/chassis_link"
-
-
-class TestYawToQuaternion:
-    """Tests for yaw to quaternion conversion in orchestrator."""
-
-    def test_yaw_to_quaternion_conversion(self):
-        """Test quaternion conversion for various yaw angles."""
-        # Zero yaw
-        yaw = 0.0
-        qz, qw = math.sin(yaw / 2.0), math.cos(yaw / 2.0)
-        assert abs(qz - 0.0) < 0.001
-        assert abs(qw - 1.0) < 0.001
-
-        # 90 degrees
-        yaw = math.pi / 2
-        qz, qw = math.sin(yaw / 2.0), math.cos(yaw / 2.0)
-        assert abs(qz - 0.707) < 0.01
-        assert abs(qw - 0.707) < 0.01
 
 
 class TestTeleportCallback:
@@ -220,13 +202,12 @@ class TestTeleportCallback:
 
             # Verify orientation was set correctly
             assert len(orient_values) == 1
-            # heading=0.5 -> qz=sin(0.25)≈0.2474, qw=cos(0.25)≈0.9689
-            qw_expected = math.cos(0.5 / 2.0)
-            qz_expected = math.sin(0.5 / 2.0)
-            assert abs(orient_values[0][0] - qw_expected) < 0.001  # w
-            assert abs(orient_values[0][1] - 0.0) < 0.001  # x
-            assert abs(orient_values[0][2] - 0.0) < 0.001  # y
-            assert abs(orient_values[0][3] - qz_expected) < 0.001  # z
+            # heading=0.5 -> quaternion via euler2quat
+            q_expected = euler2quat(0, 0, 0.5)
+            assert abs(orient_values[0][0] - q_expected[0]) < 0.001  # w
+            assert abs(orient_values[0][1] - q_expected[1]) < 0.001  # x
+            assert abs(orient_values[0][2] - q_expected[2]) < 0.001  # y
+            assert abs(orient_values[0][3] - q_expected[3]) < 0.001  # z
 
             # === SIMULATE ROBOT MOVEMENT ===
             # Simulate that xform operations now exist (from first teleport)
@@ -254,12 +235,11 @@ class TestTeleportCallback:
 
             # Verify orientation was updated correctly
             assert len(orient_values) == 2
-            qw_expected2 = math.cos(1.0 / 2.0)
-            qz_expected2 = math.sin(1.0 / 2.0)
-            assert abs(orient_values[1][0] - qw_expected2) < 0.001  # w
-            assert abs(orient_values[1][1] - 0.0) < 0.001  # x
-            assert abs(orient_values[1][2] - 0.0) < 0.001  # y
-            assert abs(orient_values[1][3] - qz_expected2) < 0.001  # z
+            q_expected2 = euler2quat(0, 0, 1.0)
+            assert abs(orient_values[1][0] - q_expected2[0]) < 0.001  # w
+            assert abs(orient_values[1][1] - q_expected2[1]) < 0.001  # x
+            assert abs(orient_values[1][2] - q_expected2[2]) < 0.001  # y
+            assert abs(orient_values[1][3] - q_expected2[3]) < 0.001  # z
 
             # === VERIFY NO ACCUMULATION ===
             # The key verification: positions are absolute, not accumulated

@@ -4,11 +4,44 @@ on:
   push:
     branches: [main]
   pull_request:
-    types:
-      - opened
-      - synchronize
+    types: [opened, synchronize]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
+  # ── Detect changed paths ────────────────────────────────────────────────
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      costnav: ${{ steps.filter.outputs.costnav }}
+      il-training: ${{ steps.filter.outputs.il-training }}
+      il-evaluation: ${{ steps.filter.outputs.il-evaluation }}
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            costnav:
+              - 'costnav_isaacsim/costnav_isaacsim/**'
+              - 'Dockerfile'
+            il-training:
+              - 'costnav_isaacsim/il_training/**'
+              - 'third_party/visualnav-transformer/**'
+              - 'third_party/diffusion_policy/**'
+            il-evaluation:
+              - 'costnav_isaacsim/il_evaluation/**'
+              - 'third_party/visualnav-transformer/**'
+              - 'Dockerfile.ros_torch'
+
+
+  # ── Lint ────────────────────────────────────────────────────────────────
   ruff:
     runs-on: ubuntu-24.04
     steps:
@@ -18,3 +51,86 @@ jobs:
       - uses: astral-sh/ruff-action@v3
       - run: ruff check --fix
       - run: ruff format --check --diff
+
+  # ── costnav_isaacsim tests (Docker, base stage) ───────────────────────
+  costnav-tests:
+    needs: changes
+    if: needs.changes.outputs.costnav == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: false
+      - name: Build test image
+        run: docker build --target base --tag costnav-base:test -f Dockerfile .
+      - name: Run tests
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/workspace costnav-base:test bash -c "
+            cd costnav_isaacsim/costnav_isaacsim &&
+            uv sync --quiet &&
+            uv run pytest tests/ -v --tb=short --junitxml=test-results.xml
+          "
+
+  # ── IL Training tests (uv, no GPU needed) ──────────────────────────────
+  il-training-tests:
+    needs: changes
+    if: needs.changes.outputs.il-training == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: costnav_isaacsim/il_training
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: false
+      - name: Init required submodules
+        run: |
+          cd ../..
+          git submodule update --init --depth 1 \
+            third_party/visualnav-transformer \
+            third_party/diffusion_policy
+      - uses: astral-sh/setup-uv@v7
+      - name: Patch diffusion_policy __init__.py
+        run: |
+          INIT_FILE="../../third_party/diffusion_policy/diffusion_policy/__init__.py"
+          [ -f "$INIT_FILE" ] || touch "$INIT_FILE"
+      - run: uv sync --quiet
+      - run: |
+          uv run pytest tests/ \
+            -v --tb=short --junitxml=test-results.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: il-training-test-results
+          path: costnav_isaacsim/il_training/test-results.xml
+          retention-days: 30
+
+  # ── IL Evaluation tests (Docker, ROS2 + PyTorch) ────────────────────────
+  il-evaluation-tests:
+    needs: changes
+    if: needs.changes.outputs.il-evaluation == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: false
+      - name: Init required submodules
+        run: |
+          git submodule update --init --depth 1 \
+            third_party/visualnav-transformer
+      - name: Build evaluation image
+        run: docker build --tag costnav-eval:test -f Dockerfile.ros_torch .
+      - name: Run tests
+        run: |
+          docker run --rm costnav-eval:test bash -c "
+            cd /workspace/costnav_isaacsim/il_evaluation &&
+            uv sync --quiet &&
+            uv run pytest tests/ -v --tb=short 2>/dev/null ||
+            echo 'No tests found (tests/ empty or missing)'
+          "

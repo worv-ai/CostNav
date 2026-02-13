@@ -7,6 +7,7 @@ FROM ubuntu:24.04 AS base
 
 # uv handles Python installs
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+ENV UV_LINK_MODE=copy
 
 # System packages
 RUN apt-get update && apt-get install -y \
@@ -19,19 +20,13 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /workspace
 
-COPY pyproject.toml ./
-COPY README.md ./
-
-# Core dev extras
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system --break-system-packages -e ".[dev]"
-
 # === Isaac Sim image ===
 ARG ISAAC_SIM_VERSION=5.1.0
 FROM nvcr.io/nvidia/isaac-sim:${ISAAC_SIM_VERSION} AS isaac-sim
 
 # Reuse uv binary
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+ENV UV_LINK_MODE=copy
 
 # Install git for version control
 USER root
@@ -67,16 +62,16 @@ ENV LD_LIBRARY_PATH="\
     ${ISAAC_PATH}/kit/exts:\
     ${LD_LIBRARY_PATH}"
 
-COPY pyproject.toml ./
-COPY README.md ./
 COPY costnav_isaacsim/costnav_isaacsim/ ./costnav_isaacsim/costnav_isaacsim/
 
 # python -> python3 shim
 RUN ln -sf /isaac-sim/kit/python/bin/python3 /isaac-sim/kit/python/bin/python
 
-# Install costnav package (mission config, people manager, mission manager)
+# Install costnav package into Isaac Sim's site-packages directly.
+# Using --system because #!/isaac-sim/python.sh bypasses any venv.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --python="${PYTHON_BIN}" --system -e ./costnav_isaacsim/costnav_isaacsim
+    uv pip install --python="${PYTHON_BIN}" --system \
+    -e ./costnav_isaacsim/costnav_isaacsim
 
 # Install pre-commit for git hooks
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -99,6 +94,7 @@ FROM nvcr.io/nvidia/isaac-sim:${ISAAC_SIM_VERSION} AS isaac-lab
 
 # uv + git for installs
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+ENV UV_LINK_MODE=copy
 
 USER root
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*

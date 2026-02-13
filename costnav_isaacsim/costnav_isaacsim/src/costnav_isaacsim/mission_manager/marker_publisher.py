@@ -24,6 +24,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import ColorRGBA
+from transforms3d.euler import euler2quat
 from visualization_msgs.msg import Marker
 
 if TYPE_CHECKING:
@@ -190,6 +191,9 @@ class MarkerPublisher(Node):
         base_heading = config.fixed_heading if config.fixed_heading is not None else heading
         arrow_heading = base_heading + config.heading_offset
 
+        # Quaternion from yaw using transforms3d (returns w, x, y, z)
+        quat = euler2quat(0, 0, arrow_heading)
+
         # Position (ensure float type for ROS2 compatibility)
         if config.marker_type == Marker.ARROW and config.head_on_pose:
             offset = float(config.scale_x)
@@ -203,11 +207,11 @@ class MarkerPublisher(Node):
             marker.pose.position.y = float(y)
             marker.pose.position.z = float(z)
 
-        # Orientation (quaternion from yaw)
-        marker.pose.orientation.x = 0.0
-        marker.pose.orientation.y = 0.0
-        marker.pose.orientation.z = math.sin(arrow_heading / 2.0)
-        marker.pose.orientation.w = math.cos(arrow_heading / 2.0)
+        # Orientation (quaternion from yaw via transforms3d)
+        marker.pose.orientation.w = quat[0]
+        marker.pose.orientation.x = quat[1]
+        marker.pose.orientation.y = quat[2]
+        marker.pose.orientation.z = quat[3]
 
         # Scale (ensure float type for ROS2 compatibility)
         marker.scale.x = float(config.scale_x)

@@ -12,6 +12,7 @@ keywords = ["robotics", "navigation", "isaac-sim", "simulation", "ros2"]
 dependencies = [
     # Core dependencies - most come from Isaac Sim container
     "pyyaml>=6.0.0",
+    "transforms3d>=0.4.2",
 ]
 
 [project.urls]
