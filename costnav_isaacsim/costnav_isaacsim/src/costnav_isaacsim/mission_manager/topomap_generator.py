@@ -94,8 +94,8 @@ class TopomapGenerator:
             goal: Goal position on the NavMesh.
 
         Returns:
-            List of sparse SampledPosition waypoints (at turns/corners),
-            or None if no path exists.
+            List of raw SampledPosition waypoints from the NavMesh path
+            query (typically very dense), or None if no path exists.
         """
         if not NAVMESH_AVAILABLE:
             logger.error("NavMesh extensions not available.")
@@ -135,7 +135,7 @@ class TopomapGenerator:
                 )
 
             logger.info(
-                f"NavMesh path: {len(waypoints)} sparse waypoints from "
+                f"NavMesh path: {len(waypoints)} raw waypoints from "
                 f"({start.x:.2f}, {start.y:.2f}) to ({goal.x:.2f}, {goal.y:.2f})"
             )
             return waypoints
@@ -145,51 +145,51 @@ class TopomapGenerator:
             return None
 
     @staticmethod
-    def interpolate_waypoints(
-        sparse_points: List[SampledPosition],
+    def resample_waypoints(
+        raw_points: List[SampledPosition],
         interval: float = 2.0,
     ) -> List[SampledPosition]:
         """Resample waypoints along the polyline at fixed arc-length intervals.
 
-        Walks along the entire polyline defined by *sparse_points* and emits
-        a new waypoint every *interval* meters of arc length.  This both
-        **interpolates** (adds points on long segments) and **decimates**
-        (skips original vertices that are closer than *interval*).
+        The NavMesh path query typically returns a very dense set of points.
+        This method walks along the polyline and emits a new waypoint every
+        *interval* meters of arc length, producing a **uniformly-spaced**
+        subset that is usually much smaller than the input.
 
         Heading at each emitted point is the direction of the segment it
         falls on.
 
         Args:
-            sparse_points: Sparse waypoints from NavMesh path query.
+            raw_points: Raw waypoints from NavMesh path query.
             interval: Target distance between resampled waypoints (meters).
 
         Returns:
             List of uniformly-spaced SampledPosition with headings set.
         """
-        if len(sparse_points) < 2:
-            return list(sparse_points)
+        if len(raw_points) < 2:
+            return list(raw_points)
 
         # --- Build cumulative arc-length table --------------------------------
         seg_lengths: List[float] = []
-        for i in range(len(sparse_points) - 1):
-            p0 = sparse_points[i]
-            p1 = sparse_points[i + 1]
+        for i in range(len(raw_points) - 1):
+            p0 = raw_points[i]
+            p1 = raw_points[i + 1]
             dx = p1.x - p0.x
             dy = p1.y - p0.y
             seg_lengths.append(math.sqrt(dx * dx + dy * dy))
 
         total_length = sum(seg_lengths)
         if total_length < 1e-6:
-            return [sparse_points[0], sparse_points[-1]]
+            return [raw_points[0], raw_points[-1]]
 
         # --- Walk along the polyline, emitting a point every *interval* m -----
-        dense_points: List[SampledPosition] = []
+        resampled: List[SampledPosition] = []
 
         # Always emit the start point
-        first = sparse_points[0]
-        dx0 = sparse_points[1].x - first.x
-        dy0 = sparse_points[1].y - first.y
-        dense_points.append(
+        first = raw_points[0]
+        dx0 = raw_points[1].x - first.x
+        dy0 = raw_points[1].y - first.y
+        resampled.append(
             SampledPosition(
                 x=first.x,
                 y=first.y,
@@ -206,8 +206,8 @@ class TopomapGenerator:
                 cumulative += seg_len
                 continue
 
-            p0 = sparse_points[seg_idx]
-            p1 = sparse_points[seg_idx + 1]
+            p0 = raw_points[seg_idx]
+            p1 = raw_points[seg_idx + 1]
             dx = p1.x - p0.x
             dy = p1.y - p0.y
             dz = p1.z - p0.z
@@ -219,7 +219,7 @@ class TopomapGenerator:
             # Emit all threshold crossings that fall inside this segment
             while next_emit_dist <= seg_end_cum:
                 t = (next_emit_dist - seg_start_cum) / seg_len
-                dense_points.append(
+                resampled.append(
                     SampledPosition(
                         x=p0.x + t * dx,
                         y=p0.y + t * dy,
@@ -232,22 +232,20 @@ class TopomapGenerator:
             cumulative = seg_end_cum
 
         # Always include the final goal point
-        last = sparse_points[-1]
-        prev = sparse_points[-2]
+        last = raw_points[-1]
+        prev = raw_points[-2]
         last_heading = math.atan2(last.y - prev.y, last.x - prev.x)
         # Avoid duplicate if the last emitted point is very close to the goal
-        if dense_points:
-            lp = dense_points[-1]
+        if resampled:
+            lp = resampled[-1]
             dist_to_last = math.sqrt((last.x - lp.x) ** 2 + (last.y - lp.y) ** 2)
             if dist_to_last > interval * 0.1:
-                dense_points.append(SampledPosition(x=last.x, y=last.y, z=last.z, heading=last_heading))
+                resampled.append(SampledPosition(x=last.x, y=last.y, z=last.z, heading=last_heading))
         else:
-            dense_points.append(SampledPosition(x=last.x, y=last.y, z=last.z, heading=last_heading))
+            resampled.append(SampledPosition(x=last.x, y=last.y, z=last.z, heading=last_heading))
 
-        logger.info(
-            f"Interpolated {len(sparse_points)} sparse → {len(dense_points)} dense " f"waypoints (interval={interval}m)"
-        )
-        return dense_points
+        logger.info(f"Resampled {len(raw_points)} raw → {len(resampled)} uniform " f"waypoints (interval={interval}m)")
+        return resampled
 
     def setup_camera(self) -> None:
         """Create the virtual camera prim and attach a Replicator RGB annotator.
@@ -381,13 +379,22 @@ class TopomapGenerator:
             return None
 
     def cleanup_camera(self) -> None:
-        """Remove the topomap camera prim and release render resources."""
-        try:
-            if self._render_product is not None:
-                import omni.replicator.core as rep
+        """Remove the topomap camera prim and release render resources.
 
-                rep.orchestrator.stop()
-                self._render_product = None
+        Note: We intentionally do NOT call ``rep.orchestrator.stop()`` here
+        because that stops the entire simulation, which breaks teleportation
+        and odom/tf publishing for subsequent missions.  Instead we detach
+        the annotator and release references so the render product can be
+        garbage-collected without disrupting the running simulation.
+        """
+        try:
+            if self._rgb_annotator is not None:
+                try:
+                    self._rgb_annotator.detach(self._render_product)
+                except Exception:
+                    pass  # best-effort detach
+
+            self._render_product = None
 
             if self._camera_prim is not None and self._stage is not None:
                 cam_path = self._config.camera_prim_path
@@ -408,8 +415,8 @@ class TopomapGenerator:
         """Generate a complete topological map between start and goal.
 
         This is the main entry point. It:
-        1. Queries NavMesh shortest path
-        2. Interpolates waypoints at configured interval
+        1. Queries NavMesh shortest path (returns dense raw points)
+        2. Resamples waypoints at configured uniform interval
         3. Sets up the virtual camera
         4. Captures an image at each waypoint
         5. Saves images as 0.png, 1.png, ..., N.png
@@ -436,26 +443,26 @@ class TopomapGenerator:
 
         os.makedirs(out_dir, exist_ok=True)
 
-        # Step 1: Query shortest path
-        sparse_waypoints = self.get_shortest_path_waypoints(start, goal)
-        if sparse_waypoints is None or len(sparse_waypoints) < 2:
+        # Step 1: Query shortest path (returns dense raw points from NavMesh)
+        raw_waypoints = self.get_shortest_path_waypoints(start, goal)
+        if raw_waypoints is None or len(raw_waypoints) < 2:
             logger.error("[TOPOMAP] Failed to get valid path. Aborting topomap generation.")
             return []
 
-        # Step 2: Interpolate waypoints
+        # Step 2: Resample at uniform intervals
         logger.info(
             f"[TOPOMAP] Using waypoint_interval={self._config.waypoint_interval}m, "
             f"robot_prim_path={getattr(self._config, 'robot_prim_path', None)}"
         )
-        dense_waypoints = self.interpolate_waypoints(
-            sparse_waypoints,
+        waypoints = self.resample_waypoints(
+            raw_waypoints,
             self._config.waypoint_interval,
         )
-        if len(dense_waypoints) == 0:
-            logger.error("[TOPOMAP] Interpolation produced no waypoints.")
+        if len(waypoints) == 0:
+            logger.error("[TOPOMAP] Resampling produced no waypoints.")
             return []
 
-        logger.info(f"[TOPOMAP] Generating topomap: {len(dense_waypoints)} waypoints → {out_dir}")
+        logger.info(f"[TOPOMAP] Generating topomap: {len(waypoints)} waypoints → {out_dir}")
 
         # Step 3: Setup camera
         self.setup_camera()
@@ -464,7 +471,7 @@ class TopomapGenerator:
         # Skip the first waypoint (index 0) so the topomap starts at a safe
         # distance from the robot, preventing the robot from appearing in the
         # first captured image.  Saved images are still numbered from 0.png.
-        waypoints_to_capture = dense_waypoints[1:]
+        waypoints_to_capture = waypoints[1:]
         saved_paths: List[str] = []
         try:
             for i, waypoint in enumerate(waypoints_to_capture):
