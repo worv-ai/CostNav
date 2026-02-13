@@ -133,6 +133,7 @@ class TopoMapConfig:
     output_dir: str = "/tmp/costnav_topomap"  # Default output directory
     camera_prim_path: str = "/World/topomap_camera"  # USD prim path for topomap camera
     render_settle_steps: int = 3  # Simulation steps per capture for render pipeline flush
+    first_image_extra_settle_steps: int = 10  # Extra simulation steps for the first capture to eliminate render noise
     robot_prim_path: Optional[str] = None  # Robot prim path to hide during capture
     # Camera intrinsics (matching rgb_left.usda parameters)
     focal_length: float = 2.87343
@@ -283,6 +284,7 @@ class MissionConfig:
             output_dir=topomap_data.get("output_dir", "/tmp/costnav_topomap"),
             camera_prim_path=topomap_data.get("camera_prim_path", "/World/topomap_camera"),
             render_settle_steps=topomap_data.get("render_settle_steps", 3),
+            first_image_extra_settle_steps=topomap_data.get("first_image_extra_settle_steps", 10),
             robot_prim_path=topomap_data.get("robot_prim_path", teleport_data.get("robot_prim")),
             focal_length=topomap_data.get("focal_length", 2.87343),
             horizontal_aperture=topomap_data.get("horizontal_aperture", 5.76),

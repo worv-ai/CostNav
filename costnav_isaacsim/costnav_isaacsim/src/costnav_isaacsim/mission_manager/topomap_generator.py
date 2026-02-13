@@ -304,7 +304,7 @@ class TopomapGenerator:
             logger.error(f"[TOPOMAP] Failed to setup camera: {exc}")
             raise
 
-    def capture_image_at_position(self, position: SampledPosition):
+    def capture_image_at_position(self, position: SampledPosition, extra_settle_steps: int = 0):
         """Capture an RGB image at the given position and heading.
 
         Moves the virtual camera to (x, y, z + camera_height_offset) with
@@ -313,6 +313,9 @@ class TopomapGenerator:
 
         Args:
             position: SampledPosition with x, y, z, heading.
+            extra_settle_steps: Additional simulation steps to run before
+                capture (on top of ``render_settle_steps``).  Useful for the
+                first image where the render pipeline may not yet be warm.
 
         Returns:
             numpy.ndarray of shape (H, W, 3) with dtype uint8, or None on failure.
@@ -349,14 +352,23 @@ class TopomapGenerator:
             # Add π to heading so the camera faces forward (toward the next
             # waypoint) instead of backward.
             q = euler2quat(0, 0, position.heading + math.pi)
-            yaw_quat = Gf.Quatd(q[0], Gf.Vec3d(q[1], q[2], q[3]))
-            # Base camera orientation (USD camera -Z to ROS +X convention)
-            base_quat = Gf.Quatd(0.5, Gf.Vec3d(0.5, 0.5, 0.5))
+
+            # USD xformOp:orient type varies (GfQuatf or GfQuatd) depending
+            # on how the prim was created.  Detect the actual attribute type
+            # and construct the matching quaternion so Set() never fails.
+            attr_type = orient_op.GetAttr().GetTypeName()
+            if attr_type == "quatd":
+                yaw_quat = Gf.Quatd(float(q[0]), Gf.Vec3d(float(q[1]), float(q[2]), float(q[3])))
+                base_quat = Gf.Quatd(0.5, Gf.Vec3d(0.5, 0.5, 0.5))
+            else:
+                yaw_quat = Gf.Quatf(float(q[0]), Gf.Vec3f(float(q[1]), float(q[2]), float(q[3])))
+                base_quat = Gf.Quatf(0.5, Gf.Vec3f(0.5, 0.5, 0.5))
             final_quat = yaw_quat * base_quat
             orient_op.Set(final_quat)
 
             # Step simulation to flush render pipeline
-            for _ in range(self._config.render_settle_steps):
+            total_steps = self._config.render_settle_steps + extra_settle_steps
+            for _ in range(total_steps):
                 self._simulation_context.step(render=True)
 
             # Capture image
@@ -475,7 +487,8 @@ class TopomapGenerator:
         saved_paths: List[str] = []
         try:
             for i, waypoint in enumerate(waypoints_to_capture):
-                rgb_data = self.capture_image_at_position(waypoint)
+                extra = self._config.first_image_extra_settle_steps if i == 0 else 0
+                rgb_data = self.capture_image_at_position(waypoint, extra_settle_steps=extra)
                 if rgb_data is None:
                     logger.warning(f"[TOPOMAP] Skipping waypoint {i}: capture failed")
                     continue
