@@ -127,13 +127,14 @@ This approach is useful for development and debugging within the devcontainer.
 
 ### ViNT Policy Node
 
-| Direction | Topic                                 | Type                | Description                                  |
-| --------- | ------------------------------------- | ------------------- | -------------------------------------------- |
-| Subscribe | `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image` | Camera image input                           |
-| Subscribe | `/goal_image`                         | `sensor_msgs/Image` | Goal image (ImageGoal mode, transient local) |
-| Subscribe | `/vint_enable`                        | `std_msgs/Bool`     | Enable/disable policy execution              |
-| Publish   | `/vint_trajectory`                    | `nav_msgs/Path`     | Predicted trajectory (5 waypoints)           |
-| Service   | `/reset_agent`                        | `std_srvs/Trigger`  | Reset agent memory for new mission           |
+| Direction | Topic                                 | Type                | Description                                        |
+| --------- | ------------------------------------- | ------------------- | -------------------------------------------------- |
+| Subscribe | `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image` | Camera image input (configurable via robot config) |
+| Subscribe | `/goal_image`                         | `sensor_msgs/Image` | Goal image (ImageGoal mode, transient local)       |
+| Subscribe | `/vint_enable`                        | `std_msgs/Bool`     | Enable/disable policy execution                    |
+| Publish   | `/vint_trajectory`                    | `nav_msgs/Path`     | Predicted trajectory (5 waypoints)                 |
+| Publish   | `/vint_reached_goal`                  | `std_msgs/Bool`     | True when topomap goal node is reached             |
+| Service   | `/reset_agent`                        | `std_srvs/Trigger`  | Reset agent memory for new mission                 |
 
 ### Trajectory Follower Node
 
@@ -251,7 +252,7 @@ The evaluation system tracks the following metrics per mission:
 il_evaluation/
 ├── pyproject.toml            # Package configuration (uv pip install -e .)
 ├── configs/                  # Configuration files
-│   ├── vint_eval.yaml                # Model architecture config
+│   ├── vint_eval.yaml                # Model + inference config
 │   ├── robot_carter.yaml             # Nova Carter robot config
 │   └── robot_segway.yaml             # Segway E1 robot config
 └── src/il_evaluation/        # Python package source
@@ -401,7 +402,7 @@ The source-of-truth training parameters (`waypoint_spacing`, `metric_waypoint_sp
 
 ### Inference Rate
 
-The inference rate (`--inference_rate`, default **4.0 Hz**) must match the training data `sample_rate` (4.0 Hz from `vint_processing_config.yaml`). This ensures the temporal context window (past `context_size=5` frames) spans the same time interval as during training. Running at a different rate (e.g. 10 Hz) fills the memory queue with near-identical frames, degrading temporal context quality.
+The inference rate (`inference_rate` in `vint_eval.yaml`, default **4.0 Hz**) must match the training data `sample_rate` (4.0 Hz from `vint_processing_config.yaml`). This ensures the temporal context window (past `context_size=5` frames) spans the same time interval as during training. Running at a different rate (e.g. 10 Hz) fills the memory queue with near-identical frames, degrading temporal context quality.
 
 ## Configuration Reference
 
@@ -489,8 +490,8 @@ ros2 topic pub /vint_enable std_msgs/msg/Bool "data: true"
 
 ### Performance Tuning
 
-- **Inference rate**: Default 4 Hz (must match training `sample_rate`). Do not change unless retraining with a different rate
-- **Control rate**: Default 20 Hz. Higher rates = smoother motion, more CPU load
+- **Inference rate**: Default 4 Hz in `vint_eval.yaml` (must match training `sample_rate`). Do not change unless retraining with a different rate
+- **Control rate**: Default 20 Hz in robot config YAML. Higher rates = smoother motion, more CPU load
 - **MPC horizon**: Default N=15. Longer = better planning, slower computation
 - **Trajectory density**: 50× interpolation by default. Higher = smoother tracking
 - **MPC warm start**: The CasADi problem is built once and reused — no tuning needed. Warm start is cleared on mission reset
