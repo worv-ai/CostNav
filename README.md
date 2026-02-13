@@ -159,7 +159,8 @@ make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
 - [x] Paper release
 - [x] isaac sim & nav2 support for rule-based navigation
 - [ ] cost formula and reference sheet
-- [ ] imitation learning baseline, and collected dataset with teleoperation
+- [ ] imitation learning baseline
+- [ ] collected dataset with teleoperation
 
 ## Contributing
 
