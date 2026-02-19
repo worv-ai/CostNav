@@ -13,5 +13,25 @@ topics:
 trajectory_follower:
   control_rate: 20.0        # Control loop frequency (Hz)
   max_linear_vel: 0.8       # Maximum linear velocity (m/s)
-  max_angular_vel: 0.5      # Maximum angular velocity (rad/s)
+  max_angular_vel: 1.5      # Maximum angular velocity (rad/s)
   trajectory_timeout: 0.5   # Trajectory validity timeout (s)
+
+  # Kinematic model type: "unicycle" or "bicycle"
+  # - unicycle: differential drive (Nova Carter) - control: [v, omega]
+  # - bicycle: Ackermann steering (Segway E1) - control: [v, delta]
+  kinematic_model: "bicycle"
+
+  # Bicycle model parameters (only used when kinematic_model is "bicycle")
+  wheelbase: 0.53           # Distance between front and rear axles (m)
+  max_steering_angle: 0.5   # Maximum steering angle (rad) ~28.6 degrees
+
+  # Rotate-in-place parameters (for bicycle model)
+  # When trajectory points are close and heading error is large, rotate in place
+  # instead of using MPC (leverages wheel controller's in-place rotation capability)
+  rotate_in_place_dist_threshold: 0.3      # Distance threshold (m) - rotate if target closer than this
+  rotate_in_place_heading_threshold: 0.5   # Heading error threshold (rad) ~28.6 degrees
+
+  # MPC lookahead: fraction of trajectory points to skip before tracking
+  # This prevents the MPC from tracking the robot's current position
+  # 0.4 = skip first 40%, track from middle (matches original ViNT waypoint=2)
+  mpc_lookahead_ratio: 0.4

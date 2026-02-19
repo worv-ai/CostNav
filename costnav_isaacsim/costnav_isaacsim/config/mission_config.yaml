@@ -133,7 +133,7 @@ topomap:
   enabled: false
 
   # Distance between waypoints along the path (meters)
-  waypoint_interval: 2.0
+  waypoint_interval: 0.5
 
   # Camera height offset from ground (meters)
   camera_height_offset: 0.3
