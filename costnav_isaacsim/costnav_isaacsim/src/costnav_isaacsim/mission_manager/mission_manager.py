@@ -584,7 +584,7 @@ class MissionManager:
                 return descendant
 
         # No Camera found — fall back to using the root prim and log a warning
-        logger.warning(f"[{label}] No Camera prim found in {camera_usd_path}; " f"using root prim at {cam_prim_path}")
+        logger.warning(f"[{label}] No Camera prim found in {camera_usd_path}; using root prim at {cam_prim_path}")
         return prim
 
     def _capture_and_publish_goal_image(self, goal_position) -> bool:
@@ -1313,9 +1313,7 @@ class MissionManager:
             first_wp = self._sampler.get_path_first_waypoint(start, goal)
             if first_wp is not None:
                 start.heading = math.atan2(first_wp.y - start.y, first_wp.x - start.x)
-                logger.info(
-                    f"[{self._state.name}] Aligned start heading to path: " f"{math.degrees(start.heading):.1f}°"
-                )
+                logger.info(f"[{self._state.name}] Aligned start heading to path: {math.degrees(start.heading):.1f}°")
             else:
                 # Fallback: point directly at the goal
                 start.heading = math.atan2(goal.y - start.y, goal.x - start.x)

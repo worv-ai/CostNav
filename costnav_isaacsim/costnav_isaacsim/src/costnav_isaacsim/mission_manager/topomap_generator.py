@@ -155,7 +155,7 @@ class TopomapGenerator:
                 )
 
             if path is None:
-                logger.warning(f"No path found from ({start.x:.2f}, {start.y:.2f}) " f"to ({goal.x:.2f}, {goal.y:.2f})")
+                logger.warning(f"No path found from ({start.x:.2f}, {start.y:.2f}) to ({goal.x:.2f}, {goal.y:.2f})")
                 return None
 
             points = path.get_points()
@@ -373,7 +373,7 @@ class TopomapGenerator:
                     f"(max_heading_change={math.degrees(max_heading_change):.1f}°)"
                 )
 
-        logger.info(f"Resampled {len(raw_points)} raw → {len(resampled)} waypoints " f"(interval={interval}m)")
+        logger.info(f"Resampled {len(raw_points)} raw → {len(resampled)} waypoints (interval={interval}m)")
         return resampled
 
     def setup_camera(self) -> None:
@@ -434,7 +434,7 @@ class TopomapGenerator:
                 self._rgb_annotator = rep.AnnotatorRegistry.get_annotator("rgb", device="cpu")
                 self._rgb_annotator.attach(self._render_product)
 
-            logger.info(f"[TOPOMAP] Camera setup complete: {resolution[0]}x{resolution[1]} " f"@ {actual_cam_path}")
+            logger.info(f"[TOPOMAP] Camera setup complete: {resolution[0]}x{resolution[1]} @ {actual_cam_path}")
 
         except ImportError as exc:
             logger.error(f"[TOPOMAP] Isaac Sim modules not available: {exc}")
@@ -477,7 +477,7 @@ class TopomapGenerator:
                 return descendant
 
         # No Camera found — fall back to using the root prim and log a warning
-        logger.warning(f"[TOPOMAP] No Camera prim found in {camera_usd_path}; " f"using root prim at {cam_prim_path}")
+        logger.warning(f"[TOPOMAP] No Camera prim found in {camera_usd_path}; using root prim at {cam_prim_path}")
         return prim
 
     def capture_image_at_position(self, position: SampledPosition, extra_settle_steps: int = 0):
@@ -673,5 +673,5 @@ class TopomapGenerator:
             # Step 6: Cleanup
             self.cleanup_camera()
 
-        logger.info(f"[TOPOMAP] Topomap generation complete: {len(saved_paths)} images " f"saved to {out_dir}")
+        logger.info(f"[TOPOMAP] Topomap generation complete: {len(saved_paths)} images saved to {out_dir}")
         return saved_paths

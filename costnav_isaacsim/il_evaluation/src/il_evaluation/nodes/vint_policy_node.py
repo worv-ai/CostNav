@@ -262,7 +262,7 @@ class ViNTPolicyNode(Node):
             self._goal_image_pub = self.create_publisher(Image, "/vint_goal_image", 10)
             self._localization_image_pub = self.create_publisher(Image, "/vint_localization_image", 10)
             self.get_logger().info(
-                "Debug image visualization enabled. " "Publishing to: /vint_goal_image, /vint_localization_image"
+                "Debug image visualization enabled. Publishing to: /vint_goal_image, /vint_localization_image"
             )
 
         # Inference timer
@@ -270,14 +270,13 @@ class ViNTPolicyNode(Node):
         self.timer = self.create_timer(timer_period, self.inference_callback)
 
         self.get_logger().info(
-            f"ViNT policy node started (goal_type={self.goal_type}). " f"Inference rate: {self.inference_rate} Hz"
+            f"ViNT policy node started (goal_type={self.goal_type}). Inference rate: {self.inference_rate} Hz"
         )
         self.get_logger().info(f"Subscribing to: {image_topic}")
         self.get_logger().info("Publishing trajectory to: /vint_trajectory")
         if self.goal_type == "topomap":
             self.get_logger().info(
-                "Topomap mode enabled. Waiting for /vint_load_topomap service call "
-                f"(topomap_dir={self._topomap_dir})"
+                f"Topomap mode enabled. Waiting for /vint_load_topomap service call (topomap_dir={self._topomap_dir})"
             )
         elif self.goal_type == "image_goal":
             self.get_logger().info("Waiting for goal image to start image-goal navigation...")
@@ -326,7 +325,7 @@ class ViNTPolicyNode(Node):
         self._topomap_reached_goal = False
 
         self.get_logger().info(
-            f"Loaded topomap from {topomap_dir}: {num_nodes} nodes, " f"goal_node={self._topomap_goal_node}"
+            f"Loaded topomap from {topomap_dir}: {num_nodes} nodes, goal_node={self._topomap_goal_node}"
         )
 
     # ------------------------------------------------------------------
@@ -448,7 +447,7 @@ class ViNTPolicyNode(Node):
                 self._load_topomap(self._topomap_dir, self._topomap_goal_node_param)
                 self.agent.reset(batch_size=1)
                 self.get_logger().info(
-                    f"Topomap reloaded on enable: {len(self.topomap)} nodes " f"from {self._topomap_dir}"
+                    f"Topomap reloaded on enable: {len(self.topomap)} nodes from {self._topomap_dir}"
                 )
             except Exception as e:
                 self.get_logger().error(f"Failed to reload topomap on enable: {e}")
@@ -628,7 +627,7 @@ class ViNTPolicyNode(Node):
             if closest_node is not None:
                 extra += f", node={closest_node}/{self._topomap_goal_node}"
             self.get_logger().info(
-                f"[ViNT] #{self._trajectory_publish_count}: " f"traj_last=({last_wp[0]:.2f}, {last_wp[1]:.2f}){extra}"
+                f"[ViNT] #{self._trajectory_publish_count}: traj_last=({last_wp[0]:.2f}, {last_wp[1]:.2f}){extra}"
             )
 
     def trajectory_to_path(self, trajectory: np.ndarray) -> Path:
