@@ -135,6 +135,8 @@ class TopoMapConfig:
     camera_prim_path: str = "/World/topomap_camera"  # USD prim path for topomap camera
     render_settle_steps: int = 3  # Simulation steps per capture for render pipeline flush
     first_image_extra_settle_steps: int = 10  # Extra simulation steps for the first capture to eliminate render noise
+    max_heading_change_per_waypoint: float = 0.35  # Max heading change (radians) per waypoint (~20°); corners exceeding this get extra interpolated waypoints
+    wall_clearance: float = 0.0  # Extra clearance from walls (meters); added to agent_radius for path queries to push paths away from obstacles
     robot_prim_path: Optional[str] = None  # Robot prim path to hide during capture
     camera_usd_path: Optional[str] = None  # USD asset path to load camera from (e.g. omniverse://...camera.usd)
 
@@ -288,6 +290,8 @@ class MissionConfig:
             camera_prim_path=topomap_data.get("camera_prim_path", "/World/topomap_camera"),
             render_settle_steps=topomap_data.get("render_settle_steps", 3),
             first_image_extra_settle_steps=topomap_data.get("first_image_extra_settle_steps", 10),
+            max_heading_change_per_waypoint=topomap_data.get("max_heading_change_per_waypoint", 0.35),
+            wall_clearance=topomap_data.get("wall_clearance", 0.0),
             robot_prim_path=topomap_data.get("robot_prim_path", teleport_data.get("robot_prim")),
             camera_usd_path=topomap_data.get("camera_usd_path"),
         )

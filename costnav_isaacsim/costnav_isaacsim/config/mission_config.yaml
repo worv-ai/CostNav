@@ -154,6 +154,18 @@ topomap:
   # Extra simulation steps for the first image capture to eliminate render noise
   first_image_extra_settle_steps: 10
 
+  # Maximum heading change per waypoint (radians, ~0.35 rad ≈ 20°)
+  # At sharp corners, extra waypoints are inserted to interpolate heading smoothly.
+  # Smaller values produce smoother camera rotations but more waypoints.
+  max_heading_change_per_waypoint: 0.35
+
+  # Extra clearance from walls/obstacles (meters)
+  # Added to agent_radius when querying NavMesh shortest paths, pushing the path
+  # away from walls. If the wider query fails (e.g. narrow corridors), the planner
+  # falls back to the original agent_radius.
+  # Set to 0.0 to disable (default). Typical useful range: 0.3–1.0 m.
+  wall_clearance: 1.0
+
   # Robot prim path to hide during image capture (prevents robot from appearing in images)
   # If not set, falls back to teleport.robot_prim
   # robot_prim_path: "/World/Nova_Carter_ROS"

@@ -89,6 +89,13 @@ class TopomapGenerator:
     ) -> Optional[List[SampledPosition]]:
         """Query NavMesh for shortest path waypoints between start and goal.
 
+        When ``wall_clearance`` is configured (> 0), the path query first
+        attempts to use an inflated agent radius
+        (``agent_radius + wall_clearance``) so the resulting path stays
+        further away from walls and obstacles.  If the NavMesh cannot find
+        a valid path with the larger radius (e.g. narrow corridors), the
+        method automatically falls back to the original ``agent_radius``.
+
         Args:
             start: Start position on the NavMesh.
             goal: Goal position on the NavMesh.
@@ -109,11 +116,43 @@ class TopomapGenerator:
             start_point = carb.Float3(start.x, start.y, start.z)
             end_point = carb.Float3(goal.x, goal.y, goal.z)
 
-            path = navmesh.query_shortest_path(
-                start_pos=start_point,
-                end_pos=end_point,
-                agent_radius=self._sampler.agent_radius,
-            )
+            base_radius = self._sampler.agent_radius
+            wall_clearance = getattr(self._config, "wall_clearance", 0.0)
+
+            path = None
+
+            # First attempt: use inflated radius to push path away from walls
+            if wall_clearance > 0:
+                expanded_radius = base_radius + wall_clearance
+                path = navmesh.query_shortest_path(
+                    start_pos=start_point,
+                    end_pos=end_point,
+                    agent_radius=expanded_radius,
+                )
+                if path is not None:
+                    pts = path.get_points()
+                    if pts is None or len(pts) == 0:
+                        path = None  # treat empty-point path as failure
+
+                if path is not None:
+                    logger.info(
+                        f"NavMesh path found with wall_clearance={wall_clearance}m "
+                        f"(effective radius={expanded_radius}m)"
+                    )
+                else:
+                    logger.warning(
+                        f"NavMesh path query failed with expanded radius "
+                        f"{expanded_radius}m (wall_clearance={wall_clearance}m). "
+                        f"Falling back to base agent_radius={base_radius}m."
+                    )
+
+            # Fallback (or only attempt when wall_clearance == 0): original radius
+            if path is None:
+                path = navmesh.query_shortest_path(
+                    start_pos=start_point,
+                    end_pos=end_point,
+                    agent_radius=base_radius,
+                )
 
             if path is None:
                 logger.warning(f"No path found from ({start.x:.2f}, {start.y:.2f}) " f"to ({goal.x:.2f}, {goal.y:.2f})")
@@ -145,9 +184,80 @@ class TopomapGenerator:
             return None
 
     @staticmethod
+    def _normalize_angle(angle: float) -> float:
+        """Normalize an angle to the range (-π, π].
+
+        Args:
+            angle: Angle in radians.
+
+        Returns:
+            Equivalent angle in (-π, π].
+        """
+        while angle > math.pi:
+            angle -= 2.0 * math.pi
+        while angle <= -math.pi:
+            angle += 2.0 * math.pi
+        return angle
+
+    @staticmethod
+    def _interpolate_heading_at_corners(
+        waypoints: List[SampledPosition],
+        max_heading_change: float,
+    ) -> List[SampledPosition]:
+        """Insert extra waypoints at corners to smoothly interpolate heading.
+
+        When the heading change between two consecutive waypoints exceeds
+        *max_heading_change*, additional waypoints are inserted at the
+        corner position (same x, y, z) with evenly-spaced intermediate
+        headings so that no single step exceeds the threshold.
+
+        Args:
+            waypoints: Uniformly-spaced waypoints from arc-length resampling.
+            max_heading_change: Maximum allowed heading change (radians) per
+                consecutive waypoint pair.  Must be > 0.
+
+        Returns:
+            New list with heading-interpolation waypoints inserted at corners.
+        """
+        if len(waypoints) < 2 or max_heading_change <= 0:
+            return list(waypoints)
+
+        result: List[SampledPosition] = [waypoints[0]]
+
+        for i in range(1, len(waypoints)):
+            prev = result[-1]
+            curr = waypoints[i]
+
+            delta = TopomapGenerator._normalize_angle(curr.heading - prev.heading)
+            abs_delta = abs(delta)
+
+            if abs_delta > max_heading_change + 1e-9:
+                # Number of steps needed so each step ≤ max_heading_change
+                n_steps = math.ceil(abs_delta / max_heading_change)
+                step = delta / n_steps
+
+                # Insert (n_steps - 1) intermediate waypoints at the
+                # corner position with progressively rotated heading.
+                for k in range(1, n_steps):
+                    interp_heading = TopomapGenerator._normalize_angle(prev.heading + step * k)
+                    result.append(
+                        SampledPosition(
+                            x=curr.x,
+                            y=curr.y,
+                            z=curr.z,
+                            heading=interp_heading,
+                        )
+                    )
+
+            result.append(curr)
+
+        return result
+
+    @staticmethod
     def resample_waypoints(
         raw_points: List[SampledPosition],
         interval: float = 2.0,
+        max_heading_change: float = 0.0,
     ) -> List[SampledPosition]:
         """Resample waypoints along the polyline at fixed arc-length intervals.
 
@@ -156,12 +266,20 @@ class TopomapGenerator:
         *interval* meters of arc length, producing a **uniformly-spaced**
         subset that is usually much smaller than the input.
 
+        When *max_heading_change* is positive, a second pass inserts extra
+        waypoints at sharp corners so that the heading change between any
+        two consecutive waypoints never exceeds this threshold (in radians).
+        This produces smoother camera rotations in the captured topomap
+        images.
+
         Heading at each emitted point is the direction of the segment it
         falls on.
 
         Args:
             raw_points: Raw waypoints from NavMesh path query.
             interval: Target distance between resampled waypoints (meters).
+            max_heading_change: Maximum heading change per waypoint (radians).
+                0 disables heading interpolation (original behaviour).
 
         Returns:
             List of uniformly-spaced SampledPosition with headings set.
@@ -182,7 +300,7 @@ class TopomapGenerator:
         if total_length < 1e-6:
             return [raw_points[0], raw_points[-1]]
 
-        # --- Walk along the polyline, emitting a point every *interval* m -----
+        # --- Phase 1: Walk along the polyline, emitting a point every *interval* m
         resampled: List[SampledPosition] = []
 
         # Always emit the start point
@@ -244,7 +362,18 @@ class TopomapGenerator:
         else:
             resampled.append(SampledPosition(x=last.x, y=last.y, z=last.z, heading=last_heading))
 
-        logger.info(f"Resampled {len(raw_points)} raw → {len(resampled)} uniform " f"waypoints (interval={interval}m)")
+        # --- Phase 2: Smooth heading at sharp corners -------------------------
+        if max_heading_change > 0 and len(resampled) >= 2:
+            before = len(resampled)
+            resampled = TopomapGenerator._interpolate_heading_at_corners(resampled, max_heading_change)
+            added = len(resampled) - before
+            if added > 0:
+                logger.info(
+                    f"Heading interpolation: inserted {added} extra waypoints "
+                    f"(max_heading_change={math.degrees(max_heading_change):.1f}°)"
+                )
+
+        logger.info(f"Resampled {len(raw_points)} raw → {len(resampled)} waypoints " f"(interval={interval}m)")
         return resampled
 
     def setup_camera(self) -> None:
@@ -508,6 +637,7 @@ class TopomapGenerator:
         waypoints = self.resample_waypoints(
             raw_waypoints,
             self._config.waypoint_interval,
+            max_heading_change=getattr(self._config, "max_heading_change_per_waypoint", 0.0),
         )
         if len(waypoints) == 0:
             logger.error("[TOPOMAP] Resampling produced no waypoints.")
