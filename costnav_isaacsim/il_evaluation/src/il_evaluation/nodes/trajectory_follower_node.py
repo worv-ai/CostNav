@@ -463,22 +463,12 @@ class TrajectoryFollowerNode(Node):
         self.kinematic_model = follower_cfg.get("kinematic_model", "unicycle")
         self.wheelbase = follower_cfg.get("wheelbase", 0.5)  # For bicycle model
         self.max_steering_angle = follower_cfg.get("max_steering_angle", 0.5)  # For bicycle model
-
-        # Rotate-in-place parameters (for bicycle model)
-        # When trajectory points are closer than this, consider rotating in place
-        self.rotate_in_place_dist_threshold = follower_cfg.get("rotate_in_place_dist_threshold", 0.3)
-        # When heading error exceeds this (rad), rotate in place instead of MPC
-        self.rotate_in_place_heading_threshold = follower_cfg.get("rotate_in_place_heading_threshold", 0.5)
         # MPC lookahead: fraction of trajectory to skip (0.4 = skip first 40%, matches original ViNT)
         self.mpc_lookahead_ratio = follower_cfg.get("mpc_lookahead_ratio", 0.4)
 
         self.get_logger().info(f"Kinematic model: {self.kinematic_model}")
         if self.kinematic_model == "bicycle":
             self.get_logger().info(f"  Wheelbase: {self.wheelbase}m, Max steering: {self.max_steering_angle}rad")
-            self.get_logger().info(
-                f"  Rotate-in-place: dist<{self.rotate_in_place_dist_threshold}m, "
-                f"heading>{self.rotate_in_place_heading_threshold}rad"
-            )
         self.get_logger().info(
             f"  MPC lookahead ratio: {self.mpc_lookahead_ratio} (skip first {self.mpc_lookahead_ratio * 100:.0f}% of trajectory)"
         )
@@ -750,12 +740,6 @@ class TrajectoryFollowerNode(Node):
             self.get_logger().debug("No odometry available for MPC")
             return twist
 
-        # For bicycle model: check if we should rotate in place
-        if self.kinematic_model == "bicycle":
-            rotate_cmd = self._check_rotate_in_place(robot_state, mpc)
-            if rotate_cmd is not None:
-                return rotate_cmd
-
         try:
             # Solve MPC
             opt_u_controls, _ = mpc.solve(robot_state)
@@ -780,60 +764,6 @@ class TrajectoryFollowerNode(Node):
             self.get_logger().error(f"MPC solve failed: {e}")
 
         return twist
-
-    def _check_rotate_in_place(self, robot_state: np.ndarray, mpc: BaseMPCController) -> Optional[Twist]:
-        """Check if the robot should rotate in place instead of using MPC.
-
-        For bicycle model: when trajectory points are close but require significant
-        heading change, rotate in place using the wheel controller capability.
-
-        Args:
-            robot_state: Current robot state [x, y, theta].
-            mpc: Bicycle MPC controller instance.
-
-        Returns:
-            Twist command for rotation if needed, None otherwise.
-        """
-        # Find nearest trajectory point and target point
-        robot_pos = robot_state[:2]
-        robot_theta = robot_state[2]
-
-        # Get reference trajectory from MPC
-        ref_traj = mpc._find_reference_traj()
-        if len(ref_traj) < 2:
-            return None
-
-        # Check distance to first few trajectory points
-        dist_to_first = np.linalg.norm(ref_traj[0] - robot_pos)
-        dist_to_target = np.linalg.norm(ref_traj[1] - robot_pos) if len(ref_traj) > 1 else dist_to_first
-
-        # Threshold for "close" trajectory points (meters)
-        close_threshold = self.rotate_in_place_dist_threshold
-
-        if dist_to_target < close_threshold:
-            # Trajectory points are close - check if we need to rotate
-            # Compute desired heading to target
-            dx = ref_traj[1, 0] - robot_pos[0]
-            dy = ref_traj[1, 1] - robot_pos[1]
-            desired_heading = np.arctan2(dy, dx)
-
-            # Compute heading error (normalized to [-pi, pi])
-            heading_error = desired_heading - robot_theta
-            heading_error = np.arctan2(np.sin(heading_error), np.cos(heading_error))
-
-            # Threshold for "significant" heading error (radians)
-            heading_threshold = self.rotate_in_place_heading_threshold
-
-            if abs(heading_error) > heading_threshold:
-                # Rotate in place
-                twist = Twist()
-                twist.linear.x = 0.0
-                # Proportional control for rotation with max angular velocity limit
-                w = np.clip(heading_error * 1.5, -self.max_angular_vel, self.max_angular_vel)
-                twist.angular.z = w
-                return twist
-
-        return None
 
 
 def parse_args():

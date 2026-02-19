@@ -25,12 +25,6 @@ trajectory_follower:
   wheelbase: 0.53           # Distance between front and rear axles (m)
   max_steering_angle: 0.5   # Maximum steering angle (rad) ~28.6 degrees
 
-  # Rotate-in-place parameters (for bicycle model)
-  # When trajectory points are close and heading error is large, rotate in place
-  # instead of using MPC (leverages wheel controller's in-place rotation capability)
-  rotate_in_place_dist_threshold: 0.3      # Distance threshold (m) - rotate if target closer than this
-  rotate_in_place_heading_threshold: 0.5   # Heading error threshold (rad) ~28.6 degrees
-
   # MPC lookahead: fraction of trajectory points to skip before tracking
   # This prevents the MPC from tracking the robot's current position
   # 0.4 = skip first 40%, track from middle (matches original ViNT waypoint=2)
