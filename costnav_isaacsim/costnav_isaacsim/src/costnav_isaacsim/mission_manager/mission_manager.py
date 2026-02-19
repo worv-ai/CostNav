@@ -21,13 +21,13 @@ import math
 from enum import Enum
 from typing import TYPE_CHECKING, Callable, Optional
 
+from transforms3d.euler import euler2quat
+
 if TYPE_CHECKING:
     from costnav_isaacsim.config import MissionConfig
 
 logger = logging.getLogger("costnav_mission_manager")
-from costnav_isaacsim.evaluation import EvaluationManager
-from costnav_isaacsim.evaluation import injury
-from costnav_isaacsim.evaluation import food
+from costnav_isaacsim.evaluation import EvaluationManager, food, injury
 
 
 class MissionState(Enum):
@@ -1001,12 +1001,9 @@ class MissionManager:
 
     def _yaw_to_quaternion(self, yaw: float) -> tuple:
         """Convert yaw angle to quaternion (x, y, z, w)."""
-        return (
-            0.0,
-            0.0,
-            math.sin(yaw / 2.0),
-            math.cos(yaw / 2.0),
-        )
+        # euler2quat returns (w, x, y, z); reorder to (x, y, z, w)
+        q = euler2quat(0, 0, yaw)
+        return (q[1], q[2], q[3], q[0])
 
     def _teleport_robot(self, position) -> bool:
         """Teleport robot to the specified position.

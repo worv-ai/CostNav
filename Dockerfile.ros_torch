@@ -1,0 +1,44 @@
+# ROS2 + PyTorch Container for IL Evaluation
+# Extends ROS2 Jazzy with PyTorch and ML dependencies for IL policy inference
+FROM osrf/ros:jazzy-desktop
+
+# Set environment variables
+ENV ROS_DISTRO=jazzy
+ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+ENV DEBIAN_FRONTEND=noninteractive
+ENV UV_LINK_MODE=copy
+
+# Install system packages
+RUN apt-get update && \
+    apt-get install -y \
+    python3-pip \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
+# Set working directory
+WORKDIR /workspace
+
+# Place the venv outside /workspace so .:/workspace bind mount won't shadow it
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+ENV PATH="/opt/venv/bin:${PATH}"
+
+# Copy the evaluation package and third_party dependencies
+# Only copy the vint_train package source, not logs/wandb artifacts (19GB+)
+COPY costnav_isaacsim/il_evaluation /workspace/costnav_isaacsim/il_evaluation
+COPY third_party/visualnav-transformer/train/vint_train /workspace/third_party/visualnav-transformer/train/vint_train
+COPY third_party/visualnav-transformer/train/setup.py /workspace/third_party/visualnav-transformer/train/
+COPY third_party/visualnav-transformer/train/README.md /workspace/third_party/visualnav-transformer/train/
+
+# Install dependencies into /opt/venv via uv sync
+RUN --mount=type=cache,target=/root/.cache/uv \
+    cd /workspace/costnav_isaacsim/il_evaluation && \
+    uv sync --no-dev --quiet
+
+COPY docker/ros_entrypoint.sh /ros_entrypoint.sh
+RUN chmod +x /ros_entrypoint.sh
+
+ENTRYPOINT ["/ros_entrypoint.sh"]
+CMD ["bash"]

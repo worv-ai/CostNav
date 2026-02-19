@@ -1,23 +1,47 @@
 version: 2
 
-multi-ecosystem-groups:
-  python:
-    schedule:
-      interval: "daily"
-
 updates:
-# Python packages - Root directory
-- package-ecosystem: "pip"
-  directory: "/"
-  multi-ecosystem-group: python
-  patterns: ["*"]
-- package-ecosystem: "uv"
-  directory: "/"
-  multi-ecosystem-group: python
-  patterns: ["*"]
+  # ── GitHub Actions ────────────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]
 
-# GitHub Actions
-- package-ecosystem: "github-actions"
-  directory: "/"
-  schedule:
-    interval: "daily"
+  # ── Docker ────────────────────────────────────────────────────────────────
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      docker:
+        patterns: ["*"]
+
+  # ── Python: costnav_isaacsim ──────────────────────────────────────────────
+  - package-ecosystem: "pip"
+    directory: "/costnav_isaacsim/costnav_isaacsim"
+    schedule:
+      interval: "weekly"
+    groups:
+      python-costnav:
+        patterns: ["*"]
+
+  # ── Python: il_training (data processing + model training) ────────────────
+  - package-ecosystem: "pip"
+    directory: "/costnav_isaacsim/il_training"
+    schedule:
+      interval: "weekly"
+    groups:
+      python-il-training:
+        patterns: ["*"]
+
+  # ── Python: il_evaluation (inference + ROS2 nodes) ───────────────────────
+  - package-ecosystem: "pip"
+    directory: "/costnav_isaacsim/il_evaluation"
+    schedule:
+      interval: "weekly"
+    groups:
+      python-il-evaluation:
+        patterns: ["*"]
