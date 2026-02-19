@@ -25,6 +25,7 @@ FOOD ?= True
 TUNED ?= True
 AMCL ?= False
 TOPOMAP ?= False
+ALIGN_HEADING ?= False
 
 # Joystick settings for teleop (always reads from .env)
 XBOX_ID := $(shell grep '^XBOX_ID=' .env 2>/dev/null | cut -d= -f2)
@@ -81,11 +82,11 @@ run-ros2:
 # Run the Isaac Sim container with launch.py (includes RViz)
 # TODO: down and up every time takes a long time. Can we avoid it?
 # However, healthcheck does not work if we don't do this...
-# Usage: make run-isaac-sim NUM_PEOPLE=5 SIM_ROBOT=nova_carter FOOD=True TOPOMAP=True
+# Usage: make run-isaac-sim NUM_PEOPLE=5 SIM_ROBOT=nova_carter FOOD=True TOPOMAP=True ALIGN_HEADING=True
 run-isaac-sim:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile isaac-sim down
-	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) TOPOMAP=$(TOPOMAP) $(DOCKER_COMPOSE) --profile isaac-sim up
+	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) TOPOMAP=$(TOPOMAP) ALIGN_HEADING=$(ALIGN_HEADING) $(DOCKER_COMPOSE) --profile isaac-sim up
 
 # Run the Isaac Sim container with the native Isaac Sim GUI (no launch.py)
 # Useful for opening the editor directly to inspect scenes, create assets, etc.
@@ -187,7 +188,7 @@ build-vint:
 run-vint:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile vint down
-	TOPOMAP=True MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile vint up
+	TOPOMAP=True ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile vint up
 
 # =============================================================================
 # ROS Bag Recording Targets

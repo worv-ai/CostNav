@@ -133,4 +133,13 @@ def parse_args():
         help="Enable NavMesh-based topomap generation (True/False or 1/0)",
     )
 
+    # Mission Manager arguments
+    manager_group = parser.add_argument_group("Mission Manager")
+    manager_group.add_argument(
+        "--align-initial-heading-to-path",
+        type=str,
+        default=None,
+        help="Align robot's initial heading to NavMesh path direction (True/False or 1/0)",
+    )
+
     return parser.parse_args()

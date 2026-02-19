@@ -156,6 +156,11 @@ class MissionManagerConfig:
     clear_costmaps_on_mission_start: bool = True
     costmap_clear_timeout_sec: float = 2.0  # Max time to wait for clear service responses before continuing
 
+    # When True, set the start heading to point toward the first NavMesh
+    # shortest-path waypoint (or directly toward the goal if no intermediate
+    # waypoints exist) instead of using a random heading.
+    align_initial_heading_to_path: bool = False
+
 
 @dataclass
 class MissionConfig:
@@ -300,6 +305,7 @@ class MissionConfig:
             teleport_settle_steps=manager_data.get("teleport_settle_steps", 30),
             clear_costmaps_on_mission_start=manager_data.get("clear_costmaps_on_mission_start", True),
             costmap_clear_timeout_sec=manager_data.get("costmap_clear_timeout_sec", 2.0),
+            align_initial_heading_to_path=manager_data.get("align_initial_heading_to_path", False),
         )
 
         return cls(

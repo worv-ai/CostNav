@@ -1308,6 +1308,22 @@ class MissionManager:
             self._state = MissionState.READY  # Try again next step
             return
 
+        # Optionally align the start heading to the first NavMesh path waypoint
+        if self.config.manager.align_initial_heading_to_path:
+            first_wp = self._sampler.get_path_first_waypoint(start, goal)
+            if first_wp is not None:
+                start.heading = math.atan2(first_wp.y - start.y, first_wp.x - start.x)
+                logger.info(
+                    f"[{self._state.name}] Aligned start heading to path: " f"{math.degrees(start.heading):.1f}°"
+                )
+            else:
+                # Fallback: point directly at the goal
+                start.heading = math.atan2(goal.y - start.y, goal.x - start.x)
+                logger.warning(
+                    f"[{self._state.name}] No path waypoint found; "
+                    f"aligned heading to goal: {math.degrees(start.heading):.1f}°"
+                )
+
         # Store positions locally
         self._current_start = start
         self._current_goal = goal

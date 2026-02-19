@@ -292,6 +292,7 @@ class TestMissionManagerConfig:
         assert config.teleport_settle_steps == 30
         assert config.clear_costmaps_on_mission_start is True
         assert config.costmap_clear_timeout_sec == 2.0
+        assert config.align_initial_heading_to_path is False
 
     def test_custom_values(self):
         """Test MissionManagerConfig with custom values."""
@@ -306,6 +307,7 @@ class TestMissionManagerConfig:
             teleport_settle_steps=50,
             clear_costmaps_on_mission_start=False,
             costmap_clear_timeout_sec=5.0,
+            align_initial_heading_to_path=True,
         )
         assert config.min_distance == 10.0
         assert config.max_distance == 200.0
@@ -317,6 +319,7 @@ class TestMissionManagerConfig:
         assert config.teleport_settle_steps == 50
         assert config.clear_costmaps_on_mission_start is False
         assert config.costmap_clear_timeout_sec == 5.0
+        assert config.align_initial_heading_to_path is True
 
 
 class TestMissionConfig:
@@ -585,6 +588,7 @@ class TestMissionConfigFromDict:
                 "teleport_settle_steps": 50,
                 "clear_costmaps_on_mission_start": False,
                 "costmap_clear_timeout_sec": 5.0,
+                "align_initial_heading_to_path": True,
             }
         }
         config = MissionConfig.from_dict(data)
@@ -598,6 +602,7 @@ class TestMissionConfigFromDict:
         assert config.manager.teleport_settle_steps == 50
         assert config.manager.clear_costmaps_on_mission_start is False
         assert config.manager.costmap_clear_timeout_sec == 5.0
+        assert config.manager.align_initial_heading_to_path is True
 
     def test_manager_inherits_from_other_sections(self):
         """Test that manager config inherits values from other sections when not specified."""

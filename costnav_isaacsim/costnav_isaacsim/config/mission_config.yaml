@@ -184,3 +184,8 @@ manager:
   # Nav2 costmap clearing (useful when teleporting between missions)
   clear_costmaps_on_mission_start: true
   costmap_clear_timeout_sec: 2.0  # Max time to wait for clear service responses
+
+  # Align the robot's initial heading to face the first waypoint of the
+  # NavMesh shortest path (or the goal if no intermediate waypoints exist).
+  # When false, the start heading is random.
+  align_initial_heading_to_path: false
