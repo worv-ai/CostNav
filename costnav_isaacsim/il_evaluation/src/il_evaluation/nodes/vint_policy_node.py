@@ -7,10 +7,10 @@
 This node subscribes to camera images, runs ViNT inference,
 and publishes trajectory to /vint_trajectory for the trajectory follower node.
 
-Supports three navigation modes:
-1. **NoGoal** (default) — exploration without a goal image.
-2. **ImageGoal** (``--use_imagegoal``) — navigate toward a single goal image.
-3. **Topomap** (``--use_topomap``) — follow a topological map generated
+Supports three navigation modes (selected via ``goal_type``):
+1. **no_goal** (default) — exploration without a goal image.
+2. **image_goal** — navigate toward a single goal image.
+3. **topomap** — follow a topological map generated
    online in simulation by the NavMesh-to-Topomap pipeline
    (see ``TOPOMAP_PIPELINE.md``).
 
@@ -42,18 +42,18 @@ Following the NavDP pattern, when a new goal image is received:
 - The new goal image is stored and used for subsequent inference
 
 Usage:
-    # Default (NoGoal exploration, or ImageGoal if use_imagegoal=true in model config)
+    # Default (Get goal type from model config)
     python3 vint_policy_node.py \\
         --checkpoint /path/to/model.pth \\
         --model_config /path/to/config.yaml \\
         --robot_config /path/to/robot.yaml
 
-    # Topomap mode (--use_topomap and --topomap_dir are docker-compose injected)
+    # Topomap mode (--goal_type overrides goal_type from vint_eval.yaml)
     python3 vint_policy_node.py \\
         --checkpoint /path/to/model.pth \\
         --model_config /path/to/config.yaml \\
         --robot_config /path/to/robot.yaml \\
-        --use_topomap --topomap_dir /tmp/costnav_topomap
+        --goal_type topomap --topomap_dir /tmp/costnav_topomap
 """
 
 import argparse
@@ -82,17 +82,17 @@ from il_evaluation.agents.vint_agent import ViNTAgent
 class ViNTPolicyNode(Node):
     """ROS2 Node for ViNT policy inference.
 
-    Supports three navigation modes (mutually exclusive):
+    Supports three navigation modes (mutually exclusive, selected via ``goal_type``):
 
-    * **NoGoal** — exploration without a goal.
-    * **ImageGoal** — navigate toward a single goal image received on a topic.
-    * **Topomap** — follow a topological map (directory of numbered PNGs).
+    * **no_goal** — exploration without a goal.
+    * **image_goal** — navigate toward a single goal image received on a topic.
+    * **topomap** — follow a topological map (directory of numbered PNGs).
       The topomap is generated online in simulation by ``TopomapGenerator``
       from the NavMesh-to-Topomap pipeline.
 
     Subscribes to:
         - /front_stereo_camera/left/image_raw (sensor_msgs/Image)
-        - /goal_image (sensor_msgs/Image) - for ImageGoal mode (latched/transient local QoS)
+        - /goal_image (sensor_msgs/Image) - for image_goal mode (latched/transient local QoS)
         - /vint_enable (std_msgs/Bool) - enable/disable policy execution
 
     Services:
@@ -106,24 +106,26 @@ class ViNTPolicyNode(Node):
         - checkpoint: Path to trained model weights
         - model_config: Path to model configuration YAML (inference params)
         - robot_config: Path to robot configuration YAML (topics)
-        - use_topomap: Enable topomap navigation mode (docker-compose injected)
-        - topomap_dir: Directory containing topomap images (docker-compose injected)
+        - goal_type: Override navigation mode ("no_goal", "image_goal", "topomap")
+        - topomap_dir: Directory containing topomap images
 
     From model_config (vint_eval.yaml):
-        - inference_rate, device, use_imagegoal, visualize_goal_image,
-          visualize_debug_images
+        - inference_rate, device, goal_type, visualize_debug_images
         - topomap_goal_node, topomap_radius, topomap_close_threshold
 
     From robot_config (robot_*.yaml):
         - image topic, goal_image topic
     """
 
+    #: Valid navigation mode values for ``goal_type``.
+    VALID_GOAL_TYPES = ("no_goal", "image_goal", "topomap")
+
     def __init__(
         self,
         checkpoint: str,
         model_config: str,
         robot_config: str,
-        use_topomap: bool = False,
+        goal_type: Optional[str] = None,
         topomap_dir: str = "",
     ):
         super().__init__("vint_policy_node")
@@ -150,19 +152,23 @@ class ViNTPolicyNode(Node):
         # Parameters from model config
         self.inference_rate = model_cfg.get("inference_rate", 4.0)
         device = model_cfg.get("device", "cuda:0")
-        self.use_imagegoal = model_cfg.get("use_imagegoal", False)
-        self.visualize_goal_image = model_cfg.get("visualize_goal_image", False)
         self.visualize_debug_images = model_cfg.get("visualize_debug_images", False)
         topomap_goal_node = model_cfg.get("topomap_goal_node", -1)
         topomap_radius = model_cfg.get("topomap_radius", 4)
         topomap_close_threshold = model_cfg.get("topomap_close_threshold", 3.0)
 
+        # Navigation mode: CLI --goal_type overrides config goal_type
+        if goal_type is not None:
+            self.goal_type = goal_type
+        else:
+            self.goal_type = model_cfg.get("goal_type", "no_goal")
+        if self.goal_type not in self.VALID_GOAL_TYPES:
+            raise ValueError(f"Invalid goal_type '{self.goal_type}'. Must be one of {self.VALID_GOAL_TYPES}")
+
         # Parameters from robot config
         topics = robot_cfg.get("topics", {})
         image_topic = topics.get("image", "/front_stereo_camera/left/image_raw")
         self.goal_image_topic = topics.get("goal_image", "/goal_image")
-
-        self.use_topomap = use_topomap
 
         # Initialize ViNT agent
         self.get_logger().info(f"Loading ViNT model from {checkpoint}")
@@ -198,11 +204,6 @@ class ViNTPolicyNode(Node):
         self._topomap_dir: str = topomap_dir
         self._topomap_goal_node_param: int = topomap_goal_node
 
-        if self.use_topomap:
-            if self.use_imagegoal:
-                self.get_logger().warn("Both --use_topomap and --use_imagegoal set. Topomap mode takes priority.")
-                self.use_imagegoal = False
-
         # Logging counters for interval-based logging
         self._trajectory_publish_count = 0
         self._log_interval = 10  # Log every N trajectory publishes
@@ -227,12 +228,12 @@ class ViNTPolicyNode(Node):
         # Subscribers
         self.image_sub = self.create_subscription(Image, image_topic, self.image_callback, sensor_qos)
 
-        if self.use_imagegoal:
+        if self.goal_type == "image_goal":
             # Subscribe to goal image with transient local durability for reliable delivery
             self.goal_sub = self.create_subscription(
                 Image, self.goal_image_topic, self.goal_image_callback, goal_image_qos
             )
-            self.get_logger().info(f"ImageGoal mode enabled. Subscribing to: {self.goal_image_topic}")
+            self.get_logger().info(f"image_goal mode enabled. Subscribing to: {self.goal_image_topic}")
 
         # Enable/disable subscription
         self.enable_sub = self.create_subscription(Bool, "/vint_enable", self.enable_callback, 10)
@@ -242,7 +243,7 @@ class ViNTPolicyNode(Node):
 
         # Topomap (re)load service — called by the mission manager after it
         # generates a fresh topomap on each mission start.
-        if self.use_topomap:
+        if self.goal_type == "topomap":
             self._load_topomap_service = self.create_service(Trigger, "/vint_load_topomap", self._handle_load_topomap)
 
         # TF2 buffer and listener for base_link -> map transform (RViz visualization)
@@ -254,13 +255,7 @@ class ViNTPolicyNode(Node):
         self.trajectory_map_pub = self.create_publisher(Path, "/vint_trajectory_map", 10)
         self.reached_goal_pub = self.create_publisher(Bool, "/vint_reached_goal", 10)
 
-        # Debug publisher for visualizing received goal image
-        self._received_goal_image_pub = None
-        if self.visualize_goal_image:
-            self._received_goal_image_pub = self.create_publisher(Image, "/received_goal_image", 10)
-            self.get_logger().info("Goal image visualization enabled. Publishing to: /received_goal_image")
-
-        # Debug publishers for current goal and localization images
+        # Debug publishers (all gated by the single visualize_debug_images flag)
         self._goal_image_pub = None
         self._localization_image_pub = None
         if self.visualize_debug_images:
@@ -274,15 +269,17 @@ class ViNTPolicyNode(Node):
         timer_period = 1.0 / self.inference_rate
         self.timer = self.create_timer(timer_period, self.inference_callback)
 
-        self.get_logger().info(f"ViNT policy node started. Inference rate: {self.inference_rate} Hz")
+        self.get_logger().info(
+            f"ViNT policy node started (goal_type={self.goal_type}). " f"Inference rate: {self.inference_rate} Hz"
+        )
         self.get_logger().info(f"Subscribing to: {image_topic}")
         self.get_logger().info("Publishing trajectory to: /vint_trajectory")
-        if self.use_topomap:
+        if self.goal_type == "topomap":
             self.get_logger().info(
                 "Topomap mode enabled. Waiting for /vint_load_topomap service call "
                 f"(topomap_dir={self._topomap_dir})"
             )
-        elif self.use_imagegoal:
+        elif self.goal_type == "image_goal":
             self.get_logger().info("Waiting for goal image to start image-goal navigation...")
 
     # ------------------------------------------------------------------
@@ -370,13 +367,13 @@ class ViNTPolicyNode(Node):
             )
 
             # Publish received goal image for debugging visualization
-            if self._received_goal_image_pub is not None:
+            if self._goal_image_pub is not None:
                 try:
                     debug_msg = self.bridge.cv2_to_imgmsg(new_goal_image, "rgb8")
                     debug_msg.header.stamp = self.get_clock().now().to_msg()
                     debug_msg.header.frame_id = "goal_image"
-                    self._received_goal_image_pub.publish(debug_msg)
-                    self.get_logger().info("Published received goal image to /received_goal_image")
+                    self._goal_image_pub.publish(debug_msg)
+                    self.get_logger().info("Published received goal image to /vint_goal_image")
                 except Exception as pub_err:
                     self.get_logger().warn(f"Failed to publish debug goal image: {pub_err}")
         except Exception as e:
@@ -446,7 +443,7 @@ class ViNTPolicyNode(Node):
         self.get_logger().info(f"ViNT policy {status}")
 
         # Reload topomap on every disabled → enabled transition
-        if self.use_topomap and self.enabled and not was_enabled:
+        if self.goal_type == "topomap" and self.enabled and not was_enabled:
             try:
                 self._load_topomap(self._topomap_dir, self._topomap_goal_node_param)
                 self.agent.reset(batch_size=1)
@@ -464,18 +461,18 @@ class ViNTPolicyNode(Node):
         if self.current_image is None:
             return
 
-        # In imagegoal mode, wait for goal image before starting inference
-        if self.use_imagegoal and self.goal_image is None:
+        # In image_goal mode, wait for goal image before starting inference
+        if self.goal_type == "image_goal" and self.goal_image is None:
             return
 
         # In topomap mode, wait until the topomap has been loaded via service
-        if self.use_topomap and not self.topomap:
+        if self.goal_type == "topomap" and not self.topomap:
             return
 
         try:
-            if self.use_topomap:
+            if self.goal_type == "topomap":
                 self._inference_topomap()
-            elif self.use_imagegoal and self.goal_image is not None:
+            elif self.goal_type == "image_goal" and self.goal_image is not None:
                 self._inference_imagegoal()
             else:
                 self._inference_nogoal()
@@ -729,8 +726,8 @@ def parse_args():
     """Parse command line arguments.
 
     Most parameters are read from model_config (vint_eval.yaml) and
-    robot_config (robot_*.yaml).  Only the file paths, docker-compose-injected
-    flags, and log level remain as CLI arguments.
+    robot_config (robot_*.yaml).  Only the file paths, optional goal_type
+    override, topomap_dir, and log level remain as CLI arguments.
     """
     parser = argparse.ArgumentParser(description="ViNT ROS2 Policy Node for CostNav")
     parser.add_argument(
@@ -751,11 +748,12 @@ def parse_args():
         required=True,
         help="Path to robot configuration YAML (contains topics)",
     )
-    # Docker-compose injected flags
     parser.add_argument(
-        "--use_topomap",
-        action="store_true",
-        help="Use topomap navigation mode (directory of numbered PNGs)",
+        "--goal_type",
+        type=str,
+        default=None,
+        choices=ViNTPolicyNode.VALID_GOAL_TYPES,
+        help="Override navigation mode from vint_eval.yaml (no_goal | image_goal | topomap)",
     )
     parser.add_argument(
         "--topomap_dir",
@@ -784,7 +782,7 @@ def main():
             checkpoint=args.checkpoint,
             model_config=args.model_config,
             robot_config=args.robot_config,
-            use_topomap=args.use_topomap,
+            goal_type=args.goal_type,
             topomap_dir=args.topomap_dir,
         )
         # Set log level

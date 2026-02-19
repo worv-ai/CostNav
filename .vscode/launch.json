@@ -100,8 +100,8 @@
                 // Optional args (uncomment as needed):
                 // "--inference_rate", "10.0",
                 // "--image_topic", "/front_stereo_camera/left/image_raw",
-                "--use_imagegoal",
-                "--visualize_goal_image",
+                "--goal_type",
+                "image_goal",
                 // "--device", "cuda"
                 "--log_level",
                 "debug"

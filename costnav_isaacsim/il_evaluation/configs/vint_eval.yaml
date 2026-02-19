@@ -29,12 +29,12 @@ metric_waypoint_spacing: 0.25      # Physical distance between consecutive frame
 inference_rate: 4.0                # Inference frequency (Hz), must match training sample_rate
 device: "cuda:0"                   # PyTorch device for inference
 
-# Navigation mode
-use_imagegoal: false               # Use image goal navigation mode
-visualize_goal_image: false        # Publish received goal image to /received_goal_image for debugging
-visualize_debug_images: true       # Publish /vint_goal_image and /vint_localization_image for debugging
+# Navigation mode — one of "no_goal", "image_goal", or "topomap"
+# Can be overridden at the CLI with --goal_type.
+goal_type: "topomap"               # "no_goal" | "image_goal" | "topomap"
+visualize_debug_images: true       # Publish debug images: /vint_goal_image, /vint_localization_image
 
-# Topomap parameters (used when --use_topomap is passed on CLI)
+# Topomap parameters (used when goal_type is "topomap")
 topomap_goal_node: -1              # Goal node index in the topomap (-1 = last node)
 topomap_radius: 4                  # Number of local nodes to consider for localization
 topomap_close_threshold: 3.0       # Temporal distance threshold to advance closest node

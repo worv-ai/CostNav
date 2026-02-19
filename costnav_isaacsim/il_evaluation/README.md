@@ -149,16 +149,16 @@ This approach is useful for development and debugging within the devcontainer.
 
 ### ViNT Policy Node
 
-| Parameter        | Type   | Default                | Description                                               |
-| ---------------- | ------ | ---------------------- | --------------------------------------------------------- |
-| `--checkpoint`   | string | (required)             | Path to trained model weights                             |
-| `--model_config` | string | (required)             | Path to model config YAML (inference + navigation params) |
-| `--robot_config` | string | (required)             | Path to robot config YAML (topics)                        |
-| `--use_topomap`  | flag   | false                  | Enable topomap navigation (docker-compose injected)       |
-| `--topomap_dir`  | string | `/tmp/costnav_topomap` | Topomap image directory (docker-compose injected)         |
-| `--log_level`    | string | `info`                 | Log level (`debug`, `info`, `warn`, `error`, `fatal`)     |
+| Parameter        | Type   | Default                | Description                                                   |
+| ---------------- | ------ | ---------------------- | ------------------------------------------------------------- |
+| `--checkpoint`   | string | (required)             | Path to trained model weights                                 |
+| `--model_config` | string | (required)             | Path to model config YAML (inference + navigation params)     |
+| `--robot_config` | string | (required)             | Path to robot config YAML (topics)                            |
+| `--goal_type`    | string | `null` (use config)    | Override navigation mode (`no_goal`, `image_goal`, `topomap`) |
+| `--topomap_dir`  | string | `/tmp/costnav_topomap` | Topomap image directory                                       |
+| `--log_level`    | string | `info`                 | Log level (`debug`, `info`, `warn`, `error`, `fatal`)         |
 
-All other parameters (`inference_rate`, `device`, `use_imagegoal`, `visualize_goal_image`, `topomap_goal_node`, `topomap_radius`, `topomap_close_threshold`) are read from `vint_eval.yaml`. Topic names (`image`, `goal_image`) are read from the robot config YAML.
+All other parameters (`inference_rate`, `device`, `goal_type`, `visualize_debug_images`, `topomap_goal_node`, `topomap_radius`, `topomap_close_threshold`) are read from `vint_eval.yaml`. Topic names (`image`, `goal_image`) are read from the robot config YAML. The `--goal_type` CLI argument, when provided, overrides the `goal_type` value from `vint_eval.yaml`.
 
 ### Trajectory Follower Node
 
@@ -425,11 +425,12 @@ metric_waypoint_spacing: 0.25
 inference_rate: 4.0 # Hz, must match training sample_rate
 device: "cuda:0"
 
-# Navigation mode
-use_imagegoal: false
-visualize_goal_image: false
+# Navigation mode — one of "no_goal", "image_goal", or "topomap"
+# Can be overridden at the CLI with --goal_type.
+goal_type: "topomap" # "no_goal" | "image_goal" | "topomap"
+visualize_debug_images: true # Publish /vint_goal_image, /vint_localization_image
 
-# Topomap parameters (used when --use_topomap is passed on CLI)
+# Topomap parameters (used when goal_type is "topomap")
 topomap_goal_node: -1
 topomap_radius: 4
 topomap_close_threshold: 3.0
