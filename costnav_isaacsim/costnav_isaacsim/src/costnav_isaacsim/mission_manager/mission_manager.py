@@ -872,11 +872,11 @@ class MissionManager:
 
         if self._vint_enable_pub is not None:
             self._vint_enable_pub.publish(disable_msg)
-            logger.info("[START_MISSION] Disabled ViNT policy node")
+            logger.info(f"[{self._state.name}] Disabled ViNT policy node")
 
         if self._trajectory_follower_enable_pub is not None:
             self._trajectory_follower_enable_pub.publish(disable_msg)
-            logger.info("[START_MISSION] Disabled trajectory follower node")
+            logger.info(f"[{self._state.name}] Disabled trajectory follower node")
 
     def _enable_il_baseline_nodes(self) -> None:
         """Enable IL baseline nodes (ViNT and trajectory follower).
@@ -892,11 +892,11 @@ class MissionManager:
 
         if self._vint_enable_pub is not None:
             self._vint_enable_pub.publish(enable_msg)
-            logger.info("[PUBLISHING_GOAL] Enabled ViNT policy node")
+            logger.info(f"[{self._state.name}] Enabled ViNT policy node")
 
         if self._trajectory_follower_enable_pub is not None:
             self._trajectory_follower_enable_pub.publish(enable_msg)
-            logger.info("[PUBLISHING_GOAL] Enabled trajectory follower node")
+            logger.info(f"[{self._state.name}] Enabled trajectory follower node")
 
     def _handle_get_mission_result(self, _request, response):
         """Handle mission result query service.
@@ -1533,6 +1533,7 @@ class MissionManager:
             # Check for food spoilage before declaring success
             if self._evaluation.check_food_spoilage():
                 self._last_mission_result = MissionResult.FAILURE_FOODSPOILED
+                self._disable_il_baseline_nodes()
                 self._state = MissionState.WAITING_FOR_START
                 logger.info(
                     f"[FAILURE_FOODSPOILED] Mission {self._current_mission} failed - food spoiled! "
@@ -1542,6 +1543,7 @@ class MissionManager:
                 return
 
             self._last_mission_result = MissionResult.SUCCESS
+            self._disable_il_baseline_nodes()
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[SUCCESS] Mission {self._current_mission} completed! "
@@ -1567,6 +1569,7 @@ class MissionManager:
             self._eval.last_delta_v_magnitudes_mps = list(self._eval.delta_v_magnitudes_mps)
             self._eval.last_injury_costs = list(self._eval.injury_costs)
             self._eval.last_total_injury_cost = self._eval.total_injury_cost
+            self._disable_il_baseline_nodes()
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_PHYSICALASSISTANCE] Mission {self._current_mission} failed - robot fell down! "
@@ -1591,6 +1594,7 @@ class MissionManager:
             self._eval.last_delta_v_magnitudes_mps = list(self._eval.delta_v_magnitudes_mps)
             self._eval.last_injury_costs = list(self._eval.injury_costs)
             self._eval.last_total_injury_cost = self._eval.total_injury_cost
+            self._disable_il_baseline_nodes()
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_PHYSICALASSISTANCE] Mission {self._current_mission} failed - impulse health depleted! "
@@ -1614,6 +1618,7 @@ class MissionManager:
             self._eval.last_delta_v_magnitudes_mps = list(self._eval.delta_v_magnitudes_mps)
             self._eval.last_injury_costs = list(self._eval.injury_costs)
             self._eval.last_total_injury_cost = self._eval.total_injury_cost
+            self._disable_il_baseline_nodes()
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_TIMEOUT] Mission {self._current_mission} timed out! "
