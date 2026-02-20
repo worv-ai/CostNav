@@ -22,6 +22,7 @@ Example:
 from __future__ import annotations
 
 import argparse
+import csv
 import logging
 import sys
 import time
@@ -99,6 +100,27 @@ def convert_bag_task(
         return {"input_path": str(input_path), "status": "error", "error": str(e)}
 
 
+def load_csv_filter(csv_path: Path) -> list[str]:
+    """Read a CSV file and return recording_dir values where error == 'O'.
+
+    Args:
+        csv_path: Path to the CSV file with ``recording_dir`` and ``error`` columns.
+
+    Returns:
+        List of recording directory relative paths (e.g. ``"changhoon/recording_..."``).
+    """
+    filtered: list[str] = []
+    with open(csv_path, newline="", encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        for row in reader:
+            if row.get("error", "").strip() == "O":
+                rec_dir = row.get("recording_dir", "").strip()
+                if rec_dir:
+                    filtered.append(rec_dir)
+    console.print(f"[green]CSV filter: {len(filtered)} recordings with error='O' out of total rows[/green]")
+    return filtered
+
+
 def find_bags(input_dir: Path, bag_names: Optional[list[str]] = None) -> list[Path]:
     """Find all valid ROS bags in directory, recursing into subdirectories."""
     bags = []
@@ -137,6 +159,12 @@ def main():
     parser.add_argument("--config", "-c", type=Path, help="Processing config YAML")
     parser.add_argument("--num_workers", "-n", type=int, help="Number of parallel workers (can be set in config)")
     parser.add_argument("--bags", nargs="*", help="Specific bag names to process (default: all, can be set in config)")
+    parser.add_argument(
+        "--csv-filter",
+        type=Path,
+        default=None,
+        help="Path to CSV file for filtering bags. Only recordings where error=='O' will be processed.",
+    )
     parser.add_argument("--fps", type=float, default=30.0, help="Video FPS")
 
     args = parser.parse_args()
@@ -149,6 +177,15 @@ def main():
     input_dir = args.input_dir or (Path(paths_config["input_dir"]) if "input_dir" in paths_config else None)
     output_dir = args.output_dir or (Path(paths_config["output_dir"]) if "output_dir" in paths_config else None)
     bags = args.bags if args.bags is not None else paths_config.get("bags")
+
+    # Apply CSV filter if provided (overrides --bags / config bags)
+    if args.csv_filter is not None:
+        if not args.csv_filter.exists():
+            console.print(f"[red]Error: CSV filter file not found: {args.csv_filter}[/red]")
+            sys.exit(1)
+        if bags:
+            console.print("[yellow]Warning: --csv-filter overrides --bags / config bags list[/yellow]")
+        bags = load_csv_filter(args.csv_filter)
 
     # Validate required paths
     if input_dir is None:
