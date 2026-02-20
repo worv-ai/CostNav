@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-vint run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-vint run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint download-assets-omniverse download-assets-hf upload-assets-hf upload-dataset-hf start-nucleus stop-nucleus
 
 # Load environment variables from .env file if it exists
 # Variables can still be overridden from command line
@@ -301,6 +301,15 @@ upload-assets-hf:
 	$(DOCKER_COMPOSE) --profile dev run --rm dev \
 		bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/scripts/assets/upload_assets_hf.py"
 
+# Upload teleop dataset to Hugging Face dataset
+# Runs inside dev Docker container with huggingface_hub
+# Requires HF_TOKEN to be set in .env file
+upload-dataset-hf:
+	@echo "Uploading teleop dataset to Hugging Face..."
+	$(DOCKER_COMPOSE) --profile dev run --rm \
+		-e COSTNAV_DATASET_ROOT="$(COSTNAV_DATASET_ROOT)" \
+		-v "$(COSTNAV_DATASET_ROOT)":"$(COSTNAV_DATASET_ROOT)":ro \
+		dev bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/scripts/assets/upload_assets_hf_dataset.py"
 # =============================================================================
 # Nucleus Server Targets
 # =============================================================================

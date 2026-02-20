@@ -89,6 +89,9 @@ make start-nucleus
 # Upload assets to HuggingFace (for internal developers, requires HF_TOKEN in .env)
 # make upload-assets-hf
 
+# Upload teleop dataset to HuggingFace (for internal developers, requires HF_TOKEN in .env)
+# make upload-dataset-hf
+
 ```
 
 ## Running Nav2 (Rule-Based Navigation)
@@ -192,8 +195,8 @@ For detailed IL training and evaluation documentation, see:
 - [x] isaac sim assets release
 - [x] nav2 support for rule-based navigation
 - [ ] cost formula and reference sheet
+- [x] collected dataset with teleoperation
 - [ ] imitation learning baseline
-- [ ] collected dataset with teleoperation
 
 ## Contributing
 
