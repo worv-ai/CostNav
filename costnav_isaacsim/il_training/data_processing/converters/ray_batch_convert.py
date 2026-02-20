@@ -109,15 +109,17 @@ def load_csv_filter(csv_path: Path) -> list[str]:
     Returns:
         List of recording directory relative paths (e.g. ``"changhoon/recording_..."``).
     """
+    total = 0
     filtered: list[str] = []
     with open(csv_path, newline="", encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
         for row in reader:
+            total += 1
             if row.get("error", "").strip() == "O":
                 rec_dir = row.get("recording_dir", "").strip()
                 if rec_dir:
                     filtered.append(rec_dir)
-    console.print(f"[green]CSV filter: {len(filtered)} recordings with error='O' out of total rows[/green]")
+    console.print(f"[green]CSV filter: {len(filtered)} / {total} recordings with error='O'[/green]")
     return filtered
 
 
