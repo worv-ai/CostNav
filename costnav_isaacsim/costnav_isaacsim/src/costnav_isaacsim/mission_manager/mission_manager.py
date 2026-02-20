@@ -43,6 +43,7 @@ class MissionState(Enum):
     CLEARING_COSTMAPS = "clearing_costmaps"
     PUBLISHING_GOAL = "publishing_goal"
     LOADING_TOPOMAP = "loading_topomap"  # Waiting for ViNT to reload topomap
+    LOADING_CANVAS = "loading_canvas"  # Waiting for CANVAS to become ready
     WAITING_FOR_COMPLETION = "waiting_for_completion"
     COMPLETED = "completed"
 
@@ -185,6 +186,10 @@ class MissionManager:
         # Topomap generator (NavMesh-based topological map for ViNT)
         self._topomap_generator = None
 
+        # Canvas instruction generator (CANVAS integration)
+        self._canvas_generator = None
+        self._canvas_start_time = None  # Timestamp when LOADING_CANVAS state entered
+
     def _get_current_time_seconds(self) -> float:
         """Get current time in seconds from ROS clock.
 
@@ -226,6 +231,8 @@ class MissionManager:
             self._step_publishing_goal()
         elif self._state == MissionState.LOADING_TOPOMAP:
             self._step_loading_topomap()
+        elif self._state == MissionState.LOADING_CANVAS:
+            self._step_loading_canvas()
         elif self._state == MissionState.WAITING_FOR_COMPLETION:
             self._step_waiting_for_completion()
         elif self._state == MissionState.COMPLETED:
@@ -346,6 +353,10 @@ class MissionManager:
                 # Service client to tell the ViNT node to (re)load the topomap
                 self._vint_load_topomap_srv = self._node.create_client(Trigger, "/vint_load_topomap")
 
+            # Setup canvas instruction generator if enabled (CANVAS integration)
+            if self.config.canvas.enabled:
+                self._setup_canvas_generator()
+
             # Setup food tracking if enabled
             self._evaluation.setup_food_tracking()
 
@@ -378,6 +389,7 @@ class MissionManager:
             MissionState.CLEARING_COSTMAPS,
             MissionState.PUBLISHING_GOAL,
             MissionState.LOADING_TOPOMAP,
+            MissionState.LOADING_CANVAS,
             MissionState.WAITING_FOR_COMPLETION,
         }
 
@@ -703,6 +715,25 @@ class MissionManager:
             logger.error(f"[TOPOMAP] {traceback.format_exc()}")
             self._topomap_generator = None
             self.config.topomap.enabled = False
+
+    def _setup_canvas_generator(self) -> None:
+        """Initialize the CanvasInstructionGenerator for CANVAS integration."""
+        try:
+            from .canvas_instruction_generator import CanvasInstructionGenerator
+
+            self._canvas_generator = CanvasInstructionGenerator(
+                sampler=self._sampler,
+                config=self.config.canvas,
+                node=self._node,
+            )
+            logger.info("[CANVAS] CanvasInstructionGenerator initialized")
+        except Exception as exc:
+            logger.error(f"[CANVAS] Failed to initialize CanvasInstructionGenerator: {exc}")
+            import traceback
+
+            logger.error(f"[CANVAS] {traceback.format_exc()}")
+            self._canvas_generator = None
+            self.config.canvas.enabled = False
 
     def _generate_topomap(self, start, goal) -> bool:
         """Generate topomap images and kick off async reload on the ViNT node.
@@ -1474,7 +1505,24 @@ class MissionManager:
                 self._state = MissionState.LOADING_TOPOMAP
                 return
 
-            # No topomap — finish mission setup immediately
+            # No topomap — check if canvas is needed before finalizing
+            if self.config.canvas.enabled and self._canvas_generator is not None:
+                if not self._canvas_generator.generate_and_publish(
+                    self._current_start, self._current_goal, self._current_mission
+                ):
+                    # Canvas generation failed — restart the mission
+                    logger.warning(
+                        f"[PUBLISHING_GOAL] Mission {self._current_mission} restarting: "
+                        "canvas instruction generation failed"
+                    )
+                    self._current_mission -= 1
+                    self._state = MissionState.READY
+                    return
+                # Transition to LOADING_CANVAS — wait for to become ready
+                self._state = MissionState.LOADING_CANVAS
+                self._canvas_start_time = self._get_current_time_seconds()
+                return
+
             self._finalize_mission_setup()
 
     def _step_loading_topomap(self):
@@ -1488,7 +1536,7 @@ class MissionManager:
         _TOPOMAP_LOAD_TIMEOUT = 15.0  # seconds
 
         if self._check_vint_load_topomap_done():
-            self._finalize_mission_setup()
+            self._after_topomap_done()
             return
 
         # Safety timeout so we don't get stuck forever
@@ -1498,10 +1546,53 @@ class MissionManager:
                 logger.warning(f"[TOPOMAP] /vint_load_topomap timed out after {waited:.1f}s — proceeding anyway")
                 self._vint_load_topomap_future = None
                 self._vint_load_topomap_start_time = None
+                self._after_topomap_done()
+
+    def _after_topomap_done(self) -> None:
+        """Chain from topomap to canvas if enabled, otherwise finalize."""
+        if self.config.canvas.enabled and self._canvas_generator is not None:
+            if not self._canvas_generator.generate_and_publish(
+                self._current_start, self._current_goal, self._current_mission
+            ):
+                logger.warning(
+                    f"[CANVAS] Mission {self._current_mission} restarting: "
+                    "canvas instruction generation failed after topomap"
+                )
+                self._current_mission -= 1
+                self._state = MissionState.READY
+                return
+            self._state = MissionState.LOADING_CANVAS
+            self._canvas_start_time = self._get_current_time_seconds()
+            return
+        self._finalize_mission_setup()
+
+    def _step_loading_canvas(self):
+        """Poll for model ready state (non-blocking).
+
+        This state exists so that the main ``step()`` loop keeps calling
+        ``_spin_ros_once()`` while waiting to reach
+        the ``"waiting"`` state, at which point we send ``/start_pause=True``.
+        """
+        # Check if model is ready (model_state == "waiting")
+        if self._canvas_generator.model_state == "waiting":
+            logger.info("[CANVAS] Model ready, sending start signal")
+            self._canvas_generator.send_start()
+            self._finalize_mission_setup()
+            return
+
+        # Safety timeout so we don't get stuck forever
+        if self._canvas_start_time is not None:
+            waited = self._get_current_time_seconds() - self._canvas_start_time
+            if waited >= self.config.canvas.planner_ready_timeout:
+                logger.warning(
+                    f"[CANVAS] Model ready timeout after {waited:.1f}s "
+                    f"(state={self._canvas_generator.model_state}) — proceeding anyway"
+                )
+                self._canvas_start_time = None
                 self._finalize_mission_setup()
 
     def _finalize_mission_setup(self):
-        """Common tail of mission setup shared by PUBLISHING_GOAL and LOADING_TOPOMAP."""
+        """Common tail of mission setup shared by PUBLISHING_GOAL, LOADING_TOPOMAP, and LOADING_CANVAS."""
         # Update RViz markers
         self._marker_publisher.publish_start_goal_from_sampled(self._current_start, self._current_goal)
 

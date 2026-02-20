@@ -142,6 +142,57 @@ class TopoMapConfig:
 
 
 @dataclass
+class CanvasInstructionConfig:
+    """Configuration for CANVAS instruction generation.
+
+    Controls the CanvasInstructionGenerator which converts NavMesh shortest
+    paths into pixel-space trajectory annotations and publishes them as
+    Scenario JSON + Int32MultiArray for CANVAS.
+    """
+
+    enabled: bool = False  # Enable canvas instruction generation for CANVAS
+
+    # Scenario fields published
+    map_name: str = "costnav"  # Top-level key in map_list.yml
+    sketch_map_name: str = "orthographic_map"  # Sub-key for HTL (sketch) map
+    drive_map_name: str = "orthographic_map"  # Sub-key for drive map
+
+    # Model guideline for the neural planner
+    model_guideline: str = (
+        "You are segway_e1, measuring 62*89*115cm (width, length, and height),\n"
+        "equipped with a wide-angle camera and moving on four wheel drive.\n\n"
+        "You are driving on a sidewalk.\n"
+        "You should act like a last-mile delivery robot.\n\n"
+        "You must follow these driving instructions:\n"
+        "1. You must avoid collisions.\n"
+        "2. You should prioritize reaching the final destination.\n"
+        "3. You should follow the Trajectory Instruction.\n"
+        "    a. If the Trajectory Instruction cannot be followed due to any obstacles, "
+        "you should deviate to bypass the obstacle.\n"
+        "    b. You should try to evade any identifiable obstacles.\n"
+        "4. You should maintain a constant driving speed.\n"
+        "5. You must drive on the sidewalk.\n"
+        "    a. If you need to cross the road, you must use the crosswalk."
+    )
+
+    # Path to the map YAML file (Nav2 format with resolution, origin, image).
+    # The CanvasInstructionGenerator loads resolution, origin, and image
+    # dimensions from this file at runtime.
+    map_yaml_path: str = ""
+
+    # ROS2 topic names
+    scenario_topic: str = "/instruction_scenario"
+    annotation_topic: str = "/instruction_annotation"
+    start_pause_topic: str = "/start_pause"
+    stop_model_topic: str = "/stop_model"
+    reached_goal_topic: str = "/reached_goal"
+    model_state_topic: str = "/model_state"
+
+    # Timeout for waiting to become ready (seconds)
+    planner_ready_timeout: float = 15.0
+
+
+@dataclass
 class MissionManagerConfig:
     """Configuration for MissionManager runtime settings."""
 
@@ -185,6 +236,7 @@ class MissionConfig:
     injury: InjuryConfig = field(default_factory=InjuryConfig)
     goal_image: GoalImageConfig = field(default_factory=GoalImageConfig)
     topomap: TopoMapConfig = field(default_factory=TopoMapConfig)
+    canvas: CanvasInstructionConfig = field(default_factory=CanvasInstructionConfig)
     manager: MissionManagerConfig = field(default_factory=MissionManagerConfig)
 
     @classmethod
@@ -296,6 +348,24 @@ class MissionConfig:
             camera_usd_path=topomap_data.get("camera_usd_path"),
         )
 
+        # Parse canvas instruction config (for CANVAS integration)
+        canvas_data = data.get("canvas", {})
+        canvas_config = CanvasInstructionConfig(
+            enabled=canvas_data.get("enabled", False),
+            map_name=canvas_data.get("map_name", "costnav"),
+            sketch_map_name=canvas_data.get("sketch_map_name", "orthographic_map"),
+            drive_map_name=canvas_data.get("drive_map_name", "orthographic_map"),
+            model_guideline=canvas_data.get("model_guideline", CanvasInstructionConfig().model_guideline),
+            map_yaml_path=canvas_data.get("map_yaml_path", ""),
+            scenario_topic=canvas_data.get("scenario_topic", "/instruction_scenario"),
+            annotation_topic=canvas_data.get("annotation_topic", "/instruction_annotation"),
+            start_pause_topic=canvas_data.get("start_pause_topic", "/start_pause"),
+            stop_model_topic=canvas_data.get("stop_model_topic", "/stop_model"),
+            reached_goal_topic=canvas_data.get("reached_goal_topic", "/reached_goal"),
+            model_state_topic=canvas_data.get("model_state_topic", "/model_state"),
+            planner_ready_timeout=canvas_data.get("planner_ready_timeout", 15.0),
+        )
+
         # Parse manager config (MissionManager runtime settings)
         manager_data = data.get("manager", {})
         manager_config = MissionManagerConfig(
@@ -325,6 +395,7 @@ class MissionConfig:
             injury=injury_config,
             goal_image=goal_image_config,
             topomap=topomap_config,
+            canvas=canvas_config,
             manager=manager_config,
         )
 

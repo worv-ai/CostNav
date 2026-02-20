@@ -4,7 +4,7 @@
 This converter extracts image topics to video files and creates MediaRef
 references in the output bag for efficient lazy-loading during training.
 
-Adapted from sketchdrive bag_to_mediaref.py for CostNav data format.
+Adapted from CANVAS bag_to_mediaref.py for CostNav data format.
 
 Example:
     python rosbag_to_mediaref.py \

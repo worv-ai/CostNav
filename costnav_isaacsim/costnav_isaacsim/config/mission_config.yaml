@@ -201,3 +201,31 @@ manager:
   # NavMesh shortest path (or the goal if no intermediate waypoints exist).
   # When false, the start heading is random.
   align_initial_heading_to_path: false
+
+# Canvas instruction generation settings (CANVAS integration)
+# Converts NavMesh shortest paths to pixel-space trajectory annotations
+# and publishes them as Scenario JSON for CANVAS.
+canvas:
+  # Enable canvas instruction generation
+  enabled: false
+
+  # Scenario fields (must match entries in ASSETS_PATH/map_list.yml)
+  map_name: "costnav"
+  sketch_map_name: "orthographic_map"
+  drive_map_name: "orthographic_map"
+
+  # Path to the map YAML file (Nav2 format: resolution, origin, image).
+  # The CanvasInstructionGenerator loads resolution, origin, and image
+  # dimensions from this file at runtime.
+  map_yaml_path: "/workspace/costnav_isaacsim/nav2_params/maps/sidewalk.yaml"
+
+  # ROS2 topic names for communicating
+  scenario_topic: "/instruction_scenario"
+  annotation_topic: "/instruction_annotation"
+  start_pause_topic: "/start_pause"
+  stop_model_topic: "/stop_model"
+  reached_goal_topic: "/reached_goal"
+  model_state_topic: "/model_state"
+
+  # Timeout for waiting to become ready (seconds)
+  planner_ready_timeout: 15.0
