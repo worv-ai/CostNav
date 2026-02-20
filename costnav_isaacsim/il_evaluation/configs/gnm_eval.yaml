@@ -1,0 +1,34 @@
+# GNM Evaluation Configuration for CostNav
+# This config is used by the policy node during inference.
+
+# Model selection and architecture parameters
+model_type: "gnm"                   # Selects GNM model backend in policy node
+context_size: 5                     # Number of past frames for temporal context
+len_traj_pred: 5                    # Number of waypoints to predict
+learn_angle: true                   # Predict heading angles
+obs_encoding_size: 1024             # Observation encoding dimension
+goal_encoding_size: 1024            # Goal encoding dimension
+
+# Input dimensions
+image_size: [85, 64]                # [width, height] - must match training
+
+# Action normalization
+# WARNING: waypoint_spacing and metric_waypoint_spacing are training-time constants.
+# They MUST exactly match the values used when training the checkpoint.
+normalize: true                     # Denormalize predicted waypoints to metric coordinates
+waypoint_spacing: 1                 # Subsampling stride over trajectory frames
+metric_waypoint_spacing: 0.25       # Physical spacing between trajectory frames in meters
+
+# Inference parameters
+inference_rate: 4.0                 # Inference frequency (Hz)
+device: "cuda:0"                    # PyTorch device for inference
+
+# Navigation mode — one of "no_goal", "image_goal", or "topomap"
+# Can be overridden at the CLI with --goal_type.
+goal_type: "topomap"                # "no_goal" | "image_goal" | "topomap"
+visualize_debug_images: true        # Publish debug images: /vint_goal_image, /vint_localization_image
+
+# Topomap parameters (used when goal_type is "topomap")
+topomap_goal_node: -1               # Goal node index in the topomap (-1 = last node)
+topomap_radius: 4                   # Number of local nodes to consider for localization
+topomap_close_threshold: 3.0        # Temporal distance threshold to advance closest node

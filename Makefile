@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-vint run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-vint run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint run-gnm start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint run-eval-gnm download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
 
 # Load environment variables from .env file if it exists
 # Variables can still be overridden from command line
@@ -29,9 +29,6 @@ ALIGN_HEADING ?= False
 
 # Joystick settings for teleop (always reads from .env)
 XBOX_ID := $(shell grep '^XBOX_ID=' .env 2>/dev/null | cut -d= -f2)
-
-# model checkpoint path
-MODEL_CHECKPOINT ?= checkpoints/vint.pth
 
 ISAAC_SIM_IMAGE ?= costnav-isaacsim-$(ISAAC_SIM_VERSION):$(COSTNAV_VERSION)
 ISAAC_LAB_IMAGE ?= costnav-isaaclab-$(ISAAC_SIM_VERSION)-$(ISAAC_LAB_VERSION):$(COSTNAV_VERSION)
@@ -174,7 +171,7 @@ run-teleop:
 	echo "Done."
 
 # =============================================================================
-# IL Evaluation (ViNT) Targets
+# IL Evaluation (ViNT / GNM) Targets
 # =============================================================================
 
 # Build the ROS2 + PyTorch Docker image (ViNT evaluation)
@@ -185,10 +182,21 @@ build-vint:
 # Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/vint.pth)
 # Topomap generation is enabled by default for ViNT navigation
 # Example: MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
+run-vint: MODEL_CHECKPOINT ?= checkpoints/vint.pth
 run-vint:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile vint down
 	TOPOMAP=True ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile vint up
+
+# Run Isaac Sim with GNM policy node and trajectory follower for IL baseline evaluation
+# Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/gnm.pth)
+# Topomap generation is enabled by default for GNM navigation
+# Example: MODEL_CHECKPOINT=checkpoints/gnm.pth make run-gnm
+run-gnm: MODEL_CHECKPOINT ?= checkpoints/gnm.pth
+run-gnm:
+	xhost +local:docker 2>/dev/null || true
+	$(DOCKER_COMPOSE) --profile gnm down
+	TOPOMAP=True ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile gnm up
 
 # =============================================================================
 # ROS Bag Recording Targets
@@ -274,6 +282,26 @@ run-eval-vint:
 	@echo "  Number of missions:  $(NUM_MISSIONS)"
 	@echo ""
 	@bash scripts/eval.sh vint $(TIMEOUT) $(NUM_MISSIONS)
+
+# Run GNM evaluation (requires running gnm instance via make run-gnm)
+# Usage: make run-eval-gnm TIMEOUT=20 NUM_MISSIONS=10
+# Output: ./logs/gnm_evaluation_<timestamp>.log
+run-eval-gnm:
+	@if ! docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-gnm"; then \
+		echo "ERROR: 'make run-gnm' is not running."; \
+		echo ""; \
+		echo "Please start gnm first in a separate terminal:"; \
+		echo "  MODEL_CHECKPOINT=checkpoints/gnm.pth make run-gnm"; \
+		echo ""; \
+		echo "Then run this command again:"; \
+		echo "  make run-eval-gnm TIMEOUT=$(TIMEOUT) NUM_MISSIONS=$(NUM_MISSIONS)"; \
+		exit 1; \
+	fi
+	@echo "Starting GNM evaluation..."
+	@echo "  Timeout per mission: $(TIMEOUT)s"
+	@echo "  Number of missions:  $(NUM_MISSIONS)"
+	@echo ""
+	@bash scripts/eval.sh gnm $(TIMEOUT) $(NUM_MISSIONS)
 
 
 # =============================================================================
