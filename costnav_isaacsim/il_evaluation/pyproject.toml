@@ -49,6 +49,9 @@ warmup-scheduler = { git = "https://github.com/ildoonet/pytorch-gradual-warmup-l
 # Main ViNT policy node entry point
 # Usage: vint_policy_node --checkpoint /path/to/model.pth --model_config /path/to/config.yaml --robot_config /path/to/robot.yaml
 vint_policy_node = "il_evaluation.nodes.vint_policy_node:main"
+# Main GNM policy node entry point
+# Usage: gnm_policy_node --checkpoint /path/to/model.pth --model_config /path/to/config.yaml --robot_config /path/to/robot.yaml
+gnm_policy_node = "il_evaluation.nodes.gnm_policy_node:main"
 # Trajectory follower node for executing trajectories at high rate
 # Usage: trajectory_follower_node --robot_config configs/robot_carter.yaml
 trajectory_follower_node = "il_evaluation.nodes.trajectory_follower_node:main"
