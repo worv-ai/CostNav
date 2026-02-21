@@ -90,7 +90,8 @@ class GNMAgent(BaseAgent):
             input_image = torch.concat(input_image, dim=0)
 
             goal_tensors = [
-                transform_images(sg_img, self.image_size, center_crop=False).to(self.device) for sg_img in subgoal_images
+                transform_images(sg_img, self.image_size, center_crop=False).to(self.device)
+                for sg_img in subgoal_images
             ]
             goal_batch = torch.concat(goal_tensors, dim=0)
 

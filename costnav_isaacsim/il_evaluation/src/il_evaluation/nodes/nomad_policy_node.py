@@ -452,7 +452,6 @@ class NoMaDPolicyNode(Node):
             except Exception as e:
                 self.get_logger().error(f"Failed to reload topomap on enable: {e}")
 
-
     def inference_callback(self):
         """Run NoMaD inference and publish trajectory."""
         if not self.enabled:

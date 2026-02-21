@@ -293,14 +293,11 @@ class NoMaDAgent(BaseAgent):
             self.callback_obs(images)
 
             goal_image = [
-                _transform_images(PILImage.fromarray(g_img), self.image_size).to(self.device)
-                for g_img in goal_images
+                _transform_images(PILImage.fromarray(g_img), self.image_size).to(self.device) for g_img in goal_images
             ]
             goal_image = torch.concat(goal_image, dim=0)
 
-            input_image = [
-                _transform_images(imgs, self.image_size).to(self.device) for imgs in self.memory_queue
-            ]
+            input_image = [_transform_images(imgs, self.image_size).to(self.device) for imgs in self.memory_queue]
             input_image = torch.concat(input_image, dim=0)
 
             goal_mask = torch.zeros((goal_image.shape[0],), dtype=torch.long, device=self.device)
@@ -325,9 +322,7 @@ class NoMaDAgent(BaseAgent):
         """
         with torch.no_grad():
             self.callback_obs(images)
-            input_image = [
-                _transform_images(imgs, self.image_size).to(self.device) for imgs in self.memory_queue
-            ]
+            input_image = [_transform_images(imgs, self.image_size).to(self.device) for imgs in self.memory_queue]
             input_image = torch.concat(input_image, dim=0)
 
             dummy_goal = input_image[:, -3:, :, :]
@@ -353,14 +348,10 @@ class NoMaDAgent(BaseAgent):
         with torch.no_grad():
             self.callback_obs(images)
 
-            input_image = [
-                _transform_images(imgs, self.image_size).to(self.device) for imgs in self.memory_queue
-            ]
+            input_image = [_transform_images(imgs, self.image_size).to(self.device) for imgs in self.memory_queue]
             input_image = torch.concat(input_image, dim=0)  # [1, C*(ctx+1), H, W]
 
-            goal_tensors = [
-                _transform_images(sg_img, self.image_size).to(self.device) for sg_img in subgoal_images
-            ]
+            goal_tensors = [_transform_images(sg_img, self.image_size).to(self.device) for sg_img in subgoal_images]
             goal_batch = torch.concat(goal_tensors, dim=0)
 
             obs_batch = input_image.repeat(len(subgoal_images), 1, 1, 1)
