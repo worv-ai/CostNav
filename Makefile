@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-vint run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint run-gnm start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint run-eval-gnm download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-vint run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint run-gnm run-nomad start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint run-eval-gnm run-eval-nomad download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
 
 # Load environment variables from .env file if it exists
 # Variables can still be overridden from command line
@@ -171,7 +171,7 @@ run-teleop:
 	echo "Done."
 
 # =============================================================================
-# IL Evaluation (ViNT / GNM) Targets
+# IL Evaluation (ViNT / GNM / NoMaD) Targets
 # =============================================================================
 
 # Build the ROS2 + PyTorch Docker image (ViNT evaluation)
@@ -197,6 +197,16 @@ run-gnm:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile gnm down
 	TOPOMAP=True ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile gnm up
+
+# Run Isaac Sim with NoMaD policy node and trajectory follower for IL baseline evaluation
+# Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/nomad.pth)
+# Topomap generation is enabled by default for NoMaD navigation
+# Example: MODEL_CHECKPOINT=checkpoints/nomad.pth make run-nomad
+run-nomad: MODEL_CHECKPOINT ?= checkpoints/nomad.pth
+run-nomad:
+	xhost +local:docker 2>/dev/null || true
+	$(DOCKER_COMPOSE) --profile nomad down
+	TOPOMAP=True ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile nomad up
 
 # =============================================================================
 # ROS Bag Recording Targets
@@ -302,6 +312,26 @@ run-eval-gnm:
 	@echo "  Number of missions:  $(NUM_MISSIONS)"
 	@echo ""
 	@bash scripts/eval.sh gnm $(TIMEOUT) $(NUM_MISSIONS)
+
+# Run NoMaD evaluation (requires running nomad instance via make run-nomad)
+# Usage: make run-eval-nomad TIMEOUT=20 NUM_MISSIONS=10
+# Output: ./logs/nomad_evaluation_<timestamp>.log
+run-eval-nomad:
+	@if ! docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-nomad"; then \
+		echo "ERROR: 'make run-nomad' is not running."; \
+		echo ""; \
+		echo "Please start nomad first in a separate terminal:"; \
+		echo "  MODEL_CHECKPOINT=checkpoints/nomad.pth make run-nomad"; \
+		echo ""; \
+		echo "Then run this command again:"; \
+		echo "  make run-eval-nomad TIMEOUT=$(TIMEOUT) NUM_MISSIONS=$(NUM_MISSIONS)"; \
+		exit 1; \
+	fi
+	@echo "Starting NoMaD evaluation..."
+	@echo "  Timeout per mission: $(TIMEOUT)s"
+	@echo "  Number of missions:  $(NUM_MISSIONS)"
+	@echo ""
+	@bash scripts/eval.sh nomad $(TIMEOUT) $(NUM_MISSIONS)
 
 
 # =============================================================================

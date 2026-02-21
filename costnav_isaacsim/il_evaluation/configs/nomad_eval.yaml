@@ -1,0 +1,45 @@
+# NoMaD Evaluation Configuration for CostNav
+# This config is used by the NoMaD agent and policy node during inference.
+
+# Model architecture parameters (must match training)
+model_type: nomad
+vision_encoder: nomad_vint           # nomad_vint or vit
+obs_encoder: "efficientnet-b0"
+encoding_size: 256
+context_size: 3
+len_traj_pred: 8
+learn_angle: false
+mha_num_attention_heads: 4
+mha_num_attention_layers: 4
+mha_ff_dim_factor: 4
+down_dims: [64, 128, 256]
+cond_predict_scale: false
+patch_size: 8                        # only used for vision_encoder=vit
+
+# Input dimensions
+image_size: [96, 96]                 # [width, height] - must match training
+
+# Diffusion parameters
+num_diffusion_iters: 10
+num_samples: 8
+beta_schedule: "squaredcos_cap_v2"
+
+# Action normalization
+# NOTE: action_stats MUST match the values used during training.
+action_stats:
+  min: [-2.5, -4.0]
+  max: [5.0, 4.0]
+
+# Inference parameters
+inference_rate: 4.0                  # Inference frequency (Hz)
+device: "cuda:0"                     # PyTorch device for inference
+
+# Navigation mode — one of "no_goal", "image_goal", or "topomap"
+# Can be overridden at the CLI with --goal_type.
+goal_type: "topomap"
+visualize_debug_images: true         # Publish debug images: /vint_goal_image, /vint_localization_image
+
+# Topomap parameters (used when goal_type is "topomap")
+topomap_goal_node: -1                # Goal node index in the topomap (-1 = last node)
+topomap_radius: 4                    # Number of local nodes to consider for localization
+topomap_close_threshold: 3.0         # Temporal distance threshold to advance closest node
