@@ -1,13 +1,13 @@
 #!/bin/bash
-# Unified Evaluation Script for Teleop, Nav2, ViNT, and GNM
+# Unified Evaluation Script for Teleop, Nav2, ViNT, GNM, and NoMaD
 # Runs consecutive missions and generates comprehensive evaluation logs
 #
 # Usage: ./eval.sh <MODE> [TIMEOUT] [NUM_MISSIONS]
-#   MODE: Either 'teleop', 'nav2', 'vint', or 'gnm'
+#   MODE: Either 'teleop', 'nav2', 'vint', 'gnm', or 'nomad'
 #   TIMEOUT: Mission timeout in seconds (default: 20)
 #   NUM_MISSIONS: Number of missions to run (default: 10)
 #
-# Requires: A running instance (make run-teleop, make run-nav2, make run-vint, or make run-gnm)
+# Requires: A running instance (make run-teleop, make run-nav2, make run-vint, make run-gnm, or make run-nomad)
 #
 # Controls:
 #   Right Arrow (→): Skip current mission
@@ -16,9 +16,9 @@ set -e
 
 # Mode validation
 MODE="${1:-}"
-if [ -z "$MODE" ] || { [ "$MODE" != "teleop" ] && [ "$MODE" != "nav2" ] && [ "$MODE" != "vint" ] && [ "$MODE" != "gnm" ]; }; then
-    echo "ERROR: Mode must be 'teleop', 'nav2', 'vint', or 'gnm'"
-    echo "Usage: $0 <teleop|nav2|vint|gnm> [TIMEOUT] [NUM_MISSIONS]"
+if [ -z "$MODE" ] || { [ "$MODE" != "teleop" ] && [ "$MODE" != "nav2" ] && [ "$MODE" != "vint" ] && [ "$MODE" != "gnm" ] && [ "$MODE" != "nomad" ]; }; then
+    echo "ERROR: Mode must be 'teleop', 'nav2', 'vint', 'gnm', or 'nomad'"
+    echo "Usage: $0 <teleop|nav2|vint|gnm|nomad> [TIMEOUT] [NUM_MISSIONS]"
     exit 1
 fi
 
@@ -32,6 +32,9 @@ elif [ "$MODE" = "vint" ]; then
 elif [ "$MODE" = "gnm" ]; then
     CONTAINER_NAME="costnav-ros2-gnm"
     MODE_DISPLAY="GNM"
+elif [ "$MODE" = "nomad" ]; then
+    CONTAINER_NAME="costnav-ros2-nomad"
+    MODE_DISPLAY="NoMaD"
 else
     CONTAINER_NAME="costnav-ros2-nav2"
     MODE_DISPLAY="Nav2"
