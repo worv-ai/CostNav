@@ -127,13 +127,14 @@ This approach is useful for development and debugging within the devcontainer.
 
 ### ViNT Policy Node
 
-| Direction | Topic                                 | Type                | Description                                  |
-| --------- | ------------------------------------- | ------------------- | -------------------------------------------- |
-| Subscribe | `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image` | Camera image input                           |
-| Subscribe | `/goal_image`                         | `sensor_msgs/Image` | Goal image (ImageGoal mode, transient local) |
-| Subscribe | `/vint_enable`                        | `std_msgs/Bool`     | Enable/disable policy execution              |
-| Publish   | `/vint_trajectory`                    | `nav_msgs/Path`     | Predicted trajectory (5 waypoints)           |
-| Service   | `/reset_agent`                        | `std_srvs/Trigger`  | Reset agent memory for new mission           |
+| Direction | Topic                                 | Type                | Description                                        |
+| --------- | ------------------------------------- | ------------------- | -------------------------------------------------- |
+| Subscribe | `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image` | Camera image input (configurable via robot config) |
+| Subscribe | `/goal_image`                         | `sensor_msgs/Image` | Goal image (ImageGoal mode, transient local)       |
+| Subscribe | `/vint_enable`                        | `std_msgs/Bool`     | Enable/disable policy execution                    |
+| Publish   | `/vint_trajectory`                    | `nav_msgs/Path`     | Predicted trajectory (5 waypoints)                 |
+| Publish   | `/vint_reached_goal`                  | `std_msgs/Bool`     | True when topomap goal node is reached             |
+| Service   | `/reset_agent`                        | `std_srvs/Trigger`  | Reset agent memory for new mission                 |
 
 ### Trajectory Follower Node
 
@@ -148,25 +149,25 @@ This approach is useful for development and debugging within the devcontainer.
 
 ### ViNT Policy Node
 
-| Parameter          | Type   | Default                               | Description                   |
-| ------------------ | ------ | ------------------------------------- | ----------------------------- |
-| `--checkpoint`     | string | (required)                            | Path to trained model weights |
-| `--model_config`   | string | `configs/vint_eval.yaml`              | Path to model config          |
-| `--robot_config`   | string | `configs/robot_carter.yaml`           | Path to robot config          |
-| `--inference_rate` | float  | 10.0                                  | Inference frequency (Hz)      |
-| `--image_topic`    | string | `/front_stereo_camera/left/image_raw` | Camera topic                  |
-| `--use_imagegoal`  | flag   | false                                 | Use image goal navigation     |
-| `--device`         | string | `cuda:0`                              | PyTorch device                |
+| Parameter        | Type   | Default                | Description                                                   |
+| ---------------- | ------ | ---------------------- | ------------------------------------------------------------- |
+| `--checkpoint`   | string | (required)             | Path to trained model weights                                 |
+| `--model_config` | string | (required)             | Path to model config YAML (inference + navigation params)     |
+| `--robot_config` | string | (required)             | Path to robot config YAML (topics)                            |
+| `--goal_type`    | string | `null` (use config)    | Override navigation mode (`no_goal`, `image_goal`, `topomap`) |
+| `--topomap_dir`  | string | `/tmp/costnav_topomap` | Topomap image directory                                       |
+| `--log_level`    | string | `info`                 | Log level (`debug`, `info`, `warn`, `error`, `fatal`)         |
+
+All other parameters (`inference_rate`, `device`, `goal_type`, `visualize_debug_images`, `topomap_goal_node`, `topomap_radius`, `topomap_close_threshold`) are read from `vint_eval.yaml`. Topic names (`image`, `goal_image`) are read from the robot config YAML. The `--goal_type` CLI argument, when provided, overrides the `goal_type` value from `vint_eval.yaml`.
 
 ### Trajectory Follower Node
 
-| Parameter              | Type   | Default                     | Description                      |
-| ---------------------- | ------ | --------------------------- | -------------------------------- |
-| `--robot_config`       | string | `configs/robot_carter.yaml` | Path to robot config             |
-| `--control_rate`       | float  | 20.0                        | Control loop frequency (Hz)      |
-| `--max_linear_vel`     | float  | 0.5                         | Maximum linear velocity (m/s)    |
-| `--max_angular_vel`    | float  | 0.5                         | Maximum angular velocity (rad/s) |
-| `--trajectory_timeout` | float  | 0.5                         | Trajectory timeout (s)           |
+| Parameter        | Type   | Default    | Description                                                     |
+| ---------------- | ------ | ---------- | --------------------------------------------------------------- |
+| `--robot_config` | string | (required) | Path to robot config YAML (topics + trajectory_follower params) |
+| `--log_level`    | string | `info`     | Log level (`debug`, `info`, `warn`, `error`, `fatal`)           |
+
+All control parameters (`control_rate`, `max_linear_vel`, `max_angular_vel`, `trajectory_timeout`) are read from the `trajectory_follower` section of the robot config YAML.
 
 ## Evaluation
 
@@ -251,7 +252,7 @@ The evaluation system tracks the following metrics per mission:
 il_evaluation/
 ├── pyproject.toml            # Package configuration (uv pip install -e .)
 ├── configs/                  # Configuration files
-│   ├── vint_eval.yaml                # Model architecture config
+│   ├── vint_eval.yaml                # Model + inference config
 │   ├── robot_carter.yaml             # Nova Carter robot config
 │   └── robot_segway.yaml             # Segway E1 robot config
 └── src/il_evaluation/        # Python package source
@@ -263,35 +264,93 @@ il_evaluation/
     │   ├── traj_opt.py
     │   └── vint_network.py
     ├── nodes/                # ROS2 nodes (entry points)
-    │   ├── vint_policy_node.py       # ViNT inference (~10Hz)
+    │   ├── vint_policy_node.py       # ViNT inference (~4Hz)
     │   └── trajectory_follower_node.py  # MPC controller (~20Hz)
     ├── utils/                # Utility functions
     └── tests/                # Unit tests
 ```
 
-## MPC Controller
+## Trajectory Follower
 
-The trajectory follower node uses a **Model Predictive Control (MPC)** controller based on the [NavDP](https://github.com/InternRobotics/NavDP) implementation. The controller tracks trajectories published by the ViNT policy node.
+The system uses a **two-node architecture** that decouples perception from control:
 
-### Controller Parameters
+```
+Camera ──► ViNT Policy Node (4 Hz) ──► /vint_trajectory ──► Trajectory Follower Node (20 Hz) ──► /cmd_vel ──► Robot
+                                                                     ▲
+                                                          /odom ─────┘
+```
+
+- **ViNT policy node** runs inference at **4 Hz**, predicts 5 waypoints, generates a smooth trajectory via cubic spline, and publishes it on `/vint_trajectory` as a `nav_msgs/Path`.
+- **Trajectory follower node** subscribes to that trajectory and runs an MPC control loop at **20 Hz**, reading the robot's current pose from `/odom` and publishing velocity commands to `/cmd_vel`.
+
+### Control Flow
+
+The trajectory follower node has three callbacks:
+
+| Callback              | Trigger                | What it does                                                                       |
+| --------------------- | ---------------------- | ---------------------------------------------------------------------------------- |
+| `trajectory_callback` | New `/vint_trajectory` | Converts Path → numpy, transforms to world frame if needed, creates or updates MPC |
+| `odom_callback`       | New `/odom`            | Stores latest robot pose (used by `control_callback`)                              |
+| `control_callback`    | Timer at 20 Hz         | Reads robot state, calls `mpc.solve(x0)`, publishes `cmd_vel`                      |
+
+The control timer fires independently of trajectory arrival. If no valid trajectory exists or it has timed out (default 0.5 s), the callback publishes zero velocity (stop).
+
+### Coordinate Frame Handling
+
+ViNT predicts waypoints in the **robot-local frame** (`base_link`). MPC needs a **world-frame** trajectory to track against a moving robot. When a trajectory arrives in `base_link`:
+
+1. Read the current robot pose `(x, y, quaternion)` from odometry
+2. Build a **full 3D rotation matrix** from the quaternion (not yaw-only, so it's correct on slopes)
+3. For each local waypoint `(dx, dy)`:
+   - Extend to 3D: `(dx, dy, 0)`
+   - Rotate: `rotated = R @ [dx, dy, 0]`
+   - Translate: `world_x = robot_x + rotated[0]`, `world_y = robot_y + rotated[1]`
+
+Once in world frame, the trajectory is stored and tracked until the next update or timeout.
+
+### Enable / Disable
+
+Publishing `false` on `/trajectory_follower_enable`:
+
+- Immediately publishes a zero-velocity `Twist` (stops the robot)
+- Calls `mpc.reset()` to clear the warm-start state so the next enable starts fresh
+
+### MPC Controller
+
+The trajectory follower uses a **Model Predictive Control (MPC)** controller based on the [NavDP](https://github.com/InternRobotics/NavDP) implementation.
+
+#### MPC Reuse (Warm Start)
+
+The CasADi optimization problem is built **once** on the first trajectory and reused for all subsequent updates. When a new trajectory arrives (~4 Hz), only the reference trajectory (`ref_traj`) is replaced — the solver structure, constraints, and warm-start state (`last_opt_u_controls`, `last_opt_x_states`) are preserved. This avoids the expensive `_setup_mpc()` rebuild and lets IPOPT converge faster from the previous solution.
+
+```python
+# First trajectory — build the CasADi problem once
+if self.mpc_controller is None:
+    self.mpc_controller = MPCController(trajectory=world_trajectory, ...)
+else:
+    # Reuse existing MPC: update ref trajectory, keep warm start
+    self.mpc_controller.ref_traj = self.mpc_controller._make_ref_denser(world_trajectory)
+```
+
+#### Controller Parameters
 
 | Parameter   | Default | Description                             |
 | ----------- | ------- | --------------------------------------- |
 | `N`         | 15      | MPC horizon length                      |
 | `desired_v` | 0.5     | Desired velocity for reference spacing  |
-| `v_max`     | 0.5     | Maximum linear velocity (m/s)           |
+| `v_max`     | 2.0     | Maximum linear velocity (m/s)           |
 | `w_max`     | 0.5     | Maximum angular velocity (rad/s)        |
 | `ref_gap`   | 3       | Gap between reference points in horizon |
 | `dt`        | 0.1     | Time step for dynamics (s)              |
 
-### Cost Matrices
+#### Cost Matrices
 
 The MPC uses the following cost matrices:
 
 - **State cost Q**: `diag([10.0, 10.0, 0.0])` - penalizes x, y error, ignores heading
 - **Control cost R**: `diag([0.02, 0.15])` - penalizes velocity (v) and angular velocity (w)
 
-### Unicycle Dynamics
+#### Unicycle Dynamics
 
 The controller uses unicycle dynamics:
 
@@ -301,48 +360,97 @@ dy/dt = v * sin(θ)
 dθ/dt = w
 ```
 
-### Solver
+#### Solver
 
 - **Solver**: IPOPT via CasADi
 - **Max iterations**: 100
 - **Tolerance**: 1e-8
-- **Warm start**: Uses previous solution for faster convergence
+- **Warm start**: Uses previous solution for faster convergence (preserved across trajectory updates)
 
-### Trajectory Processing
+#### Trajectory Processing
 
 1. **Density interpolation**: Trajectory is made 50× denser via linear interpolation
 2. **Nearest point finding**: Controller finds nearest point on trajectory to current pose
 3. **Reference selection**: Reference points are sampled along the trajectory at `desired_v * ref_gap * dt` spacing
 4. **Output**: Uses second control output (index 1) for smoother response
 
+## Waypoint Normalization
+
+ViNT outputs **normalized** waypoints during training and expects the same normalization to be reversed at evaluation time. Getting this wrong causes the robot to over- or under-shoot.
+
+### Training (normalization)
+
+```python
+# In training data processing:
+actions[:, :2] /= metric_waypoint_spacing * waypoint_spacing   # = 0.25 * 1 = 0.25
+```
+
+### Evaluation (denormalization)
+
+```python
+# In vint_agent.py:
+waypoints[:, :, :2] *= self.denorm_scale  # = metric_waypoint_spacing * waypoint_spacing = 0.25
+```
+
+The denormalization scale (`denorm_scale`) is computed in `base_agent.py` directly from the model config:
+
+```python
+denorm_scale = metric_waypoint_spacing * waypoint_spacing  # 0.25 * 1 = 0.25 m
+```
+
+The source-of-truth training parameters (`waypoint_spacing`, `metric_waypoint_spacing`) live in `vint_eval.yaml` and must match the training config `vint_costnav.yaml`. Velocity limits (`max_linear_vel`, `max_angular_vel`) are **not** involved in denormalization — they are only used by the trajectory follower for MPC control (configured in the robot config YAML under `trajectory_follower`).
+
+### Inference Rate
+
+The inference rate (`inference_rate` in `vint_eval.yaml`, default **4.0 Hz**) must match the training data `sample_rate` (4.0 Hz from `vint_processing_config.yaml`). This ensures the temporal context window (past `context_size=5` frames) spans the same time interval as during training. Running at a different rate (e.g. 10 Hz) fills the memory queue with near-identical frames, degrading temporal context quality.
+
 ## Configuration Reference
 
-### vint_eval.yaml (Model Architecture)
+### vint_eval.yaml (Model + Inference Config)
 
 ```yaml
 # Model architecture parameters
-context_size: 5 # Number of past frames for temporal context
-len_traj_pred: 5 # Number of waypoints to predict
-learn_angle: true # Predict heading angles
-obs_encoder: "efficientnet-b0" # Image encoder backbone
-obs_encoding_size: 512 # Encoding dimension
-late_fusion: false # Early fusion of obs+goal
-mha_num_attention_heads: 4 # Transformer attention heads
-mha_num_attention_layers: 4 # Transformer layers
-mha_ff_dim_factor: 4 # Feedforward dimension factor
+context_size: 5
+len_traj_pred: 5
+learn_angle: true
+obs_encoder: "efficientnet-b0"
 image_size: [85, 64] # [width, height] - matches training
-normalize: true # Normalize actions by max velocity
+
+# Action normalization (must match training config vint_costnav.yaml)
+normalize: true
+waypoint_spacing: 1
+metric_waypoint_spacing: 0.25
+
+# Inference parameters
+inference_rate: 4.0 # Hz, must match training sample_rate
+device: "cuda:0"
+
+# Navigation mode — one of "no_goal", "image_goal", or "topomap"
+# Can be overridden at the CLI with --goal_type.
+goal_type: "topomap" # "no_goal" | "image_goal" | "topomap"
+visualize_debug_images: true # Publish /vint_goal_image, /vint_localization_image
+
+# Topomap parameters (used when goal_type is "topomap")
+topomap_goal_node: -1
+topomap_radius: 4
+topomap_close_threshold: 3.0
 ```
 
-### robot_segway.yaml (Robot Parameters)
+### robot_carter.yaml / robot_segway.yaml (Robot Parameters)
 
 ```yaml
-# Velocity limits
-max_v: 0.8 # Maximum linear velocity (m/s)
-max_w: 0.8 # Maximum angular velocity (rad/s)
+# Topics
+topics:
+  odom: /chassis/odom
+  image: /front_stereo_camera/left/image_raw
+  goal_image: /goal_image
 
-# Timing - IMPORTANT: must match training config
-frame_rate: 3 # Training frame rate (Hz) - used for waypoint scaling
+# Trajectory follower parameters
+trajectory_follower:
+  control_rate: 20.0
+  max_linear_vel: 2.0
+  max_angular_vel: 0.5
+  trajectory_timeout: 0.5
 ```
 
 ## Troubleshooting
@@ -383,10 +491,11 @@ ros2 topic pub /vint_enable std_msgs/msg/Bool "data: true"
 
 ### Performance Tuning
 
-- **Inference rate**: Default 10Hz. Lower for slower GPUs, higher for more responsive control
-- **Control rate**: Default 20Hz. Higher rates = smoother motion, more CPU load
+- **Inference rate**: Default 4 Hz in `vint_eval.yaml` (must match training `sample_rate`). Do not change unless retraining with a different rate
+- **Control rate**: Default 20 Hz in robot config YAML. Higher rates = smoother motion, more CPU load
 - **MPC horizon**: Default N=15. Longer = better planning, slower computation
 - **Trajectory density**: 50× interpolation by default. Higher = smoother tracking
+- **MPC warm start**: The CasADi problem is built once and reused — no tuning needed. Warm start is cleared on mission reset
 
 ## Training Models
 

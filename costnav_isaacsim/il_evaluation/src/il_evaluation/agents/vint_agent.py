@@ -77,7 +77,6 @@ class ViNTAgent(BaseAgent):
     Args:
         model_path: Path to trained ViNT model weights.
         model_config_path: Path to model configuration YAML.
-        robot_config_path: Path to robot configuration YAML.
         device: PyTorch device for inference.
     """
 
@@ -85,10 +84,9 @@ class ViNTAgent(BaseAgent):
         self,
         model_path: str,
         model_config_path: str,
-        robot_config_path: str,
         device: str = "cuda:0",
     ):
-        super().__init__(model_config_path, robot_config_path, device)
+        super().__init__(model_config_path, device)
 
         self.model_path = model_path
 
@@ -151,13 +149,87 @@ class ViNTAgent(BaseAgent):
 
             # Apply normalization if configured
             if self.normalize:
-                waypoints[:, :, :2] *= self.MAX_V / self.RATE
+                waypoints[:, :, :2] *= self.denorm_scale
 
             # Stop if far from goal (distance > 7.0)
             stop_mask = (distances > 7.0).unsqueeze(1).float()
             trajectory = self.traj_generate.TrajGeneratorFromPFreeRot(waypoints[:, :, 0:3], step=0.1) * stop_mask
 
             return waypoints[:, :, 0:3], trajectory, distances
+
+    def step_topomap(
+        self,
+        images: List[np.ndarray],
+        subgoal_images: List[PILImage.Image],
+        close_threshold: float = 3.0,
+    ) -> Tuple[torch.Tensor, torch.Tensor, np.ndarray, int]:
+        """Run batched inference against a window of topomap subgoal images.
+
+        This implements the core localization + subgoal selection loop from
+        ViNT's ``navigate.py`` (non-NoMaD branch).  For each subgoal image in
+        the provided window the model predicts a temporal distance and a set of
+        waypoints.  The closest node is identified via ``argmin`` of the
+        predicted distances, and the next subgoal is selected based on whether
+        the closest node distance is below *close_threshold*.
+
+        Args:
+            images: List with a single current observation image ``[np.ndarray]``.
+            subgoal_images: Window of PIL images from the topomap
+                (e.g. ``topomap[start:end+1]``).
+            close_threshold: Temporal distance below which the agent advances
+                to the next node in the window (default: 3.0).
+
+        Returns:
+            Tuple of ``(waypoints, trajectory, distances, chosen_subgoal_idx)``.
+                waypoints: ``[N, num_waypoints, 3]`` for each subgoal.
+                trajectory: ``[1, num_points, 3]`` smoothed trajectory for the
+                    chosen subgoal.
+                distances: ``numpy [N]`` predicted distances to each subgoal.
+                chosen_subgoal_idx: Index into *subgoal_images* of the chosen
+                    subgoal (0-based within the window).
+        """
+        with torch.no_grad():
+            self.callback_obs(images)
+
+            # Transform observation context (single batch element)
+            input_image = [
+                transform_images(imgs, self.image_size, center_crop=False).to(self.device) for imgs in self.memory_queue
+            ]
+            input_image = torch.concat(input_image, dim=0)  # [1, C*(ctx+1), H, W]
+
+            # Transform each subgoal image
+            goal_tensors = [
+                transform_images(sg_img, self.image_size, center_crop=False).to(self.device)
+                for sg_img in subgoal_images
+            ]
+            goal_batch = torch.concat(goal_tensors, dim=0)  # [N, 3, H, W]
+
+            # Repeat observation for each subgoal so batch dims match
+            obs_batch = input_image.repeat(len(subgoal_images), 1, 1, 1)  # [N, C*(ctx+1), H, W]
+
+            # Batched inference
+            distances, waypoints = self.vint_policy.predict_imagegoal_distance_and_action(obs_batch, goal_batch)
+
+            # Apply normalization
+            if self.normalize:
+                waypoints[:, :, :2] *= self.denorm_scale
+
+            distances_np = to_numpy(distances.flatten())  # [N]
+
+            # Localize: find closest node in the window
+            min_dist_idx = int(np.argmin(distances_np))
+
+            # Select subgoal: advance if close enough
+            if distances_np[min_dist_idx] > close_threshold:
+                chosen_idx = min_dist_idx
+            else:
+                chosen_idx = min(min_dist_idx + 1, len(subgoal_images) - 1)
+
+            # Generate smooth trajectory for the chosen subgoal only
+            chosen_wp = waypoints[chosen_idx : chosen_idx + 1, :, 0:3]
+            trajectory = self.traj_generate.TrajGeneratorFromPFreeRot(chosen_wp, step=0.1)
+
+            return waypoints[:, :, 0:3], trajectory, distances_np, chosen_idx
 
     def step_nogoal(self, images: List[np.ndarray]) -> Tuple[torch.Tensor, torch.Tensor]:
         """Generate trajectory for exploration without goal.
@@ -185,7 +257,7 @@ class ViNTAgent(BaseAgent):
 
             # Apply normalization if configured
             if self.normalize:
-                waypoints[:, :, :2] *= self.MAX_V / self.RATE
+                waypoints[:, :, :2] *= self.denorm_scale
 
             trajectory = self.traj_generate.TrajGeneratorFromPFreeRot(waypoints[:, :, 0:3], step=0.1)
 
@@ -202,10 +274,9 @@ class NoGoalViNTAgent(BaseAgent):
         self,
         model_path: str,
         model_config_path: str,
-        robot_config_path: str,
         device: str = "cuda:0",
     ):
-        super().__init__(model_config_path, robot_config_path, device)
+        super().__init__(model_config_path, device)
 
         self.model_path = model_path
 
@@ -245,7 +316,7 @@ class NoGoalViNTAgent(BaseAgent):
             waypoints = self.vint_policy.predict_nogoal_action(input_image)
 
             if self.normalize:
-                waypoints[:, :, :2] *= self.MAX_V / self.RATE
+                waypoints[:, :, :2] *= self.denorm_scale
 
             trajectory = self.traj_generate.TrajGeneratorFromPFreeRot(waypoints[:, :, 0:3], step=0.1)
 

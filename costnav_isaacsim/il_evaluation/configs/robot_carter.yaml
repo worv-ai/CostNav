@@ -1,19 +1,27 @@
 # Robot Configuration for Nova Carter in Isaac Sim
-# Used by IL baseline agents for velocity limits and timing
+# Used by both the policy node and the trajectory follower node.
 
-# Velocity limits
-max_v: 0.8        # Maximum linear velocity (m/s) - matches ViNT training config
-max_w: 0.8        # Maximum angular velocity (rad/s) - matches ViNT training config
-
-# Timing
-# IMPORTANT: frame_rate is used for waypoint normalization (MAX_V / RATE)
-# This must match the training config (3 Hz), NOT the inference rate
-frame_rate: 3     # Training frame rate (Hz) - used for waypoint scaling
-
-# Topic names (for reference - actual topics used in ROS2 node)
-# These are not directly used by the agent but documented for reference
+# Topic names
 topics:
-  cmd_vel: /cmd_vel              # Main velocity command topic
-  cmd_vel_model: /cmd_vel_model  # Model output velocity topic
-  odom: /chassis/odom                    # Odometry topic
-  image: /front_stereo_camera/left/image_raw  # Camera image topic
+  cmd_vel: /cmd_vel
+  cmd_vel_model: /cmd_vel_model
+  odom: /chassis/odom
+  image: /front_stereo_camera/left/image_raw
+  goal_image: /goal_image
+
+# Trajectory follower parameters
+trajectory_follower:
+  control_rate: 20.0        # Control loop frequency (Hz)
+  max_linear_vel: 0.8       # Maximum linear velocity (m/s)
+  max_angular_vel: 0.5      # Maximum angular velocity (rad/s)
+  trajectory_timeout: 0.5   # Trajectory validity timeout (s)
+
+  # Kinematic model type: "unicycle" or "bicycle"
+  # - unicycle: differential drive (Nova Carter) - control: [v, omega]
+  # - bicycle: Ackermann steering (Segway E1) - control: [v, delta]
+  kinematic_model: "unicycle"
+
+  # MPC lookahead: fraction of trajectory points to skip before tracking
+  # This prevents the MPC from tracking the robot's current position
+  # 0.4 = skip first 40%, track from middle (matches original ViNT waypoint=2)
+  mpc_lookahead_ratio: 0.4

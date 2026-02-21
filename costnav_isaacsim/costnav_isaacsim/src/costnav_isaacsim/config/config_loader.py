@@ -115,6 +115,30 @@ class GoalImageConfig:
     height: int = 360  # Goal image height (matches ViNT input)
     camera_height_offset: float = 0.3  # Camera height offset from ground (meters)
     camera_prim_path: str = "/World/goal_camera"  # USD prim path for goal camera
+    camera_usd_path: Optional[str] = None  # USD asset path to load camera from (e.g. omniverse://...camera.usd)
+
+
+@dataclass
+class TopoMapConfig:
+    """Configuration for NavMesh-based topological map generation.
+
+    Controls the TopomapGenerator which creates ViNT-compatible topomaps
+    by querying NavMesh shortest paths and capturing images along the route.
+    """
+
+    enabled: bool = False  # Enable topomap generation
+    waypoint_interval: float = 2.0  # Distance between waypoints in meters
+    camera_height_offset: float = 0.3  # Camera height above ground (meters)
+    image_width: int = 640  # Captured image width (pixels)
+    image_height: int = 400  # Captured image height (pixels) — aspect ratio must match aperture (5.76/3.6 = 16:10)
+    output_dir: str = "/tmp/costnav_topomap"  # Default output directory
+    camera_prim_path: str = "/World/topomap_camera"  # USD prim path for topomap camera
+    render_settle_steps: int = 3  # Simulation steps per capture for render pipeline flush
+    first_image_extra_settle_steps: int = 10  # Extra simulation steps for the first capture to eliminate render noise
+    max_heading_change_per_waypoint: float = 0.35  # Max heading change (radians) per waypoint (~20°); corners exceeding this get extra interpolated waypoints
+    wall_clearance: float = 0.0  # Extra clearance from walls (meters); added to agent_radius for path queries to push paths away from obstacles
+    robot_prim_path: Optional[str] = None  # Robot prim path to hide during capture
+    camera_usd_path: Optional[str] = None  # USD asset path to load camera from (e.g. omniverse://...camera.usd)
 
 
 @dataclass
@@ -133,6 +157,11 @@ class MissionManagerConfig:
     # Nav2 costmap clearing (useful when teleporting between missions)
     clear_costmaps_on_mission_start: bool = True
     costmap_clear_timeout_sec: float = 2.0  # Max time to wait for clear service responses before continuing
+
+    # When True, set the start heading to point toward the first NavMesh
+    # shortest-path waypoint (or directly toward the goal if no intermediate
+    # waypoints exist) instead of using a random heading.
+    align_initial_heading_to_path: bool = False
 
 
 @dataclass
@@ -155,6 +184,7 @@ class MissionConfig:
     food: FoodConfig = field(default_factory=FoodConfig)
     injury: InjuryConfig = field(default_factory=InjuryConfig)
     goal_image: GoalImageConfig = field(default_factory=GoalImageConfig)
+    topomap: TopoMapConfig = field(default_factory=TopoMapConfig)
     manager: MissionManagerConfig = field(default_factory=MissionManagerConfig)
 
     @classmethod
@@ -245,6 +275,25 @@ class MissionConfig:
             height=goal_image_data.get("height", 360),
             camera_height_offset=goal_image_data.get("camera_height_offset", 0.3),
             camera_prim_path=goal_image_data.get("camera_prim_path", "/World/goal_camera"),
+            camera_usd_path=goal_image_data.get("camera_usd_path"),
+        )
+
+        # Parse topomap config (NavMesh-based topological map generation)
+        topomap_data = data.get("topomap", {})
+        topomap_config = TopoMapConfig(
+            enabled=topomap_data.get("enabled", False),
+            waypoint_interval=topomap_data.get("waypoint_interval", 2.0),
+            camera_height_offset=topomap_data.get("camera_height_offset", 0.3),
+            image_width=topomap_data.get("image_width", 640),
+            image_height=topomap_data.get("image_height", 400),
+            output_dir=topomap_data.get("output_dir", "/tmp/costnav_topomap"),
+            camera_prim_path=topomap_data.get("camera_prim_path", "/World/topomap_camera"),
+            render_settle_steps=topomap_data.get("render_settle_steps", 3),
+            first_image_extra_settle_steps=topomap_data.get("first_image_extra_settle_steps", 10),
+            max_heading_change_per_waypoint=topomap_data.get("max_heading_change_per_waypoint", 0.35),
+            wall_clearance=topomap_data.get("wall_clearance", 0.0),
+            robot_prim_path=topomap_data.get("robot_prim_path", teleport_data.get("robot_prim")),
+            camera_usd_path=topomap_data.get("camera_usd_path"),
         )
 
         # Parse manager config (MissionManager runtime settings)
@@ -260,6 +309,7 @@ class MissionConfig:
             teleport_settle_steps=manager_data.get("teleport_settle_steps", 30),
             clear_costmaps_on_mission_start=manager_data.get("clear_costmaps_on_mission_start", True),
             costmap_clear_timeout_sec=manager_data.get("costmap_clear_timeout_sec", 2.0),
+            align_initial_heading_to_path=manager_data.get("align_initial_heading_to_path", False),
         )
 
         return cls(
@@ -274,6 +324,7 @@ class MissionConfig:
             food=food_config,
             injury=injury_config,
             goal_image=goal_image_config,
+            topomap=topomap_config,
             manager=manager_config,
         )
 

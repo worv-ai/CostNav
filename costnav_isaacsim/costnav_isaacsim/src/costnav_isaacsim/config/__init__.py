@@ -11,6 +11,7 @@ from .config_loader import (
     Nav2Config,
     SamplingConfig,
     TeleportConfig,
+    TopoMapConfig,
     load_mission_config,
 )
 
@@ -25,5 +26,6 @@ __all__ = [
     "Nav2Config",
     "SamplingConfig",
     "TeleportConfig",
+    "TopoMapConfig",
     "load_mission_config",
 ]

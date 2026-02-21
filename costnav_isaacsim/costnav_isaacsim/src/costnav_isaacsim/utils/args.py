@@ -124,4 +124,22 @@ def parse_args():
         help="Enable goal image publishing for ViNT ImageGoal mode (True/False or 1/0)",
     )
 
+    # Topomap arguments (NavMesh-based topological map generation)
+    topomap_group = parser.add_argument_group("Topomap")
+    topomap_group.add_argument(
+        "--topomap-enabled",
+        type=str,
+        default=None,
+        help="Enable NavMesh-based topomap generation (True/False or 1/0)",
+    )
+
+    # Mission Manager arguments
+    manager_group = parser.add_argument_group("Mission Manager")
+    manager_group.add_argument(
+        "--align-initial-heading-to-path",
+        type=str,
+        default=None,
+        help="Align robot's initial heading to NavMesh path direction (True/False or 1/0)",
+    )
+
     return parser.parse_args()

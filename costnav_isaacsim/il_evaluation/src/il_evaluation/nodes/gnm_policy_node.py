@@ -2,9 +2,9 @@
 # Copyright (c) 2026 CostNav Authors
 # Licensed under the MIT License
 
-"""ViNT ROS2 Policy Node for CostNav.
+"""GNM ROS2 Policy Node for CostNav.
 
-This node subscribes to camera images, runs ViNT inference,
+This node subscribes to camera images, runs GNM inference,
 and publishes trajectory to /vint_trajectory for the trajectory follower node.
 
 Supports three navigation modes (selected via ``goal_type``):
@@ -21,7 +21,7 @@ The topomap is a directory of sequentially numbered PNGs (``0.png``, ``1.png``,
 
 1. Selects a local window of subgoal images around ``closest_node``
    (controlled by ``--topomap_radius``).
-2. Runs batched ViNT inference to predict distances from the current
+2. Runs batched GNM inference to predict distances from the current
    observation to each subgoal in the window.
 3. Localises to the closest node (``argmin`` of predicted distances).
 4. If the distance to the closest node is below ``--topomap_close_threshold``,
@@ -30,7 +30,7 @@ The topomap is a directory of sequentially numbered PNGs (``0.png``, ``1.png``,
 6. Publishes ``reached_goal=True`` on ``/vint_reached_goal`` when
    ``closest_node == goal_node``.
 
-This mirrors the navigation loop in ViNT's ``navigate.py`` but runs inside
+This mirrors the navigation loop in GNM's ``navigate.py`` but runs inside
 the CostNav ROS 2 stack.
 
 For ImageGoal mode, the node receives goal images via:
@@ -43,13 +43,13 @@ Following the NavDP pattern, when a new goal image is received:
 
 Usage:
     # Default (Get goal type from model config)
-    python3 vint_policy_node.py \\
+    python3 gnm_policy_node.py \\
         --checkpoint /path/to/model.pth \\
         --model_config /path/to/config.yaml \\
         --robot_config /path/to/robot.yaml
 
-    # Topomap mode (--goal_type overrides goal_type from vint_eval.yaml)
-    python3 vint_policy_node.py \\
+    # Topomap mode (--goal_type overrides goal_type from gnm_eval.yaml)
+    python3 gnm_policy_node.py \\
         --checkpoint /path/to/model.pth \\
         --model_config /path/to/config.yaml \\
         --robot_config /path/to/robot.yaml \\
@@ -76,11 +76,11 @@ import tf2_ros
 from transforms3d.euler import euler2quat
 from transforms3d.quaternions import qmult, quat2mat
 
-from il_evaluation.agents.vint_agent import ViNTAgent
+from il_evaluation.agents.gnm_agent import GNMAgent
 
 
-class ViNTPolicyNode(Node):
-    """ROS2 Node for ViNT policy inference.
+class GNMPolicyNode(Node):
+    """ROS2 Node for GNM policy inference.
 
     Supports three navigation modes (mutually exclusive, selected via ``goal_type``):
 
@@ -109,7 +109,7 @@ class ViNTPolicyNode(Node):
         - goal_type: Override navigation mode ("no_goal", "image_goal", "topomap")
         - topomap_dir: Directory containing topomap images
 
-    From model_config (vint_eval.yaml):
+    From model_config (gnm_eval.yaml):
         - inference_rate, device, goal_type, visualize_debug_images
         - topomap_goal_node, topomap_radius, topomap_close_threshold
 
@@ -128,7 +128,7 @@ class ViNTPolicyNode(Node):
         goal_type: Optional[str] = None,
         topomap_dir: str = "",
     ):
-        super().__init__("vint_policy_node")
+        super().__init__("gnm_policy_node")
 
         # Validate file paths
         if not checkpoint or not os.path.exists(checkpoint):
@@ -170,15 +170,15 @@ class ViNTPolicyNode(Node):
         image_topic = topics.get("image", "/front_stereo_camera/left/image_raw")
         self.goal_image_topic = topics.get("goal_image", "/goal_image")
 
-        # Initialize ViNT agent
-        self.get_logger().info(f"Loading ViNT model from {checkpoint}")
-        self.agent = ViNTAgent(
+        # Initialize GNM agent
+        self.get_logger().info(f"Loading GNM model from {checkpoint}")
+        self.agent = GNMAgent(
             model_path=checkpoint,
             model_config_path=model_config,
             device=device,
         )
         self.agent.reset(batch_size=1)
-        self.get_logger().info("ViNT agent initialized successfully")
+        self.get_logger().info("GNM agent initialized successfully")
 
         # CV bridge for image conversion
         self.bridge = CvBridge()
@@ -270,7 +270,7 @@ class ViNTPolicyNode(Node):
         self.timer = self.create_timer(timer_period, self.inference_callback)
 
         self.get_logger().info(
-            f"ViNT policy node started (goal_type={self.goal_type}). Inference rate: {self.inference_rate} Hz"
+            f"GNM policy node started (goal_type={self.goal_type}). Inference rate: {self.inference_rate} Hz"
         )
         self.get_logger().info(f"Subscribing to: {image_topic}")
         self.get_logger().info("Publishing trajectory to: /vint_trajectory")
@@ -290,7 +290,7 @@ class ViNTPolicyNode(Node):
 
         Images are sorted by their integer filename prefix (``0.png``,
         ``1.png``, …) which matches the format produced by
-        ``TopomapGenerator`` and expected by ViNT's ``navigate.py``.
+        ``TopomapGenerator`` and expected by GNM's ``navigate.py``.
 
         Args:
             topomap_dir: Path to the directory containing topomap images.
@@ -396,7 +396,7 @@ class ViNTPolicyNode(Node):
             self._topomap_closest_node = 0
             self._topomap_reached_goal = False
             response.success = True
-            response.message = "ViNT agent memory queue reset successfully"
+            response.message = "GNM agent memory queue reset successfully"
             self.get_logger().info("Agent reset via service call")
         except Exception as e:
             response.success = False
@@ -439,7 +439,7 @@ class ViNTPolicyNode(Node):
         was_enabled = self.enabled
         self.enabled = msg.data
         status = "enabled" if self.enabled else "disabled"
-        self.get_logger().info(f"ViNT policy {status}")
+        self.get_logger().info(f"GNM policy {status}")
 
         # Reload topomap on every disabled → enabled transition
         if self.goal_type == "topomap" and self.enabled and not was_enabled:
@@ -453,7 +453,7 @@ class ViNTPolicyNode(Node):
                 self.get_logger().error(f"Failed to reload topomap on enable: {e}")
 
     def inference_callback(self):
-        """Run ViNT inference and publish trajectory."""
+        """Run GNM inference and publish trajectory."""
         if not self.enabled:
             return
 
@@ -499,7 +499,7 @@ class ViNTPolicyNode(Node):
     def _inference_topomap(self) -> None:
         """Topomap mode: follow a topological map.
 
-        Implements the navigation loop from ViNT's ``navigate.py``:
+        Implements the navigation loop from GNM's ``navigate.py``:
         1. Select a local window of subgoal images around ``closest_node``.
         2. Run batched inference to predict distances to each subgoal.
         3. Localise to the closest node and optionally advance.
@@ -627,11 +627,11 @@ class ViNTPolicyNode(Node):
             if closest_node is not None:
                 extra += f", node={closest_node}/{self._topomap_goal_node}"
             self.get_logger().info(
-                f"[ViNT] #{self._trajectory_publish_count}: traj_last=({last_wp[0]:.2f}, {last_wp[1]:.2f}){extra}"
+                f"[GNM] #{self._trajectory_publish_count}: traj_last=({last_wp[0]:.2f}, {last_wp[1]:.2f}){extra}"
             )
 
     def trajectory_to_path(self, trajectory: np.ndarray) -> Path:
-        """Convert ViNT trajectory output to nav_msgs/Path message.
+        """Convert GNM trajectory output to nav_msgs/Path message.
 
         The trajectory is in robot-local frame (x forward, y left). This is
         published for the trajectory follower node to execute at higher rate.
@@ -724,11 +724,11 @@ class ViNTPolicyNode(Node):
 def parse_args():
     """Parse command line arguments.
 
-    Most parameters are read from model_config (vint_eval.yaml) and
+    Most parameters are read from model_config (gnm_eval.yaml) and
     robot_config (robot_*.yaml).  Only the file paths, optional goal_type
     override, topomap_dir, and log level remain as CLI arguments.
     """
-    parser = argparse.ArgumentParser(description="ViNT ROS2 Policy Node for CostNav")
+    parser = argparse.ArgumentParser(description="GNM ROS2 Policy Node for CostNav")
     parser.add_argument(
         "--checkpoint",
         type=str,
@@ -751,8 +751,8 @@ def parse_args():
         "--goal_type",
         type=str,
         default=None,
-        choices=ViNTPolicyNode.VALID_GOAL_TYPES,
-        help="Override navigation mode from vint_eval.yaml (no_goal | image_goal | topomap)",
+        choices=GNMPolicyNode.VALID_GOAL_TYPES,
+        help="Override navigation mode from gnm_eval.yaml (no_goal | image_goal | topomap)",
     )
     parser.add_argument(
         "--topomap_dir",
@@ -771,13 +771,13 @@ def parse_args():
 
 
 def main():
-    """Main entry point for the ViNT policy node."""
+    """Main entry point for the GNM policy node."""
     args = parse_args()
 
     rclpy.init()
 
     try:
-        node = ViNTPolicyNode(
+        node = GNMPolicyNode(
             checkpoint=args.checkpoint,
             model_config=args.model_config,
             robot_config=args.robot_config,
@@ -797,7 +797,7 @@ def main():
     except KeyboardInterrupt:
         pass
     except Exception as e:
-        print(f"Error starting ViNT policy node: {e}")
+        print(f"Error starting GNM policy node: {e}")
         raise
     finally:
         rclpy.shutdown()

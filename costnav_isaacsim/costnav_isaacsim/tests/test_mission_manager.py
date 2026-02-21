@@ -9,11 +9,14 @@ This test suite validates:
 1. MissionManagerConfig dataclass defaults and customization
 2. Mission workflow logic (sampling, teleporting, publishing)
 3. Utility functions (yaw to quaternion conversion, covariance matrix)
+4. TopomapGenerator.resample_waypoints arc-length resampling
 
 Note:
     These tests do NOT require ROS2 or Isaac Sim to be running.
     They test the configuration and logic, not the actual ROS2 communication.
 """
+
+import math
 
 # Mock ROS2 and other dependencies
 import sys
@@ -35,6 +38,7 @@ from transforms3d.euler import euler2quat  # noqa: E402
 
 from costnav_isaacsim.config import MissionManagerConfig  # noqa: E402
 from costnav_isaacsim.mission_manager.navmesh_sampler import SampledPosition  # noqa: E402
+from costnav_isaacsim.mission_manager.topomap_generator import TopomapGenerator  # noqa: E402
 
 
 class TestMissionManagerConfig:
@@ -292,3 +296,147 @@ class TestCovarianceMatrix:
         assert covariance[0] == 0.25
         assert covariance[7] == 0.25
         assert covariance[35] == 0.0685
+
+
+class TestResampleWaypoints:
+    """Tests for TopomapGenerator.resample_waypoints arc-length resampling."""
+
+    @staticmethod
+    def _pts(*coords):
+        """Helper: create SampledPosition list from (x, y) tuples."""
+        return [SampledPosition(x=x, y=y, z=0.0) for x, y in coords]
+
+    @staticmethod
+    def _spacing(points):
+        """Return list of consecutive 2D distances."""
+        return [points[i].distance_to(points[i + 1]) for i in range(len(points) - 1)]
+
+    # ------------------------------------------------------------------
+    # Basic behaviour
+    # ------------------------------------------------------------------
+
+    def test_straight_line_interval_2(self):
+        """10 m straight line with interval=2 → start + 4 interior + goal = 6 pts."""
+        raw = self._pts((0, 0), (10, 0))
+        result = TopomapGenerator.resample_waypoints(raw, interval=2.0)
+        # Expected: 0m(start), 2m, 4m, 6m, 8m, 10m(goal) = 6 points
+        assert len(result) == 6
+        # All interior spacings should be ~2.0 m
+        for d in self._spacing(result)[:-1]:
+            assert abs(d - 2.0) < 1e-6
+
+    def test_straight_line_interval_3(self):
+        """10 m line with interval=3 → start + 3 interior + goal = 5 pts."""
+        raw = self._pts((0, 0), (10, 0))
+        result = TopomapGenerator.resample_waypoints(raw, interval=3.0)
+        # 0m(start), 3m, 6m, 9m, 10m(goal) = 5 points
+        assert len(result) == 5
+        for d in self._spacing(result)[:-1]:
+            assert abs(d - 3.0) < 1e-6
+        # Last gap should be 1.0 m (10 - 9)
+        assert abs(self._spacing(result)[-1] - 1.0) < 1e-6
+
+    # ------------------------------------------------------------------
+    # Decimation: the key fix
+    # ------------------------------------------------------------------
+
+    def test_decimation_skips_dense_navmesh_vertices(self):
+        """Many points 0.3 m apart with interval=2.0 → should be decimated.
+
+        This is the exact scenario that was broken before the fix.
+        """
+        # 30 points, each 0.3 m apart → total 8.7 m
+        raw = self._pts(*[(i * 0.3, 0) for i in range(30)])
+        result = TopomapGenerator.resample_waypoints(raw, interval=2.0)
+        # Total ~8.7 m / 2.0 m ≈ 4 interior + start + goal = ~6
+        # Must be MUCH fewer than the original 30
+        assert len(result) < 10
+        assert len(result) >= 3  # at least start, one middle, goal
+
+    def test_decimation_with_large_interval(self):
+        """Interval larger than total path → only start + goal."""
+        raw = self._pts((0, 0), (3, 0), (5, 0))
+        result = TopomapGenerator.resample_waypoints(raw, interval=10.0)
+        # Total path = 5 m, interval = 10 m → no interior points emitted
+        assert len(result) == 2  # start + goal
+        assert abs(result[0].x - 0.0) < 1e-6
+        assert abs(result[-1].x - 5.0) < 1e-6
+
+    # ------------------------------------------------------------------
+    # Multi-segment / L-shaped paths
+    # ------------------------------------------------------------------
+
+    def test_l_shaped_path(self):
+        """L-shaped path: 6 m east then 8 m north, interval=2.0."""
+        raw = self._pts((0, 0), (6, 0), (6, 8))
+        result = TopomapGenerator.resample_waypoints(raw, interval=2.0)
+        # Expected: start + 6 interior (at 2,4,6,8,10,12) + goal = 8
+        assert len(result) == 8
+        # Verify all spacings are ~2.0 except possibly the last
+        for d in self._spacing(result)[:-1]:
+            assert abs(d - 2.0) < 1e-6
+
+    def test_heading_follows_segment_direction(self):
+        """Heading should match the direction of the segment each point falls on."""
+        raw = self._pts((0, 0), (10, 0), (10, 10))
+        result = TopomapGenerator.resample_waypoints(raw, interval=5.0)
+        # Points on first segment (east) should have heading ≈ 0
+        # Points on second segment (north) should have heading ≈ π/2
+        for pt in result:
+            if pt.x < 9.9 and pt.y < 0.1:
+                # On the east segment
+                assert abs(pt.heading - 0.0) < 1e-6
+            elif pt.x > 9.9 and pt.y > 0.1 and pt.y < 9.9:
+                # On the north segment
+                assert abs(pt.heading - math.pi / 2) < 1e-6
+
+    # ------------------------------------------------------------------
+    # Edge cases
+    # ------------------------------------------------------------------
+
+    def test_single_point_returns_as_is(self):
+        """Single point input returns that point."""
+        raw = self._pts((5, 5))
+        result = TopomapGenerator.resample_waypoints(raw, interval=2.0)
+        assert len(result) == 1
+        assert result[0].x == 5.0
+
+    def test_two_identical_points(self):
+        """Two identical points (zero-length path) → start + goal."""
+        raw = self._pts((3, 3), (3, 3))
+        result = TopomapGenerator.resample_waypoints(raw, interval=2.0)
+        assert len(result) == 2
+
+    def test_empty_input(self):
+        """Empty input returns empty list."""
+        result = TopomapGenerator.resample_waypoints([], interval=2.0)
+        assert result == []
+
+    def test_zero_length_segment_in_middle(self):
+        """Duplicate vertex in the middle should be handled gracefully."""
+        raw = self._pts((0, 0), (5, 0), (5, 0), (10, 0))
+        result = TopomapGenerator.resample_waypoints(raw, interval=2.0)
+        # Total path = 10 m, same as a straight line
+        assert len(result) == 6  # 0,2,4,6,8,10
+
+    def test_start_and_goal_always_included(self):
+        """First and last points should always match the original start/goal."""
+        raw = self._pts((1, 2), (7, 2), (7, 9))
+        result = TopomapGenerator.resample_waypoints(raw, interval=3.0)
+        assert abs(result[0].x - 1.0) < 1e-6
+        assert abs(result[0].y - 2.0) < 1e-6
+        assert abs(result[-1].x - 7.0) < 1e-6
+        assert abs(result[-1].y - 9.0) < 1e-6
+
+    def test_z_coordinate_interpolated(self):
+        """Z coordinate should be linearly interpolated along segments."""
+        sparse = [
+            SampledPosition(x=0, y=0, z=0.0),
+            SampledPosition(x=10, y=0, z=5.0),
+        ]
+        result = TopomapGenerator.resample_waypoints(sparse, interval=5.0)
+        # 0m(z=0), 5m(z=2.5), 10m(z=5.0)
+        assert len(result) == 3
+        assert abs(result[0].z - 0.0) < 1e-6
+        assert abs(result[1].z - 2.5) < 1e-6
+        assert abs(result[2].z - 5.0) < 1e-6

@@ -14,7 +14,7 @@ x-ros2-service: &ros2-service
 services:
   # Isaac Sim environment
   isaac-sim:
-    profiles: ["isaac-sim", "nav2", "teleop", "vint"]
+    profiles: ["isaac-sim", "nav2", "teleop", "vint", "gnm", "nomad"]
     image: costnav-isaacsim-${ISAAC_SIM_VERSION}:${COSTNAV_VERSION}
     container_name: costnav-isaac-sim
     deploy:
@@ -43,10 +43,12 @@ services:
       - NUM_PEOPLE=${NUM_PEOPLE:-20}
       - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
       - FOOD=${FOOD:-True}
-      - GOAL_IMAGE=${GOAL_IMAGE:-False}
+      - TOPOMAP=${TOPOMAP:-False}
+      - ALIGN_HEADING=${ALIGN_HEADING:-False}
     volumes:
       - .:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /tmp/costnav_topomap:/tmp/costnav_topomap:rw
       - /tmp/isaac-sim/cache/kit:/isaac-sim/kit/cache:rw
       - /tmp/isaac-sim/cache/ov:/root/.cache/ov:rw
       - /tmp/isaac-sim/cache/pip:/root/.cache/pip:rw
@@ -60,7 +62,7 @@ services:
     working_dir: /workspace
     command:
       - "-ic"
-      - "/workspace/costnav_isaacsim/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-20} --robot $${SIM_ROBOT:-segway_e1} --food-enabled $${FOOD:-True} --goal-image-enabled $${GOAL_IMAGE:-False}"
+      - "/workspace/costnav_isaacsim/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-20} --robot $${SIM_ROBOT:-segway_e1} --food-enabled $${FOOD:-True} --topomap-enabled $${TOPOMAP:-False} --align-initial-heading-to-path $${ALIGN_HEADING:-False}"
     healthcheck:
       test:
         [
@@ -178,7 +180,7 @@ services:
   # ROS2 with RViz - standalone visualization service that runs alongside Isaac Sim
   ros2-rviz-nav2:
     <<: *ros2-service
-    profiles: ["isaac-sim", "nav2", "vint"]
+    profiles: ["isaac-sim", "nav2", "vint", "gnm", "nomad"]
     container_name: costnav-ros2-rviz-nav2
     environment:
       - ROS_DISTRO=jazzy
@@ -307,6 +309,7 @@ services:
       - MODEL_CHECKPOINT=${MODEL_CHECKPOINT:-checkpoints/vint.pth}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /tmp/costnav_topomap:/tmp/costnav_topomap:rw
       - .:/workspace
     working_dir: /workspace
     command: >
@@ -315,7 +318,7 @@ services:
         else
           ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_segway.yaml
         fi &&
-        vint_policy_node --checkpoint $${MODEL_CHECKPOINT} --model_config /workspace/costnav_isaacsim/il_evaluation/configs/vint_eval.yaml --robot_config $${ROBOT_CONFIG} --inference_rate 10.0 --use_imagegoal"
+        vint_policy_node --checkpoint $${MODEL_CHECKPOINT} --model_config /workspace/costnav_isaacsim/il_evaluation/configs/vint_eval.yaml --robot_config $${ROBOT_CONFIG} --goal_type topomap --topomap_dir /tmp/costnav_topomap"
     network_mode: host
     ipc: host
     stdin_open: true
@@ -345,7 +348,149 @@ services:
         else
           ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_segway.yaml
         fi &&
-        trajectory_follower_node --robot_config $${ROBOT_CONFIG} --control_rate 20.0 --max_linear_vel 0.5 --max_angular_vel 0.5"
+        trajectory_follower_node --robot_config $${ROBOT_CONFIG}"
+    network_mode: host
+    ipc: host
+    stdin_open: true
+    tty: true
+
+  # ROS2 with GNM policy
+  ros2-gnm:
+    profiles: ["gnm"]
+    image: costnav-ros2-torch:${COSTNAV_VERSION:-0.1.0}
+    container_name: costnav-ros2-gnm
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${GPU_DEVICE_IDS:-0}"]
+              capabilities: [gpu]
+    depends_on:
+      isaac-sim:
+        condition: service_healthy
+    environment:
+      - ROS_DISTRO=jazzy
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+      - DISPLAY=${DISPLAY:-:0}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
+      - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
+      - MODEL_CHECKPOINT=${MODEL_CHECKPOINT:-checkpoints/gnm.pth}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /tmp/costnav_topomap:/tmp/costnav_topomap:rw
+      - .:/workspace
+    working_dir: /workspace
+    command: >
+      bash -c "if [ \"$${SIM_ROBOT}\" = \"nova_carter\" ]; then
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_carter.yaml
+        else
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_segway.yaml
+        fi &&
+        gnm_policy_node --checkpoint $${MODEL_CHECKPOINT} --model_config /workspace/costnav_isaacsim/il_evaluation/configs/gnm_eval.yaml --robot_config $${ROBOT_CONFIG} --goal_type topomap --topomap_dir /tmp/costnav_topomap"
+    network_mode: host
+    ipc: host
+    stdin_open: true
+    tty: true
+
+  # ROS2 Trajectory Follower - MPC controller for executing GNM trajectories
+  ros2-gnm-trajectory-follower:
+    profiles: ["gnm"]
+    image: costnav-ros2-torch:${COSTNAV_VERSION:-0.1.0}
+    container_name: costnav-ros2-gnm-trajectory-follower
+    depends_on:
+      isaac-sim:
+        condition: service_healthy
+    environment:
+      - ROS_DISTRO=jazzy
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+      - DISPLAY=${DISPLAY:-:0}
+      - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - .:/workspace
+    working_dir: /workspace
+    command: >
+      bash -c "if [ \"$${SIM_ROBOT}\" = \"nova_carter\" ]; then
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_carter.yaml
+        else
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_segway.yaml
+        fi &&
+        trajectory_follower_node --robot_config $${ROBOT_CONFIG}"
+    network_mode: host
+    ipc: host
+    stdin_open: true
+    tty: true
+
+  # ROS2 with NoMaD policy
+  ros2-nomad:
+    profiles: ["nomad"]
+    image: costnav-ros2-torch:${COSTNAV_VERSION:-0.1.0}
+    container_name: costnav-ros2-nomad
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${GPU_DEVICE_IDS:-0}"]
+              capabilities: [gpu]
+    depends_on:
+      isaac-sim:
+        condition: service_healthy
+    environment:
+      - ROS_DISTRO=jazzy
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+      - DISPLAY=${DISPLAY:-:0}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
+      - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
+      - MODEL_CHECKPOINT=${MODEL_CHECKPOINT:-checkpoints/nomad.pth}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /tmp/costnav_topomap:/tmp/costnav_topomap:rw
+      - .:/workspace
+    working_dir: /workspace
+    command: >
+      bash -c "if [ \"$${SIM_ROBOT}\" = \"nova_carter\" ]; then
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_carter.yaml
+        else
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_segway.yaml
+        fi &&
+        nomad_policy_node --checkpoint $${MODEL_CHECKPOINT} --model_config /workspace/costnav_isaacsim/il_evaluation/configs/nomad_eval.yaml --robot_config $${ROBOT_CONFIG} --goal_type topomap --topomap_dir /tmp/costnav_topomap"
+    network_mode: host
+    ipc: host
+    stdin_open: true
+    tty: true
+
+  # ROS2 Trajectory Follower - MPC controller for executing NoMaD trajectories
+  ros2-nomad-trajectory-follower:
+    profiles: ["nomad"]
+    image: costnav-ros2-torch:${COSTNAV_VERSION:-0.1.0}
+    container_name: costnav-ros2-nomad-trajectory-follower
+    depends_on:
+      isaac-sim:
+        condition: service_healthy
+    environment:
+      - ROS_DISTRO=jazzy
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+      - DISPLAY=${DISPLAY:-:0}
+      - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - .:/workspace
+    working_dir: /workspace
+    command: >
+      bash -c "if [ \"$${SIM_ROBOT}\" = \"nova_carter\" ]; then
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_carter.yaml
+        else
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_segway.yaml
+        fi &&
+        trajectory_follower_node --robot_config $${ROBOT_CONFIG}"
     network_mode: host
     ipc: host
     stdin_open: true

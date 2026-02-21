@@ -113,7 +113,7 @@ This starts Isaac Sim with the Street Sidewalk environment and Segway E1 robot, 
 
 ```bash
 
-# Usage: make run-teleop NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True GOAL_IMAGE=True
+# Usage: make run-teleop NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True TOPOMAP=True
 make run-teleop
 
 make run-rosbag # start rosbag record
