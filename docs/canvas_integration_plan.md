@@ -1,5 +1,7 @@
 # CostNav → CANVAS Integration Plan
 
+> **CANVAS project page:** <https://worv-ai.github.io/canvas/>
+
 ## Goal
 
 Pass mission information (start/goal) from CostNav's **MissionManager** to CANVAS using **sketch-based navigation** (shortest path in image/pixel space). No goal images, goal poses, or topomaps are used.
@@ -214,5 +216,60 @@ Replace the Nav2 goal-publishing step with CANVAS scenario publishing:
 | `PUBLISHING_INITIAL_POSE` | Publish `/initialpose` for AMCL   | Skip or keep for localization                                  |
 | `PUBLISHING_GOAL`         | Publish `/goal_pose` to Nav2      | Convert path → pixels, publish Scenario + annotation to CANVAS |
 | `WAITING_FOR_COMPLETION`  | Poll Nav2 result + distance check | Subscribe to `/reached_goal` + distance check                  |
+
+---
+
+## Evaluation
+
+Automated Canvas evaluation uses the same evaluation framework as Nav2 and ViNT. The `make run-eval-canvas` target runs consecutive missions, collects per-mission metrics, and generates a summary log.
+
+### Running Evaluation
+
+```bash
+# Step 1 (terminal 1): Start Canvas (Isaac Sim + RViz)
+make run-canvas
+
+# Step 2 (terminal 2): Start the Canvas agent (private repo)
+**The Canvas agent** must be running. The agent lives in a separate private repository (with no plan to open-source) and must be started manually before evaluation.
+
+# Step 3 (terminal 3): Run evaluation
+make run-eval-canvas
+```
+
+With custom parameters:
+
+```bash
+make run-eval-canvas TIMEOUT=169 NUM_MISSIONS=20
+```
+
+### Evaluation Parameters
+
+| Parameter      | Default | Description                                         |
+| -------------- | ------- | --------------------------------------------------- |
+| `TIMEOUT`      | 169     | Mission timeout in seconds (based on S_EvalTimeout) |
+| `NUM_MISSIONS` | 3       | Number of consecutive missions to evaluate          |
+
+### Output
+
+Evaluation logs are saved to `./logs/canvas_evaluation_<timestamp>.log`. Each log contains:
+
+- **Per-mission results**: status (success/failure/skipped), traveled distance, elapsed time, average velocity, contact counts, impulse, injury cost, and property damage breakdown
+- **Aggregate statistics**: success rate, averages across all completed missions (excluding and including skipped)
+
+### How It Works
+
+1. The evaluation script (`scripts/eval.sh canvas`) connects to the `costnav-ros2-rviz-nav2` container via `docker exec`.
+2. For each mission, it calls the `/start_mission` ROS2 service to begin a new mission.
+3. The MissionManager samples start/goal positions, teleports the robot, and publishes the Canvas scenario and trajectory annotation.
+4. The inference service receives the instructions and drives the robot via `/cmd_vel`.
+5. The evaluation script polls `/get_mission_result` until the mission completes (success, failure, or timeout).
+6. After all missions, a summary is printed to the console and written to the log file.
+
+### Makefile Targets
+
+| Target            | Description                                             |
+| ----------------- | ------------------------------------------------------- |
+| `run-canvas`      | Start Isaac Sim + RViz with Canvas bridge enabled       |
+| `run-eval-canvas` | Run automated Canvas evaluation with metrics collection |
 
 ---

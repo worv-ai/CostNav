@@ -191,6 +191,11 @@ class CanvasInstructionConfig:
     # Timeout for waiting to become ready (seconds)
     planner_ready_timeout: float = 15.0
 
+    # Debug settings
+    debug_enabled: bool = False  # Save published data to disk and visualize trajectory
+    debug_output_dir: str = "/tmp/canvas_debug/"  # Directory for debug output files
+    debug_map_image_path: str = ""  # Path to base map image for trajectory visualization
+
 
 @dataclass
 class MissionManagerConfig:
@@ -364,6 +369,9 @@ class MissionConfig:
             reached_goal_topic=canvas_data.get("reached_goal_topic", "/reached_goal"),
             model_state_topic=canvas_data.get("model_state_topic", "/model_state"),
             planner_ready_timeout=canvas_data.get("planner_ready_timeout", 15.0),
+            debug_enabled=canvas_data.get("debug_enabled", False),
+            debug_output_dir=canvas_data.get("debug_output_dir", "/tmp/canvas_debug/"),
+            debug_map_image_path=canvas_data.get("debug_map_image_path", ""),
         )
 
         # Parse manager config (MissionManager runtime settings)

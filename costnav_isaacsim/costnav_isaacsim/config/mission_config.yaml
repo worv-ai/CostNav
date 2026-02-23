@@ -229,3 +229,8 @@ canvas:
 
   # Timeout for waiting to become ready (seconds)
   planner_ready_timeout: 15.0
+
+  # Debug settings (save published data to disk and visualize trajectory)
+  debug_enabled: false
+  debug_output_dir: "/tmp/canvas_debug/"
+  debug_map_image_path: ""  # Path to base map image for trajectory overlay

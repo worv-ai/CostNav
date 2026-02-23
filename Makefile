@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-vint run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-vint run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint run-canvas start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint run-eval-canvas download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
 
 # Load environment variables from .env file if it exists
 # Variables can still be overridden from command line
@@ -26,6 +26,7 @@ TUNED ?= True
 AMCL ?= False
 TOPOMAP ?= False
 ALIGN_HEADING ?= False
+CANVAS ?= False
 
 # Joystick settings for teleop (always reads from .env)
 XBOX_ID := $(shell grep '^XBOX_ID=' .env 2>/dev/null | cut -d= -f2)
@@ -190,6 +191,14 @@ run-vint:
 	$(DOCKER_COMPOSE) --profile vint down
 	TOPOMAP=True ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile vint up
 
+# Run Isaac Sim with CANVAS instruction generation enabled
+# Starts Isaac Sim + RViz with canvas.enabled=true in mission config
+# Usage: make run-canvas NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True
+run-canvas:
+	xhost +local:docker 2>/dev/null || true
+	$(DOCKER_COMPOSE) --profile canvas down
+	CANVAS=True NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) $(DOCKER_COMPOSE) --profile canvas up
+
 # =============================================================================
 # ROS Bag Recording Targets
 # =============================================================================
@@ -274,6 +283,26 @@ run-eval-vint:
 	@echo "  Number of missions:  $(NUM_MISSIONS)"
 	@echo ""
 	@bash scripts/eval.sh vint $(TIMEOUT) $(NUM_MISSIONS)
+
+# Run Canvas evaluation (requires running canvas instance via make run-canvas)
+# Usage: make run-eval-canvas TIMEOUT=20 NUM_MISSIONS=10
+# Output: ./logs/canvas_evaluation_<timestamp>.log
+run-eval-canvas:
+	@if ! docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-rviz-nav2"; then \
+		echo "ERROR: 'make run-canvas' is not running."; \
+		echo ""; \
+		echo "Please start canvas first in a separate terminal:"; \
+		echo "  make run-canvas"; \
+		echo ""; \
+		echo "Then run this command again:"; \
+		echo "  make run-eval-canvas TIMEOUT=$(TIMEOUT) NUM_MISSIONS=$(NUM_MISSIONS)"; \
+		exit 1; \
+	fi
+	@echo "Starting Canvas evaluation..."
+	@echo "  Timeout per mission: $(TIMEOUT)s"
+	@echo "  Number of missions:  $(NUM_MISSIONS)"
+	@echo ""
+	@bash scripts/eval.sh canvas $(TIMEOUT) $(NUM_MISSIONS)
 
 
 # =============================================================================

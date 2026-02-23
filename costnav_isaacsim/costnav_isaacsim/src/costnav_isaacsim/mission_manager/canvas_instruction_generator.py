@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Tuple
 
@@ -121,11 +122,11 @@ def pose2pixel(
         map_height: Image height in pixels.
 
     Returns:
-        (pixel_x, pixel_y) tuple of integers.
+        (pixel_y, pixel_x) tuple of integers.
     """
     px = int(round((x - origin_x) / resolution))
     py = int(round(map_height - (y - origin_y) / resolution))
-    return px, py
+    return py, px
 
 
 class CanvasInstructionGenerator:
@@ -281,7 +282,7 @@ class CanvasInstructionGenerator:
     def _convert_path_to_pixels(self, path: List[SampledPosition]) -> np.ndarray:
         """Convert world-coordinate waypoints to pixel coordinates.
 
-        Returns an (N, 2) int32 ndarray of [pixel_x, pixel_y] pairs.
+        Returns an (N, 2) int32 ndarray of [pixel_y, pixel_x] pairs.
         """
         pixels = [
             pose2pixel(
@@ -315,26 +316,91 @@ class CanvasInstructionGenerator:
         pixel_coords: np.ndarray,
     ) -> None:
         """Publish the scenario string and the trajectory annotation."""
-        from std_msgs.msg import Int32MultiArray, MultiArrayDimension, MultiArrayLayout, String
+        from std_msgs.msg import Int32MultiArray, String
 
         # Scenario
-        scenario_msg = String()
-        scenario_msg.data = scenario_json
-        self._scenario_pub.publish(scenario_msg)
+        self._scenario_pub.publish(String(data=scenario_json))
         logger.info(f"[CANVAS] Published scenario on {self._config.scenario_topic}")
 
-        # Annotation: flatten (N, 2) → [x0, y0, x1, y1, ...]
-        flat = pixel_coords.flatten().tolist()
-        annotation_msg = Int32MultiArray()
-        annotation_msg.layout = MultiArrayLayout(
-            dim=[
-                MultiArrayDimension(label="points", size=pixel_coords.shape[0], stride=pixel_coords.shape[0] * 2),
-                MultiArrayDimension(label="xy", size=2, stride=2),
-            ],
-            data_offset=0,
-        )
-        annotation_msg.data = flat
-        self._annotation_pub.publish(annotation_msg)
+        # Annotation: flatten (N, 2) → [y0, x0, y1, x1, ...]
+        self._annotation_pub.publish(Int32MultiArray(data=pixel_coords.flatten().tolist()))
         logger.info(
             f"[CANVAS] Published annotation ({pixel_coords.shape[0]} waypoints) " f"on {self._config.annotation_topic}"
         )
+
+        # Debug: save published data to disk and visualize trajectory
+        if self._config.debug_enabled or os.environ.get("CANVAS_DEBUG", "").lower() in ("1", "true"):
+            self._debug_save_outputs(scenario_json, pixel_coords)
+
+    # ------------------------------------------------------------------
+    # Debug helpers
+    # ------------------------------------------------------------------
+
+    def _debug_save_outputs(
+        self,
+        scenario_json: str,
+        pixel_coords: np.ndarray,
+    ) -> None:
+        """Save published data to disk and render a trajectory visualization.
+
+        Outputs (written to ``self._config.debug_output_dir``):
+
+        * ``debug_scenario.json`` – the Scenario JSON string.
+        * ``debug_annotation.npy`` – the (N, 2) pixel-coordinate array.
+        * ``debug_trajectory.png`` – trajectory drawn on the base map image.
+
+        The method is a no-op (with a warning) if the output directory cannot
+        be created or the map image is missing.
+        """
+        out_dir = Path(self._config.debug_output_dir)
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            logger.warning(f"[CANVAS-DEBUG] Cannot create output dir {out_dir}: {exc}")
+            return
+
+        # 1. Save scenario JSON
+        scenario_path = out_dir / "debug_scenario.json"
+        scenario_path.write_text(scenario_json, encoding="utf-8")
+        logger.info(f"[CANVAS-DEBUG] Saved scenario JSON → {scenario_path}")
+
+        # 2. Save annotation as NumPy array
+        annotation_path = out_dir / "debug_annotation.npy"
+        np.save(str(annotation_path), pixel_coords)
+        logger.info(f"[CANVAS-DEBUG] Saved annotation ({pixel_coords.shape}) → {annotation_path}")
+
+        # 3. Visualize trajectory on the base map image
+        map_image_path = self._config.debug_map_image_path
+        if not map_image_path:
+            logger.info("[CANVAS-DEBUG] No debug_map_image_path configured; skipping trajectory visualization")
+            return
+
+        try:
+            import cv2
+
+            base_map = cv2.imread(map_image_path, cv2.IMREAD_COLOR)
+            if base_map is None:
+                logger.warning(f"[CANVAS-DEBUG] Cannot read map image: {map_image_path}")
+                return
+
+            # pixel_coords is (N, 2) with columns [pixel_y, pixel_x];
+            # OpenCV expects (x, y) so swap columns for drawing.
+            xy_coords = pixel_coords[:, ::-1].copy()  # (N, 2) → [pixel_x, pixel_y]
+            pts = xy_coords.reshape(-1, 1, 2)  # shape required by cv2.polylines
+            cv2.polylines(base_map, [pts], isClosed=False, color=(0, 0, 255), thickness=2)
+
+            # Draw start (green) and goal (blue) circles
+            if len(xy_coords) >= 1:
+                start_pt = (int(xy_coords[0][0]), int(xy_coords[0][1]))
+                cv2.circle(base_map, start_pt, radius=6, color=(0, 255, 0), thickness=-1)
+            if len(xy_coords) >= 2:
+                goal_pt = (int(xy_coords[-1][0]), int(xy_coords[-1][1]))
+                cv2.circle(base_map, goal_pt, radius=6, color=(255, 0, 0), thickness=-1)
+
+            vis_path = out_dir / "debug_trajectory.png"
+            cv2.imwrite(str(vis_path), base_map)
+            logger.info(f"[CANVAS-DEBUG] Saved trajectory visualization → {vis_path}")
+        except ImportError:
+            logger.warning("[CANVAS-DEBUG] cv2 (OpenCV) not available; skipping trajectory visualization")
+        except Exception as exc:
+            logger.warning(f"[CANVAS-DEBUG] Trajectory visualization failed: {exc}")
