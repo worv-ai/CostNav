@@ -384,6 +384,55 @@ class NavMeshSampler:
             logger.error(f"Path check failed: {e}")
             return False
 
+    def get_path_first_waypoint(
+        self,
+        start: SampledPosition,
+        goal: SampledPosition,
+    ) -> Optional[SampledPosition]:
+        """Return the first non-start waypoint on the NavMesh shortest path.
+
+        Useful for aligning the robot's initial heading with the path direction.
+        If the path has only start and goal (no intermediate waypoints), the
+        goal itself is returned.
+
+        Args:
+            start: Start position.
+            goal: Goal position.
+
+        Returns:
+            The first waypoint after start on the shortest path,
+            or None if no valid path exists.
+        """
+        try:
+            navmesh = self._get_navmesh()
+
+            start_point = carb.Float3(start.x, start.y, start.z)
+            end_point = carb.Float3(goal.x, goal.y, goal.z)
+
+            path = navmesh.query_shortest_path(
+                start_pos=start_point,
+                end_pos=end_point,
+                agent_radius=self.agent_radius,
+            )
+
+            if path is None:
+                return None
+
+            points = path.get_points()
+            if points is None or len(points) < 2:
+                return None
+
+            # The second point (index 1) is the first waypoint after start
+            pt = points[1]
+            return SampledPosition(
+                x=float(pt.x),
+                y=float(pt.y),
+                z=float(pt.z),
+            )
+        except Exception as e:
+            logger.error(f"Failed to get first path waypoint: {e}")
+            return None
+
     def sample_goal_in_annulus(
         self,
         start: SampledPosition,
