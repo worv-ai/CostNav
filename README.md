@@ -167,7 +167,7 @@ Place the downloaded model files (e.g., `vint.pth`, `gnm.pth`, `nomad.pth`) in t
 2. Build a docker image
 
 ```bash
-make build-vint
+make build-ros2-torch
 ```
 
 3. Run the evaluation

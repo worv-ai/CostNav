@@ -464,22 +464,25 @@ ViNT (Visual Navigation Transformer) is being implemented as the reference basel
 **Evaluation (Implemented ✅):**
 
 - [x] Port ViNT agent from `third_party/NavDP/baselines/vint/vint_agent.py`
-  - Location: `costnav_isaacsim/il_training/evaluation/agents/vint_agent.py`
+  - Location: `costnav_isaacsim/il_evaluation/src/il_evaluation/agents/vint_agent.py`
 - [x] Create ROS2 policy node that:
   - Subscribes to `/front_stereo_camera/left/image_raw` (sensor_msgs/Image)
   - Subscribes to `/goal_image` for ImageGoal mode
   - Publishes `/vint_trajectory` (nav_msgs/Path)
-  - Location: `costnav_isaacsim/il_training/evaluation/nodes/vint_policy_node.py`
+  - Location: `costnav_isaacsim/il_evaluation/src/il_evaluation/nodes/vint_policy_node.py`
 - [x] Implement MPC trajectory follower node
   - Subscribes to `/vint_trajectory` and `/chassis/odom`
   - Publishes `/cmd_vel` directly
-  - Location: `costnav_isaacsim/il_training/evaluation/nodes/trajectory_follower_node.py`
+  - Location: `costnav_isaacsim/il_evaluation/src/il_evaluation/nodes/trajectory_follower_node.py`
 
 #### 4.3 CostNav ROS2 Integration ✅
 
 **Running ViNT in Isaac Sim:**
 
 ```bash
+# Build shared ROS2 + PyTorch image for IL baselines (first time only)
+make build-ros2-torch
+
 # Start all containers (Isaac Sim + ViNT)
 make run-vint
 ```
@@ -488,7 +491,7 @@ This launches:
 
 - Isaac Sim with Nova Carter robot and ROS2 bridge
 - ViNT policy node (`vint_policy_node`)
-- Trajectory follower node (`trajectory_follower_node`)
+- Shared trajectory follower service (`ros2-trajectory-follower`) running `trajectory_follower_node`
 
 See [evaluation/README.md](../costnav_isaacsim/il_evaluation/README.md) for detailed usage and configuration options.
 

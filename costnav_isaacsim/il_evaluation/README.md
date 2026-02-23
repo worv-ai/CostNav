@@ -52,7 +52,7 @@ The baseline implementations (ViNT, NoMaD, GNM) are derived from:
 
 ```bash
 # Dependencies are installed automatically when building the image:
-docker build -f Dockerfile.ros_torch -t costnav-ros2-vint .
+docker build -f Dockerfile.ros_torch -t costnav-ros2-torch .
 
 # For development inside the container:
 cd /workspace/costnav_isaacsim/il_evaluation
@@ -75,15 +75,21 @@ See [Download Pretrained Checkpoints](../README.md#download-pretrained-checkpoin
 
 **Note:** The `MODEL_CHECKPOINT` environment variable must point to your trained ViNT model weights (`.pth` file).
 
-1. **Start the ViNT stack** (in terminal 1):
+1. **Build the shared IL image** (first time only):
+
+   ```bash
+   make build-ros2-torch
+   ```
+
+2. **Start the ViNT stack** (in terminal 1):
 
    ```bash
    MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
    ```
 
-   This starts both Isaac Sim and the ViNT policy node together.
+   This starts Isaac Sim, the ViNT policy node, and the shared trajectory follower (`ros2-trajectory-follower`).
 
-2. **Run automated evaluation** (in terminal 2):
+3. **Run automated evaluation** (in terminal 2):
 
    ```bash
    # Run evaluation with default settings (3 missions, 169s timeout)
@@ -95,7 +101,7 @@ See [Download Pretrained Checkpoints](../README.md#download-pretrained-checkpoin
 
    This will automatically run consecutive missions and generate evaluation logs in `./logs/vint_evaluation_<timestamp>.log`.
 
-3. **Manually trigger individual missions** (alternative to automated evaluation):
+4. **Manually trigger individual missions** (alternative to automated evaluation):
    ```bash
    make start-mission
    ```
