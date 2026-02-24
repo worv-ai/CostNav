@@ -36,8 +36,8 @@ The baseline implementations (ViNT, NoMaD, GNM) are derived from:
 ## Supported Baselines
 
 - **ViNT** (Visual Navigation Transformer) - ✅ Implemented
-- **NoMaD** (No Map Diffusion) - 🔄 Planned
-- **GNM** (General Navigation Model) - 🔄 Planned
+- **NoMaD** (No Map Diffusion) - ✅ Implemented
+- **GNM** (General Navigation Model) - ✅ Implemented
 
 ## Installation
 
@@ -63,17 +63,17 @@ Dependencies are automatically installed from `pyproject.toml`.
 
 ## Usage
 
-There are two main approaches for testing ViNT evaluation:
+There are two main approaches for testing IL evaluation:
 
 ### Approach 1: Docker-Based Automated Testing (Recommended)
 
-This approach runs the complete stack (Isaac Sim + ViNT policy) in Docker containers.
+This approach runs the complete stack (Isaac Sim + IL policy) in Docker containers.
 
 **Prerequisites:**
 Download the pretrained model weights from Google Drive or train your model and place it to `checkpoints/`
 See [Download Pretrained Checkpoints](../README.md#download-pretrained-checkpoints) for more information.
 
-**Note:** The `MODEL_CHECKPOINT` environment variable must point to your trained ViNT model weights (`.pth` file).
+**Note:** The `MODEL_CHECKPOINT` environment variable must point to the selected baseline's model weights (`.pth` file).
 
 1. **Build the shared IL image** (first time only):
 
@@ -81,25 +81,48 @@ See [Download Pretrained Checkpoints](../README.md#download-pretrained-checkpoin
    make build-ros2-torch
    ```
 
-2. **Start the ViNT stack** (in terminal 1):
+2. **Start a baseline stack** (in terminal 1):
 
    ```bash
+   # ViNT
    MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
+
+   # GNM
+   MODEL_CHECKPOINT=checkpoints/gnm.pth make run-gnm
+
+   # NoMaD
+   MODEL_CHECKPOINT=checkpoints/nomad.pth make run-nomad
    ```
 
-   This starts Isaac Sim, the ViNT policy node, and the shared trajectory follower (`ros2-trajectory-follower`).
+   This starts Isaac Sim, the selected policy node, and the shared trajectory follower (`ros2-trajectory-follower`).
+   To switch navigation mode, set `GOAL_TYPE` (auto-syncs related flags):
+
+   ```bash
+   # Force image-goal evaluation
+   GOAL_TYPE=image_goal MODEL_CHECKPOINT=checkpoints/nomad.pth make run-nomad
+
+   # Force topomap evaluation
+   GOAL_TYPE=topomap MODEL_CHECKPOINT=checkpoints/nomad.pth make run-nomad
+   ```
+
+   `GOAL_TYPE` automatically sets `GOAL_IMAGE` and `IL_TOPOMAP` unless you explicitly override them
+   (e.g., `GOAL_TYPE=image_goal GOAL_IMAGE=False ...`).
 
 3. **Run automated evaluation** (in terminal 2):
 
    ```bash
    # Run evaluation with default settings (3 missions, 169s timeout)
    make run-eval-vint
+   make run-eval-gnm
+   make run-eval-nomad
 
    # Or customize the evaluation parameters
    make run-eval-vint TIMEOUT=120 NUM_MISSIONS=10
+   make run-eval-gnm TIMEOUT=120 NUM_MISSIONS=10
+   make run-eval-nomad TIMEOUT=120 NUM_MISSIONS=10
    ```
 
-   This will automatically run consecutive missions and generate evaluation logs in `./logs/vint_evaluation_<timestamp>.log`.
+   This will automatically run consecutive missions and generate evaluation logs in `./logs/<baseline>_evaluation_<timestamp>.log`.
 
 4. **Manually trigger individual missions** (alternative to automated evaluation):
    ```bash
@@ -116,13 +139,15 @@ This approach is useful for development and debugging within the devcontainer.
    make run-isaac-sim
    ```
 
-2. **Launch ViNT Policy Node using VSCode Debugger** (recommended):
+2. **Launch Policy Node using VSCode Debugger** (recommended):
 
    Use the VSCode launch configurations in `.vscode/launch.json`:
    - **"Python: ViNT Policy Node (ROS2)"** - Runs ViNT inference node with debugger
    - **"Python: Trajectory Follower Node (ROS2)"** - Runs MPC trajectory follower with debugger
 
    Press `F5` or use the Run and Debug panel to start with breakpoints enabled.
+   For GNM or NoMaD, point the launch configuration at `gnm_policy_node.py` or `nomad_policy_node.py`
+   and swap `--model_config` to `gnm_eval.yaml` or `nomad_eval.yaml`.
 
 3. **Trigger missions manually**:
    ```bash
@@ -131,29 +156,31 @@ This approach is useful for development and debugging within the devcontainer.
 
 ## Topics
 
-### ViNT Policy Node
+### Policy Node (ViNT/GNM/NoMaD)
+
+All IL baselines share the same `/model_*` topics to keep the trajectory follower and tooling model-agnostic.
 
 | Direction | Topic                                 | Type                | Description                                        |
 | --------- | ------------------------------------- | ------------------- | -------------------------------------------------- |
 | Subscribe | `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image` | Camera image input (configurable via robot config) |
 | Subscribe | `/goal_image`                         | `sensor_msgs/Image` | Goal image (ImageGoal mode, transient local)       |
-| Subscribe | `/vint_enable`                        | `std_msgs/Bool`     | Enable/disable policy execution                    |
-| Publish   | `/vint_trajectory`                    | `nav_msgs/Path`     | Predicted trajectory (5 waypoints)                 |
-| Publish   | `/vint_reached_goal`                  | `std_msgs/Bool`     | True when topomap goal node is reached             |
-| Service   | `/reset_agent`                        | `std_srvs/Trigger`  | Reset agent memory for new mission                 |
+| Subscribe | `/model_enable`                        | `std_msgs/Bool`     | Enable/disable policy execution                    |
+| Publish   | `/model_trajectory`                    | `nav_msgs/Path`     | Predicted trajectory (len_traj_pred waypoints)     |
+| Publish   | `/model_reached_goal`                  | `std_msgs/Bool`     | True when topomap goal node is reached             |
+| Service   | `/model_reset_agent`                   | `std_srvs/Trigger`  | Reset agent memory for new mission                 |
 
 ### Trajectory Follower Node
 
 | Direction | Topic                         | Type                  | Description                                    |
 | --------- | ----------------------------- | --------------------- | ---------------------------------------------- |
-| Subscribe | `/vint_trajectory`            | `nav_msgs/Path`       | Trajectory from ViNT policy node               |
+| Subscribe | `/model_trajectory`            | `nav_msgs/Path`       | Trajectory from policy node                    |
 | Subscribe | `/chassis/odom`               | `nav_msgs/Odometry`   | Robot odometry (configurable via robot config) |
 | Subscribe | `/trajectory_follower_enable` | `std_msgs/Bool`       | Enable/disable trajectory following            |
 | Publish   | `/cmd_vel`                    | `geometry_msgs/Twist` | Velocity commands to robot                     |
 
 ## Parameters
 
-### ViNT Policy Node
+### Policy Node (ViNT/GNM/NoMaD)
 
 | Parameter        | Type   | Default                | Description                                                   |
 | ---------------- | ------ | ---------------------- | ------------------------------------------------------------- |
@@ -164,7 +191,7 @@ This approach is useful for development and debugging within the devcontainer.
 | `--topomap_dir`  | string | `/tmp/costnav_topomap` | Topomap image directory                                       |
 | `--log_level`    | string | `info`                 | Log level (`debug`, `info`, `warn`, `error`, `fatal`)         |
 
-All other parameters (`inference_rate`, `device`, `goal_type`, `visualize_debug_images`, `topomap_goal_node`, `topomap_radius`, `topomap_close_threshold`) are read from `vint_eval.yaml`. Topic names (`image`, `goal_image`) are read from the robot config YAML. The `--goal_type` CLI argument, when provided, overrides the `goal_type` value from `vint_eval.yaml`.
+All other parameters (`inference_rate`, `device`, `goal_type`, `visualize_debug_images`, `topomap_goal_node`, `topomap_radius`, `topomap_close_threshold`) are read from the selected model config (`vint_eval.yaml`, `gnm_eval.yaml`, or `nomad_eval.yaml`). Topic names (`image`, `goal_image`) are read from the robot config YAML. The `--goal_type` CLI argument, when provided, overrides the `goal_type` value from the model config.
 
 ### Trajectory Follower Node
 
@@ -192,11 +219,15 @@ The evaluation system runs consecutive missions and collects comprehensive metri
 **Running Automated Evaluation:**
 
 ```bash
-# Terminal 1: Start the ViNT stack
+# Terminal 1: Start a baseline stack
 MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
+MODEL_CHECKPOINT=checkpoints/gnm.pth make run-gnm
+MODEL_CHECKPOINT=checkpoints/nomad.pth make run-nomad
 
 # Terminal 2: Run evaluation
 make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
+make run-eval-gnm TIMEOUT=169 NUM_MISSIONS=10
+make run-eval-nomad TIMEOUT=169 NUM_MISSIONS=10
 ```
 
 **Evaluation Parameters:**
@@ -206,7 +237,7 @@ make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
 
 **Output:**
 
-- Logs are saved to `./logs/vint_evaluation_<timestamp>.log`
+- Logs are saved to `./logs/<baseline>_evaluation_<timestamp>.log`
 - Real-time progress is displayed in the terminal
 - Summary statistics are generated at the end
 
@@ -219,7 +250,7 @@ make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
 For development and debugging, you can manually trigger individual missions:
 
 ```bash
-# After starting the ViNT stack (make run-vint)
+# After starting a baseline stack (make run-*)
 make start-mission
 ```
 
@@ -259,17 +290,25 @@ il_evaluation/
 ├── pyproject.toml            # Package configuration (uv pip install -e .)
 ├── configs/                  # Configuration files
 │   ├── vint_eval.yaml                # Model + inference config
+│   ├── gnm_eval.yaml                 # Model + inference config
+│   ├── nomad_eval.yaml               # Model + inference config
 │   ├── robot_carter.yaml             # Nova Carter robot config
 │   └── robot_segway.yaml             # Segway E1 robot config
 └── src/il_evaluation/        # Python package source
     ├── agents/               # Policy inference agents
     │   ├── base_agent.py
+    │   ├── gnm_agent.py
+    │   ├── nomad_agent.py
     │   └── vint_agent.py
     ├── models/               # Neural network architectures
     │   ├── base_model.py
+    │   ├── gnm_network.py
     │   ├── traj_opt.py
     │   └── vint_network.py
     ├── nodes/                # ROS2 nodes (entry points)
+    │   ├── base_policy_node.py       # Shared policy node logic
+    │   ├── gnm_policy_node.py        # GNM inference (~4Hz)
+    │   ├── nomad_policy_node.py      # NoMaD inference (~4Hz)
     │   ├── vint_policy_node.py       # ViNT inference (~4Hz)
     │   └── trajectory_follower_node.py  # MPC controller (~20Hz)
     ├── utils/                # Utility functions
@@ -281,12 +320,12 @@ il_evaluation/
 The system uses a **two-node architecture** that decouples perception from control:
 
 ```
-Camera ──► ViNT Policy Node (4 Hz) ──► /vint_trajectory ──► Trajectory Follower Node (20 Hz) ──► /cmd_vel ──► Robot
+Camera ──► Policy Node (ViNT/GNM/NoMaD, ~4 Hz) ──► /model_trajectory ──► Trajectory Follower Node (20 Hz) ──► /cmd_vel ──► Robot
                                                                      ▲
                                                           /odom ─────┘
 ```
 
-- **ViNT policy node** runs inference at **4 Hz**, predicts 5 waypoints, generates a smooth trajectory via cubic spline, and publishes it on `/vint_trajectory` as a `nav_msgs/Path`.
+- **Policy node (ViNT/GNM/NoMaD)** runs inference at **~4 Hz**, predicts `len_traj_pred` waypoints (5 for ViNT/GNM, 8 for NoMaD by default), generates a smooth trajectory via cubic spline, and publishes it on `/model_trajectory` as a `nav_msgs/Path`.
 - **Trajectory follower node** subscribes to that trajectory and runs an MPC control loop at **20 Hz**, reading the robot's current pose from `/odom` and publishing velocity commands to `/cmd_vel`.
 
 ### Control Flow
@@ -295,7 +334,7 @@ The trajectory follower node has three callbacks:
 
 | Callback              | Trigger                | What it does                                                                       |
 | --------------------- | ---------------------- | ---------------------------------------------------------------------------------- |
-| `trajectory_callback` | New `/vint_trajectory` | Converts Path → numpy, transforms to world frame if needed, creates or updates MPC |
+| `trajectory_callback` | New `/model_trajectory` | Converts Path → numpy, transforms to world frame if needed, creates or updates MPC |
 | `odom_callback`       | New `/odom`            | Stores latest robot pose (used by `control_callback`)                              |
 | `control_callback`    | Timer at 20 Hz         | Reads robot state, calls `mpc.solve(x0)`, publishes `cmd_vel`                      |
 
@@ -303,7 +342,7 @@ The control timer fires independently of trajectory arrival. If no valid traject
 
 ### Coordinate Frame Handling
 
-ViNT predicts waypoints in the **robot-local frame** (`base_link`). MPC needs a **world-frame** trajectory to track against a moving robot. When a trajectory arrives in `base_link`:
+The policy node predicts waypoints in the **robot-local frame** (`base_link`). MPC needs a **world-frame** trajectory to track against a moving robot. When a trajectory arrives in `base_link`:
 
 1. Read the current robot pose `(x, y, quaternion)` from odometry
 2. Build a **full 3D rotation matrix** from the quaternion (not yaw-only, so it's correct on slopes)
@@ -382,7 +421,7 @@ dθ/dt = w
 
 ## Waypoint Normalization
 
-ViNT outputs **normalized** waypoints during training and expects the same normalization to be reversed at evaluation time. Getting this wrong causes the robot to over- or under-shoot.
+ViNT and GNM output **normalized** waypoints during training and expect the same normalization to be reversed at evaluation time. Getting this wrong causes the robot to over- or under-shoot.
 
 ### Training (normalization)
 
@@ -404,11 +443,13 @@ The denormalization scale (`denorm_scale`) is computed in `base_agent.py` direct
 denorm_scale = metric_waypoint_spacing * waypoint_spacing  # 0.25 * 1 = 0.25 m
 ```
 
-The source-of-truth training parameters (`waypoint_spacing`, `metric_waypoint_spacing`) live in `vint_eval.yaml` and must match the training config `vint_costnav.yaml`. Velocity limits (`max_linear_vel`, `max_angular_vel`) are **not** involved in denormalization — they are only used by the trajectory follower for MPC control (configured in the robot config YAML under `trajectory_follower`).
+The source-of-truth training parameters (`waypoint_spacing`, `metric_waypoint_spacing`) live in `vint_eval.yaml` or `gnm_eval.yaml` and must match the corresponding training config. Velocity limits (`max_linear_vel`, `max_angular_vel`) are **not** involved in denormalization — they are only used by the trajectory follower for MPC control (configured in the robot config YAML under `trajectory_follower`).
+
+**NoMaD** uses `action_stats` (min/max) from `nomad_eval.yaml` to unnormalize diffusion outputs. These values must match the training dataset statistics (or be provided via the original `data_config.yaml`).
 
 ### Inference Rate
 
-The inference rate (`inference_rate` in `vint_eval.yaml`, default **4.0 Hz**) must match the training data `sample_rate` (4.0 Hz from `vint_processing_config.yaml`). This ensures the temporal context window (past `context_size=5` frames) spans the same time interval as during training. Running at a different rate (e.g. 10 Hz) fills the memory queue with near-identical frames, degrading temporal context quality.
+The inference rate (`inference_rate` in the model config, default **4.0 Hz**) must match the training data `sample_rate` (4.0 Hz from `vint_processing_config.yaml`). This ensures the temporal context window (past `context_size=5` frames) spans the same time interval as during training. Running at a different rate (e.g. 10 Hz) fills the memory queue with near-identical frames, degrading temporal context quality.
 
 ## Configuration Reference
 
@@ -434,13 +475,17 @@ device: "cuda:0"
 # Navigation mode — one of "no_goal", "image_goal", or "topomap"
 # Can be overridden at the CLI with --goal_type.
 goal_type: "topomap" # "no_goal" | "image_goal" | "topomap"
-visualize_debug_images: true # Publish /vint_goal_image, /vint_localization_image
+visualize_debug_images: true # Publish /model_goal_image, /model_localization_image
 
 # Topomap parameters (used when goal_type is "topomap")
 topomap_goal_node: -1
 topomap_radius: 4
 topomap_close_threshold: 3.0
 ```
+
+### gnm_eval.yaml / nomad_eval.yaml (Model + Inference Config)
+
+These configs mirror `vint_eval.yaml` for navigation mode, inference rate, and topomap parameters. `nomad_eval.yaml` additionally includes diffusion-specific fields (`num_diffusion_iters`, `num_samples`, `beta_schedule`) and `action_stats` for unnormalizing trajectory deltas.
 
 ### robot_carter.yaml / robot_segway.yaml (Robot Parameters)
 
@@ -468,16 +513,16 @@ trajectory_follower:
 | **Model checkpoint not found** | Invalid path or missing file           | Verify `checkpoint` parameter points to valid `.pth` file       |
 | **CUDA out of memory**         | GPU memory exhausted                   | Reduce `context_size` or use smaller batch during inference     |
 | **No trajectory published**    | Camera topic not connected             | Check `/front_stereo_camera/left/image_raw` topic is publishing |
-| **Robot not moving**           | Trajectory follower not receiving data | Verify `/vint_trajectory` and `/chassis/odom` topics            |
+| **Robot not moving**           | Trajectory follower not receiving data | Verify `/model_trajectory` and `/chassis/odom` topics            |
 | **MPC solver fails**           | Invalid trajectory or constraints      | Check trajectory waypoints are valid; try increasing `dt`       |
 | **Path not visible in RViz**   | Transform or QoS mismatch              | Set Fixed Frame to `base_link`; increase Transform Tolerance    |
-| **Trajectory jumps**           | Memory queue not reset on new mission  | Call `/reset_agent` service when starting new mission           |
+| **Trajectory jumps**           | Memory queue not reset on new mission  | Call `/model_reset_agent` service when starting new mission     |
 
 ### Debug Commands
 
 ```bash
-# Check ViNT policy node status
-ros2 topic echo /vint_trajectory --once
+# Check policy node status
+ros2 topic echo /model_trajectory --once
 
 # Check trajectory follower status
 ros2 topic echo /cmd_vel --once
@@ -489,10 +534,10 @@ ros2 topic hz /front_stereo_camera/left/image_raw
 ros2 topic echo /chassis/odom --once
 
 # Reset agent memory (for new mission)
-ros2 service call /reset_agent std_srvs/srv/Trigger {}
+ros2 service call /model_reset_agent std_srvs/srv/Trigger {}
 
 # Enable/disable policy execution
-ros2 topic pub /vint_enable std_msgs/msg/Bool "data: true"
+ros2 topic pub /model_enable std_msgs/msg/Bool "data: true"
 ```
 
 ### Performance Tuning

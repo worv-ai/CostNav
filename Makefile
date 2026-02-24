@@ -25,7 +25,33 @@ FOOD ?= True
 TUNED ?= True
 AMCL ?= False
 TOPOMAP ?= False
+IL_TOPOMAP ?= True
+GOAL_IMAGE ?= False
 ALIGN_HEADING ?= False
+
+# Auto-link goal_type to goal image/topomap flags unless explicitly overridden.
+# Explicit means set via command line or environment (including overrides).
+define _is_explicit
+$(filter command line environment environment override,$(origin $(1)))
+endef
+
+ifneq ($(strip $(GOAL_TYPE)),)
+ifeq ($(strip $(GOAL_TYPE)),image_goal)
+ifeq ($(call _is_explicit,GOAL_IMAGE),)
+GOAL_IMAGE := True
+endif
+ifeq ($(call _is_explicit,IL_TOPOMAP),)
+IL_TOPOMAP := False
+endif
+else ifeq ($(strip $(GOAL_TYPE)),topomap)
+ifeq ($(call _is_explicit,GOAL_IMAGE),)
+GOAL_IMAGE := False
+endif
+ifeq ($(call _is_explicit,IL_TOPOMAP),)
+IL_TOPOMAP := True
+endif
+endif
+endif
 
 # Joystick settings for teleop (always reads from .env)
 XBOX_ID := $(shell grep '^XBOX_ID=' .env 2>/dev/null | cut -d= -f2)
@@ -189,7 +215,7 @@ run-vint: MODEL_CHECKPOINT ?= checkpoints/vint.pth
 run-vint:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile vint down
-	TOPOMAP=True ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile vint up
+	TOPOMAP=$(IL_TOPOMAP) GOAL_IMAGE=$(GOAL_IMAGE) ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile vint up
 
 # Run Isaac Sim with GNM policy node and trajectory follower for IL baseline evaluation
 # Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/gnm.pth)
@@ -199,7 +225,7 @@ run-gnm: MODEL_CHECKPOINT ?= checkpoints/gnm.pth
 run-gnm:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile gnm down
-	TOPOMAP=True ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile gnm up
+	TOPOMAP=$(IL_TOPOMAP) GOAL_IMAGE=$(GOAL_IMAGE) ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile gnm up
 
 # Run Isaac Sim with NoMaD policy node and trajectory follower for IL baseline evaluation
 # Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/nomad.pth)
@@ -209,7 +235,7 @@ run-nomad: MODEL_CHECKPOINT ?= checkpoints/nomad.pth
 run-nomad:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile nomad down
-	TOPOMAP=True ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile nomad up
+	TOPOMAP=$(IL_TOPOMAP) GOAL_IMAGE=$(GOAL_IMAGE) ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile nomad up
 
 # =============================================================================
 # ROS Bag Recording Targets

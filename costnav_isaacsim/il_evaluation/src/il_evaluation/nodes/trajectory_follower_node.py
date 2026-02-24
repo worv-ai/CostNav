@@ -4,7 +4,7 @@
 
 """Trajectory Follower ROS2 Node for CostNav.
 
-This node subscribes to trajectory waypoints published by ViNT policy node
+This node subscribes to trajectory waypoints published by the policy node
 and publishes velocity commands at a fixed rate using MPC controller.
 
 Reference:
@@ -23,7 +23,7 @@ Key features from NavDP:
     - When MPC is None, skip control iteration (matching NavDP behavior)
 
 Architecture:
-    - ViNT policy node: runs inference at ~4 Hz, publishes full trajectory
+    - Policy node (ViNT/GNM/NoMaD): runs inference at ~4 Hz, publishes full trajectory
     - Trajectory follower node: receives trajectory, publishes cmd_vel at ~20 Hz
 
 MPC reuse:
@@ -431,7 +431,7 @@ class TrajectoryFollowerNode(Node):
     """ROS2 Node for trajectory following control.
 
     Subscribes to:
-        - /vint_trajectory (nav_msgs/Path) - trajectory from ViNT policy (world frame)
+        - /model_trajectory (nav_msgs/Path) - trajectory from policy (world frame)
         - /odom (nav_msgs/Odometry) - robot odometry for state feedback
         - /trajectory_follower_enable (std_msgs/Bool) - enable/disable control
 
@@ -503,7 +503,7 @@ class TrajectoryFollowerNode(Node):
         )
 
         # Subscribers
-        self.trajectory_sub = self.create_subscription(Path, "/vint_trajectory", self.trajectory_callback, 10)
+        self.trajectory_sub = self.create_subscription(Path, "/model_trajectory", self.trajectory_callback, 10)
         self.odom_sub = self.create_subscription(Odometry, self.odom_topic, self.odom_callback, sensor_qos)
         self.enable_sub = self.create_subscription(Bool, "/trajectory_follower_enable", self.enable_callback, 10)
 
@@ -517,11 +517,11 @@ class TrajectoryFollowerNode(Node):
         self.get_logger().info(f"Trajectory follower node started. Control rate: {self.control_rate} Hz")
         self.get_logger().info("Controller: MPC (NavDP reference)")
         self.get_logger().info(f"Max velocities: linear={self.max_linear_vel}, angular={self.max_angular_vel}")
-        self.get_logger().info(f"Subscribing to: /vint_trajectory, {self.odom_topic}")
+        self.get_logger().info(f"Subscribing to: /model_trajectory, {self.odom_topic}")
         self.get_logger().info("Publishing to: /cmd_vel")
 
     def trajectory_callback(self, msg: Path):
-        """Process incoming trajectory from ViNT policy.
+        """Process incoming trajectory from policy node.
 
         The trajectory can be in either:
         - World frame (frame_id != "base_link")

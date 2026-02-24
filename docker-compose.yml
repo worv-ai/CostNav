@@ -44,6 +44,7 @@ services:
       - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
       - FOOD=${FOOD:-True}
       - TOPOMAP=${TOPOMAP:-False}
+      - GOAL_IMAGE=${GOAL_IMAGE:-False}
       - ALIGN_HEADING=${ALIGN_HEADING:-False}
     volumes:
       - .:/workspace
@@ -62,7 +63,7 @@ services:
     working_dir: /workspace
     command:
       - "-ic"
-      - "/workspace/costnav_isaacsim/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-20} --robot $${SIM_ROBOT:-segway_e1} --food-enabled $${FOOD:-True} --topomap-enabled $${TOPOMAP:-False} --align-initial-heading-to-path $${ALIGN_HEADING:-False}"
+      - "/workspace/costnav_isaacsim/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-20} --robot $${SIM_ROBOT:-segway_e1} --food-enabled $${FOOD:-True} --topomap-enabled $${TOPOMAP:-False} --goal-image-enabled $${GOAL_IMAGE:-False} --align-initial-heading-to-path $${ALIGN_HEADING:-False}"
     healthcheck:
       test:
         [
@@ -306,6 +307,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
       - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
+      - GOAL_TYPE=${GOAL_TYPE:-}
       - MODEL_CHECKPOINT=${MODEL_CHECKPOINT:-checkpoints/vint.pth}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -318,7 +320,7 @@ services:
         else
           ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_segway.yaml
         fi &&
-        vint_policy_node --checkpoint $${MODEL_CHECKPOINT} --model_config /workspace/costnav_isaacsim/il_evaluation/configs/vint_eval.yaml --robot_config $${ROBOT_CONFIG} --goal_type topomap --topomap_dir /tmp/costnav_topomap"
+        vint_policy_node --checkpoint $${MODEL_CHECKPOINT} --model_config /workspace/costnav_isaacsim/il_evaluation/configs/vint_eval.yaml --robot_config $${ROBOT_CONFIG} $${GOAL_TYPE:+--goal_type $${GOAL_TYPE}} --topomap_dir /tmp/costnav_topomap"
     network_mode: host
     ipc: host
     stdin_open: true
@@ -377,6 +379,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
       - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
+      - GOAL_TYPE=${GOAL_TYPE:-}
       - MODEL_CHECKPOINT=${MODEL_CHECKPOINT:-checkpoints/gnm.pth}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -389,7 +392,7 @@ services:
         else
           ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_segway.yaml
         fi &&
-        gnm_policy_node --checkpoint $${MODEL_CHECKPOINT} --model_config /workspace/costnav_isaacsim/il_evaluation/configs/gnm_eval.yaml --robot_config $${ROBOT_CONFIG} --goal_type topomap --topomap_dir /tmp/costnav_topomap"
+        gnm_policy_node --checkpoint $${MODEL_CHECKPOINT} --model_config /workspace/costnav_isaacsim/il_evaluation/configs/gnm_eval.yaml --robot_config $${ROBOT_CONFIG} $${GOAL_TYPE:+--goal_type $${GOAL_TYPE}} --topomap_dir /tmp/costnav_topomap"
     network_mode: host
     ipc: host
     stdin_open: true
@@ -418,6 +421,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
       - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
+      - GOAL_TYPE=${GOAL_TYPE:-}
       - MODEL_CHECKPOINT=${MODEL_CHECKPOINT:-checkpoints/nomad.pth}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -430,7 +434,7 @@ services:
         else
           ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_segway.yaml
         fi &&
-        nomad_policy_node --checkpoint $${MODEL_CHECKPOINT} --model_config /workspace/costnav_isaacsim/il_evaluation/configs/nomad_eval.yaml --robot_config $${ROBOT_CONFIG} --goal_type topomap --topomap_dir /tmp/costnav_topomap"
+        nomad_policy_node --checkpoint $${MODEL_CHECKPOINT} --model_config /workspace/costnav_isaacsim/il_evaluation/configs/nomad_eval.yaml --robot_config $${ROBOT_CONFIG} $${GOAL_TYPE:+--goal_type $${GOAL_TYPE}} --topomap_dir /tmp/costnav_topomap"
     network_mode: host
     ipc: host
     stdin_open: true
