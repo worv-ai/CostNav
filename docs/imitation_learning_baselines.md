@@ -361,12 +361,14 @@ CostNav uses **ROS2** as its communication layer. The ViNT container runs two no
 
 | Topic                                 | Type                  | Direction        | Description                     |
 | :------------------------------------ | :-------------------- | :--------------- | :------------------------------ |
-| `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image`   | Isaac Sim → ViNT | Camera images for policy        |
-| `/chassis/odom`                       | `nav_msgs/Odometry`   | Isaac Sim → ViNT | Robot odometry for MPC          |
-| `/goal_image`                         | `sensor_msgs/Image`   | Isaac Sim → ViNT | Goal image (ImageGoal mode)     |
-| `/cmd_vel`                            | `geometry_msgs/Twist` | ViNT → Isaac Sim | Velocity commands to robot      |
-| `/vint_enable`                        | `std_msgs/Bool`       | Isaac Sim → ViNT | Enable/disable policy execution |
-| `/vint_trajectory`                    | `nav_msgs/Path`       | Internal (ViNT)  | Policy → Trajectory Follower    |
+| `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image`   | Isaac Sim → Policy | Camera images for policy        |
+| `/chassis/odom`                       | `nav_msgs/Odometry`   | Isaac Sim → Policy | Robot odometry for MPC          |
+| `/goal_image`                         | `sensor_msgs/Image`   | Isaac Sim → Policy | Goal image (ImageGoal mode)     |
+| `/cmd_vel`                            | `geometry_msgs/Twist` | Policy → Isaac Sim | Velocity commands to robot      |
+| `/model_enable`                        | `std_msgs/Bool`       | Isaac Sim → Policy | Enable/disable policy execution |
+| `/model_trajectory`                    | `nav_msgs/Path`       | Internal (Policy)  | Policy → Trajectory Follower    |
+
+All IL baselines share the same `/model_*` topic names so the trajectory follower and RViz configs remain model-agnostic.
 
 ### ROS2 Node Interface (Abstract)
 
@@ -382,10 +384,10 @@ class BasePolicyNode(Node):
         # Subscribers
         self.create_subscription(Image, '/front_stereo_camera/left/image_raw', ...)
         self.create_subscription(Image, '/goal_image', ...)  # ImageGoal mode
-        self.create_subscription(Bool, '/<model>_enable', ...)
+        self.create_subscription(Bool, '/model_enable', ...)
 
         # Publishers
-        self.trajectory_pub = self.create_publisher(Path, '/<model>_trajectory', 10)
+        self.trajectory_pub = self.create_publisher(Path, '/model_trajectory', 10)
 
         # Inference timer
         self.create_timer(1.0 / inference_rate, self.inference_callback)
@@ -471,22 +473,25 @@ ViNT (Visual Navigation Transformer) is being implemented as the reference basel
 **Evaluation (Implemented ✅):**
 
 - [x] Port ViNT agent from `third_party/NavDP/baselines/vint/vint_agent.py`
-  - Location: `costnav_isaacsim/il_training/evaluation/agents/vint_agent.py`
+  - Location: `costnav_isaacsim/il_evaluation/src/il_evaluation/agents/vint_agent.py`
 - [x] Create ROS2 policy node that:
   - Subscribes to `/front_stereo_camera/left/image_raw` (sensor_msgs/Image)
   - Subscribes to `/goal_image` for ImageGoal mode
-  - Publishes `/vint_trajectory` (nav_msgs/Path)
-  - Location: `costnav_isaacsim/il_training/evaluation/nodes/vint_policy_node.py`
+  - Publishes `/model_trajectory` (nav_msgs/Path)
+  - Location: `costnav_isaacsim/il_evaluation/src/il_evaluation/nodes/vint_policy_node.py`
 - [x] Implement MPC trajectory follower node
-  - Subscribes to `/vint_trajectory` and `/chassis/odom`
+  - Subscribes to `/model_trajectory` and `/chassis/odom`
   - Publishes `/cmd_vel` directly
-  - Location: `costnav_isaacsim/il_training/evaluation/nodes/trajectory_follower_node.py`
+  - Location: `costnav_isaacsim/il_evaluation/src/il_evaluation/nodes/trajectory_follower_node.py`
 
 #### 4.3 CostNav ROS2 Integration ✅
 
 **Running ViNT in Isaac Sim:**
 
 ```bash
+# Build shared ROS2 + PyTorch image for IL baselines (first time only)
+make build-ros2-torch
+
 # Start all containers (Isaac Sim + ViNT)
 make run-vint
 ```
@@ -495,7 +500,7 @@ This launches:
 
 - Isaac Sim with Nova Carter robot and ROS2 bridge
 - ViNT policy node (`vint_policy_node`)
-- Trajectory follower node (`trajectory_follower_node`)
+- Shared trajectory follower service (`ros2-trajectory-follower`) running `trajectory_follower_node`
 
 See [evaluation/README.md](../costnav_isaacsim/il_evaluation/README.md) for detailed usage and configuration options.
 
@@ -503,10 +508,22 @@ See [evaluation/README.md](../costnav_isaacsim/il_evaluation/README.md) for deta
 
 ### Phase 5: Additional Baselines
 
-Planned baselines using the same two-node architecture (see [ROS2 Node Interface](#ros2-node-interface-abstract) above):
+Baselines integrated into the same two-node architecture (see [ROS2 Node Interface](#ros2-node-interface-abstract) above):
 
-- [ ] **NoMaD** - Diffusion-based navigation policy
-- [ ] **GNM** - General Navigation Model
+- [x] **NoMaD** - Diffusion-based navigation policy (ROS2 policy node + trajectory follower; `make run-nomad`)
+- [x] **GNM** - General Navigation Model (ROS2 policy node + trajectory follower; `make run-gnm`)
+- [ ] **NavDP** - HTTP-based baseline (planned)
+
+**Navigation mode override:** use `GOAL_TYPE` to switch between `image_goal` and `topomap` when running a baseline.
+This auto-syncs `GOAL_IMAGE` and `IL_TOPOMAP` unless you explicitly override them.
+
+```bash
+# Image-goal mode
+GOAL_TYPE=image_goal MODEL_CHECKPOINT=checkpoints/nomad.pth make run-nomad
+
+# Topomap mode
+GOAL_TYPE=topomap MODEL_CHECKPOINT=checkpoints/nomad.pth make run-nomad
+```
 
 ---
 
@@ -518,7 +535,7 @@ Planned baselines using the same two-node architecture (see [ROS2 Node Interface
 | **Goal Support**      | Image, NoGoal | Image, NoGoal | Image, NoGoal | Point, Image, Pixel |
 | **Trajectory Length** | 8 waypoints   | 8 waypoints   | 5 waypoints   | 24 waypoints        |
 | **Context Frames**    | 5             | 5             | 5             | 8                   |
-| **Implementation**    | **Phase 4**   | Phase 5       | Phase 5       | Phase 5             |
+| **Implementation**    | ✅ Implemented | ✅ Implemented | ✅ Implemented | Planned             |
 
 ### References
 

@@ -2,9 +2,9 @@
 # Copyright (c) 2026 CostNav Authors
 # Licensed under the MIT License
 
-"""ViNT ROS2 Policy Node for CostNav.
+"""GNM ROS2 Policy Node for CostNav.
 
-This node subscribes to camera images, runs ViNT inference,
+This node subscribes to camera images, runs GNM inference,
 and publishes trajectory to /model_trajectory for the trajectory follower node.
 
 Supports three navigation modes (selected via ``goal_type``):
@@ -21,7 +21,7 @@ The topomap is a directory of sequentially numbered PNGs (``0.png``, ``1.png``,
 
 1. Selects a local window of subgoal images around ``closest_node``
    (controlled by ``--topomap_radius``).
-2. Runs batched ViNT inference to predict distances from the current
+2. Runs batched GNM inference to predict distances from the current
    observation to each subgoal in the window.
 3. Localises to the closest node (``argmin`` of predicted distances).
 4. If the distance to the closest node is below ``--topomap_close_threshold``,
@@ -30,7 +30,7 @@ The topomap is a directory of sequentially numbered PNGs (``0.png``, ``1.png``,
 6. Publishes ``reached_goal=True`` on ``/model_reached_goal`` when
    ``closest_node == goal_node``.
 
-This mirrors the navigation loop in ViNT's ``navigate.py`` but runs inside
+This mirrors the navigation loop in GNM's ``navigate.py`` but runs inside
 the CostNav ROS 2 stack.
 
 For ImageGoal mode, the node receives goal images via:
@@ -43,13 +43,13 @@ Following the NavDP pattern, when a new goal image is received:
 
 Usage:
     # Default (Get goal type from model config)
-    python3 vint_policy_node.py \
+    python3 gnm_policy_node.py \
         --checkpoint /path/to/model.pth \
         --model_config /path/to/config.yaml \
         --robot_config /path/to/robot.yaml
 
-    # Topomap mode (--goal_type overrides goal_type from vint_eval.yaml)
-    python3 vint_policy_node.py \
+    # Topomap mode (--goal_type overrides goal_type from gnm_eval.yaml)
+    python3 gnm_policy_node.py \
         --checkpoint /path/to/model.pth \
         --model_config /path/to/config.yaml \
         --robot_config /path/to/robot.yaml \
@@ -58,12 +58,12 @@ Usage:
 
 from __future__ import annotations
 
-from il_evaluation.agents.vint_agent import ViNTAgent
+from il_evaluation.agents.gnm_agent import GNMAgent
 from il_evaluation.nodes.base_policy_node import BasePolicyNode, build_arg_parser, run_policy_node
 
 
-class ViNTPolicyNode(BasePolicyNode):
-    """ROS2 Node for ViNT policy inference."""
+class GNMPolicyNode(BasePolicyNode):
+    """ROS2 Node for GNM policy inference."""
 
     def __init__(
         self,
@@ -79,21 +79,21 @@ class ViNTPolicyNode(BasePolicyNode):
             robot_config=robot_config,
             goal_type=goal_type,
             topomap_dir=topomap_dir,
-            model_name="ViNT",
-            node_name="vint_policy_node",
-            agent_cls=ViNTAgent,
+            model_name="GNM",
+            node_name="gnm_policy_node",
+            agent_cls=GNMAgent,
         )
 
 
 def parse_args():
     """Parse command line arguments."""
-    return build_arg_parser("ViNT", "vint_eval.yaml").parse_args()
+    return build_arg_parser("GNM", "gnm_eval.yaml").parse_args()
 
 
 def main() -> None:
-    """Main entry point for the ViNT policy node."""
+    """Main entry point for the GNM policy node."""
     args = parse_args()
-    run_policy_node(ViNTPolicyNode, args, node_label="ViNT")
+    run_policy_node(GNMPolicyNode, args, node_label="GNM")
 
 
 if __name__ == "__main__":

@@ -9,8 +9,8 @@ Panels:
         - /TF1/Tree1
         - /Controller1/Local Costmap1
         - /Image1/Topic1
-        - /vint_goal_image1
-        - /vint_localization_image1
+        - /model_goal_image1
+        - /model_localization_image1
       Splitter Ratio: 0.5833333134651184
     Tree Height: 140
   - Class: rviz_common/Selection
@@ -668,35 +668,35 @@ Visualization Manager:
         Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /vint_trajectory_map
+        Value: /model_trajectory_map
       Value: true
     - Class: rviz_default_plugins/Image
       Enabled: true
       Max Value: 1
       Median window: 5
       Min Value: 0
-      Name: vint_goal_image
+      Name: model_goal_image
       Normalize Range: true
       Topic:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /vint_goal_image
+        Value: /model_goal_image
       Value: true
     - Class: rviz_default_plugins/Image
       Enabled: true
       Max Value: 1
       Median window: 5
       Min Value: 0
-      Name: vint_localization_image
+      Name: model_localization_image
       Normalize Range: true
       Topic:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /vint_localization_image
+        Value: /model_localization_image
       Value: true
   Enabled: true
   Global Options:
@@ -780,7 +780,7 @@ Window Geometry:
   Width: 1854
   X: 66
   Y: 32
-  vint_goal_image:
+  model_goal_image:
     collapsed: false
-  vint_localization_image:
+  model_localization_image:
     collapsed: false
