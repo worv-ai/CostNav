@@ -295,16 +295,23 @@ The sbatch script uses `uv run` — no manual venv activation needed.
 
 - ✅ ViNT model (trained on Nova Carter data) runs successfully in Isaac Sim
 - ✅ Two-node architecture implemented (policy node + trajectory follower)
-- ⚠️ Performance is limited without topological graph guidance
+- ✅ Topological graph navigation implemented (NavMesh-to-Topomap pipeline)
+
+**Completed Tasks:**
+
+- [x] Setup uv environment + Slurm setup
+- [x] **(Critical)** Implement topological graph navigation
+  - NavMesh-based `TopomapGenerator` generates ViNT-compatible topomaps from Isaac Sim shortest paths
+  - `ViNTPolicyNode` supports `topomap` goal mode with batched subgoal inference, localization, and goal tracking
+  - `VintAgent.step_topomap()` runs batched distance prediction against a sliding window of subgoal images
+  - Online topomap generation: NavMesh query → waypoint interpolation → virtual camera capture → sequential PNGs
+  - Configurable via `mission_config.yaml` (`topomap:` key) and `vint_eval.yaml` (radius, threshold)
+  - Enabled via `make run-vint` or `make run-isaac-sim TOPOMAP=True`
+  - See [TOPOMAP_PIPELINE.md](../costnav_isaacsim/costnav_isaacsim/TOPOMAP_PIPELINE.md) for full details
 
 **Remaining Tasks:**
 
-- [x] Setup uv environment + Slurm setup
 - [ ] Train and compare with Segway E1 data (2h, 4h, 6h training runs)
-- [ ] **(Critical)** Implement topological graph navigation
-  - Current ImageGoal-only approach has poor performance (robot needs to memorize entire map)
-  - Need to implement sequential subgoal images along the path to goal
-  - Reference: Original ViNT paper's topological graph approach
 
 ---
 
