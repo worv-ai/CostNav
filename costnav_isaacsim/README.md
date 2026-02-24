@@ -116,7 +116,7 @@ make build-isaac-sim
 make build-ros2
 
 # Build ViNT image (for IL baseline evaluation)
-make build-vint
+make build-vint  # Deprecated: use make build-ros2-torch
 ```
 
 ### 2. Run Nav2 Navigation (Recommended)
@@ -184,7 +184,7 @@ See [Download Pretrained Checkpoints](il_training/README.md#download-pretrained-
 
 ```bash
 # Build ViNT Docker image (first time only)
-make build-vint
+make build-vint  # Deprecated: use make build-ros2-torch
 
 # Run ViNT evaluation with Isaac Sim
 # Optionally specify model checkpoint path
@@ -204,6 +204,16 @@ You can trigger missions while ViNT is running:
 
 ```bash
 make start-mission
+```
+
+To switch navigation mode, set `GOAL_TYPE` (auto-syncs related flags):
+
+```bash
+# Force image-goal evaluation
+GOAL_TYPE=image_goal MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
+
+# Force topomap evaluation
+GOAL_TYPE=topomap MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
 ```
 
 To run automated evaluation with metrics collection:
@@ -893,7 +903,7 @@ CostNav includes an imitation learning (IL) baseline evaluation framework for co
 
 ```bash
 # Build the ViNT Docker image (first time only)
-make build-vint
+make build-vint  # Deprecated: use make build-ros2-torch
 
 # Run ViNT policy evaluation with Isaac Sim
 make run-vint
@@ -917,7 +927,7 @@ This starts:
 │  │ launch.py          │       │ ViNT Policy Node (~10Hz)       │   │
 │  │ - Physics sim      │       │ - Camera → ViNT inference      │   │
 │  │ - Nova Carter      │       │ - Goal image navigation        │   │
-│  │ - ROS2 Bridge      │       │ - Publishes /vint_trajectory   │   │
+│  │ - ROS2 Bridge      │       │ - Publishes /model_trajectory   │   │
 │  │                    │       └────────────┬───────────────────┘   │
 │  │ /front_*/image ────┼──────►             │                       │
 │  │                    │                    ▼                       │
@@ -935,17 +945,21 @@ This starts:
 
 | Topic              | Type                | Direction | Description                        |
 | ------------------ | ------------------- | --------- | ---------------------------------- |
-| `/vint_trajectory` | `nav_msgs/Path`     | Publish   | Predicted trajectory (8 waypoints) |
-| `/vint_enable`     | `std_msgs/Bool`     | Subscribe | Enable/disable policy execution    |
+| `/model_trajectory` | `nav_msgs/Path`     | Publish   | Predicted trajectory (8 waypoints) |
+| `/model_enable`     | `std_msgs/Bool`     | Subscribe | Enable/disable policy execution    |
 | `/goal_image`      | `sensor_msgs/Image` | Subscribe | Goal image for ImageGoal mode      |
 
 ### Makefile Targets (IL Baselines)
 
 | Target            | Description                                             |
 | ----------------- | ------------------------------------------------------- |
-| `build-vint`      | Build ViNT Docker image with ROS2 Jazzy + PyTorch       |
+| `build-vint`      | Deprecated: alias for `build-ros2-torch`                |
 | `run-vint`        | Run Isaac Sim + ViNT policy + trajectory follower       |
 | `run-eval-vint`   | Run automated ViNT evaluation with metrics collection   |
+| `run-gnm`         | Run Isaac Sim + GNM policy + trajectory follower        |
+| `run-eval-gnm`    | Run automated GNM evaluation with metrics collection    |
+| `run-nomad`       | Run Isaac Sim + NoMaD policy + trajectory follower      |
+| `run-eval-nomad`  | Run automated NoMaD evaluation with metrics collection  |
 | `run-canvas`      | Run Isaac Sim + RViz with Canvas bridge enabled         |
 | `run-eval-canvas` | Run automated Canvas evaluation with metrics collection |
 
