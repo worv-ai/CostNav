@@ -70,15 +70,20 @@ There are two main approaches for testing ViNT evaluation:
 This approach runs the complete stack (Isaac Sim + ViNT policy) in Docker containers.
 
 **Prerequisites:**
-Download the pretrained model weights from Google Drive or train your model and place it to `checkpoints/`
-See [Download Pretrained Checkpoints](../README.md#download-pretrained-checkpoints) for more information.
+Download the pretrained checkpoints from Hugging Face or train your own model:
+
+```bash
+make download-baseline-checkpoints-hf
+```
+
+See [Download Pretrained Checkpoints](../il_training/README.md#download-pretrained-checkpoints) for more information.
 
 **Note:** The `MODEL_CHECKPOINT` environment variable must point to your trained ViNT model weights (`.pth` file).
 
 1. **Start the ViNT stack** (in terminal 1):
 
    ```bash
-   MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
+   MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
    ```
 
    This starts both Isaac Sim and the ViNT policy node together.
@@ -187,7 +192,7 @@ The evaluation system runs consecutive missions and collects comprehensive metri
 
 ```bash
 # Terminal 1: Start the ViNT stack
-MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
+MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
 
 # Terminal 2: Run evaluation
 make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10

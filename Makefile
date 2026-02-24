@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-vint run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-vint run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint download-assets-omniverse download-assets-hf upload-assets-hf download-baseline-checkpoints-hf start-nucleus stop-nucleus
 
 # Load environment variables from .env file if it exists
 # Variables can still be overridden from command line
@@ -31,7 +31,7 @@ ALIGN_HEADING ?= False
 XBOX_ID := $(shell grep '^XBOX_ID=' .env 2>/dev/null | cut -d= -f2)
 
 # model checkpoint path
-MODEL_CHECKPOINT ?= checkpoints/vint.pth
+MODEL_CHECKPOINT ?= checkpoints/baseline-vint.pth
 
 ISAAC_SIM_IMAGE ?= costnav-isaacsim-$(ISAAC_SIM_VERSION):$(COSTNAV_VERSION)
 ISAAC_LAB_IMAGE ?= costnav-isaaclab-$(ISAAC_SIM_VERSION)-$(ISAAC_LAB_VERSION):$(COSTNAV_VERSION)
@@ -182,9 +182,9 @@ build-vint:
 	$(DOCKER_BUILD) -f Dockerfile.ros_torch -t $(COSTNAV_ROS2_TORCH_IMAGE) .
 
 # Run Isaac Sim with ViNT policy node and trajectory follower for IL baseline evaluation
-# Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/vint.pth)
+# Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/baseline-vint.pth)
 # Topomap generation is enabled by default for ViNT navigation
-# Example: MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
+# Example: MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
 run-vint:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile vint down
@@ -263,7 +263,7 @@ run-eval-vint:
 		echo "ERROR: 'make run-vint' is not running."; \
 		echo ""; \
 		echo "Please start vint first in a separate terminal:"; \
-		echo "  MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint"; \
+		echo "  MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint"; \
 		echo ""; \
 		echo "Then run this command again:"; \
 		echo "  make run-eval-vint TIMEOUT=$(TIMEOUT) NUM_MISSIONS=$(NUM_MISSIONS)"; \
@@ -301,6 +301,13 @@ upload-assets-hf:
 	@echo "Uploading assets to Hugging Face..."
 	$(DOCKER_COMPOSE) --profile dev run --rm dev \
 		bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/scripts/assets/upload_assets_hf.py"
+
+# Download pretrained baseline checkpoints from Hugging Face
+# Downloads ViNT, NoMaD, GNM checkpoints to ./checkpoints/
+download-baseline-checkpoints-hf:
+	@echo "Downloading baseline checkpoints from Hugging Face..."
+	$(DOCKER_COMPOSE) --profile dev run --rm dev \
+		bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/scripts/assets/download_baseline_checkpoints_hf.py"
 
 # =============================================================================
 # Nucleus Server Targets

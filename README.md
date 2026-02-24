@@ -155,14 +155,13 @@ CostNav/
 
 ## Running IL Baselines (ViNT)
 
-1. Download checkpoint or train a model
-   Link is from [visualnav-transformer](https://github.com/robodhruv/visualnav-transformer)
+1. Download pretrained checkpoints from Hugging Face
 
-```
-gdown --folder https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHetz263--4_2FFggg
+```bash
+make download-baseline-checkpoints-hf
 ```
 
-Place the downloaded model files (e.g., `vint.pth`, `gnm.pth`, `nomad.pth`) in the `checkpoints/` directory.
+This downloads pretrained model files (`baseline-vint.pth`, `baseline-gnm.pth`, `baseline-nomad.pth`) into the `checkpoints/` directory.
 
 2. Build a docker image
 
@@ -174,7 +173,7 @@ make build-vint
 
 ```bash
 # Terminal 1: Start the ViNT stack
-MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
+MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
 
 # Terminal 2: Run evaluation
 make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
