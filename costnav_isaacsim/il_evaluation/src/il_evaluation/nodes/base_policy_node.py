@@ -700,10 +700,7 @@ def build_arg_parser(model_name: str, model_config_name: str) -> argparse.Argume
         type=str,
         default=None,
         choices=BasePolicyNode.VALID_GOAL_TYPES,
-        help=(
-            f"Override navigation mode from {model_config_name} "
-            "(no_goal | image_goal | topomap)"
-        ),
+        help=(f"Override navigation mode from {model_config_name} (no_goal | image_goal | topomap)"),
     )
     parser.add_argument(
         "--topomap_dir",
