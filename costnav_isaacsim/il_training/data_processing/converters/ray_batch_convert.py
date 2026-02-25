@@ -181,9 +181,7 @@ def main():
     bags = args.bags if args.bags is not None else paths_config.get("bags")
 
     # Apply CSV filter if provided (overrides --bags / config bags)
-    csv_filter = args.csv_filter or (
-        Path(paths_config["csv_filter"]) if paths_config.get("csv_filter") else None
-    )
+    csv_filter = args.csv_filter or (Path(paths_config["csv_filter"]) if paths_config.get("csv_filter") else None)
     if csv_filter is not None:
         csv_filter = Path(csv_filter)
         if not csv_filter.exists():
