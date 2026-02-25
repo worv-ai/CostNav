@@ -212,7 +212,7 @@ build-ros2-torch:
 # robot's initial heading is misaligned with the trajectory. Override with ALIGN_HEADING=False if needed.
 # Example: MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
 run-vint: MODEL_CHECKPOINT ?= checkpoints/baseline-vint.pth
-run-vint: ALIGN_HEADING ?= True
+run-vint: ALIGN_HEADING = True
 run-vint:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile vint down
@@ -225,7 +225,7 @@ run-vint:
 # robot's initial heading is misaligned with the trajectory. Override with ALIGN_HEADING=False if needed.
 # Example: MODEL_CHECKPOINT=checkpoints/baseline-gnm.pth make run-gnm
 run-gnm: MODEL_CHECKPOINT ?= checkpoints/baseline-gnm.pth
-run-gnm: ALIGN_HEADING ?= True
+run-gnm: ALIGN_HEADING = True
 run-gnm:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile gnm down
@@ -238,7 +238,7 @@ run-gnm:
 # robot's initial heading is misaligned with the trajectory. Override with ALIGN_HEADING=False if needed.
 # Example: MODEL_CHECKPOINT=checkpoints/baseline-nomad.pth make run-nomad
 run-nomad: MODEL_CHECKPOINT ?= checkpoints/baseline-nomad.pth
-run-nomad: ALIGN_HEADING ?= True
+run-nomad: ALIGN_HEADING = True
 run-nomad:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile nomad down
