@@ -16,9 +16,9 @@ set -e
 
 # Mode validation
 MODE="${1:-}"
-if [ -z "$MODE" ] || { [ "$MODE" != "teleop" ] && [ "$MODE" != "nav2" ] && [ "$MODE" != "vint" ] && [ "$MODE" != "gnm" ] && [ "$MODE" != "nomad" ]; }; then
-    echo "ERROR: Mode must be 'teleop', 'nav2', 'vint', 'gnm', or 'nomad'"
-    echo "Usage: $0 <teleop|nav2|vint|gnm|nomad> [TIMEOUT] [NUM_MISSIONS]"
+if [ -z "$MODE" ] || { [ "$MODE" != "teleop" ] && [ "$MODE" != "nav2" ] && [ "$MODE" != "vint" ] && [ "$MODE" != "gnm" ] && [ "$MODE" != "nomad" ] && [ "$MODE" != "canvas" ]; }; then
+    echo "ERROR: Mode must be 'teleop', 'nav2', 'vint', 'gnm', 'nomad', or 'canvas'"
+    echo "Usage: $0 <teleop|nav2|vint|gnm|nomad|canvas> [TIMEOUT] [NUM_MISSIONS]"
     exit 1
 fi
 
@@ -35,6 +35,9 @@ elif [ "$MODE" = "gnm" ]; then
 elif [ "$MODE" = "nomad" ]; then
     CONTAINER_NAME="costnav-ros2-nomad"
     MODE_DISPLAY="NoMaD"
+elif [ "$MODE" = "canvas" ]; then
+    CONTAINER_NAME="costnav-ros2-rviz-nav2"
+    MODE_DISPLAY="Canvas"
 else
     CONTAINER_NAME="costnav-ros2-nav2"
     MODE_DISPLAY="Nav2"

@@ -14,7 +14,7 @@ x-ros2-service: &ros2-service
 services:
   # Isaac Sim environment
   isaac-sim:
-    profiles: ["isaac-sim", "nav2", "teleop", "vint", "gnm", "nomad"]
+    profiles: ["isaac-sim", "nav2", "teleop", "vint", "gnm", "nomad", "canvas"]
     image: costnav-isaacsim-${ISAAC_SIM_VERSION}:${COSTNAV_VERSION}
     container_name: costnav-isaac-sim
     deploy:
@@ -46,6 +46,7 @@ services:
       - TOPOMAP=${TOPOMAP:-False}
       - GOAL_IMAGE=${GOAL_IMAGE:-False}
       - ALIGN_HEADING=${ALIGN_HEADING:-False}
+      - CANVAS=${CANVAS:-False}
     volumes:
       - .:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -63,7 +64,7 @@ services:
     working_dir: /workspace
     command:
       - "-ic"
-      - "/workspace/costnav_isaacsim/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-20} --robot $${SIM_ROBOT:-segway_e1} --food-enabled $${FOOD:-True} --topomap-enabled $${TOPOMAP:-False} --goal-image-enabled $${GOAL_IMAGE:-False} --align-initial-heading-to-path $${ALIGN_HEADING:-False}"
+      - "/workspace/costnav_isaacsim/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-20} --robot $${SIM_ROBOT:-segway_e1} --food-enabled $${FOOD:-True} --topomap-enabled $${TOPOMAP:-False} --goal-image-enabled $${GOAL_IMAGE:-False} --align-initial-heading-to-path $${ALIGN_HEADING:-False} --canvas-enabled $${CANVAS:-False}"
     healthcheck:
       test:
         [
@@ -181,7 +182,7 @@ services:
   # ROS2 with RViz - standalone visualization service that runs alongside Isaac Sim
   ros2-rviz-nav2:
     <<: *ros2-service
-    profiles: ["isaac-sim", "nav2", "vint", "gnm", "nomad"]
+    profiles: ["isaac-sim", "nav2", "vint", "gnm", "nomad", "canvas"]
     container_name: costnav-ros2-rviz-nav2
     environment:
       - ROS_DISTRO=jazzy

@@ -133,6 +133,15 @@ def parse_args():
         help="Enable NavMesh-based topomap generation (True/False or 1/0)",
     )
 
+    # Canvas arguments (CANVAS instruction generation)
+    canvas_group = parser.add_argument_group("Canvas")
+    canvas_group.add_argument(
+        "--canvas-enabled",
+        type=str,
+        default=None,
+        help="Enable CANVAS instruction generation (True/False or 1/0)",
+    )
+
     # Mission Manager arguments
     manager_group = parser.add_argument_group("Mission Manager")
     manager_group.add_argument(
