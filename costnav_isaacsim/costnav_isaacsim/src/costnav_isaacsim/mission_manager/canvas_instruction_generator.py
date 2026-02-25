@@ -325,7 +325,7 @@ class CanvasInstructionGenerator:
         # Annotation: flatten (N, 2) → [y0, x0, y1, x1, ...]
         self._annotation_pub.publish(Int32MultiArray(data=pixel_coords.flatten().tolist()))
         logger.info(
-            f"[CANVAS] Published annotation ({pixel_coords.shape[0]} waypoints) " f"on {self._config.annotation_topic}"
+            f"[CANVAS] Published annotation ({pixel_coords.shape[0]} waypoints) on {self._config.annotation_topic}"
         )
 
         # Debug: save published data to disk and visualize trajectory
