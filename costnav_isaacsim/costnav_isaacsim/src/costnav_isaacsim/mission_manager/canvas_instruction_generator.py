@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, List, Tuple
 
 import numpy as np
 import yaml
+from std_msgs.msg import Bool, Int32MultiArray, String
 
 from .navmesh_sampler import NavMeshSampler, SampledPosition
 
@@ -162,8 +163,6 @@ class CanvasInstructionGenerator:
             config: CanvasInstructionConfig with topic names & map path.
             node: ROS2 Node to create publishers / subscribers on.
         """
-        from std_msgs.msg import Bool, Int32MultiArray, String
-
         self._sampler = sampler
         self._config = config
         self._node = node
@@ -259,8 +258,6 @@ class CanvasInstructionGenerator:
 
     def send_start(self) -> None:
         """Send start_pause=True to start the model."""
-        from std_msgs.msg import Bool
-
         msg = Bool()
         msg.data = True
         self._start_pause_pub.publish(msg)
@@ -268,8 +265,6 @@ class CanvasInstructionGenerator:
 
     def send_stop(self) -> None:
         """Send stop_model=True to stop the model."""
-        from std_msgs.msg import Bool
-
         msg = Bool()
         msg.data = True
         self._stop_model_pub.publish(msg)
@@ -316,8 +311,6 @@ class CanvasInstructionGenerator:
         pixel_coords: np.ndarray,
     ) -> None:
         """Publish the scenario string and the trajectory annotation."""
-        from std_msgs.msg import Int32MultiArray, String
-
         # Scenario
         self._scenario_pub.publish(String(data=scenario_json))
         logger.info(f"[CANVAS] Published scenario on {self._config.scenario_topic}")
