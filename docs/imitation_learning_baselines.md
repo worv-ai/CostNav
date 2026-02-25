@@ -217,24 +217,19 @@ PROJECT_ROOT=/path/to/CostNav
 
 #### Download Pretrained Checkpoints
 
-Download pretrained models from [visualnav-transformer checkpoints](https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHetz263--4_2FFggg?usp=sharing):
+Download pretrained models from Hugging Face:
 
 ```bash
-# Create checkpoints directory at repository root
-mkdir -p checkpoints
-cd checkpoints
-
-# Download using gdown
-uv run gdown --folder https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHetz263--4_2FFggg
+make download-baseline-checkpoints-hf
 ```
 
 Expected structure:
 
 ```
 checkpoints/
-├── vint.pth      # ViNT pretrained weights
-├── nomad.pth     # NoMaD pretrained weights
-└── gnm.pth       # GNM pretrained weights
+├── baseline-vint.pth      # ViNT pretrained weights
+├── baseline-nomad.pth     # NoMaD pretrained weights
+└── baseline-gnm.pth       # GNM pretrained weights
 ```
 
 #### Training ViNT

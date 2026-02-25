@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-ros2-torch build-vint run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint run-gnm run-nomad run-canvas start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint run-eval-gnm run-eval-nomad run-eval-canvas download-assets-omniverse download-assets-hf upload-assets-hf start-nucleus stop-nucleus
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-ros2-torch run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint run-gnm run-nomad run-canvas start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint run-eval-gnm run-eval-nomad run-eval-canvas download-assets-omniverse download-assets-hf upload-assets-hf download-baseline-checkpoints-hf start-nucleus stop-nucleus
 
 # Load environment variables from .env file if it exists
 # Variables can still be overridden from command line
@@ -205,14 +205,14 @@ run-teleop:
 build-ros2-torch:
 	$(DOCKER_BUILD) -f Dockerfile.ros_torch -t $(COSTNAV_ROS2_TORCH_IMAGE) .
 
-# Backward-compatible alias (deprecated): use build-ros2-torch
-build-vint: build-ros2-torch
-
 # Run Isaac Sim with ViNT policy node and trajectory follower for IL baseline evaluation
-# Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/vint.pth)
+# Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/baseline-vint.pth)
 # Topomap generation is enabled by default for ViNT navigation
-# Example: MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
-run-vint: MODEL_CHECKPOINT ?= checkpoints/vint.pth
+# ALIGN_HEADING defaults to True for IL baselines — IL models perform poorly when the
+# robot's initial heading is misaligned with the trajectory. Override with ALIGN_HEADING=False if needed.
+# Example: MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
+run-vint: MODEL_CHECKPOINT ?= checkpoints/baseline-vint.pth
+run-vint: ALIGN_HEADING = True
 run-vint:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile vint down
@@ -221,18 +221,24 @@ run-vint:
 # Run Isaac Sim with GNM policy node and trajectory follower for IL baseline evaluation
 # Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/gnm.pth)
 # Topomap generation is enabled by default for GNM navigation
-# Example: MODEL_CHECKPOINT=checkpoints/gnm.pth make run-gnm
-run-gnm: MODEL_CHECKPOINT ?= checkpoints/gnm.pth
+# ALIGN_HEADING defaults to True for IL baselines — IL models perform poorly when the
+# robot's initial heading is misaligned with the trajectory. Override with ALIGN_HEADING=False if needed.
+# Example: MODEL_CHECKPOINT=checkpoints/baseline-gnm.pth make run-gnm
+run-gnm: MODEL_CHECKPOINT ?= checkpoints/baseline-gnm.pth
+run-gnm: ALIGN_HEADING = True
 run-gnm:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile gnm down
 	TOPOMAP=$(IL_TOPOMAP) GOAL_IMAGE=$(GOAL_IMAGE) ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile gnm up
 
 # Run Isaac Sim with NoMaD policy node and trajectory follower for IL baseline evaluation
-# Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/nomad.pth)
+# Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/baseline-nomad.pth)
 # Topomap generation is enabled by default for NoMaD navigation
-# Example: MODEL_CHECKPOINT=checkpoints/nomad.pth make run-nomad
-run-nomad: MODEL_CHECKPOINT ?= checkpoints/nomad.pth
+# ALIGN_HEADING defaults to True for IL baselines — IL models perform poorly when the
+# robot's initial heading is misaligned with the trajectory. Override with ALIGN_HEADING=False if needed.
+# Example: MODEL_CHECKPOINT=checkpoints/baseline-nomad.pth make run-nomad
+run-nomad: MODEL_CHECKPOINT ?= checkpoints/baseline-nomad.pth
+run-nomad: ALIGN_HEADING = True
 run-nomad:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile nomad down
@@ -319,7 +325,7 @@ run-eval-vint:
 		echo "ERROR: 'make run-vint' is not running."; \
 		echo ""; \
 		echo "Please start vint first in a separate terminal:"; \
-		echo "  MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint"; \
+		echo "  MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint"; \
 		echo ""; \
 		echo "Then run this command again:"; \
 		echo "  make run-eval-vint TIMEOUT=$(TIMEOUT) NUM_MISSIONS=$(NUM_MISSIONS)"; \
@@ -339,7 +345,7 @@ run-eval-gnm:
 		echo "ERROR: 'make run-gnm' is not running."; \
 		echo ""; \
 		echo "Please start gnm first in a separate terminal:"; \
-		echo "  MODEL_CHECKPOINT=checkpoints/gnm.pth make run-gnm"; \
+		echo "  MODEL_CHECKPOINT=checkpoints/baseline-gnm.pth make run-gnm"; \
 		echo ""; \
 		echo "Then run this command again:"; \
 		echo "  make run-eval-gnm TIMEOUT=$(TIMEOUT) NUM_MISSIONS=$(NUM_MISSIONS)"; \
@@ -359,7 +365,7 @@ run-eval-nomad:
 		echo "ERROR: 'make run-nomad' is not running."; \
 		echo ""; \
 		echo "Please start nomad first in a separate terminal:"; \
-		echo "  MODEL_CHECKPOINT=checkpoints/nomad.pth make run-nomad"; \
+		echo "  MODEL_CHECKPOINT=checkpoints/baseline-nomad.pth make run-nomad"; \
 		echo ""; \
 		echo "Then run this command again:"; \
 		echo "  make run-eval-nomad TIMEOUT=$(TIMEOUT) NUM_MISSIONS=$(NUM_MISSIONS)"; \
@@ -417,6 +423,13 @@ upload-assets-hf:
 	@echo "Uploading assets to Hugging Face..."
 	$(DOCKER_COMPOSE) --profile dev run --rm dev \
 		bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/scripts/assets/upload_assets_hf.py"
+
+# Download pretrained baseline checkpoints from Hugging Face
+# Downloads ViNT, NoMaD, GNM checkpoints to ./checkpoints/
+download-baseline-checkpoints-hf:
+	@echo "Downloading baseline checkpoints from Hugging Face..."
+	$(DOCKER_COMPOSE) --profile dev run --rm dev \
+		bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/scripts/assets/download_baseline_checkpoints_hf.py"
 
 # =============================================================================
 # Nucleus Server Targets

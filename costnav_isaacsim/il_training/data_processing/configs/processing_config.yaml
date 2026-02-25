@@ -6,6 +6,7 @@ paths:
   input_dir: # Enter your input directory here (ex. "/mnt/raid11/workspace/data")
   output_dir: # Enter your input directory here (ex. "/mnt/raid11/workspace/mediaref")
   bags: [] # Optional: specific bags to process (leave empty for all bags)
+  csv_filter: # Optional: path to CSV file to filter bags by error=='O' (overrides bags)
   num_workers: 32  # Number of parallel workers
 
 # Video encoding settings

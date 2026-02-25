@@ -115,8 +115,8 @@ make build-isaac-sim
 # Build ROS2 runtime image
 make build-ros2
 
-# Build ViNT image (for IL baseline evaluation)
-make build-vint  # Deprecated: use make build-ros2-torch
+# Build ROS2 + PyTorch image (for IL baseline evaluation)
+make build-ros2-torch
 ```
 
 ### 2. Run Nav2 Navigation (Recommended)
@@ -179,16 +179,21 @@ make run-ros2
 
 Run the imitation learning baseline using ViNT (Visual Navigation Transformer):
 
-Download the pretrained model weights from Google Drive or train your model and place it to `checkpoints/`
+Download the pretrained checkpoints from Hugging Face:
+
+```bash
+make download-baseline-checkpoints-hf
+```
+
 See [Download Pretrained Checkpoints](il_training/README.md#download-pretrained-checkpoints) for more information.
 
 ```bash
-# Build ViNT Docker image (first time only)
-make build-vint  # Deprecated: use make build-ros2-torch
+# Build ROS2 + PyTorch Docker image (first time only)
+make build-ros2-torch
 
 # Run ViNT evaluation with Isaac Sim
 # Optionally specify model checkpoint path
-MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
+MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
 
 # Or run with default model
 make run-vint
@@ -902,8 +907,8 @@ CostNav includes an imitation learning (IL) baseline evaluation framework for co
 ### Quick Start: Run ViNT Evaluation
 
 ```bash
-# Build the ViNT Docker image (first time only)
-make build-vint  # Deprecated: use make build-ros2-torch
+# Build the ROS2 + PyTorch Docker image (first time only)
+make build-ros2-torch
 
 # Run ViNT policy evaluation with Isaac Sim
 make run-vint
@@ -943,25 +948,25 @@ This starts:
 
 ### ROS2 Topics (ViNT)
 
-| Topic              | Type                | Direction | Description                        |
-| ------------------ | ------------------- | --------- | ---------------------------------- |
+| Topic               | Type                | Direction | Description                        |
+| ------------------- | ------------------- | --------- | ---------------------------------- |
 | `/model_trajectory` | `nav_msgs/Path`     | Publish   | Predicted trajectory (8 waypoints) |
 | `/model_enable`     | `std_msgs/Bool`     | Subscribe | Enable/disable policy execution    |
-| `/goal_image`      | `sensor_msgs/Image` | Subscribe | Goal image for ImageGoal mode      |
+| `/goal_image`       | `sensor_msgs/Image` | Subscribe | Goal image for ImageGoal mode      |
 
 ### Makefile Targets (IL Baselines)
 
-| Target            | Description                                             |
-| ----------------- | ------------------------------------------------------- |
-| `build-vint`      | Deprecated: alias for `build-ros2-torch`                |
-| `run-vint`        | Run Isaac Sim + ViNT policy + trajectory follower       |
-| `run-eval-vint`   | Run automated ViNT evaluation with metrics collection   |
-| `run-gnm`         | Run Isaac Sim + GNM policy + trajectory follower        |
-| `run-eval-gnm`    | Run automated GNM evaluation with metrics collection    |
-| `run-nomad`       | Run Isaac Sim + NoMaD policy + trajectory follower      |
-| `run-eval-nomad`  | Run automated NoMaD evaluation with metrics collection  |
-| `run-canvas`      | Run Isaac Sim + RViz with Canvas bridge enabled         |
-| `run-eval-canvas` | Run automated Canvas evaluation with metrics collection |
+| Target             | Description                                              |
+| ------------------ | -------------------------------------------------------- |
+| `build-ros2-torch` | Build ROS2 Jazzy + PyTorch Docker image for IL baselines |
+| `run-vint`         | Run Isaac Sim + ViNT policy + trajectory follower        |
+| `run-eval-vint`    | Run automated ViNT evaluation with metrics collection    |
+| `run-gnm`          | Run Isaac Sim + GNM policy + trajectory follower         |
+| `run-eval-gnm`     | Run automated GNM evaluation with metrics collection     |
+| `run-nomad`        | Run Isaac Sim + NoMaD policy + trajectory follower       |
+| `run-eval-nomad`   | Run automated NoMaD evaluation with metrics collection   |
+| `run-canvas`       | Run Isaac Sim + RViz with Canvas bridge enabled          |
+| `run-eval-canvas`  | Run automated Canvas evaluation with metrics collection  |
 
 ### Configuration Files
 

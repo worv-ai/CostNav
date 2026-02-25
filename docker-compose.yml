@@ -126,6 +126,10 @@ services:
     # Development environment (minimal dependencies)
   dev:
     profiles: ["dev"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
     image: costnav-dev:${COSTNAV_VERSION}
     container_name: costnav-dev
     env_file:

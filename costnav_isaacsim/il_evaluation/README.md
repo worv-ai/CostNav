@@ -70,8 +70,13 @@ There are two main approaches for testing IL evaluation:
 This approach runs the complete stack (Isaac Sim + IL policy) in Docker containers.
 
 **Prerequisites:**
-Download the pretrained model weights from Google Drive or train your model and place it to `checkpoints/`
-See [Download Pretrained Checkpoints](../README.md#download-pretrained-checkpoints) for more information.
+Download the pretrained checkpoints from Hugging Face or train your own model:
+
+```bash
+make download-baseline-checkpoints-hf
+```
+
+See [Download Pretrained Checkpoints](../il_training/README.md#download-pretrained-checkpoints) for more information.
 
 **Note:** The `MODEL_CHECKPOINT` environment variable must point to the selected baseline's model weights (`.pth` file).
 
@@ -85,24 +90,37 @@ See [Download Pretrained Checkpoints](../README.md#download-pretrained-checkpoin
 
    ```bash
    # ViNT
-   MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
+   MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
 
    # GNM
-   MODEL_CHECKPOINT=checkpoints/gnm.pth make run-gnm
+   MODEL_CHECKPOINT=checkpoints/baseline-gnm.pth make run-gnm
 
    # NoMaD
-   MODEL_CHECKPOINT=checkpoints/nomad.pth make run-nomad
+   MODEL_CHECKPOINT=checkpoints/baseline-nomad.pth make run-nomad
    ```
 
    This starts Isaac Sim, the selected policy node, and the shared trajectory follower (`ros2-trajectory-follower`).
+
+   > **Heading alignment (`ALIGN_HEADING=True`)** is enabled by default for all IL baselines
+   > (ViNT, GNM, NoMaD). This aligns the robot's initial heading with the first topomap
+   > waypoint direction before navigation begins. IL models perform poorly when the initial
+   > heading is misaligned with the trajectory, so this is a **requirement** for reliable
+   > IL evaluation — not just an optional parameter. Unlike Canvas (which handles arbitrary
+   > initial headings), IL baselines require proper heading initialization for good
+   > performance. You can override this with `ALIGN_HEADING=False` for testing:
+   >
+   > ```bash
+   > ALIGN_HEADING=False MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
+   > ```
+
    To switch navigation mode, set `GOAL_TYPE` (auto-syncs related flags):
 
    ```bash
    # Force image-goal evaluation
-   GOAL_TYPE=image_goal MODEL_CHECKPOINT=checkpoints/nomad.pth make run-nomad
+   GOAL_TYPE=image_goal MODEL_CHECKPOINT=checkpoints/baseline-nomad.pth make run-nomad
 
    # Force topomap evaluation
-   GOAL_TYPE=topomap MODEL_CHECKPOINT=checkpoints/nomad.pth make run-nomad
+   GOAL_TYPE=topomap MODEL_CHECKPOINT=checkpoints/baseline-nomad.pth make run-nomad
    ```
 
    `GOAL_TYPE` automatically sets `GOAL_IMAGE` and `IL_TOPOMAP` unless you explicitly override them
@@ -164,16 +182,16 @@ All IL baselines share the same `/model_*` topics to keep the trajectory followe
 | --------- | ------------------------------------- | ------------------- | -------------------------------------------------- |
 | Subscribe | `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image` | Camera image input (configurable via robot config) |
 | Subscribe | `/goal_image`                         | `sensor_msgs/Image` | Goal image (ImageGoal mode, transient local)       |
-| Subscribe | `/model_enable`                        | `std_msgs/Bool`     | Enable/disable policy execution                    |
-| Publish   | `/model_trajectory`                    | `nav_msgs/Path`     | Predicted trajectory (len_traj_pred waypoints)     |
-| Publish   | `/model_reached_goal`                  | `std_msgs/Bool`     | True when topomap goal node is reached             |
-| Service   | `/model_reset_agent`                   | `std_srvs/Trigger`  | Reset agent memory for new mission                 |
+| Subscribe | `/model_enable`                       | `std_msgs/Bool`     | Enable/disable policy execution                    |
+| Publish   | `/model_trajectory`                   | `nav_msgs/Path`     | Predicted trajectory (len_traj_pred waypoints)     |
+| Publish   | `/model_reached_goal`                 | `std_msgs/Bool`     | True when topomap goal node is reached             |
+| Service   | `/model_reset_agent`                  | `std_srvs/Trigger`  | Reset agent memory for new mission                 |
 
 ### Trajectory Follower Node
 
 | Direction | Topic                         | Type                  | Description                                    |
 | --------- | ----------------------------- | --------------------- | ---------------------------------------------- |
-| Subscribe | `/model_trajectory`            | `nav_msgs/Path`       | Trajectory from policy node                    |
+| Subscribe | `/model_trajectory`           | `nav_msgs/Path`       | Trajectory from policy node                    |
 | Subscribe | `/chassis/odom`               | `nav_msgs/Odometry`   | Robot odometry (configurable via robot config) |
 | Subscribe | `/trajectory_follower_enable` | `std_msgs/Bool`       | Enable/disable trajectory following            |
 | Publish   | `/cmd_vel`                    | `geometry_msgs/Twist` | Velocity commands to robot                     |
@@ -220,9 +238,9 @@ The evaluation system runs consecutive missions and collects comprehensive metri
 
 ```bash
 # Terminal 1: Start a baseline stack
-MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
-MODEL_CHECKPOINT=checkpoints/gnm.pth make run-gnm
-MODEL_CHECKPOINT=checkpoints/nomad.pth make run-nomad
+MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
+MODEL_CHECKPOINT=checkpoints/baseline-gnm.pth make run-gnm
+MODEL_CHECKPOINT=checkpoints/baseline-nomad.pth make run-nomad
 
 # Terminal 2: Run evaluation
 make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
@@ -234,6 +252,7 @@ make run-eval-nomad TIMEOUT=169 NUM_MISSIONS=10
 
 - `TIMEOUT`: Maximum time per mission in seconds (default: 169s)
 - `NUM_MISSIONS`: Number of consecutive missions to run (default: 3)
+- `ALIGN_HEADING`: Align robot heading with first topomap waypoint before navigation (default: `True` for IL baselines). **Required** for reliable IL evaluation — see [Initial Heading Alignment](#initial-heading-alignment) below.
 
 **Output:**
 
@@ -282,6 +301,32 @@ The evaluation system tracks the following metrics per mission:
 - Food pieces (initial → final)
 - Food loss fraction
 - Food spoiled status
+
+### Initial Heading Alignment
+
+IL baselines (ViNT, GNM, NoMaD) default to `ALIGN_HEADING=True` in the Makefile targets (`run-vint`, `run-gnm`, `run-nomad`). This flag tells Isaac Sim to rotate the robot so its initial heading points toward the first topomap waypoint before navigation begins.
+
+**Why this is required for IL evaluation:**
+
+IL models are trained on demonstration trajectories where the robot is always moving forward along the path. When the robot spawns with an arbitrary heading that is misaligned with the first waypoint direction, the model receives observations it was never trained on and produces poor or erratic actions. This is a fundamental limitation of the imitation learning approach — the models have no mechanism to recover from large heading errors at the start of a mission.
+
+In contrast, classical planners like Nav2 and learned methods like Canvas handle arbitrary initial headings natively, so they do not need this flag (the global default is `ALIGN_HEADING=False`).
+
+**Summary:**
+
+| Method | `ALIGN_HEADING` default | Reason                                       |
+| ------ | ----------------------- | -------------------------------------------- |
+| Nav2   | `False`                 | Classical planner handles arbitrary headings |
+| Canvas | `False`                 | Learned policy handles arbitrary headings    |
+| ViNT   | **`True`**              | IL model requires aligned initial heading    |
+| GNM    | **`True`**              | IL model requires aligned initial heading    |
+| NoMaD  | **`True`**              | IL model requires aligned initial heading    |
+
+To disable heading alignment for testing purposes:
+
+```bash
+ALIGN_HEADING=False MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
+```
 
 ## Package Structure
 
@@ -332,11 +377,11 @@ Camera ──► Policy Node (ViNT/GNM/NoMaD, ~4 Hz) ──► /model_trajectory
 
 The trajectory follower node has three callbacks:
 
-| Callback              | Trigger                | What it does                                                                       |
-| --------------------- | ---------------------- | ---------------------------------------------------------------------------------- |
+| Callback              | Trigger                 | What it does                                                                       |
+| --------------------- | ----------------------- | ---------------------------------------------------------------------------------- |
 | `trajectory_callback` | New `/model_trajectory` | Converts Path → numpy, transforms to world frame if needed, creates or updates MPC |
-| `odom_callback`       | New `/odom`            | Stores latest robot pose (used by `control_callback`)                              |
-| `control_callback`    | Timer at 20 Hz         | Reads robot state, calls `mpc.solve(x0)`, publishes `cmd_vel`                      |
+| `odom_callback`       | New `/odom`             | Stores latest robot pose (used by `control_callback`)                              |
+| `control_callback`    | Timer at 20 Hz          | Reads robot state, calls `mpc.solve(x0)`, publishes `cmd_vel`                      |
 
 The control timer fires independently of trajectory arrival. If no valid trajectory exists or it has timed out (default 0.5 s), the callback publishes zero velocity (stop).
 
@@ -513,7 +558,7 @@ trajectory_follower:
 | **Model checkpoint not found** | Invalid path or missing file           | Verify `checkpoint` parameter points to valid `.pth` file       |
 | **CUDA out of memory**         | GPU memory exhausted                   | Reduce `context_size` or use smaller batch during inference     |
 | **No trajectory published**    | Camera topic not connected             | Check `/front_stereo_camera/left/image_raw` topic is publishing |
-| **Robot not moving**           | Trajectory follower not receiving data | Verify `/model_trajectory` and `/chassis/odom` topics            |
+| **Robot not moving**           | Trajectory follower not receiving data | Verify `/model_trajectory` and `/chassis/odom` topics           |
 | **MPC solver fails**           | Invalid trajectory or constraints      | Check trajectory waypoints are valid; try increasing `dt`       |
 | **Path not visible in RViz**   | Transform or QoS mismatch              | Set Fixed Frame to `base_link`; increase Transform Tolerance    |
 | **Trajectory jumps**           | Memory queue not reset on new mission  | Call `/model_reset_agent` service when starting new mission     |
