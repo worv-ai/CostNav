@@ -208,8 +208,11 @@ build-ros2-torch:
 # Run Isaac Sim with ViNT policy node and trajectory follower for IL baseline evaluation
 # Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/baseline-vint.pth)
 # Topomap generation is enabled by default for ViNT navigation
+# ALIGN_HEADING defaults to True for IL baselines — IL models perform poorly when the
+# robot's initial heading is misaligned with the trajectory. Override with ALIGN_HEADING=False if needed.
 # Example: MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
 run-vint: MODEL_CHECKPOINT ?= checkpoints/baseline-vint.pth
+run-vint: ALIGN_HEADING ?= True
 run-vint:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile vint down
@@ -218,8 +221,11 @@ run-vint:
 # Run Isaac Sim with GNM policy node and trajectory follower for IL baseline evaluation
 # Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/gnm.pth)
 # Topomap generation is enabled by default for GNM navigation
+# ALIGN_HEADING defaults to True for IL baselines — IL models perform poorly when the
+# robot's initial heading is misaligned with the trajectory. Override with ALIGN_HEADING=False if needed.
 # Example: MODEL_CHECKPOINT=checkpoints/baseline-gnm.pth make run-gnm
 run-gnm: MODEL_CHECKPOINT ?= checkpoints/baseline-gnm.pth
+run-gnm: ALIGN_HEADING ?= True
 run-gnm:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile gnm down
@@ -228,8 +234,11 @@ run-gnm:
 # Run Isaac Sim with NoMaD policy node and trajectory follower for IL baseline evaluation
 # Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/baseline-nomad.pth)
 # Topomap generation is enabled by default for NoMaD navigation
+# ALIGN_HEADING defaults to True for IL baselines — IL models perform poorly when the
+# robot's initial heading is misaligned with the trajectory. Override with ALIGN_HEADING=False if needed.
 # Example: MODEL_CHECKPOINT=checkpoints/baseline-nomad.pth make run-nomad
 run-nomad: MODEL_CHECKPOINT ?= checkpoints/baseline-nomad.pth
+run-nomad: ALIGN_HEADING ?= True
 run-nomad:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile nomad down

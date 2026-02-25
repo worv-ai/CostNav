@@ -100,6 +100,19 @@ See [Download Pretrained Checkpoints](../il_training/README.md#download-pretrain
    ```
 
    This starts Isaac Sim, the selected policy node, and the shared trajectory follower (`ros2-trajectory-follower`).
+
+   > **Heading alignment (`ALIGN_HEADING=True`)** is enabled by default for all IL baselines
+   > (ViNT, GNM, NoMaD). This aligns the robot's initial heading with the first topomap
+   > waypoint direction before navigation begins. IL models perform poorly when the initial
+   > heading is misaligned with the trajectory, so this is a **requirement** for reliable
+   > IL evaluation — not just an optional parameter. Unlike Canvas (which handles arbitrary
+   > initial headings), IL baselines require proper heading initialization for good
+   > performance. You can override this with `ALIGN_HEADING=False` for testing:
+   >
+   > ```bash
+   > ALIGN_HEADING=False MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
+   > ```
+
    To switch navigation mode, set `GOAL_TYPE` (auto-syncs related flags):
 
    ```bash
@@ -239,6 +252,7 @@ make run-eval-nomad TIMEOUT=169 NUM_MISSIONS=10
 
 - `TIMEOUT`: Maximum time per mission in seconds (default: 169s)
 - `NUM_MISSIONS`: Number of consecutive missions to run (default: 3)
+- `ALIGN_HEADING`: Align robot heading with first topomap waypoint before navigation (default: `True` for IL baselines). **Required** for reliable IL evaluation — see [Initial Heading Alignment](#initial-heading-alignment) below.
 
 **Output:**
 
@@ -287,6 +301,32 @@ The evaluation system tracks the following metrics per mission:
 - Food pieces (initial → final)
 - Food loss fraction
 - Food spoiled status
+
+### Initial Heading Alignment
+
+IL baselines (ViNT, GNM, NoMaD) default to `ALIGN_HEADING=True` in the Makefile targets (`run-vint`, `run-gnm`, `run-nomad`). This flag tells Isaac Sim to rotate the robot so its initial heading points toward the first topomap waypoint before navigation begins.
+
+**Why this is required for IL evaluation:**
+
+IL models are trained on demonstration trajectories where the robot is always moving forward along the path. When the robot spawns with an arbitrary heading that is misaligned with the first waypoint direction, the model receives observations it was never trained on and produces poor or erratic actions. This is a fundamental limitation of the imitation learning approach — the models have no mechanism to recover from large heading errors at the start of a mission.
+
+In contrast, classical planners like Nav2 and learned methods like Canvas handle arbitrary initial headings natively, so they do not need this flag (the global default is `ALIGN_HEADING=False`).
+
+**Summary:**
+
+| Method | `ALIGN_HEADING` default | Reason                                       |
+| ------ | ----------------------- | -------------------------------------------- |
+| Nav2   | `False`                 | Classical planner handles arbitrary headings |
+| Canvas | `False`                 | Learned policy handles arbitrary headings    |
+| ViNT   | **`True`**              | IL model requires aligned initial heading    |
+| GNM    | **`True`**              | IL model requires aligned initial heading    |
+| NoMaD  | **`True`**              | IL model requires aligned initial heading    |
+
+To disable heading alignment for testing purposes:
+
+```bash
+ALIGN_HEADING=False MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
+```
 
 ## Package Structure
 
