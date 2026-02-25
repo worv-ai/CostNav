@@ -45,6 +45,7 @@ except ImportError:
     pass
 
 if ROS2_AVAILABLE:
+    from .canvas_instruction_generator import CanvasInstructionGenerator
     from .marker_publisher import MarkerPublisher
     from .mission_manager import MissionManager
 
@@ -52,6 +53,7 @@ if ROS2_AVAILABLE:
         "NavMeshSampler",
         "SampledPosition",
         "TopomapGenerator",
+        "CanvasInstructionGenerator",
         "MarkerPublisher",
         "MissionManager",
         "ROS2_AVAILABLE",

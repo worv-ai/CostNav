@@ -166,7 +166,7 @@ This downloads pretrained model files (`baseline-vint.pth`, `baseline-gnm.pth`, 
 2. Build a docker image
 
 ```bash
-make build-vint
+make build-ros2-torch
 ```
 
 3. Run the evaluation

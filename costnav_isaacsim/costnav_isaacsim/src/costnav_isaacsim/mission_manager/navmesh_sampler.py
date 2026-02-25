@@ -603,6 +603,50 @@ class NavMeshSampler:
         )
         return None, None
 
+    def get_shortest_path(
+        self,
+        start: SampledPosition,
+        goal: SampledPosition,
+    ) -> "Optional[list[SampledPosition]]":
+        """Return all waypoints on the NavMesh shortest path from start to goal.
+
+        This method queries the NavMesh for the shortest path between two
+        positions and returns all intermediate waypoints (including start
+        and goal projections).  Useful for converting the full navigation
+        route to pixel coordinates for sketch-based navigation.
+
+        Args:
+            start: Start position on the NavMesh.
+            goal: Goal position on the NavMesh.
+
+        Returns:
+            List of SampledPosition waypoints along the shortest path,
+            or None if no valid path exists.
+        """
+        try:
+            navmesh = self._get_navmesh()
+
+            start_point = carb.Float3(start.x, start.y, start.z)
+            end_point = carb.Float3(goal.x, goal.y, goal.z)
+
+            path = navmesh.query_shortest_path(
+                start_pos=start_point,
+                end_pos=end_point,
+                agent_radius=self.agent_radius,
+            )
+
+            if path is None:
+                return None
+
+            points = path.get_points()
+            if points is None or len(points) < 2:
+                return None
+
+            return [SampledPosition(x=float(pt.x), y=float(pt.y), z=float(pt.z)) for pt in points]
+        except Exception as e:
+            logger.error(f"Failed to get shortest path: {e}")
+            return None
+
     def get_closest_navmesh_point(
         self,
         x: float,

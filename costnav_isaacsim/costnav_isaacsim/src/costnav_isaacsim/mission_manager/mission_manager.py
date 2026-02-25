@@ -42,7 +42,8 @@ class MissionState(Enum):
     PUBLISHING_INITIAL_POSE = "publishing_initial_pose"
     CLEARING_COSTMAPS = "clearing_costmaps"
     PUBLISHING_GOAL = "publishing_goal"
-    LOADING_TOPOMAP = "loading_topomap"  # Waiting for ViNT to reload topomap
+    LOADING_TOPOMAP = "loading_topomap"  # Waiting for policy node to reload topomap
+    LOADING_CANVAS = "loading_canvas"  # Waiting for CANVAS to become ready
     WAITING_FOR_COMPLETION = "waiting_for_completion"
     COMPLETED = "completed"
 
@@ -123,13 +124,13 @@ class MissionManager:
         self._odom_sub = None
 
         # IL baseline node control publishers
-        self._vint_enable_pub = None
+        self._model_enable_pub = None
         self._trajectory_follower_enable_pub = None
 
-        # ViNT topomap reload service client (initialized in _initialize)
-        self._vint_load_topomap_srv = None
-        self._vint_load_topomap_future = None  # Pending async future for topomap reload
-        self._vint_load_topomap_start_time = None  # Wall time when async call was fired
+        # Policy topomap reload service client (initialized in _initialize)
+        self._model_load_topomap_srv = None
+        self._model_load_topomap_future = None  # Pending async future for topomap reload
+        self._model_load_topomap_start_time = None  # Wall time when async call was fired
 
         # Nav2 costmap clear service clients (initialized in _initialize)
         self._clear_costmap_global_srv = None
@@ -176,14 +177,18 @@ class MissionManager:
         )
         self._eval = self._evaluation.state
 
-        # Goal image capture for ViNT ImageGoal mode
+        # Goal image capture for policy ImageGoal mode
         self._goal_camera_prim = None  # USD camera prim for goal image capture
         self._goal_render_product = None  # Omni replicator render product
         self._goal_rgb_annotator = None  # RGB annotator for goal image capture
         self._goal_image_pub = None  # ROS2 publisher for goal images
 
-        # Topomap generator (NavMesh-based topological map for ViNT)
+        # Topomap generator (NavMesh-based topological map for IL policy)
         self._topomap_generator = None
+
+        # Canvas instruction generator (CANVAS integration)
+        self._canvas_generator = None
+        self._canvas_start_time = None  # Timestamp when LOADING_CANVAS state entered
 
     def _get_current_time_seconds(self) -> float:
         """Get current time in seconds from ROS clock.
@@ -226,6 +231,8 @@ class MissionManager:
             self._step_publishing_goal()
         elif self._state == MissionState.LOADING_TOPOMAP:
             self._step_loading_topomap()
+        elif self._state == MissionState.LOADING_CANVAS:
+            self._step_loading_canvas()
         elif self._state == MissionState.WAITING_FOR_COMPLETION:
             self._step_waiting_for_completion()
         elif self._state == MissionState.COMPLETED:
@@ -324,10 +331,10 @@ class MissionManager:
             )
             self._goal_pose_pub = self._node.create_publisher(PoseStamped, self.config.nav2.goal_pose_topic, pose_qos)
 
-            # IL baseline node control publishers (to disable ViNT and trajectory follower when mission starts)
+            # IL baseline node control publishers (to disable policy node and trajectory follower when mission starts)
             from std_msgs.msg import Bool
 
-            self._vint_enable_pub = self._node.create_publisher(Bool, "/vint_enable", 10)
+            self._model_enable_pub = self._node.create_publisher(Bool, "/model_enable", 10)
             self._trajectory_follower_enable_pub = self._node.create_publisher(Bool, "/trajectory_follower_enable", 10)
 
             # Subscribe to odometry for robot position tracking
@@ -343,8 +350,12 @@ class MissionManager:
             # Setup topomap generator if enabled
             if self.config.topomap.enabled:
                 self._setup_topomap_generator()
-                # Service client to tell the ViNT node to (re)load the topomap
-                self._vint_load_topomap_srv = self._node.create_client(Trigger, "/vint_load_topomap")
+                # Service client to tell the policy node to (re)load the topomap
+                self._model_load_topomap_srv = self._node.create_client(Trigger, "/model_load_topomap")
+
+            # Setup canvas instruction generator if enabled (CANVAS integration)
+            if self.config.canvas.enabled:
+                self._setup_canvas_generator()
 
             # Setup food tracking if enabled
             self._evaluation.setup_food_tracking()
@@ -378,6 +389,7 @@ class MissionManager:
             MissionState.CLEARING_COSTMAPS,
             MissionState.PUBLISHING_GOAL,
             MissionState.LOADING_TOPOMAP,
+            MissionState.LOADING_CANVAS,
             MissionState.WAITING_FOR_COMPLETION,
         }
 
@@ -408,8 +420,8 @@ class MissionManager:
         self._costmap_clear_start_time = None
 
         # Reset topomap reload tracking
-        self._vint_load_topomap_future = None
-        self._vint_load_topomap_start_time = None
+        self._model_load_topomap_future = None
+        self._model_load_topomap_start_time = None
 
     def _odom_callback(self, msg) -> None:
         """Handle odometry messages for robot position and orientation tracking."""
@@ -628,11 +640,20 @@ class MissionManager:
             # Set camera orientation based on goal heading using _yaw_to_quaternion
             # Convert heading to quaternion and apply to camera
             quat_xyzw = self._yaw_to_quaternion(goal_position.heading)
-            # _yaw_to_quaternion returns (x, y, z, w), Gf.Quatd expects (w, x, y, z)
-            yaw_quat = Gf.Quatd(quat_xyzw[3], Gf.Vec3d(quat_xyzw[0], quat_xyzw[1], quat_xyzw[2]))
-            # Base camera orientation with 180-degree rotation to match rgb_left camera
-            # Original ROS convention (0.5, -0.5, 0.5, -0.5) + 180deg rotation = (0.5, 0.5, 0.5, 0.5)
-            base_quat = Gf.Quatd(0.5, Gf.Vec3d(0.5, 0.5, 0.5))
+            # _yaw_to_quaternion returns (x, y, z, w)
+            if orient_op.GetPrecision() == UsdGeom.XformOp.PrecisionFloat:
+                # Use float precision to match existing orient op type (GfQuatf)
+                yaw_quat = Gf.Quatf(
+                    float(quat_xyzw[3]),
+                    Gf.Vec3f(float(quat_xyzw[0]), float(quat_xyzw[1]), float(quat_xyzw[2])),
+                )
+                # Base camera orientation with 180-degree rotation to match rgb_left camera
+                # Original ROS convention (0.5, -0.5, 0.5, -0.5) + 180deg rotation = (0.5, 0.5, 0.5, 0.5)
+                base_quat = Gf.Quatf(0.5, Gf.Vec3f(0.5, 0.5, 0.5))
+            else:
+                # Default to double precision (GfQuatd)
+                yaw_quat = Gf.Quatd(quat_xyzw[3], Gf.Vec3d(quat_xyzw[0], quat_xyzw[1], quat_xyzw[2]))
+                base_quat = Gf.Quatd(0.5, Gf.Vec3d(0.5, 0.5, 0.5))
             final_quat = yaw_quat * base_quat
             orient_op.Set(final_quat)
 
@@ -704,13 +725,32 @@ class MissionManager:
             self._topomap_generator = None
             self.config.topomap.enabled = False
 
+    def _setup_canvas_generator(self) -> None:
+        """Initialize the CanvasInstructionGenerator for CANVAS integration."""
+        try:
+            from .canvas_instruction_generator import CanvasInstructionGenerator
+
+            self._canvas_generator = CanvasInstructionGenerator(
+                sampler=self._sampler,
+                config=self.config.canvas,
+                node=self._node,
+            )
+            logger.info("[CANVAS] CanvasInstructionGenerator initialized")
+        except Exception as exc:
+            logger.error(f"[CANVAS] Failed to initialize CanvasInstructionGenerator: {exc}")
+            import traceback
+
+            logger.error(f"[CANVAS] {traceback.format_exc()}")
+            self._canvas_generator = None
+            self.config.canvas.enabled = False
+
     def _generate_topomap(self, start, goal) -> bool:
-        """Generate topomap images and kick off async reload on the ViNT node.
+        """Generate topomap images and kick off async reload on the policy node.
 
         After generating the images, fires a **non-blocking** async call to
-        ``/vint_load_topomap``.  The caller must subsequently poll
-        ``_check_vint_load_topomap_done()`` (e.g. in ``_step_loading_topomap``)
-        to know when the ViNT node has finished reloading.
+        ``/model_load_topomap``.  The caller must subsequently poll
+        ``_check_model_load_topomap_done()`` (e.g. in ``_step_loading_topomap``)
+        to know when the policy node has finished reloading.
 
         Args:
             start: Start position (SampledPosition).
@@ -725,7 +765,7 @@ class MissionManager:
             if saved_paths:
                 logger.info(f"[TOPOMAP] Generated {len(saved_paths)} images → {self.config.topomap.output_dir}")
                 # Fire async reload — completion is checked in _step_loading_topomap
-                self._call_vint_load_topomap_async()
+                self._call_model_load_topomap_async()
                 return True
             else:
                 logger.warning("[TOPOMAP] Topomap generation returned no images")
@@ -737,10 +777,10 @@ class MissionManager:
             logger.error(f"[TOPOMAP] {traceback.format_exc()}")
             return False
 
-    def _call_vint_load_topomap_async(self) -> bool:
-        """Kick off a non-blocking /vint_load_topomap service call.
+    def _call_model_load_topomap_async(self) -> bool:
+        """Kick off a non-blocking /model_load_topomap service call.
 
-        Stores the future in ``self._vint_load_topomap_future`` so that
+        Stores the future in ``self._model_load_topomap_future`` so that
         ``_step_loading_topomap`` can poll for completion without blocking
         the executor (and therefore without blocking ``/get_mission_result``).
 
@@ -748,24 +788,24 @@ class MissionManager:
             True if the async call was successfully fired (or the service
             client is not configured), False if the service is unavailable.
         """
-        self._vint_load_topomap_future = None
-        self._vint_load_topomap_start_time = None
+        self._model_load_topomap_future = None
+        self._model_load_topomap_start_time = None
 
-        if self._vint_load_topomap_srv is None:
+        if self._model_load_topomap_srv is None:
             return True  # Nothing to do — not a failure
 
         from std_srvs.srv import Trigger
 
-        if not self._vint_load_topomap_srv.service_is_ready():
-            logger.warning("[TOPOMAP] /vint_load_topomap service not yet available")
+        if not self._model_load_topomap_srv.service_is_ready():
+            logger.warning("[TOPOMAP] /model_load_topomap service not yet available")
             return False
 
-        self._vint_load_topomap_future = self._vint_load_topomap_srv.call_async(Trigger.Request())
-        self._vint_load_topomap_start_time = self._get_current_time_seconds()
-        logger.info("[TOPOMAP] Async /vint_load_topomap call fired")
+        self._model_load_topomap_future = self._model_load_topomap_srv.call_async(Trigger.Request())
+        self._model_load_topomap_start_time = self._get_current_time_seconds()
+        logger.info("[TOPOMAP] Async /model_load_topomap call fired")
         return True
 
-    def _check_vint_load_topomap_done(self) -> bool:
+    def _check_model_load_topomap_done(self) -> bool:
         """Check whether the pending topomap-reload future has completed.
 
         Returns:
@@ -773,27 +813,27 @@ class MissionManager:
             still pending.  On completion the result is logged and the
             future is cleared.
         """
-        if self._vint_load_topomap_future is None:
+        if self._model_load_topomap_future is None:
             return True  # Nothing pending
 
-        if not self._vint_load_topomap_future.done():
+        if not self._model_load_topomap_future.done():
             return False
 
         # Future completed — inspect result
         try:
-            resp = self._vint_load_topomap_future.result()
+            resp = self._model_load_topomap_future.result()
             if resp is not None:
                 if resp.success:
-                    logger.info(f"[TOPOMAP] ViNT topomap reloaded: {resp.message}")
+                    logger.info(f"[TOPOMAP] Policy topomap reloaded: {resp.message}")
                 else:
-                    logger.warning(f"[TOPOMAP] ViNT topomap reload failed: {resp.message}")
+                    logger.warning(f"[TOPOMAP] Policy topomap reload failed: {resp.message}")
             else:
-                logger.warning("[TOPOMAP] /vint_load_topomap service returned None")
+                logger.warning("[TOPOMAP] /model_load_topomap service returned None")
         except Exception as exc:
-            logger.error(f"[TOPOMAP] Error from /vint_load_topomap: {exc}")
+            logger.error(f"[TOPOMAP] Error from /model_load_topomap: {exc}")
         finally:
-            self._vint_load_topomap_future = None
-            self._vint_load_topomap_start_time = None
+            self._model_load_topomap_future = None
+            self._model_load_topomap_start_time = None
 
         return True
 
@@ -829,7 +869,7 @@ class MissionManager:
             response.message = "Missions already completed."
             return response
 
-        # Disable IL baseline nodes (ViNT and trajectory follower) when mission starts
+        # Disable IL baseline nodes (policy node and trajectory follower) when mission starts
         # This stops the nodes from publishing trajectories and cmd_vel
         self._disable_il_baseline_nodes()
 
@@ -860,9 +900,9 @@ class MissionManager:
         return response
 
     def _disable_il_baseline_nodes(self) -> None:
-        """Disable IL baseline nodes (ViNT and trajectory follower).
+        """Disable IL baseline nodes (policy node and trajectory follower).
 
-        Publishes False to /vint_enable and /trajectory_follower_enable topics
+        Publishes False to /model_enable and /trajectory_follower_enable topics
         to stop the nodes from publishing trajectories and cmd_vel commands.
         """
         from std_msgs.msg import Bool
@@ -870,18 +910,18 @@ class MissionManager:
         disable_msg = Bool()
         disable_msg.data = False
 
-        if self._vint_enable_pub is not None:
-            self._vint_enable_pub.publish(disable_msg)
-            logger.info(f"[{self._state.name}] Disabled ViNT policy node")
+        if self._model_enable_pub is not None:
+            self._model_enable_pub.publish(disable_msg)
+            logger.info(f"[{self._state.name}] Disabled policy node")
 
         if self._trajectory_follower_enable_pub is not None:
             self._trajectory_follower_enable_pub.publish(disable_msg)
             logger.info(f"[{self._state.name}] Disabled trajectory follower node")
 
     def _enable_il_baseline_nodes(self) -> None:
-        """Enable IL baseline nodes (ViNT and trajectory follower).
+        """Enable IL baseline nodes (policy node and trajectory follower).
 
-        Publishes True to /vint_enable and /trajectory_follower_enable topics
+        Publishes True to /model_enable and /trajectory_follower_enable topics
         to allow the nodes to resume publishing trajectories and cmd_vel commands.
         Called after mission setup is complete (goal published, markers updated).
         """
@@ -890,9 +930,9 @@ class MissionManager:
         enable_msg = Bool()
         enable_msg.data = True
 
-        if self._vint_enable_pub is not None:
-            self._vint_enable_pub.publish(enable_msg)
-            logger.info(f"[{self._state.name}] Enabled ViNT policy node")
+        if self._model_enable_pub is not None:
+            self._model_enable_pub.publish(enable_msg)
+            logger.info(f"[{self._state.name}] Enabled policy node")
 
         if self._trajectory_follower_enable_pub is not None:
             self._trajectory_follower_enable_pub.publish(enable_msg)
@@ -1452,11 +1492,11 @@ class MissionManager:
         if elapsed >= self.config.manager.initial_pose_delay:
             self._publish_goal_pose(self._current_goal)
 
-            # Capture and publish goal image for ViNT ImageGoal mode
+            # Capture and publish goal image for policy ImageGoal mode
             if self.config.goal_image.enabled:
                 self._capture_and_publish_goal_image(self._current_goal)
 
-            # Generate topomap for ViNT navigation (non-blocking)
+            # Generate topomap for policy navigation (non-blocking)
             if self.config.topomap.enabled and self._topomap_generator is not None:
                 if not self._generate_topomap(self._current_start, self._current_goal):
                     # Topomap generation failed — restart the mission
@@ -1474,34 +1514,94 @@ class MissionManager:
                 self._state = MissionState.LOADING_TOPOMAP
                 return
 
-            # No topomap — finish mission setup immediately
+            # No topomap — check if canvas is needed before finalizing
+            if self.config.canvas.enabled and self._canvas_generator is not None:
+                if not self._canvas_generator.generate_and_publish(
+                    self._current_start, self._current_goal, self._current_mission
+                ):
+                    # Canvas generation failed — restart the mission
+                    logger.warning(
+                        f"[PUBLISHING_GOAL] Mission {self._current_mission} restarting: "
+                        "canvas instruction generation failed"
+                    )
+                    self._current_mission -= 1
+                    self._state = MissionState.READY
+                    return
+                # Transition to LOADING_CANVAS — wait for to become ready
+                self._state = MissionState.LOADING_CANVAS
+                self._canvas_start_time = self._get_current_time_seconds()
+                return
+
             self._finalize_mission_setup()
 
     def _step_loading_topomap(self):
-        """Poll for ViNT topomap reload completion (non-blocking).
+        """Poll for policy topomap reload completion (non-blocking).
 
         This state exists so that the main ``step()`` loop keeps calling
-        ``_spin_ros_once()`` while the ``/vint_load_topomap`` async service
+        ``_spin_ros_once()`` while the ``/model_load_topomap`` async service
         call is in-flight.  Without this, the executor would be blocked and
         ``/get_mission_result`` requests from ``eval.sh`` would go unanswered.
         """
         _TOPOMAP_LOAD_TIMEOUT = 15.0  # seconds
 
-        if self._check_vint_load_topomap_done():
+        if self._check_model_load_topomap_done():
+            self._after_topomap_done()
+            return
+
+        # Safety timeout so we don't get stuck forever
+        if self._model_load_topomap_start_time is not None:
+            waited = self._get_current_time_seconds() - self._model_load_topomap_start_time
+            if waited >= _TOPOMAP_LOAD_TIMEOUT:
+                logger.warning(f"[TOPOMAP] /model_load_topomap timed out after {waited:.1f}s — proceeding anyway")
+                self._model_load_topomap_future = None
+                self._model_load_topomap_start_time = None
+                self._after_topomap_done()
+
+    def _after_topomap_done(self) -> None:
+        """Chain from topomap to canvas if enabled, otherwise finalize."""
+        if self.config.canvas.enabled and self._canvas_generator is not None:
+            if not self._canvas_generator.generate_and_publish(
+                self._current_start, self._current_goal, self._current_mission
+            ):
+                logger.warning(
+                    f"[CANVAS] Mission {self._current_mission} restarting: "
+                    "canvas instruction generation failed after topomap"
+                )
+                self._current_mission -= 1
+                self._state = MissionState.READY
+                return
+            self._state = MissionState.LOADING_CANVAS
+            self._canvas_start_time = self._get_current_time_seconds()
+            return
+        self._finalize_mission_setup()
+
+    def _step_loading_canvas(self):
+        """Poll for model ready state (non-blocking).
+
+        This state exists so that the main ``step()`` loop keeps calling
+        ``_spin_ros_once()`` while waiting to reach
+        the ``"waiting"`` state, at which point we send ``/start_pause=True``.
+        """
+        # Check if model is ready (model_state == "waiting")
+        if self._canvas_generator.model_state == "waiting":
+            logger.info("[CANVAS] Model ready, sending start signal")
+            self._canvas_generator.send_start()
             self._finalize_mission_setup()
             return
 
         # Safety timeout so we don't get stuck forever
-        if self._vint_load_topomap_start_time is not None:
-            waited = self._get_current_time_seconds() - self._vint_load_topomap_start_time
-            if waited >= _TOPOMAP_LOAD_TIMEOUT:
-                logger.warning(f"[TOPOMAP] /vint_load_topomap timed out after {waited:.1f}s — proceeding anyway")
-                self._vint_load_topomap_future = None
-                self._vint_load_topomap_start_time = None
+        if self._canvas_start_time is not None:
+            waited = self._get_current_time_seconds() - self._canvas_start_time
+            if waited >= self.config.canvas.planner_ready_timeout:
+                logger.warning(
+                    f"[CANVAS] Model ready timeout after {waited:.1f}s "
+                    f"(state={self._canvas_generator.model_state}) — proceeding anyway"
+                )
+                self._canvas_start_time = None
                 self._finalize_mission_setup()
 
     def _finalize_mission_setup(self):
-        """Common tail of mission setup shared by PUBLISHING_GOAL and LOADING_TOPOMAP."""
+        """Common tail of mission setup shared by PUBLISHING_GOAL, LOADING_TOPOMAP, and LOADING_CANVAS."""
         # Update RViz markers
         self._marker_publisher.publish_start_goal_from_sampled(self._current_start, self._current_goal)
 
