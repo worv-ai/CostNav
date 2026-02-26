@@ -6,11 +6,11 @@ project_name: costnav-nomad
 run_name: nomad-costnav-finetune
 
 # Training setup
-use_wandb: True
-wandb_entity: gilyoung7-seoul-national-university
+use_wandb: True  # Set to True if you want to log to wandb
+wandb_entity:  # Your wandb entity/team name
 train: True
 # Optional: fine-tune from pretrained NoMaD checkpoint
-pretrained_checkpoint: /mnt/harbor/projects/owa/CostNav/checkpoints/nomad.pth
+pretrained_checkpoint: # Enter your pretrained checkpoint path here (ex. "${PROJECT_ROOT}/checkpoints/nomad.pth")
 batch_size: 256
 eval_batch_size: 128
 epochs: 15
@@ -72,9 +72,9 @@ image_size: [85, 64]  # width, height
 # (same format used for ViNT training)
 datasets:
   costnav_nomad:
-    data_folder: /mnt/raid11/datasets/CostNav/filtered_vint_training_v3
-    train: /mnt/raid11/datasets/CostNav/filtered_vint_training_v3_split/train
-    test: /mnt/raid11/datasets/CostNav/filtered_vint_training_v3_split/test
+    data_folder: # Enter your data directory here (ex. "/mnt/raid11/workspace/vint_training")
+    train: # Enter your train directory here (ex. "/mnt/raid11/workspace/vint_training_splits/train")
+    test: # Enter your test directory here (ex. "/mnt/raid11/workspace/vint_training_splits/test")
     end_slack: 3
     goals_per_obs: 2
     negative_mining: True
@@ -82,7 +82,7 @@ datasets:
     metric_waypoint_spacing: 0.25  # average spacing between waypoints (meters)
 
 # Logging
-log_dir: /mnt/harbor/users/dyg/checkpoints/nomad_costnav
+log_dir: # Enter your log directory here (ex. /mnt/harbor/users/${USERNAME}/checkpoint/costnav)
 print_log_freq: 500
 image_log_freq: 5000
 num_images_log: 8

@@ -325,6 +325,47 @@ export WANDB_MODE=disabled
 
 Checkpoints are saved to `logs/vint-costnav/`.
 
+#### Fine-tuning NoMaD on CostNav Data
+
+##### Option 1: Local Run
+
+```bash
+# From CostNav/costnav_isaacsim/
+uv run python -m il_training.training.train_vint \
+    --config il_training/training/visualnav_transformer/configs/nomad_costnav.yaml
+```
+
+##### Option 2: SLURM Job Submission
+
+**1. Edit the configuration file:**
+
+Edit `training/visualnav_transformer/configs/nomad_costnav.yaml` — set dataset paths and `log_dir`.
+
+**2. Submit the job to the cluster:**
+
+```bash
+cd costnav_isaacsim/il_training/scripts/
+sbatch train_nomad.sbatch
+```
+
+The sbatch script will automatically read paths from the config file and run training as a batch job.
+
+#### Configuration Options (NoMaD)
+
+The config file `nomad_costnav.yaml` supports the following key options:
+
+| Parameter               | Default                 | Description                              |
+| ----------------------- | ----------------------- | ---------------------------------------- |
+| `pretrained_checkpoint` | `checkpoints/nomad.pth` | Path to pretrained weights               |
+| `batch_size`            | 256                     | Training batch size                      |
+| `epochs`                | 15                      | Number of training epochs                |
+| `lr`                    | 5e-5                    | Learning rate for fine-tuning            |
+| `num_diffusion_iters`   | 10                      | Number of diffusion denoising iterations |
+| `goal_mask_prob`        | 0.5                     | Goal masking probability                 |
+| `len_traj_pred`         | 8                       | Trajectory prediction length             |
+
+Checkpoints are saved to `logs/nomad-costnav/`.
+
 ## Evaluation
 
 Evaluation runs in Docker (`Dockerfile.ros_torch`) with ROS2 and is a separate sibling package with its own `pyproject.toml`:
