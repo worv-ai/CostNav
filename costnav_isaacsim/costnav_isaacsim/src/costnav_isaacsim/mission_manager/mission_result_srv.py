@@ -6,7 +6,7 @@ in the response message field.
 
 Response format (JSON in message field):
 {
-    "result": "pending" | "success" | "failure_timeout" | "failure_physicalassistance" | "failure_foodspoiled",
+    "result": "pending" | "success" | "failure_timeout" | "failure_physicalassistance" | "failure_foodspoiled" | "skipped",
     "mission_number": int,
     "distance_to_goal": float,
     "in_progress": bool,
@@ -25,6 +25,7 @@ Result values:
 - "failure_timeout": Timeout reached before reaching goal
 - "failure_physicalassistance": Robot fell down (bad orientation, requires physical assistance)
 - "failure_foodspoiled": Food spoiled during delivery
+- "skipped": Mission skipped by user via /skip_mission service
 """
 
 from std_srvs.srv import Trigger

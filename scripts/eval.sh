@@ -175,6 +175,13 @@ start_mission() {
     echo "$result"
 }
 
+# Call skip_mission service to tell mission manager to stop current mission
+skip_mission() {
+    local result
+    result=$(ros2_exec "ros2 service call /skip_mission std_srvs/srv/Trigger {}")
+    echo "$result"
+}
+
 # Query mission result from /get_mission_result service
 get_mission_result() {
     local result
@@ -269,6 +276,8 @@ run_mission() {
                 mission_result="SKIPPED"
                 was_skipped=true
                 log "Mission $mission_num: SKIPPED by user (→ key pressed)"
+                # Tell mission manager to stop the current mission (stops canvas model, disables IL nodes)
+                skip_mission > /dev/null 2>&1
                 break
             fi
 
