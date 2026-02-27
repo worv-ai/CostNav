@@ -33,6 +33,8 @@ Our key contributions are:
 
 You can find more details in our [technical report](https://arxiv.org/abs/2511.20216).
 
+The full cost benchmark formula with real world references is available in our google drive: https://drive.google.com/drive/folders/1j1MXm6NMkd6HHBwTJi_nSde7-shv4laX?usp=sharing 
+
 ## Getting Started
 
 ### 1. Prerequisites
