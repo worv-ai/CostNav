@@ -1,0 +1,20 @@
+services:
+  nurec-pipeline:
+    image: nurec-pipeline:latest
+    container_name: nurec-pipeline
+    stdin_open: true
+    tty: true
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      # ZED 데이터 폴더 (호스트 경로를 수정하세요)
+      - ./data:/workspace/data
+      # 파이프라인 출력 폴더
+      - ./output:/workspace/output
+    working_dir: /workspace

@@ -1,0 +1,17 @@
+{
+  "name": "NuRec Pipeline",
+  "dockerComposeFile": "../docker/docker-compose.yml",
+  "service": "nurec-pipeline",
+  "workspaceFolder": "/workspace",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  }
+}
