@@ -1,0 +1,79 @@
+# =============================================================================
+# 3DGRUT Anti-Ghosting Training - Docker Compose
+# 두겹/흔들림 현상 완화를 위한 최적화된 설정 포함
+# =============================================================================
+# ★ GPU 격리 정책 ★
+# - NVIDIA_VISIBLE_DEVICES: SLURM이 할당한 GPU만 컨테이너에 노출
+# - CUDA_VISIBLE_DEVICES=0: 컨테이너 내부에서는 항상 GPU 0번 (재매핑됨)
+# - count: 1 + privileged 제거: 단일 GPU만 예약, 다른 사용자 GPU 침범 방지
+# =============================================================================
+
+services:
+  3dgrut_antighost_training:
+    image: ${GRUT_IMAGE:-docker-pri.maum.ai:443/worv/3dgrut:latest}
+
+    container_name: 3dgrut_antighost_${SLURM_JOB_ID:-local}
+
+    environment:
+      # ★ GPU 격리: SLURM 할당 GPU만 노출 ★
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-0}
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      # 컨테이너 내부에서는 1개 GPU만 보이므로 항상 0번
+      - CUDA_VISIBLE_DEVICES=0
+      # 기본 설정
+      - COLMAP_PATH=${COLMAP_PATH}
+      - MESH_PATH=${MESH_PATH:-}
+      - OUTPUT_DIR=${OUTPUT_DIR}
+      - EXPERIMENT_NAME=${EXPERIMENT_NAME:-3dgut_antighost}
+      - N_ITERATIONS=${N_ITERATIONS:-100000}
+      - CONFIG_NAME=${CONFIG_NAME:-apps/cusfm_3dgut_mcmc}
+      - DOWNSAMPLE_FACTOR=${DOWNSAMPLE_FACTOR:-1}
+      - TEST_SPLIT_INTERVAL=${TEST_SPLIT_INTERVAL:-5}
+      # ★ Anti-Ghosting 설정 ★
+      - USE_SCALE_LOSS=${USE_SCALE_LOSS:-true}
+      - LAMBDA_SCALE=${LAMBDA_SCALE:-0.1}
+      - USE_OPACITY_LOSS=${USE_OPACITY_LOSS:-true}
+      - LAMBDA_OPACITY=${LAMBDA_OPACITY:-0.01}
+      - OPACITY_THRESHOLD=${OPACITY_THRESHOLD:-0.01}
+      - POSITION_LR=${POSITION_LR:-0.0001}
+      - POSITION_LR_FINAL=${POSITION_LR_FINAL:-1.0e-06}
+      - MAX_GAUSSIANS=${MAX_GAUSSIANS:-800000}
+
+    ipc: host
+    network_mode: host
+
+    volumes:
+      - /mnt:/mnt
+      - ${SCRIPT_ROOT:-/workspace/scripts/slurm_3dgrut_antighost}:/scripts
+      - /dev/shm:/dev/shm
+
+    working_dir: /scripts
+
+    # ★ GPU 1개만 예약 (SLURM 할당분만) ★
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, compute, utility]
+
+    # ★ privileged 제거: root 권한으로 다른 GPU 침범 방지 ★
+    # privileged: true  ← 삭제됨
+
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        echo "★ GPU Isolation Check ★"
+        echo "  NVIDIA_VISIBLE_DEVICES=$NVIDIA_VISIBLE_DEVICES"
+        echo "  CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
+        nvidia-smi -L 2>/dev/null || echo "  (nvidia-smi not available)"
+        echo ""
+
+        # Conda 환경 설정
+        source /opt/conda/etc/profile.d/conda.sh 2>/dev/null || true
+        conda activate 3dgrut 2>/dev/null || true
+
+        # 3DGRUT Anti-Ghosting 학습 스크립트 실행
+        bash /scripts/train_3dgrut_antighost.sh
+
