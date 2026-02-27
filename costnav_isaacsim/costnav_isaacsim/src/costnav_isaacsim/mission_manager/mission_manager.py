@@ -42,6 +42,8 @@ class MissionState(Enum):
     PUBLISHING_INITIAL_POSE = "publishing_initial_pose"
     CLEARING_COSTMAPS = "clearing_costmaps"
     PUBLISHING_GOAL = "publishing_goal"
+    LOADING_TOPOMAP = "loading_topomap"  # Waiting for policy node to reload topomap
+    LOADING_CANVAS = "loading_canvas"  # Waiting for CANVAS to become ready
     WAITING_FOR_COMPLETION = "waiting_for_completion"
     COMPLETED = "completed"
 
@@ -122,8 +124,13 @@ class MissionManager:
         self._odom_sub = None
 
         # IL baseline node control publishers
-        self._vint_enable_pub = None
+        self._model_enable_pub = None
         self._trajectory_follower_enable_pub = None
+
+        # Policy topomap reload service client (initialized in _initialize)
+        self._model_load_topomap_srv = None
+        self._model_load_topomap_future = None  # Pending async future for topomap reload
+        self._model_load_topomap_start_time = None  # Wall time when async call was fired
 
         # Nav2 costmap clear service clients (initialized in _initialize)
         self._clear_costmap_global_srv = None
@@ -170,11 +177,18 @@ class MissionManager:
         )
         self._eval = self._evaluation.state
 
-        # Goal image capture for ViNT ImageGoal mode
+        # Goal image capture for policy ImageGoal mode
         self._goal_camera_prim = None  # USD camera prim for goal image capture
         self._goal_render_product = None  # Omni replicator render product
         self._goal_rgb_annotator = None  # RGB annotator for goal image capture
         self._goal_image_pub = None  # ROS2 publisher for goal images
+
+        # Topomap generator (NavMesh-based topological map for IL policy)
+        self._topomap_generator = None
+
+        # Canvas instruction generator (CANVAS integration)
+        self._canvas_generator = None
+        self._canvas_start_time = None  # Timestamp when LOADING_CANVAS state entered
 
     def _get_current_time_seconds(self) -> float:
         """Get current time in seconds from ROS clock.
@@ -215,6 +229,10 @@ class MissionManager:
             self._step_clearing_costmaps()
         elif self._state == MissionState.PUBLISHING_GOAL:
             self._step_publishing_goal()
+        elif self._state == MissionState.LOADING_TOPOMAP:
+            self._step_loading_topomap()
+        elif self._state == MissionState.LOADING_CANVAS:
+            self._step_loading_canvas()
         elif self._state == MissionState.WAITING_FOR_COMPLETION:
             self._step_waiting_for_completion()
         elif self._state == MissionState.COMPLETED:
@@ -313,10 +331,10 @@ class MissionManager:
             )
             self._goal_pose_pub = self._node.create_publisher(PoseStamped, self.config.nav2.goal_pose_topic, pose_qos)
 
-            # IL baseline node control publishers (to disable ViNT and trajectory follower when mission starts)
+            # IL baseline node control publishers (to disable policy node and trajectory follower when mission starts)
             from std_msgs.msg import Bool
 
-            self._vint_enable_pub = self._node.create_publisher(Bool, "/vint_enable", 10)
+            self._model_enable_pub = self._node.create_publisher(Bool, "/model_enable", 10)
             self._trajectory_follower_enable_pub = self._node.create_publisher(Bool, "/trajectory_follower_enable", 10)
 
             # Subscribe to odometry for robot position tracking
@@ -328,6 +346,16 @@ class MissionManager:
             if self.config.goal_image.enabled:
                 self._setup_goal_image_publisher(pose_qos)
                 self._setup_goal_camera()
+
+            # Setup topomap generator if enabled
+            if self.config.topomap.enabled:
+                self._setup_topomap_generator()
+                # Service client to tell the policy node to (re)load the topomap
+                self._model_load_topomap_srv = self._node.create_client(Trigger, "/model_load_topomap")
+
+            # Setup canvas instruction generator if enabled (CANVAS integration)
+            if self.config.canvas.enabled:
+                self._setup_canvas_generator()
 
             # Setup food tracking if enabled
             self._evaluation.setup_food_tracking()
@@ -360,6 +388,8 @@ class MissionManager:
             MissionState.PUBLISHING_INITIAL_POSE,
             MissionState.CLEARING_COSTMAPS,
             MissionState.PUBLISHING_GOAL,
+            MissionState.LOADING_TOPOMAP,
+            MissionState.LOADING_CANVAS,
             MissionState.WAITING_FOR_COMPLETION,
         }
 
@@ -388,6 +418,10 @@ class MissionManager:
         # Reset costmap clear tracking
         self._costmap_clear_futures = {}
         self._costmap_clear_start_time = None
+
+        # Reset topomap reload tracking
+        self._model_load_topomap_future = None
+        self._model_load_topomap_start_time = None
 
     def _odom_callback(self, msg) -> None:
         """Handle odometry messages for robot position and orientation tracking."""
@@ -476,8 +510,6 @@ class MissionManager:
         """
         try:
             import omni.replicator.core as rep
-            from isaacsim.core.utils import prims as prim_utils
-            from pxr import Gf, UsdGeom
 
             goal_image_cfg = self.config.goal_image
             cam_prim_path = goal_image_cfg.camera_prim_path
@@ -495,32 +527,28 @@ class MissionManager:
             if existing_prim.IsValid():
                 logger.info(f"[GOAL_IMAGE] Reusing existing camera at {cam_prim_path}")
                 self._goal_camera_prim = existing_prim
-            else:
-                # Create camera prim at a default position (will be moved to goal pose)
-                # Orientation includes 180-degree rotation around viewing axis to match rgb_left camera
-                self._goal_camera_prim = prim_utils.create_prim(
-                    cam_prim_path,
-                    prim_type="Camera",
-                    translation=(0.0, 0.0, goal_image_cfg.camera_height_offset),
-                    orientation=(0.5, 0.5, 0.5, 0.5),  # ROS convention + 180deg rotation
+            elif goal_image_cfg.camera_usd_path:
+                # Load camera from USD reference (duplicates the camera asset)
+                self._goal_camera_prim = self._create_camera_from_usd(
+                    stage, cam_prim_path, goal_image_cfg.camera_usd_path, label="GOAL_IMAGE"
                 )
-                # Configure camera properties (matching rgb_left.usda parameters)
-                camera_geom = UsdGeom.Camera(self._goal_camera_prim)
-                camera_geom.GetFocalLengthAttr().Set(2.87343)
-                camera_geom.GetFocusDistanceAttr().Set(0.6)
-                camera_geom.GetHorizontalApertureAttr().Set(5.76)
-                camera_geom.GetVerticalApertureAttr().Set(3.6)
-                camera_geom.GetClippingRangeAttr().Set(Gf.Vec2f(0.076, 100000.0))
-                logger.info(f"[GOAL_IMAGE] Created goal camera at {cam_prim_path}")
+            else:
+                raise RuntimeError(
+                    "[GOAL_IMAGE] camera_usd_path is required. "
+                    "Set it in mission_config.yaml or via DEFAULT_CAMERA_USD_PATHS in robot_config.py."
+                )
+
+            # Use actual camera prim path (may differ when loaded from USD reference)
+            actual_cam_path = str(self._goal_camera_prim.GetPath())
 
             # Create render product for the camera
-            self._goal_render_product = rep.create.render_product(cam_prim_path, resolution=resolution)
+            self._goal_render_product = rep.create.render_product(actual_cam_path, resolution=resolution)
 
             # Create RGB annotator and attach to render product
             self._goal_rgb_annotator = rep.AnnotatorRegistry.get_annotator("rgb", device="cpu")
             self._goal_rgb_annotator.attach(self._goal_render_product)
 
-            logger.info(f"[GOAL_IMAGE] Goal camera setup complete: {resolution[0]}x{resolution[1]} @ {cam_prim_path}")
+            logger.info(f"[GOAL_IMAGE] Goal camera setup complete: {resolution[0]}x{resolution[1]} @ {actual_cam_path}")
 
         except ImportError as exc:
             logger.warning(f"[GOAL_IMAGE] Isaac Sim modules not available: {exc}")
@@ -531,6 +559,45 @@ class MissionManager:
 
             logger.error(f"[GOAL_IMAGE] {traceback.format_exc()}")
             self.config.goal_image.enabled = False
+
+    @staticmethod
+    def _create_camera_from_usd(stage, cam_prim_path: str, camera_usd_path: str, label: str = "CAMERA"):
+        """Create a camera prim by referencing an external camera USD asset.
+
+        Loads the camera USD file and finds the Camera prim within it.
+        The resulting prim inherits all camera intrinsics (focal_length,
+        aperture, etc.) from the referenced USD, ensuring exact match
+        with the robot's actual camera.
+
+        Args:
+            stage: USD stage to create the prim on.
+            cam_prim_path: USD stage path for the new camera prim.
+            camera_usd_path: Asset path to the camera USD file
+                (e.g. ``omniverse://localhost/.../camera.usd``).
+            label: Log label for messages (e.g. "GOAL_IMAGE", "TOPOMAP").
+
+        Returns:
+            The Camera prim (may be a child of the referenced root).
+        """
+        from pxr import Usd, UsdGeom
+
+        prim = stage.DefinePrim(cam_prim_path)
+        prim.GetReferences().AddReference(camera_usd_path)
+        logger.info(f"[{label}] Added camera USD reference: {camera_usd_path} → {cam_prim_path}")
+
+        # Find the actual Camera prim (may be the prim itself or a descendant)
+        if prim.IsA(UsdGeom.Camera):
+            logger.info(f"[{label}] Camera prim loaded at {cam_prim_path}")
+            return prim
+
+        for descendant in Usd.PrimRange(prim):
+            if descendant.IsA(UsdGeom.Camera):
+                logger.info(f"[{label}] Found Camera prim at {descendant.GetPath()}")
+                return descendant
+
+        # No Camera found — fall back to using the root prim and log a warning
+        logger.warning(f"[{label}] No Camera prim found in {camera_usd_path}; using root prim at {cam_prim_path}")
+        return prim
 
     def _capture_and_publish_goal_image(self, goal_position) -> bool:
         """Capture goal image from camera at goal position and publish to ROS2.
@@ -573,11 +640,20 @@ class MissionManager:
             # Set camera orientation based on goal heading using _yaw_to_quaternion
             # Convert heading to quaternion and apply to camera
             quat_xyzw = self._yaw_to_quaternion(goal_position.heading)
-            # _yaw_to_quaternion returns (x, y, z, w), Gf.Quatd expects (w, x, y, z)
-            yaw_quat = Gf.Quatd(quat_xyzw[3], Gf.Vec3d(quat_xyzw[0], quat_xyzw[1], quat_xyzw[2]))
-            # Base camera orientation with 180-degree rotation to match rgb_left camera
-            # Original ROS convention (0.5, -0.5, 0.5, -0.5) + 180deg rotation = (0.5, 0.5, 0.5, 0.5)
-            base_quat = Gf.Quatd(0.5, Gf.Vec3d(0.5, 0.5, 0.5))
+            # _yaw_to_quaternion returns (x, y, z, w)
+            if orient_op.GetPrecision() == UsdGeom.XformOp.PrecisionFloat:
+                # Use float precision to match existing orient op type (GfQuatf)
+                yaw_quat = Gf.Quatf(
+                    float(quat_xyzw[3]),
+                    Gf.Vec3f(float(quat_xyzw[0]), float(quat_xyzw[1]), float(quat_xyzw[2])),
+                )
+                # Base camera orientation with 180-degree rotation to match rgb_left camera
+                # Original ROS convention (0.5, -0.5, 0.5, -0.5) + 180deg rotation = (0.5, 0.5, 0.5, 0.5)
+                base_quat = Gf.Quatf(0.5, Gf.Vec3f(0.5, 0.5, 0.5))
+            else:
+                # Default to double precision (GfQuatd)
+                yaw_quat = Gf.Quatd(quat_xyzw[3], Gf.Vec3d(quat_xyzw[0], quat_xyzw[1], quat_xyzw[2]))
+                base_quat = Gf.Quatd(0.5, Gf.Vec3d(0.5, 0.5, 0.5))
             final_quat = yaw_quat * base_quat
             orient_op.Set(final_quat)
 
@@ -630,6 +706,137 @@ class MissionManager:
             logger.error(f"[GOAL_IMAGE] {traceback.format_exc()}")
             return False
 
+    def _setup_topomap_generator(self) -> None:
+        """Initialize the TopomapGenerator for NavMesh-based topomap generation."""
+        try:
+            from .topomap_generator import TopomapGenerator
+
+            self._topomap_generator = TopomapGenerator(
+                sampler=self._sampler,
+                config=self.config.topomap,
+                simulation_context=self.simulation_context,
+            )
+            logger.info("[TOPOMAP] TopomapGenerator initialized")
+        except Exception as exc:
+            logger.error(f"[TOPOMAP] Failed to initialize TopomapGenerator: {exc}")
+            import traceback
+
+            logger.error(f"[TOPOMAP] {traceback.format_exc()}")
+            self._topomap_generator = None
+            self.config.topomap.enabled = False
+
+    def _setup_canvas_generator(self) -> None:
+        """Initialize the CanvasInstructionGenerator for CANVAS integration."""
+        try:
+            from .canvas_instruction_generator import CanvasInstructionGenerator
+
+            self._canvas_generator = CanvasInstructionGenerator(
+                sampler=self._sampler,
+                config=self.config.canvas,
+                node=self._node,
+            )
+            logger.info("[CANVAS] CanvasInstructionGenerator initialized")
+        except Exception as exc:
+            logger.error(f"[CANVAS] Failed to initialize CanvasInstructionGenerator: {exc}")
+            import traceback
+
+            logger.error(f"[CANVAS] {traceback.format_exc()}")
+            self._canvas_generator = None
+            self.config.canvas.enabled = False
+
+    def _generate_topomap(self, start, goal) -> bool:
+        """Generate topomap images and kick off async reload on the policy node.
+
+        After generating the images, fires a **non-blocking** async call to
+        ``/model_load_topomap``.  The caller must subsequently poll
+        ``_check_model_load_topomap_done()`` (e.g. in ``_step_loading_topomap``)
+        to know when the policy node has finished reloading.
+
+        Args:
+            start: Start position (SampledPosition).
+            goal: Goal position (SampledPosition).
+
+        Returns:
+            True if topomap images were generated (async reload may still be
+            in-flight), False on generation failure.
+        """
+        try:
+            saved_paths = self._topomap_generator.generate_topomap(start, goal)
+            if saved_paths:
+                logger.info(f"[TOPOMAP] Generated {len(saved_paths)} images → {self.config.topomap.output_dir}")
+                # Fire async reload — completion is checked in _step_loading_topomap
+                self._call_model_load_topomap_async()
+                return True
+            else:
+                logger.warning("[TOPOMAP] Topomap generation returned no images")
+                return False
+        except Exception as exc:
+            logger.error(f"[TOPOMAP] Failed to generate topomap: {exc}")
+            import traceback
+
+            logger.error(f"[TOPOMAP] {traceback.format_exc()}")
+            return False
+
+    def _call_model_load_topomap_async(self) -> bool:
+        """Kick off a non-blocking /model_load_topomap service call.
+
+        Stores the future in ``self._model_load_topomap_future`` so that
+        ``_step_loading_topomap`` can poll for completion without blocking
+        the executor (and therefore without blocking ``/get_mission_result``).
+
+        Returns:
+            True if the async call was successfully fired (or the service
+            client is not configured), False if the service is unavailable.
+        """
+        self._model_load_topomap_future = None
+        self._model_load_topomap_start_time = None
+
+        if self._model_load_topomap_srv is None:
+            return True  # Nothing to do — not a failure
+
+        from std_srvs.srv import Trigger
+
+        if not self._model_load_topomap_srv.service_is_ready():
+            logger.warning("[TOPOMAP] /model_load_topomap service not yet available")
+            return False
+
+        self._model_load_topomap_future = self._model_load_topomap_srv.call_async(Trigger.Request())
+        self._model_load_topomap_start_time = self._get_current_time_seconds()
+        logger.info("[TOPOMAP] Async /model_load_topomap call fired")
+        return True
+
+    def _check_model_load_topomap_done(self) -> bool:
+        """Check whether the pending topomap-reload future has completed.
+
+        Returns:
+            True if the future is done (or was never started), False if
+            still pending.  On completion the result is logged and the
+            future is cleared.
+        """
+        if self._model_load_topomap_future is None:
+            return True  # Nothing pending
+
+        if not self._model_load_topomap_future.done():
+            return False
+
+        # Future completed — inspect result
+        try:
+            resp = self._model_load_topomap_future.result()
+            if resp is not None:
+                if resp.success:
+                    logger.info(f"[TOPOMAP] Policy topomap reloaded: {resp.message}")
+                else:
+                    logger.warning(f"[TOPOMAP] Policy topomap reload failed: {resp.message}")
+            else:
+                logger.warning("[TOPOMAP] /model_load_topomap service returned None")
+        except Exception as exc:
+            logger.error(f"[TOPOMAP] Error from /model_load_topomap: {exc}")
+        finally:
+            self._model_load_topomap_future = None
+            self._model_load_topomap_start_time = None
+
+        return True
+
     def handle_simulation_restart(self, stage_reloaded: bool = False) -> None:
         """Refresh cached sim handles after stop/reset or stage reload."""
         self._evaluation.handle_simulation_restart(stage_reloaded=stage_reloaded)
@@ -662,7 +869,7 @@ class MissionManager:
             response.message = "Missions already completed."
             return response
 
-        # Disable IL baseline nodes (ViNT and trajectory follower) when mission starts
+        # Disable IL baseline nodes (policy node and trajectory follower) when mission starts
         # This stops the nodes from publishing trajectories and cmd_vel
         self._disable_il_baseline_nodes()
 
@@ -693,9 +900,9 @@ class MissionManager:
         return response
 
     def _disable_il_baseline_nodes(self) -> None:
-        """Disable IL baseline nodes (ViNT and trajectory follower).
+        """Disable IL baseline nodes (policy node and trajectory follower).
 
-        Publishes False to /vint_enable and /trajectory_follower_enable topics
+        Publishes False to /model_enable and /trajectory_follower_enable topics
         to stop the nodes from publishing trajectories and cmd_vel commands.
         """
         from std_msgs.msg import Bool
@@ -703,18 +910,18 @@ class MissionManager:
         disable_msg = Bool()
         disable_msg.data = False
 
-        if self._vint_enable_pub is not None:
-            self._vint_enable_pub.publish(disable_msg)
-            logger.info("[START_MISSION] Disabled ViNT policy node")
+        if self._model_enable_pub is not None:
+            self._model_enable_pub.publish(disable_msg)
+            logger.info(f"[{self._state.name}] Disabled policy node")
 
         if self._trajectory_follower_enable_pub is not None:
             self._trajectory_follower_enable_pub.publish(disable_msg)
-            logger.info("[START_MISSION] Disabled trajectory follower node")
+            logger.info(f"[{self._state.name}] Disabled trajectory follower node")
 
     def _enable_il_baseline_nodes(self) -> None:
-        """Enable IL baseline nodes (ViNT and trajectory follower).
+        """Enable IL baseline nodes (policy node and trajectory follower).
 
-        Publishes True to /vint_enable and /trajectory_follower_enable topics
+        Publishes True to /model_enable and /trajectory_follower_enable topics
         to allow the nodes to resume publishing trajectories and cmd_vel commands.
         Called after mission setup is complete (goal published, markers updated).
         """
@@ -723,13 +930,13 @@ class MissionManager:
         enable_msg = Bool()
         enable_msg.data = True
 
-        if self._vint_enable_pub is not None:
-            self._vint_enable_pub.publish(enable_msg)
-            logger.info("[PUBLISHING_GOAL] Enabled ViNT policy node")
+        if self._model_enable_pub is not None:
+            self._model_enable_pub.publish(enable_msg)
+            logger.info(f"[{self._state.name}] Enabled policy node")
 
         if self._trajectory_follower_enable_pub is not None:
             self._trajectory_follower_enable_pub.publish(enable_msg)
-            logger.info("[PUBLISHING_GOAL] Enabled trajectory follower node")
+            logger.info(f"[{self._state.name}] Enabled trajectory follower node")
 
     def _handle_get_mission_result(self, _request, response):
         """Handle mission result query service.
@@ -1141,6 +1348,20 @@ class MissionManager:
             self._state = MissionState.READY  # Try again next step
             return
 
+        # Optionally align the start heading to the first NavMesh path waypoint
+        if self.config.manager.align_initial_heading_to_path:
+            first_wp = self._sampler.get_path_first_waypoint(start, goal)
+            if first_wp is not None:
+                start.heading = math.atan2(first_wp.y - start.y, first_wp.x - start.x)
+                logger.info(f"[{self._state.name}] Aligned start heading to path: {math.degrees(start.heading):.1f}°")
+            else:
+                # Fallback: point directly at the goal
+                start.heading = math.atan2(goal.y - start.y, goal.x - start.x)
+                logger.warning(
+                    f"[{self._state.name}] No path waypoint found; "
+                    f"aligned heading to goal: {math.degrees(start.heading):.1f}°"
+                )
+
         # Store positions locally
         self._current_start = start
         self._current_goal = goal
@@ -1271,27 +1492,133 @@ class MissionManager:
         if elapsed >= self.config.manager.initial_pose_delay:
             self._publish_goal_pose(self._current_goal)
 
-            # Capture and publish goal image for ViNT ImageGoal mode
+            # Capture and publish goal image for policy ImageGoal mode
             if self.config.goal_image.enabled:
                 self._capture_and_publish_goal_image(self._current_goal)
 
-            # Update RViz markers
-            self._marker_publisher.publish_start_goal_from_sampled(self._current_start, self._current_goal)
+            # Generate topomap for policy navigation (non-blocking)
+            if self.config.topomap.enabled and self._topomap_generator is not None:
+                if not self._generate_topomap(self._current_start, self._current_goal):
+                    # Topomap generation failed — restart the mission
+                    # (decrement counter so this attempt doesn't count)
+                    logger.warning(
+                        f"[PUBLISHING_GOAL] Mission {self._current_mission} restarting: "
+                        "topomap generation failed (no images captured)"
+                    )
+                    self._current_mission -= 1
+                    self._state = MissionState.READY
+                    return
+                # Transition to LOADING_TOPOMAP — the async reload future will
+                # be polled there so that _spin_ros_once keeps running and
+                # /get_mission_result stays responsive.
+                self._state = MissionState.LOADING_TOPOMAP
+                return
 
-            # Record initial food piece count for spoilage evaluation
-            if self.config.food.enabled:
-                self._eval.initial_food_piece_count = self._evaluation.count_food_pieces_in_bucket()
-                logger.info(f"[FOOD] Initial piece count: {self._eval.initial_food_piece_count}")
+            # No topomap — check if canvas is needed before finalizing
+            if self.config.canvas.enabled and self._canvas_generator is not None:
+                if not self._canvas_generator.generate_and_publish(
+                    self._current_start, self._current_goal, self._current_mission
+                ):
+                    # Canvas generation failed — restart the mission
+                    logger.warning(
+                        f"[PUBLISHING_GOAL] Mission {self._current_mission} restarting: "
+                        "canvas instruction generation failed"
+                    )
+                    self._current_mission -= 1
+                    self._state = MissionState.READY
+                    return
+                # Transition to LOADING_CANVAS — wait for to become ready
+                self._state = MissionState.LOADING_CANVAS
+                self._canvas_start_time = self._get_current_time_seconds()
+                return
 
-            # Enable IL baseline nodes now that mission setup is complete
-            self._enable_il_baseline_nodes()
+            self._finalize_mission_setup()
 
-            logger.info(f"[{self._state.name}] Mission {self._current_mission} initiated successfully")
-            self._mission_start_time = self._get_current_time_seconds()
-            # Reset distance tracking for this mission
-            self._traveled_distance = 0.0
-            self._prev_robot_position = self._robot_position
-            self._state = MissionState.WAITING_FOR_COMPLETION
+    def _step_loading_topomap(self):
+        """Poll for policy topomap reload completion (non-blocking).
+
+        This state exists so that the main ``step()`` loop keeps calling
+        ``_spin_ros_once()`` while the ``/model_load_topomap`` async service
+        call is in-flight.  Without this, the executor would be blocked and
+        ``/get_mission_result`` requests from ``eval.sh`` would go unanswered.
+        """
+        _TOPOMAP_LOAD_TIMEOUT = 15.0  # seconds
+
+        if self._check_model_load_topomap_done():
+            self._after_topomap_done()
+            return
+
+        # Safety timeout so we don't get stuck forever
+        if self._model_load_topomap_start_time is not None:
+            waited = self._get_current_time_seconds() - self._model_load_topomap_start_time
+            if waited >= _TOPOMAP_LOAD_TIMEOUT:
+                logger.warning(f"[TOPOMAP] /model_load_topomap timed out after {waited:.1f}s — proceeding anyway")
+                self._model_load_topomap_future = None
+                self._model_load_topomap_start_time = None
+                self._after_topomap_done()
+
+    def _after_topomap_done(self) -> None:
+        """Chain from topomap to canvas if enabled, otherwise finalize."""
+        if self.config.canvas.enabled and self._canvas_generator is not None:
+            if not self._canvas_generator.generate_and_publish(
+                self._current_start, self._current_goal, self._current_mission
+            ):
+                logger.warning(
+                    f"[CANVAS] Mission {self._current_mission} restarting: "
+                    "canvas instruction generation failed after topomap"
+                )
+                self._current_mission -= 1
+                self._state = MissionState.READY
+                return
+            self._state = MissionState.LOADING_CANVAS
+            self._canvas_start_time = self._get_current_time_seconds()
+            return
+        self._finalize_mission_setup()
+
+    def _step_loading_canvas(self):
+        """Poll for model ready state (non-blocking).
+
+        This state exists so that the main ``step()`` loop keeps calling
+        ``_spin_ros_once()`` while waiting to reach
+        the ``"waiting"`` state, at which point we send ``/start_pause=True``.
+        """
+        # Check if model is ready (model_state == "waiting")
+        if self._canvas_generator.model_state == "waiting":
+            logger.info("[CANVAS] Model ready, sending start signal")
+            self._canvas_generator.send_start()
+            self._finalize_mission_setup()
+            return
+
+        # Safety timeout so we don't get stuck forever
+        if self._canvas_start_time is not None:
+            waited = self._get_current_time_seconds() - self._canvas_start_time
+            if waited >= self.config.canvas.planner_ready_timeout:
+                logger.warning(
+                    f"[CANVAS] Model ready timeout after {waited:.1f}s "
+                    f"(state={self._canvas_generator.model_state}) — proceeding anyway"
+                )
+                self._canvas_start_time = None
+                self._finalize_mission_setup()
+
+    def _finalize_mission_setup(self):
+        """Common tail of mission setup shared by PUBLISHING_GOAL, LOADING_TOPOMAP, and LOADING_CANVAS."""
+        # Update RViz markers
+        self._marker_publisher.publish_start_goal_from_sampled(self._current_start, self._current_goal)
+
+        # Record initial food piece count for spoilage evaluation
+        if self.config.food.enabled:
+            self._eval.initial_food_piece_count = self._evaluation.count_food_pieces_in_bucket()
+            logger.info(f"[FOOD] Initial piece count: {self._eval.initial_food_piece_count}")
+
+        # Enable IL baseline nodes now that mission setup is complete
+        self._enable_il_baseline_nodes()
+
+        logger.info(f"[{self._state.name}] Mission {self._current_mission} initiated successfully")
+        self._mission_start_time = self._get_current_time_seconds()
+        # Reset distance tracking for this mission
+        self._traveled_distance = 0.0
+        self._prev_robot_position = self._robot_position
+        self._state = MissionState.WAITING_FOR_COMPLETION
 
     def _step_waiting_for_completion(self):
         """Wait for goal completion, timeout, or robot fall.
@@ -1320,6 +1647,7 @@ class MissionManager:
             # Check for food spoilage before declaring success
             if self._evaluation.check_food_spoilage():
                 self._last_mission_result = MissionResult.FAILURE_FOODSPOILED
+                self._disable_il_baseline_nodes()
                 self._state = MissionState.WAITING_FOR_START
                 logger.info(
                     f"[FAILURE_FOODSPOILED] Mission {self._current_mission} failed - food spoiled! "
@@ -1329,6 +1657,7 @@ class MissionManager:
                 return
 
             self._last_mission_result = MissionResult.SUCCESS
+            self._disable_il_baseline_nodes()
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[SUCCESS] Mission {self._current_mission} completed! "
@@ -1354,6 +1683,7 @@ class MissionManager:
             self._eval.last_delta_v_magnitudes_mps = list(self._eval.delta_v_magnitudes_mps)
             self._eval.last_injury_costs = list(self._eval.injury_costs)
             self._eval.last_total_injury_cost = self._eval.total_injury_cost
+            self._disable_il_baseline_nodes()
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_PHYSICALASSISTANCE] Mission {self._current_mission} failed - robot fell down! "
@@ -1378,6 +1708,7 @@ class MissionManager:
             self._eval.last_delta_v_magnitudes_mps = list(self._eval.delta_v_magnitudes_mps)
             self._eval.last_injury_costs = list(self._eval.injury_costs)
             self._eval.last_total_injury_cost = self._eval.total_injury_cost
+            self._disable_il_baseline_nodes()
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_PHYSICALASSISTANCE] Mission {self._current_mission} failed - impulse health depleted! "
@@ -1401,6 +1732,7 @@ class MissionManager:
             self._eval.last_delta_v_magnitudes_mps = list(self._eval.delta_v_magnitudes_mps)
             self._eval.last_injury_costs = list(self._eval.injury_costs)
             self._eval.last_total_injury_cost = self._eval.total_injury_cost
+            self._disable_il_baseline_nodes()
             self._state = MissionState.WAITING_FOR_START
             logger.info(
                 f"[FAILURE_TIMEOUT] Mission {self._current_mission} timed out! "

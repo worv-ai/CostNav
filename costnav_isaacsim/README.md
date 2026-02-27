@@ -115,8 +115,8 @@ make build-isaac-sim
 # Build ROS2 runtime image
 make build-ros2
 
-# Build ViNT image (for IL baseline evaluation)
-make build-vint
+# Build ROS2 + PyTorch image (for IL baseline evaluation)
+make build-ros2-torch
 ```
 
 ### 2. Run Nav2 Navigation (Recommended)
@@ -179,16 +179,21 @@ make run-ros2
 
 Run the imitation learning baseline using ViNT (Visual Navigation Transformer):
 
-Download the pretrained model weights from Google Drive or train your model and place it to `checkpoints/`
+Download the pretrained checkpoints from Hugging Face:
+
+```bash
+make download-baseline-checkpoints-hf
+```
+
 See [Download Pretrained Checkpoints](il_training/README.md#download-pretrained-checkpoints) for more information.
 
 ```bash
-# Build ViNT Docker image (first time only)
-make build-vint
+# Build ROS2 + PyTorch Docker image (first time only)
+make build-ros2-torch
 
 # Run ViNT evaluation with Isaac Sim
 # Optionally specify model checkpoint path
-MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
+MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
 
 # Or run with default model
 make run-vint
@@ -206,6 +211,16 @@ You can trigger missions while ViNT is running:
 make start-mission
 ```
 
+To switch navigation mode, set `GOAL_TYPE` (auto-syncs related flags):
+
+```bash
+# Force image-goal evaluation
+GOAL_TYPE=image_goal MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
+
+# Force topomap evaluation
+GOAL_TYPE=topomap MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
+```
+
 To run automated evaluation with metrics collection:
 
 ```bash
@@ -218,6 +233,45 @@ make run-eval-vint
 # Or with custom parameters
 make run-eval-vint TIMEOUT=30 NUM_MISSIONS=20
 ```
+
+### 6. Run Canvas (Sketch-Based Navigation)
+
+Run the Canvas sketch-based navigation baseline. Canvas converts NavMesh shortest paths to pixel-space trajectory annotations and publishes them as instructions for an external inference service.
+
+```bash
+# Start Isaac Sim + RViz with Canvas enabled
+make run-canvas
+```
+
+This starts:
+
+- **Isaac Sim**: Street Sidewalk environment with robot and Canvas bridge enabled
+- **RViz**: Visualization of navigation markers and mission progress
+
+You can trigger missions while Canvas is running:
+
+```bash
+make start-mission
+```
+
+To run automated evaluation with metrics collection:
+
+```bash
+# Step 1 (terminal 1): Start Canvas (Isaac Sim + RViz)
+make run-canvas
+
+# Step 2 (terminal 2): Start the Canvas agent (private repo)
+# The Canvas agent lives in a separate private repository (with no plan to open-source)
+# and must be started manually before evaluation.
+
+# Step 3 (terminal 3): Run evaluation
+make run-eval-canvas
+
+# Or with custom parameters (default: 169s timeout, 3 missions)
+make run-eval-canvas TIMEOUT=169 NUM_MISSIONS=10
+```
+
+Evaluation logs are saved to `./logs/canvas_evaluation_<timestamp>.log`.
 
 ---
 
@@ -306,6 +360,7 @@ python launch.py --people 5
 | `ros2`      | ROS2 Nav2 only                     | `make run-ros2`      | Nav2 tuning (requires running sim) |
 | `teleop`    | Isaac Sim + Teleop                 | `make run-teleop`    | Manual driving (joystick)          |
 | `vint`      | Isaac Sim + ViNT Policy + Follower | `make run-vint`      | ViNT IL baseline evaluation        |
+| `canvas`    | Isaac Sim + RViz + Canvas Bridge   | `make run-canvas`    | Canvas sketch-based navigation     |
 
 ### Using Profiles Directly
 
@@ -852,8 +907,8 @@ CostNav includes an imitation learning (IL) baseline evaluation framework for co
 ### Quick Start: Run ViNT Evaluation
 
 ```bash
-# Build the ViNT Docker image (first time only)
-make build-vint
+# Build the ROS2 + PyTorch Docker image (first time only)
+make build-ros2-torch
 
 # Run ViNT policy evaluation with Isaac Sim
 make run-vint
@@ -877,7 +932,7 @@ This starts:
 │  │ launch.py          │       │ ViNT Policy Node (~10Hz)       │   │
 │  │ - Physics sim      │       │ - Camera → ViNT inference      │   │
 │  │ - Nova Carter      │       │ - Goal image navigation        │   │
-│  │ - ROS2 Bridge      │       │ - Publishes /vint_trajectory   │   │
+│  │ - ROS2 Bridge      │       │ - Publishes /model_trajectory   │   │
 │  │                    │       └────────────┬───────────────────┘   │
 │  │ /front_*/image ────┼──────►             │                       │
 │  │                    │                    ▼                       │
@@ -893,19 +948,25 @@ This starts:
 
 ### ROS2 Topics (ViNT)
 
-| Topic              | Type                | Direction | Description                        |
-| ------------------ | ------------------- | --------- | ---------------------------------- |
-| `/vint_trajectory` | `nav_msgs/Path`     | Publish   | Predicted trajectory (8 waypoints) |
-| `/vint_enable`     | `std_msgs/Bool`     | Subscribe | Enable/disable policy execution    |
-| `/goal_image`      | `sensor_msgs/Image` | Subscribe | Goal image for ImageGoal mode      |
+| Topic               | Type                | Direction | Description                        |
+| ------------------- | ------------------- | --------- | ---------------------------------- |
+| `/model_trajectory` | `nav_msgs/Path`     | Publish   | Predicted trajectory (8 waypoints) |
+| `/model_enable`     | `std_msgs/Bool`     | Subscribe | Enable/disable policy execution    |
+| `/goal_image`       | `sensor_msgs/Image` | Subscribe | Goal image for ImageGoal mode      |
 
 ### Makefile Targets (IL Baselines)
 
-| Target          | Description                                       |
-| --------------- | ------------------------------------------------- |
-| `build-vint`    | Build ViNT Docker image with ROS2 Jazzy + PyTorch |
-| `run-vint`      | Run Isaac Sim + ViNT policy + trajectory follower |
-| `run-eval-vint` | Run automated evaluation with metrics collection  |
+| Target             | Description                                              |
+| ------------------ | -------------------------------------------------------- |
+| `build-ros2-torch` | Build ROS2 Jazzy + PyTorch Docker image for IL baselines |
+| `run-vint`         | Run Isaac Sim + ViNT policy + trajectory follower        |
+| `run-eval-vint`    | Run automated ViNT evaluation with metrics collection    |
+| `run-gnm`          | Run Isaac Sim + GNM policy + trajectory follower         |
+| `run-eval-gnm`     | Run automated GNM evaluation with metrics collection     |
+| `run-nomad`        | Run Isaac Sim + NoMaD policy + trajectory follower       |
+| `run-eval-nomad`   | Run automated NoMaD evaluation with metrics collection   |
+| `run-canvas`       | Run Isaac Sim + RViz with Canvas bridge enabled          |
+| `run-eval-canvas`  | Run automated Canvas evaluation with metrics collection  |
 
 ### Configuration Files
 
@@ -915,6 +976,52 @@ This starts:
 
 > **See Also**: [IL Training Documentation](il_training/README.md) | [IL Evaluation Documentation](il_evaluation/README.md) for detailed setup and usage.
 
+### Canvas (Sketch-Based Navigation Baseline)
+
+Canvas is a sketch-based navigation baseline that converts NavMesh shortest paths to pixel-space trajectory annotations and publishes them as instructions for an external inference service. The inference service produces velocity commands (`/cmd_vel`) to drive the robot.
+
+#### Quick Start: Run Canvas Evaluation
+
+```bash
+# Step 1 (terminal 1): Start Isaac Sim + RViz with Canvas enabled
+make run-canvas
+
+# Step 2 (terminal 2): Start the Canvas agent (private repo)
+# The Canvas agent lives in a separate private repository (with no plan to open-source)
+# and must be started manually before evaluation.
+
+# Step 3 (terminal 3): Run evaluation
+make run-eval-canvas
+```
+
+#### Automated Evaluation
+
+The `run-eval-canvas` target runs consecutive missions and collects comprehensive metrics:
+
+```bash
+# Run with default parameters (169s timeout, 3 missions)
+make run-eval-canvas
+
+# Run with custom parameters
+make run-eval-canvas TIMEOUT=1169 NUM_MISSIONS=20
+```
+
+**Evaluation Parameters:**
+
+| Parameter      | Default | Description                    |
+| -------------- | ------- | ------------------------------ |
+| `TIMEOUT`      | 169     | Mission timeout in seconds     |
+| `NUM_MISSIONS` | 3       | Number of missions to evaluate |
+
+**Output:** Evaluation logs are saved to `./logs/canvas_evaluation_<timestamp>.log` with per-mission results and aggregate statistics.
+
+#### Makefile Targets (Canvas)
+
+| Target            | Description                                       |
+| ----------------- | ------------------------------------------------- |
+| `run-canvas`      | Start Isaac Sim + RViz with Canvas bridge enabled |
+| `run-eval-canvas` | Run automated evaluation with metrics collection  |
+
 ---
 
 ## Related Documentation
@@ -923,12 +1030,14 @@ This starts:
 - [Isaac Sim Launch Details](../docs/nav2/isaac_sim_launch.md) - Launch script documentation
 - [Architecture Overview](../docs/architecture.md) - CostNav system architecture
 - [Cost Model](../docs/cost_model.md) - Economic metrics for navigation evaluation
+- [Canvas Integration Plan](../docs/canvas_integration_plan.md) - Canvas integration architecture and design
 - [IL Training](il_training/README.md) - IL training documentation
 - [IL Evaluation](il_evaluation/README.md) - IL evaluation documentation
 - [IL Design](../docs/imitation_learning_baselines.md) - Detailed IL design document
 
 ## External References
 
+- [CANVAS Project Page](https://worv-ai.github.io/canvas/)
 - [Isaac Sim ROS2 Navigation Tutorial](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/ros2_tutorials/tutorial_ros2_navigation.html)
 - [Nav2 Documentation](https://docs.nav2.org/)
 - [Nav2 Configuration Guide](https://docs.nav2.org/configuration/index.html)

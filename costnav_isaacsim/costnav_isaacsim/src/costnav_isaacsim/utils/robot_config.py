@@ -33,6 +33,11 @@ DEFAULT_GOAL_CAMERA_HEIGHTS = {
     "segway_e1": 0.825,  # Segway E1 camera height
 }
 
+DEFAULT_CAMERA_USD_PATHS = {
+    "nova_carter": f"{OMNI_URL}/Users/worv/costnav/NovaCarter/camera.usd",
+    "segway_e1": f"{OMNI_URL}/Users/worv/costnav/SegwayE1/camera.usd",
+}
+
 ROBOT_NAME_ALIASES = {
     "segway": "segway_e1",
     "segway-e1": "segway_e1",

@@ -33,6 +33,7 @@ Note:
 
 # Always available (no ROS2 dependency)
 from .navmesh_sampler import NavMeshSampler, SampledPosition
+from .topomap_generator import TopomapGenerator
 
 # ROS2-dependent imports (lazy loading)
 ROS2_AVAILABLE = False
@@ -44,12 +45,15 @@ except ImportError:
     pass
 
 if ROS2_AVAILABLE:
+    from .canvas_instruction_generator import CanvasInstructionGenerator
     from .marker_publisher import MarkerPublisher
     from .mission_manager import MissionManager
 
     __all__ = [
         "NavMeshSampler",
         "SampledPosition",
+        "TopomapGenerator",
+        "CanvasInstructionGenerator",
         "MarkerPublisher",
         "MissionManager",
         "ROS2_AVAILABLE",
@@ -63,5 +67,6 @@ else:
     __all__ = [
         "NavMeshSampler",
         "SampledPosition",
+        "TopomapGenerator",
         "ROS2_AVAILABLE",
     ]

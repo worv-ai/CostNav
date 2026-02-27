@@ -245,36 +245,19 @@ The training script loads environment variables from `.env` automatically using 
 
 #### Download Pretrained Checkpoints
 
-Download pretrained model checkpoints from the [visualnav-transformer checkpoints](https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHetz263--4_2FFggg?usp=sharing) and place them in the `checkpoints/` directory.
-
-**Option 1: Manual Download**
-
-1. Visit the [Google Drive folder](https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHetz263--4_2FFggg?usp=sharing)
-2. Download the desired checkpoint files (e.g., `vint.pth`)
-3. Place them in `checkpoints/` at the repository root
-
-**Option 2: Using gdown (Recommended)**
+Download pretrained model checkpoints from Hugging Face:
 
 ```bash
-# Create checkpoints directory at repository root
-mkdir -p checkpoints
-cd checkpoints
-
-# Download ViNT checkpoint (replace FILE_ID with actual Google Drive file ID)
-# You can get the file ID from the Google Drive share link
-uv run gdown <FILE_ID>
-
-# Or download the entire folder
-uv run gdown --folder https://drive.google.com/drive/folders/1a9yWR2iooXFAqjQHetz263--4_2FFggg
+make download-baseline-checkpoints-hf
 ```
 
 The expected checkpoints directory structure:
 
 ```
 checkpoints/
-├── vint.pth      # ViNT pretrained weights
-├── nomad.pth     # NoMaD pretrained weights (optional)
-└── gnm.pth       # GNM pretrained weights (optional)
+├── baseline-vint.pth      # ViNT pretrained weights
+├── baseline-nomad.pth     # NoMaD pretrained weights
+└── baseline-gnm.pth       # GNM pretrained weights
 ```
 
 #### Fine-tuning ViNT on CostNav Data
@@ -306,16 +289,16 @@ The sbatch script will automatically read paths from the config file and run tra
 
 The config file `vint_costnav.yaml` supports the following key options:
 
-| Parameter               | Default                | Description                           |
-| ----------------------- | ---------------------- | ------------------------------------- |
-| `pretrained_checkpoint` | `checkpoints/vint.pth` | Path to pretrained weights            |
-| `batch_size`            | 64                     | Training batch size                   |
-| `epochs`                | 50                     | Number of training epochs             |
-| `lr`                    | 1e-4                   | Learning rate (lower for fine-tuning) |
-| `use_wandb`             | True                   | Enable Weights & Biases logging       |
-| `wandb_entity`          | maumai                 | W&B team/entity name                  |
-| `context_size`          | 5                      | Number of context frames              |
-| `len_traj_pred`         | 5                      | Trajectory prediction length          |
+| Parameter               | Default                         | Description                           |
+| ----------------------- | ------------------------------- | ------------------------------------- |
+| `pretrained_checkpoint` | `checkpoints/baseline-vint.pth` | Path to pretrained weights            |
+| `batch_size`            | 64                              | Training batch size                   |
+| `epochs`                | 50                              | Number of training epochs             |
+| `lr`                    | 1e-4                            | Learning rate (lower for fine-tuning) |
+| `use_wandb`             | True                            | Enable Weights & Biases logging       |
+| `wandb_entity`          | maumai                          | W&B team/entity name                  |
+| `context_size`          | 5                               | Number of context frames              |
+| `len_traj_pred`         | 5                               | Trajectory prediction length          |
 
 To disable W&B logging, set `use_wandb: False` in the config or set:
 

@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-vint run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint download-assets-omniverse download-assets-hf upload-assets-hf upload-dataset-hf start-nucleus stop-nucleus
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-ros2-torch run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint run-gnm run-nomad run-canvas start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint run-eval-gnm run-eval-nomad run-eval-canvas download-assets-omniverse download-assets-hf upload-assets-hf download-baseline-checkpoints-hf start-nucleus stop-nucleus
 
 # Load environment variables from .env file if it exists
 # Variables can still be overridden from command line
@@ -24,13 +24,38 @@ NUM_PEOPLE ?= 20
 FOOD ?= True
 TUNED ?= True
 AMCL ?= False
+TOPOMAP ?= False
+IL_TOPOMAP ?= True
 GOAL_IMAGE ?= False
+ALIGN_HEADING ?= False
+CANVAS ?= False
+
+# Auto-link goal_type to goal image/topomap flags unless explicitly overridden.
+# Explicit means set via command line or environment (including overrides).
+define _is_explicit
+$(filter command line environment environment override,$(origin $(1)))
+endef
+
+ifneq ($(strip $(GOAL_TYPE)),)
+ifeq ($(strip $(GOAL_TYPE)),image_goal)
+ifeq ($(call _is_explicit,GOAL_IMAGE),)
+GOAL_IMAGE := True
+endif
+ifeq ($(call _is_explicit,IL_TOPOMAP),)
+IL_TOPOMAP := False
+endif
+else ifeq ($(strip $(GOAL_TYPE)),topomap)
+ifeq ($(call _is_explicit,GOAL_IMAGE),)
+GOAL_IMAGE := False
+endif
+ifeq ($(call _is_explicit,IL_TOPOMAP),)
+IL_TOPOMAP := True
+endif
+endif
+endif
 
 # Joystick settings for teleop (always reads from .env)
 XBOX_ID := $(shell grep '^XBOX_ID=' .env 2>/dev/null | cut -d= -f2)
-
-# model checkpoint path
-MODEL_CHECKPOINT ?= checkpoints/vint.pth
 
 ISAAC_SIM_IMAGE ?= costnav-isaacsim-$(ISAAC_SIM_VERSION):$(COSTNAV_VERSION)
 ISAAC_LAB_IMAGE ?= costnav-isaaclab-$(ISAAC_SIM_VERSION)-$(ISAAC_LAB_VERSION):$(COSTNAV_VERSION)
@@ -81,11 +106,11 @@ run-ros2:
 # Run the Isaac Sim container with launch.py (includes RViz)
 # TODO: down and up every time takes a long time. Can we avoid it?
 # However, healthcheck does not work if we don't do this...
-# Usage: make run-isaac-sim NUM_PEOPLE=5 SIM_ROBOT=nova_carter FOOD=True GOAL_IMAGE=True
+# Usage: make run-isaac-sim NUM_PEOPLE=5 SIM_ROBOT=nova_carter FOOD=True TOPOMAP=True ALIGN_HEADING=True
 run-isaac-sim:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile isaac-sim down
-	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) GOAL_IMAGE=$(GOAL_IMAGE) $(DOCKER_COMPOSE) --profile isaac-sim up
+	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) TOPOMAP=$(TOPOMAP) ALIGN_HEADING=$(ALIGN_HEADING) $(DOCKER_COMPOSE) --profile isaac-sim up
 
 # Run the Isaac Sim container with the native Isaac Sim GUI (no launch.py)
 # Useful for opening the editor directly to inspect scenes, create assets, etc.
@@ -138,7 +163,7 @@ start-mission-record:
 
 
 # Run Isaac Sim + RViz, then launch teleop node interactively (curses UI visible)
-# Usage: make run-teleop NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True GOAL_IMAGE=True
+# Usage: make run-teleop NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True
 run-teleop:
 	@if [ "$(SIM_ROBOT)" != "nova_carter" ] && [ "$(SIM_ROBOT)" != "segway_e1" ]; then \
 		echo "Unsupported robot: $(SIM_ROBOT). Use nova_carter or segway_e1."; \
@@ -149,7 +174,7 @@ run-teleop:
 	SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile teleop down
 	@# Start Isaac Sim and RViz in background
 	@echo "Waiting for Isaac Sim to become healthy (tip: run 'docker logs -f costnav-isaac-sim' in another terminal to monitor)..."
-	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) GOAL_IMAGE=$(GOAL_IMAGE) \
+	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) \
 		$(DOCKER_COMPOSE) --profile teleop up -d
 	@# Wait for Isaac Sim to become healthy
 	@timeout 600 bash -c 'while [ "$$(docker inspect -f "{{.State.Health.Status}}" costnav-isaac-sim 2>/dev/null)" != "healthy" ]; do sleep 5; done' \
@@ -173,21 +198,59 @@ run-teleop:
 	echo "Done."
 
 # =============================================================================
-# IL Evaluation (ViNT) Targets
+# IL Evaluation (ViNT / GNM / NoMaD) Targets
 # =============================================================================
 
-# Build the ROS2 + PyTorch Docker image (ViNT evaluation)
-build-vint:
+# Build the shared ROS2 + PyTorch image for IL baselines (ViNT/GNM/NoMaD)
+build-ros2-torch:
 	$(DOCKER_BUILD) -f Dockerfile.ros_torch -t $(COSTNAV_ROS2_TORCH_IMAGE) .
 
 # Run Isaac Sim with ViNT policy node and trajectory follower for IL baseline evaluation
-# Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/vint.pth)
-# Goal image publishing is enabled by default for ViNT ImageGoal mode
-# Example: MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
+# Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/baseline-vint.pth)
+# Topomap generation is enabled by default for ViNT navigation
+# ALIGN_HEADING defaults to True for IL baselines — IL models perform poorly when the
+# robot's initial heading is misaligned with the trajectory. Override with ALIGN_HEADING=False if needed.
+# Example: MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
+run-vint: MODEL_CHECKPOINT ?= checkpoints/baseline-vint.pth
+run-vint: ALIGN_HEADING = True
 run-vint:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile vint down
-	GOAL_IMAGE=True MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile vint up
+	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) TOPOMAP=$(IL_TOPOMAP) GOAL_IMAGE=$(GOAL_IMAGE) ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile vint up
+
+# Run Isaac Sim with GNM policy node and trajectory follower for IL baseline evaluation
+# Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/gnm.pth)
+# Topomap generation is enabled by default for GNM navigation
+# ALIGN_HEADING defaults to True for IL baselines — IL models perform poorly when the
+# robot's initial heading is misaligned with the trajectory. Override with ALIGN_HEADING=False if needed.
+# Example: MODEL_CHECKPOINT=checkpoints/baseline-gnm.pth make run-gnm
+run-gnm: MODEL_CHECKPOINT ?= checkpoints/baseline-gnm.pth
+run-gnm: ALIGN_HEADING = True
+run-gnm:
+	xhost +local:docker 2>/dev/null || true
+	$(DOCKER_COMPOSE) --profile gnm down
+	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) TOPOMAP=$(IL_TOPOMAP) GOAL_IMAGE=$(GOAL_IMAGE) ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile gnm up
+
+# Run Isaac Sim with NoMaD policy node and trajectory follower for IL baseline evaluation
+# Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/baseline-nomad.pth)
+# Topomap generation is enabled by default for NoMaD navigation
+# ALIGN_HEADING defaults to True for IL baselines — IL models perform poorly when the
+# robot's initial heading is misaligned with the trajectory. Override with ALIGN_HEADING=False if needed.
+# Example: MODEL_CHECKPOINT=checkpoints/baseline-nomad.pth make run-nomad
+run-nomad: MODEL_CHECKPOINT ?= checkpoints/baseline-nomad.pth
+run-nomad: ALIGN_HEADING = True
+run-nomad:
+	xhost +local:docker 2>/dev/null || true
+	$(DOCKER_COMPOSE) --profile nomad down
+	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) TOPOMAP=$(IL_TOPOMAP) GOAL_IMAGE=$(GOAL_IMAGE) ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile nomad up
+
+# Run Isaac Sim with CANVAS instruction generation enabled
+# Starts Isaac Sim + RViz with canvas.enabled=true in mission config
+# Usage: make run-canvas NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True
+run-canvas:
+	xhost +local:docker 2>/dev/null || true
+	$(DOCKER_COMPOSE) --profile canvas down
+	CANVAS=True NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) $(DOCKER_COMPOSE) --profile canvas up
 
 # =============================================================================
 # ROS Bag Recording Targets
@@ -262,7 +325,7 @@ run-eval-vint:
 		echo "ERROR: 'make run-vint' is not running."; \
 		echo ""; \
 		echo "Please start vint first in a separate terminal:"; \
-		echo "  MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint"; \
+		echo "  MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint"; \
 		echo ""; \
 		echo "Then run this command again:"; \
 		echo "  make run-eval-vint TIMEOUT=$(TIMEOUT) NUM_MISSIONS=$(NUM_MISSIONS)"; \
@@ -273,6 +336,66 @@ run-eval-vint:
 	@echo "  Number of missions:  $(NUM_MISSIONS)"
 	@echo ""
 	@bash scripts/eval.sh vint $(TIMEOUT) $(NUM_MISSIONS)
+
+# Run GNM evaluation (requires running gnm instance via make run-gnm)
+# Usage: make run-eval-gnm TIMEOUT=20 NUM_MISSIONS=10
+# Output: ./logs/gnm_evaluation_<timestamp>.log
+run-eval-gnm:
+	@if ! docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-gnm"; then \
+		echo "ERROR: 'make run-gnm' is not running."; \
+		echo ""; \
+		echo "Please start gnm first in a separate terminal:"; \
+		echo "  MODEL_CHECKPOINT=checkpoints/baseline-gnm.pth make run-gnm"; \
+		echo ""; \
+		echo "Then run this command again:"; \
+		echo "  make run-eval-gnm TIMEOUT=$(TIMEOUT) NUM_MISSIONS=$(NUM_MISSIONS)"; \
+		exit 1; \
+	fi
+	@echo "Starting GNM evaluation..."
+	@echo "  Timeout per mission: $(TIMEOUT)s"
+	@echo "  Number of missions:  $(NUM_MISSIONS)"
+	@echo ""
+	@bash scripts/eval.sh gnm $(TIMEOUT) $(NUM_MISSIONS)
+
+# Run NoMaD evaluation (requires running nomad instance via make run-nomad)
+# Usage: make run-eval-nomad TIMEOUT=20 NUM_MISSIONS=10
+# Output: ./logs/nomad_evaluation_<timestamp>.log
+run-eval-nomad:
+	@if ! docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-nomad"; then \
+		echo "ERROR: 'make run-nomad' is not running."; \
+		echo ""; \
+		echo "Please start nomad first in a separate terminal:"; \
+		echo "  MODEL_CHECKPOINT=checkpoints/baseline-nomad.pth make run-nomad"; \
+		echo ""; \
+		echo "Then run this command again:"; \
+		echo "  make run-eval-nomad TIMEOUT=$(TIMEOUT) NUM_MISSIONS=$(NUM_MISSIONS)"; \
+		exit 1; \
+	fi
+	@echo "Starting NoMaD evaluation..."
+	@echo "  Timeout per mission: $(TIMEOUT)s"
+	@echo "  Number of missions:  $(NUM_MISSIONS)"
+	@echo ""
+	@bash scripts/eval.sh nomad $(TIMEOUT) $(NUM_MISSIONS)
+
+# Run Canvas evaluation (requires running canvas instance via make run-canvas)
+# Usage: make run-eval-canvas TIMEOUT=20 NUM_MISSIONS=10
+# Output: ./logs/canvas_evaluation_<timestamp>.log
+run-eval-canvas:
+	@if ! docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-rviz-nav2"; then \
+		echo "ERROR: 'make run-canvas' is not running."; \
+		echo ""; \
+		echo "Please start canvas first in a separate terminal:"; \
+		echo "  make run-canvas"; \
+		echo ""; \
+		echo "Then run this command again:"; \
+		echo "  make run-eval-canvas TIMEOUT=$(TIMEOUT) NUM_MISSIONS=$(NUM_MISSIONS)"; \
+		exit 1; \
+	fi
+	@echo "Starting Canvas evaluation..."
+	@echo "  Timeout per mission: $(TIMEOUT)s"
+	@echo "  Number of missions:  $(NUM_MISSIONS)"
+	@echo ""
+	@bash scripts/eval.sh canvas $(TIMEOUT) $(NUM_MISSIONS)
 
 
 # =============================================================================
@@ -301,6 +424,7 @@ upload-assets-hf:
 	$(DOCKER_COMPOSE) --profile dev run --rm dev \
 		bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/scripts/assets/upload_assets_hf.py"
 
+<<<<<<< HEAD
 # Upload teleop dataset to Hugging Face dataset
 # Runs inside dev Docker container with huggingface_hub
 # Requires HF_TOKEN to be set in .env file
@@ -310,6 +434,15 @@ upload-dataset-hf:
 		-e COSTNAV_DATASET_ROOT="$(COSTNAV_DATASET_ROOT)" \
 		-v "$(COSTNAV_DATASET_ROOT)":"$(COSTNAV_DATASET_ROOT)":ro \
 		dev bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/scripts/assets/upload_assets_hf_dataset.py"
+=======
+# Download pretrained baseline checkpoints from Hugging Face
+# Downloads ViNT, NoMaD, GNM checkpoints to ./checkpoints/
+download-baseline-checkpoints-hf:
+	@echo "Downloading baseline checkpoints from Hugging Face..."
+	$(DOCKER_COMPOSE) --profile dev run --rm dev \
+		bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/scripts/assets/download_baseline_checkpoints_hf.py"
+
+>>>>>>> main
 # =============================================================================
 # Nucleus Server Targets
 # =============================================================================

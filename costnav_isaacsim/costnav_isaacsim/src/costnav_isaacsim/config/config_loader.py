@@ -115,6 +115,86 @@ class GoalImageConfig:
     height: int = 360  # Goal image height (matches ViNT input)
     camera_height_offset: float = 0.3  # Camera height offset from ground (meters)
     camera_prim_path: str = "/World/goal_camera"  # USD prim path for goal camera
+    camera_usd_path: Optional[str] = None  # USD asset path to load camera from (e.g. omniverse://...camera.usd)
+
+
+@dataclass
+class TopoMapConfig:
+    """Configuration for NavMesh-based topological map generation.
+
+    Controls the TopomapGenerator which creates ViNT-compatible topomaps
+    by querying NavMesh shortest paths and capturing images along the route.
+    """
+
+    enabled: bool = False  # Enable topomap generation
+    waypoint_interval: float = 2.0  # Distance between waypoints in meters
+    camera_height_offset: float = 0.3  # Camera height above ground (meters)
+    image_width: int = 640  # Captured image width (pixels)
+    image_height: int = 400  # Captured image height (pixels) — aspect ratio must match aperture (5.76/3.6 = 16:10)
+    output_dir: str = "/tmp/costnav_topomap"  # Default output directory
+    camera_prim_path: str = "/World/topomap_camera"  # USD prim path for topomap camera
+    render_settle_steps: int = 3  # Simulation steps per capture for render pipeline flush
+    first_image_extra_settle_steps: int = 10  # Extra simulation steps for the first capture to eliminate render noise
+    max_heading_change_per_waypoint: float = 0.35  # Max heading change (radians) per waypoint (~20°); corners exceeding this get extra interpolated waypoints
+    wall_clearance: float = 0.0  # Extra clearance from walls (meters); added to agent_radius for path queries to push paths away from obstacles
+    robot_prim_path: Optional[str] = None  # Robot prim path to hide during capture
+    camera_usd_path: Optional[str] = None  # USD asset path to load camera from (e.g. omniverse://...camera.usd)
+
+
+@dataclass
+class CanvasInstructionConfig:
+    """Configuration for CANVAS instruction generation.
+
+    Controls the CanvasInstructionGenerator which converts NavMesh shortest
+    paths into pixel-space trajectory annotations and publishes them as
+    Scenario JSON + Int32MultiArray for CANVAS.
+    """
+
+    enabled: bool = False  # Enable canvas instruction generation for CANVAS
+
+    # Scenario fields published
+    map_name: str = "costnav"  # Top-level key in map_list.yml
+    sketch_map_name: str = "orthographic_map"  # Sub-key for HTL (sketch) map
+    drive_map_name: str = "orthographic_map"  # Sub-key for drive map
+
+    # Model guideline for the neural planner
+    model_guideline: str = (
+        "You are segway_e1, measuring 62*89*115cm (width, length, and height),\n"
+        "equipped with a wide-angle camera and moving on four wheel drive.\n\n"
+        "You are driving on a sidewalk.\n"
+        "You should act like a last-mile delivery robot.\n\n"
+        "You must follow these driving instructions:\n"
+        "1. You must avoid collisions.\n"
+        "2. You should prioritize reaching the final destination.\n"
+        "3. You should follow the Trajectory Instruction.\n"
+        "    a. If the Trajectory Instruction cannot be followed due to any obstacles, "
+        "you should deviate to bypass the obstacle.\n"
+        "    b. You should try to evade any identifiable obstacles.\n"
+        "4. You should maintain a constant driving speed.\n"
+        "5. You must drive on the sidewalk.\n"
+        "    a. If you need to cross the road, you must use the crosswalk."
+    )
+
+    # Path to the map YAML file (Nav2 format with resolution, origin, image).
+    # The CanvasInstructionGenerator loads resolution, origin, and image
+    # dimensions from this file at runtime.
+    map_yaml_path: str = ""
+
+    # ROS2 topic names
+    scenario_topic: str = "/instruction_scenario"
+    annotation_topic: str = "/instruction_annotation"
+    start_pause_topic: str = "/start_pause"
+    stop_model_topic: str = "/stop_model"
+    reached_goal_topic: str = "/reached_goal"
+    model_state_topic: str = "/model_state"
+
+    # Timeout for waiting to become ready (seconds)
+    planner_ready_timeout: float = 15.0
+
+    # Debug settings
+    debug_enabled: bool = False  # Save published data to disk and visualize trajectory
+    debug_output_dir: str = "/tmp/canvas_debug/"  # Directory for debug output files
+    debug_map_image_path: str = ""  # Path to base map image for trajectory visualization
 
 
 @dataclass
@@ -133,6 +213,11 @@ class MissionManagerConfig:
     # Nav2 costmap clearing (useful when teleporting between missions)
     clear_costmaps_on_mission_start: bool = True
     costmap_clear_timeout_sec: float = 2.0  # Max time to wait for clear service responses before continuing
+
+    # When True, set the start heading to point toward the first NavMesh
+    # shortest-path waypoint (or directly toward the goal if no intermediate
+    # waypoints exist) instead of using a random heading.
+    align_initial_heading_to_path: bool = False
 
 
 @dataclass
@@ -155,6 +240,8 @@ class MissionConfig:
     food: FoodConfig = field(default_factory=FoodConfig)
     injury: InjuryConfig = field(default_factory=InjuryConfig)
     goal_image: GoalImageConfig = field(default_factory=GoalImageConfig)
+    topomap: TopoMapConfig = field(default_factory=TopoMapConfig)
+    canvas: CanvasInstructionConfig = field(default_factory=CanvasInstructionConfig)
     manager: MissionManagerConfig = field(default_factory=MissionManagerConfig)
 
     @classmethod
@@ -245,6 +332,46 @@ class MissionConfig:
             height=goal_image_data.get("height", 360),
             camera_height_offset=goal_image_data.get("camera_height_offset", 0.3),
             camera_prim_path=goal_image_data.get("camera_prim_path", "/World/goal_camera"),
+            camera_usd_path=goal_image_data.get("camera_usd_path"),
+        )
+
+        # Parse topomap config (NavMesh-based topological map generation)
+        topomap_data = data.get("topomap", {})
+        topomap_config = TopoMapConfig(
+            enabled=topomap_data.get("enabled", False),
+            waypoint_interval=topomap_data.get("waypoint_interval", 2.0),
+            camera_height_offset=topomap_data.get("camera_height_offset", 0.3),
+            image_width=topomap_data.get("image_width", 640),
+            image_height=topomap_data.get("image_height", 400),
+            output_dir=topomap_data.get("output_dir", "/tmp/costnav_topomap"),
+            camera_prim_path=topomap_data.get("camera_prim_path", "/World/topomap_camera"),
+            render_settle_steps=topomap_data.get("render_settle_steps", 3),
+            first_image_extra_settle_steps=topomap_data.get("first_image_extra_settle_steps", 10),
+            max_heading_change_per_waypoint=topomap_data.get("max_heading_change_per_waypoint", 0.35),
+            wall_clearance=topomap_data.get("wall_clearance", 0.0),
+            robot_prim_path=topomap_data.get("robot_prim_path", teleport_data.get("robot_prim")),
+            camera_usd_path=topomap_data.get("camera_usd_path"),
+        )
+
+        # Parse canvas instruction config (for CANVAS integration)
+        canvas_data = data.get("canvas", {})
+        canvas_config = CanvasInstructionConfig(
+            enabled=canvas_data.get("enabled", False),
+            map_name=canvas_data.get("map_name", "costnav"),
+            sketch_map_name=canvas_data.get("sketch_map_name", "orthographic_map"),
+            drive_map_name=canvas_data.get("drive_map_name", "orthographic_map"),
+            model_guideline=canvas_data.get("model_guideline", CanvasInstructionConfig().model_guideline),
+            map_yaml_path=canvas_data.get("map_yaml_path", ""),
+            scenario_topic=canvas_data.get("scenario_topic", "/instruction_scenario"),
+            annotation_topic=canvas_data.get("annotation_topic", "/instruction_annotation"),
+            start_pause_topic=canvas_data.get("start_pause_topic", "/start_pause"),
+            stop_model_topic=canvas_data.get("stop_model_topic", "/stop_model"),
+            reached_goal_topic=canvas_data.get("reached_goal_topic", "/reached_goal"),
+            model_state_topic=canvas_data.get("model_state_topic", "/model_state"),
+            planner_ready_timeout=canvas_data.get("planner_ready_timeout", 15.0),
+            debug_enabled=canvas_data.get("debug_enabled", False),
+            debug_output_dir=canvas_data.get("debug_output_dir", "/tmp/canvas_debug/"),
+            debug_map_image_path=canvas_data.get("debug_map_image_path", ""),
         )
 
         # Parse manager config (MissionManager runtime settings)
@@ -260,6 +387,7 @@ class MissionConfig:
             teleport_settle_steps=manager_data.get("teleport_settle_steps", 30),
             clear_costmaps_on_mission_start=manager_data.get("clear_costmaps_on_mission_start", True),
             costmap_clear_timeout_sec=manager_data.get("costmap_clear_timeout_sec", 2.0),
+            align_initial_heading_to_path=manager_data.get("align_initial_heading_to_path", False),
         )
 
         return cls(
@@ -274,6 +402,8 @@ class MissionConfig:
             food=food_config,
             injury=injury_config,
             goal_image=goal_image_config,
+            topomap=topomap_config,
+            canvas=canvas_config,
             manager=manager_config,
         )
 
