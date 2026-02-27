@@ -30,9 +30,10 @@ dependencies = [
     "scipy>=1.15.3",
     "casadi>=3.7.2",
     "transforms3d>=0.4.2",
+    "pydantic>=2.0.0",
     # NavDP local inference
     "diffusers",
-    "transformers",
+    "transformers<4.56",
 ]
 
 [[tool.uv.index]]

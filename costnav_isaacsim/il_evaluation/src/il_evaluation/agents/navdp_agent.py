@@ -55,6 +55,8 @@ class NavDPAgent:
     def __init__(
         self,
         checkpoint: str,
+        depth_anything_checkpoint: Optional[str] = None,
+        depth_anything_encoder: Optional[str] = None,
         image_size: int = 224,
         memory_size: int = 8,
         predict_size: int = 24,
@@ -101,6 +103,16 @@ class NavDPAgent:
             },
             "local_rank": 0,
         }
+        if depth_anything_checkpoint:
+            model_cfg["il"]["depth_anything_checkpoint"] = str(depth_anything_checkpoint)
+        # NOTE:
+        # `depth_anything_encoder` in eval is primarily for the online RGB->depth estimator
+        # (navdp_policy_node). The trained NavDP checkpoint may have been trained with a
+        # different backbone variant (commonly vits). Forcing the InternNav model encoder
+        # here can break checkpoint loading with large state_dict size mismatches.
+        #
+        # Keep the NavDP model architecture at InternNav default unless we introduce a
+        # separate explicit "model backbone encoder" argument.
 
         config = NavDPModelConfig(model_cfg=model_cfg)
         self.model = NavDPNet.from_pretrained(checkpoint, config=config)
@@ -180,6 +192,10 @@ class NavDPAgent:
             input_image = np.concatenate((pad, input_image), axis=0)
         return input_image
 
+    def _to_tensor(self, array: np.ndarray) -> torch.Tensor:
+        """Move numpy batch arrays onto the model device."""
+        return torch.as_tensor(array, dtype=torch.float32, device=self.device)
+
     def _process_pixel_goal(self, image: np.ndarray, pixel_xy: Tuple[float, float]) -> np.ndarray:
         """Create pixel-goal mask aligned with processed image."""
         h, w = image.shape[:2]
@@ -240,8 +256,8 @@ class NavDPAgent:
         proc_depth = self._process_depth(depth)
 
         mem_image = self._update_memory(0, proc_image)
-        input_images = mem_image[None, ...]  # [B, T, H, W, 3]
-        input_depths = proc_depth[None, ...]  # [B, H, W, 1]
+        input_images = self._to_tensor(mem_image[None, ...])  # [B, T, H, W, 3]
+        input_depths = self._to_tensor(proc_depth[None, ...])  # [B, H, W, 1]
         goal = np.asarray(goal_xyz, dtype=np.float32)[None, ...]  # [B, 3]
 
         negative_traj, positive_traj = self.model.predict_pointgoal_batch_action_vel(
@@ -263,11 +279,11 @@ class NavDPAgent:
         proc_goal = self._process_image(goal_image)
 
         mem_image = self._update_memory(0, proc_image)
-        input_images = mem_image[None, ...]  # [B, T, H, W, 3]
-        input_depths = proc_depth[None, ...]  # [B, H, W, 1]
+        input_images = self._to_tensor(mem_image[None, ...])  # [B, T, H, W, 3]
+        input_depths = self._to_tensor(proc_depth[None, ...])  # [B, H, W, 1]
 
         rgbd_embed = self.model.rgbd_encoder(input_images, input_depths)
-        image_goal = np.concatenate((proc_goal, proc_image), axis=-1)[None, ...]  # [B, H, W, 6]
+        image_goal = self._to_tensor(np.concatenate((proc_goal, proc_image), axis=-1)[None, ...])  # [B, H, W, 6]
         image_embed = self.model.image_encoder(image_goal).unsqueeze(1)
 
         positive_traj = self._sample_with_goal_embed(image_embed, rgbd_embed)
@@ -285,11 +301,11 @@ class NavDPAgent:
         pixel_mask = self._process_pixel_goal(image, pixel_xy)
 
         mem_image = self._update_memory(0, proc_image)
-        input_images = mem_image[None, ...]
-        input_depths = proc_depth[None, ...]
+        input_images = self._to_tensor(mem_image[None, ...])
+        input_depths = self._to_tensor(proc_depth[None, ...])
 
         rgbd_embed = self.model.rgbd_encoder(input_images, input_depths)
-        pixel_goal = np.concatenate((proc_image, pixel_mask), axis=-1)[None, ...]  # [B, H, W, 4]
+        pixel_goal = self._to_tensor(np.concatenate((proc_image, pixel_mask), axis=-1)[None, ...])  # [B, H, W, 4]
         pixel_embed = self.model.pixel_encoder(pixel_goal).unsqueeze(1)
 
         positive_traj = self._sample_with_goal_embed(pixel_embed, rgbd_embed)
@@ -304,8 +320,8 @@ class NavDPAgent:
         proc_depth = self._process_depth(depth)
 
         mem_image = self._update_memory(0, proc_image)
-        input_images = mem_image[None, ...]
-        input_depths = proc_depth[None, ...]
+        input_images = self._to_tensor(mem_image[None, ...])
+        input_depths = self._to_tensor(proc_depth[None, ...])
 
         negative_traj, positive_traj = self.model.predict_nogoal_batch_action_vel(
             input_images, input_depths, sample_num=self.sample_num

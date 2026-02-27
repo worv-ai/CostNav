@@ -3,24 +3,31 @@
 
 name: navdp_costnav
 
-# Outputs (relative to costnav_isaacsim/)
-output_dir: il_baselines/outputs/navdp/%s/ckpts
-tensorboard_dir: il_baselines/outputs/navdp/%s/tensorboard
-checkpoint_folder: il_baselines/outputs/navdp/%s/ckpts
-log_dir: il_baselines/outputs/navdp/%s/logs
+# Outputs (use /mnt/harbor to avoid local disk quota)
+output_dir: /mnt/harbor/users/minhyeok/navdp/runs/%s/ckpts
+tensorboard_dir: /mnt/harbor/users/minhyeok/navdp/runs/%s/tensorboard
+checkpoint_folder: /mnt/harbor/users/minhyeok/navdp/runs/%s/ckpts
+log_dir: /mnt/harbor/users/minhyeok/navdp/runs/%s/logs
 
 il:
   # REQUIRED: update to your NavDP lerobot dataset paths
-  dataset_navdp: /ABS/PATH/TO/navdp_dataset_lerobot.json
-  root_dir: /ABS/PATH/TO/navdp/traj_data
+  dataset_navdp: /mnt/harbor/users/minhyeok/navdp/navdp_dataset_lerobot_train_vits_pg0.json
+  root_dir: /mnt/raid11/datasets/CostNav/navdp_training_vits_pg0
+  # Optional: use ViNT split traj names to filter NavDP trajectories.
+  # Disable ViNT split filtering by default. Those trajectory names do not match
+  # the NavDP-converted dataset names and can result in zero training samples.
+  traj_names_path: ""
 
   # Common training knobs (defaults match InternNav)
+  ckpt_to_load: /mnt/harbor/users/minhyeok/navdp/navdp-cross-modal.ckpt
+  depth_anything_checkpoint: /mnt/harbor/users/minhyeok/depthAnything/depth_anything_v2_vits.pth
+  depth_anything_encoder: vits
   epochs: 1000
   batch_size: 32
   lr: 1.0e-4
   num_workers: 8
   save_interval_epochs: 5
-  report_to: tensorboard
+  report_to: [tensorboard, wandb]
 
   # Model/data shape
   image_size: 224
@@ -37,3 +44,10 @@ il:
   preload: false
   random_digit: false
   prior_sample: false
+
+# Reference split config (ViNT format). NavDP trainer uses il.root_dir + il.traj_names_path.
+datasets:
+  nova_carter_vint:
+    data_folder: "/mnt/raid11/datasets/CostNav/vint_training_v3"
+    train: "/mnt/raid11/datasets/CostNav/vint_training_v3_splits/train"
+    test: "/mnt/raid11/datasets/CostNav/vint_training_v3_splits/test"

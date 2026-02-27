@@ -12,13 +12,15 @@ from __future__ import annotations
 
 import argparse
 import math
+import sys
+from pathlib import Path as FilePath
 from typing import Optional
 
 import numpy as np
 import rclpy
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PoseStamped, PointStamped
-from nav_msgs.msg import Odometry, Path
+from nav_msgs.msg import Odometry, Path as NavPath
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
@@ -28,12 +30,89 @@ from transforms3d.euler import quat2euler, euler2quat
 from il_evaluation.agents.navdp_agent import NavDPAgent
 
 
+def _find_repo_root() -> FilePath:
+    here = FilePath(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "third_party" / "InternNav").exists():
+            return parent
+    raise RuntimeError("Could not locate repo root (third_party/InternNav not found)")
+
+
+class DepthAnythingEstimator:
+    """Lightweight DepthAnything runtime wrapper for eval-time RGB->depth inference."""
+
+    def __init__(
+        self,
+        checkpoint: str,
+        encoder: str = "vitb",
+        input_size: int = 518,
+        max_depth: float = 20.0,
+        device: str = "cuda:0",
+    ) -> None:
+        import cv2
+        import torch
+
+        checkpoint_path = FilePath(checkpoint).expanduser()
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(f"DepthAnything checkpoint not found: {checkpoint_path}")
+
+        repo_root = _find_repo_root()
+        internnav_dir = repo_root / "third_party" / "InternNav"
+        depth_anything_root = internnav_dir / "internnav" / "model" / "encoder" / "depth_anything"
+        if str(depth_anything_root) not in sys.path:
+            sys.path.insert(0, str(depth_anything_root))
+        try:
+            from depth_anything_v2.dpt import DepthAnythingV2
+        except Exception:
+            if str(internnav_dir) not in sys.path:
+                sys.path.insert(0, str(internnav_dir))
+            from internnav.model.encoder.depth_anything.depth_anything_v2.dpt import DepthAnythingV2
+
+        model_configs = {
+            "vits": {"encoder": "vits", "features": 64, "out_channels": [48, 96, 192, 384]},
+            "vitb": {"encoder": "vitb", "features": 128, "out_channels": [96, 192, 384, 768]},
+            "vitl": {"encoder": "vitl", "features": 256, "out_channels": [256, 512, 1024, 1024]},
+            "vitg": {"encoder": "vitg", "features": 384, "out_channels": [1536, 1536, 1536, 1536]},
+        }
+        if encoder not in model_configs:
+            raise ValueError(f"Unsupported depth_anything encoder: {encoder}")
+
+        self.cv2 = cv2
+        self.input_size = int(input_size)
+
+        model = DepthAnythingV2(max_depth=float(max_depth), **model_configs[encoder])
+        state_dict = torch.load(str(checkpoint_path), map_location="cpu")
+        model.load_state_dict(state_dict, strict=False)
+        model.eval()
+
+        # Respect requested device when possible; otherwise fall back gracefully.
+        requested = str(device)
+        if requested.startswith("cuda") and torch.cuda.is_available():
+            model = model.to(requested)
+        elif requested.startswith("mps") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            model = model.to("mps")
+        elif torch.cuda.is_available():
+            model = model.to("cuda")
+        else:
+            model = model.to("cpu")
+        self.model = model
+
+    def infer(self, rgb_image: np.ndarray) -> np.ndarray:
+        # DepthAnything expects BGR uint8 image (OpenCV convention).
+        bgr = self.cv2.cvtColor(rgb_image, self.cv2.COLOR_RGB2BGR)
+        depth = self.model.infer_image(bgr, input_size=self.input_size).astype(np.float32)
+        depth = np.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
+        depth[depth < 0.0] = 0.0
+        return depth
+
+
 class NavDPPolicyNode(Node):
     """ROS2 Node for NavDP policy inference."""
 
     def __init__(
         self,
         checkpoint: str,
+        depth_anything_checkpoint: Optional[str] = None,
         inference_rate: float = 10.0,
         image_topic: str = "/front_stereo_camera/left/image_raw",
         depth_topic: str = "/camera/depth/image_raw",
@@ -55,7 +134,11 @@ class NavDPPolicyNode(Node):
         sample_num: int = 32,
         depth_scale: float = 10000.0,
         constant_depth: float = 1.0,
-        use_constant_depth: bool = False,
+        use_constant_depth: bool = False,  # deprecated compatibility flag
+        depth_mode: str = "depth_anything",
+        depth_anything_encoder: str = "vitb",
+        depth_anything_input_size: int = 518,
+        depth_anything_max_depth: float = 20.0,
         goal_mode: str = "point",
     ):
         super().__init__("navdp_policy_node")
@@ -63,6 +146,8 @@ class NavDPPolicyNode(Node):
         # Initialize agent
         self.agent = NavDPAgent(
             checkpoint=checkpoint,
+            depth_anything_checkpoint=depth_anything_checkpoint,
+            depth_anything_encoder=depth_anything_encoder,
             image_size=image_size,
             memory_size=memory_size,
             predict_size=predict_size,
@@ -79,9 +164,25 @@ class NavDPPolicyNode(Node):
 
         self.bridge = CvBridge()
         self.inference_rate = inference_rate
-        self.use_constant_depth = use_constant_depth
+        if use_constant_depth:
+            depth_mode = "constant"
+        self.depth_mode = str(depth_mode)
         self.constant_depth = float(constant_depth)
         self.goal_mode = goal_mode
+        self.depth_estimator: Optional[DepthAnythingEstimator] = None
+
+        if self.depth_mode == "depth_anything":
+            if not depth_anything_checkpoint:
+                raise ValueError("depth_mode=depth_anything requires --depth_anything_checkpoint")
+            self.depth_estimator = DepthAnythingEstimator(
+                checkpoint=depth_anything_checkpoint,
+                encoder=depth_anything_encoder,
+                input_size=depth_anything_input_size,
+                max_depth=depth_anything_max_depth,
+                device=device,
+            )
+        elif self.depth_mode not in {"constant", "topic"}:
+            raise ValueError(f"Unsupported depth_mode: {self.depth_mode}")
 
         # State
         self.current_image: Optional[np.ndarray] = None
@@ -101,7 +202,7 @@ class NavDPPolicyNode(Node):
 
         # Subscribers
         self.image_sub = self.create_subscription(Image, image_topic, self.image_callback, sensor_qos)
-        if not self.use_constant_depth:
+        if self.depth_mode == "topic":
             self.depth_sub = self.create_subscription(Image, depth_topic, self.depth_callback, sensor_qos)
         self.odom_sub = self.create_subscription(Odometry, odom_topic, self.odom_callback, 10)
         if self.goal_mode == "point":
@@ -113,16 +214,15 @@ class NavDPPolicyNode(Node):
         self.enable_sub = self.create_subscription(Bool, enable_topic, self.enable_callback, 10)
 
         # Publisher
-        self.trajectory_pub = self.create_publisher(Path, trajectory_topic, 10)
+        self.trajectory_pub = self.create_publisher(NavPath, trajectory_topic, 10)
 
         # Timer
         timer_period = 1.0 / self.inference_rate
         self.timer = self.create_timer(timer_period, self.inference_callback)
 
         self.get_logger().info("NavDP policy node started (local inference)")
-        self.get_logger().info(
-            f"Subscribing to: {image_topic}, {depth_topic}, {odom_topic} (goal_mode={self.goal_mode})"
-        )
+        self.get_logger().info(f"Depth mode: {self.depth_mode}")
+        self.get_logger().info(f"Subscribing to: {image_topic}, {depth_topic}, {odom_topic} (goal_mode={self.goal_mode})")
         self.get_logger().info(f"Publishing trajectory to: {trajectory_topic}")
 
     def image_callback(self, msg: Image) -> None:
@@ -181,11 +281,15 @@ class NavDPPolicyNode(Node):
         return np.array([local_x, local_y, 0.0], dtype=np.float32)
 
     def _get_depth(self) -> Optional[np.ndarray]:
-        if self.use_constant_depth:
+        if self.depth_mode == "constant":
             if self.current_image is None:
                 return None
             h, w = self.current_image.shape[:2]
             return np.full((h, w), self.constant_depth, dtype=np.float32)
+        if self.depth_mode == "depth_anything":
+            if self.current_image is None or self.depth_estimator is None:
+                return None
+            return self.depth_estimator.infer(self.current_image)
         return self.current_depth
 
     def inference_callback(self) -> None:
@@ -222,7 +326,7 @@ class NavDPPolicyNode(Node):
             return
 
         # Publish Path in base_link frame (local)
-        path_msg = Path()
+        path_msg = NavPath()
         path_msg.header.stamp = self.get_clock().now().to_msg()
         path_msg.header.frame_id = "base_link"
 
@@ -245,6 +349,11 @@ class NavDPPolicyNode(Node):
 def main():
     parser = argparse.ArgumentParser(description="NavDP ROS2 policy node (local inference)")
     parser.add_argument("--checkpoint", required=True, help="Path to NavDP checkpoint (.ckpt)")
+    parser.add_argument(
+        "--depth_anything_checkpoint",
+        default=None,
+        help="Optional DepthAnything checkpoint used by NavDP RGBD backbone",
+    )
     parser.add_argument("--device", default="cuda:0", help="Torch device (default: cuda:0)")
     parser.add_argument("--inference_rate", type=float, default=10.0, help="Inference rate in Hz")
     parser.add_argument(
@@ -276,14 +385,26 @@ def main():
 
     # Depth params
     parser.add_argument("--depth_scale", type=float, default=10000.0, help="Scale for uint16 depth to meters")
-    parser.add_argument("--use_constant_depth", action="store_true", help="Use constant depth (no depth topic)")
+    parser.add_argument(
+        "--depth_mode",
+        type=str,
+        default="depth_anything",
+        choices=["depth_anything", "topic", "constant"],
+        help="Depth input mode (default: depth_anything)",
+    )
+    parser.add_argument("--use_constant_depth", action="store_true", help="Deprecated: same as --depth_mode constant")
     parser.add_argument("--constant_depth", type=float, default=1.0, help="Constant depth in meters")
+    parser.add_argument("--depth_anything_encoder", default="vitb", help="DepthAnything encoder variant")
+    parser.add_argument("--depth_anything_input_size", type=int, default=518, help="DepthAnything input size")
+    parser.add_argument("--depth_anything_max_depth", type=float, default=20.0, help="DepthAnything max depth")
 
     args = parser.parse_args()
+    depth_mode = "constant" if args.use_constant_depth else args.depth_mode
 
     rclpy.init()
     node = NavDPPolicyNode(
         checkpoint=args.checkpoint,
+        depth_anything_checkpoint=args.depth_anything_checkpoint,
         inference_rate=args.inference_rate,
         image_topic=args.image_topic,
         depth_topic=args.depth_topic,
@@ -306,6 +427,10 @@ def main():
         depth_scale=args.depth_scale,
         constant_depth=args.constant_depth,
         use_constant_depth=args.use_constant_depth,
+        depth_mode=depth_mode,
+        depth_anything_encoder=args.depth_anything_encoder,
+        depth_anything_input_size=args.depth_anything_input_size,
+        depth_anything_max_depth=args.depth_anything_max_depth,
         goal_mode=args.goal_mode,
     )
     try:

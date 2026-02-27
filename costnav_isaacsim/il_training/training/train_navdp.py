@@ -9,7 +9,7 @@ from pathlib import Path
 try:
     import yaml
 except Exception as exc:  # pragma: no cover - runtime guard
-    raise SystemExit(f"ERROR: PyYAML is required. Install deps in costnav_isaacsim/il_baselines. ({exc})")
+    raise SystemExit(f"ERROR: PyYAML is required. Install deps in costnav_isaacsim/il_training. ({exc})")
 
 
 def _repo_paths() -> tuple[Path, Path, Path]:
@@ -52,6 +52,8 @@ def _resolve_paths(cfg: dict, base_dir: Path) -> None:
         "dataset_3dgs_root_dir",
         "dataset_grutopia10_root_dir",
         "ckpt_to_load",
+        "depth_anything_checkpoint",
+        "traj_names_path",
     }
 
     for key in top_keys:
@@ -94,7 +96,7 @@ def _derive_gpu_ids() -> list[int]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="CostNav wrapper for InternNav NavDP training")
     repo_root, costnav_root, internnav_dir = _repo_paths()
-    default_cfg = costnav_root / "il_baselines" / "training" / "configs" / "navdp_costnav.yaml"
+    default_cfg = costnav_root / "il_training" / "training" / "configs" / "navdp_costnav.yaml"
     parser.add_argument("--config", default=str(default_cfg), help="Path to navdp_costnav.yaml")
     parser.add_argument("--name", default=None, help="Override experiment name")
     args = parser.parse_args()
@@ -106,12 +108,28 @@ def main() -> None:
 
     cfg_path = Path(args.config).expanduser()
     if not cfg_path.is_absolute():
-        cfg_path = costnav_root / cfg_path
+        cwd_candidate = (Path.cwd() / cfg_path).resolve()
+        repo_candidate = (costnav_root / cfg_path).resolve()
+        cfg_path = cwd_candidate if cwd_candidate.exists() else repo_candidate
     if not cfg_path.exists():
         raise SystemExit(f"ERROR: config not found: {cfg_path}")
 
     cfg = _load_yaml(cfg_path)
     _resolve_paths(cfg, base_dir=costnav_root)
+
+    # Set the local CUDA device before importing InternNav modules. Some imports touch
+    # CUDA and would otherwise initialize on the default GPU (cuda:0) in every rank.
+    local_rank_env = os.environ.get("LOCAL_RANK")
+    if local_rank_env is not None:
+        try:
+            import torch
+
+            local_rank = int(local_rank_env)
+            if torch.cuda.is_available() and 0 <= local_rank < torch.cuda.device_count():
+                torch.cuda.set_device(local_rank)
+                print(f"[bootstrap] LOCAL_RANK={local_rank}: set CUDA device before model import")
+        except Exception as exc:
+            print(f"[bootstrap] WARNING: failed to set CUDA device early: {exc}")
 
     from scripts.train.base_train import train as train_module
     from scripts.train.base_train.configs import navdp_exp_cfg

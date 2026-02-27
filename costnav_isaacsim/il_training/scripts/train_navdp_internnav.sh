@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/../../.." && pwd)"
-UV_PROJECT="$REPO_ROOT/costnav_isaacsim/il_baselines"
+UV_PROJECT="$REPO_ROOT/costnav_isaacsim/il_training"
 INTERNNAV_DIR="$REPO_ROOT/third_party/InternNav"
 
 if [[ ! -d "$INTERNNAV_DIR" ]]; then
@@ -16,7 +16,7 @@ export PROJECT_ROOT="$REPO_ROOT"
 NAME="navdp_train"
 GPUS="${CUDA_VISIBLE_DEVICES:-}"
 MASTER_PORT="12345"
-CONFIG_PATH="$REPO_ROOT/costnav_isaacsim/il_baselines/training/configs/navdp_costnav.yaml"
+CONFIG_PATH="$REPO_ROOT/costnav_isaacsim/il_training/training/configs/navdp_costnav.yaml"
 
 usage() {
   cat <<'EOF'
@@ -105,11 +105,11 @@ if [[ "$NUM_GPUS" -gt 1 ]]; then
     --nproc_per_node="$NUM_GPUS" \
     --master_addr=localhost \
     --master_port="$MASTER_PORT" \
-    "$REPO_ROOT/costnav_isaacsim/il_baselines/training/train_navdp.py" \
+    "$REPO_ROOT/costnav_isaacsim/il_training/training/train_navdp.py" \
     --name "$NAME" \
     --config "$CONFIG_PATH"
 else
-  "${RUN_PREFIX[@]}" python "$REPO_ROOT/costnav_isaacsim/il_baselines/training/train_navdp.py" \
+  "${RUN_PREFIX[@]}" python "$REPO_ROOT/costnav_isaacsim/il_training/training/train_navdp.py" \
     --name "$NAME" \
     --config "$CONFIG_PATH"
 fi

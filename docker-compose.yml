@@ -14,7 +14,7 @@ x-ros2-service: &ros2-service
 services:
   # Isaac Sim environment
   isaac-sim:
-    profiles: ["isaac-sim", "nav2", "teleop", "vint", "gnm", "nomad", "canvas"]
+    profiles: ["isaac-sim", "nav2", "teleop", "vint", "gnm", "nomad", "navdp", "canvas"]
     image: costnav-isaacsim-${ISAAC_SIM_VERSION}:${COSTNAV_VERSION}
     container_name: costnav-isaac-sim
     deploy:
@@ -41,7 +41,6 @@ services:
       - CARB_APP_PATH=${CARB_APP_PATH:-/isaac-sim/kit}
       - EXP_PATH=${EXP_PATH:-/isaac-sim/apps}
       - NUM_PEOPLE=${NUM_PEOPLE:-20}
-      - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
       - FOOD=${FOOD:-True}
       - TOPOMAP=${TOPOMAP:-False}
       - GOAL_IMAGE=${GOAL_IMAGE:-False}
@@ -186,7 +185,7 @@ services:
   # ROS2 with RViz - standalone visualization service that runs alongside Isaac Sim
   ros2-rviz-nav2:
     <<: *ros2-service
-    profiles: ["isaac-sim", "nav2", "vint", "gnm", "nomad", "canvas"]
+    profiles: ["isaac-sim", "nav2", "vint", "gnm", "nomad", "navdp", "canvas"]
     container_name: costnav-ros2-rviz-nav2
     environment:
       - ROS_DISTRO=jazzy
@@ -356,6 +355,99 @@ services:
           ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_segway.yaml
         fi &&
         trajectory_follower_node --robot_config $${ROBOT_CONFIG}"
+    network_mode: host
+    ipc: host
+    stdin_open: true
+    tty: true
+
+  # ROS2 with NavDP policy (local inference) + trajectory follower
+  ros2-navdp:
+    profiles: ["navdp"]
+    image: costnav-ros2-torch:${COSTNAV_VERSION:-0.1.0}
+    container_name: costnav-ros2-navdp
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${GPU_DEVICE_IDS:-0}"]
+              capabilities: [gpu]
+    depends_on:
+      isaac-sim:
+        condition: service_healthy
+    environment:
+      - ROS_DISTRO=jazzy
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+      - DISPLAY=${DISPLAY:-:0}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
+      - UV_LINK_MODE=copy
+      - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
+      - NAVDP_CHECKPOINT=${NAVDP_CHECKPOINT:-checkpoints/navdp.ckpt}
+      - NAVDP_DEPTH_ANYTHING_CHECKPOINT=${NAVDP_DEPTH_ANYTHING_CHECKPOINT:-/mnt/harbor/users/minhyeok/depthAnything/depth_anything_v2_vits.pth}
+      - NAVDP_DEPTH_ANYTHING_ENCODER=${NAVDP_DEPTH_ANYTHING_ENCODER:-vits}
+      - NAVDP_DEPTH_ANYTHING_INPUT_SIZE=${NAVDP_DEPTH_ANYTHING_INPUT_SIZE:-518}
+      - NAVDP_DEPTH_ANYTHING_MAX_DEPTH=${NAVDP_DEPTH_ANYTHING_MAX_DEPTH:-20.0}
+      - NAVDP_GOAL_MODE=${NAVDP_GOAL_MODE:-point}
+      - NAVDP_DEPTH_MODE=${NAVDP_DEPTH_MODE:-depth_anything}
+      - NAVDP_USE_CONSTANT_DEPTH=${NAVDP_USE_CONSTANT_DEPTH:-0}
+      - NAVDP_DEPTH_TOPIC=${NAVDP_DEPTH_TOPIC:-/camera/depth/image_raw}
+      - NAVDP_CONSTANT_DEPTH=${NAVDP_CONSTANT_DEPTH:-1.0}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /tmp/costnav_topomap:/tmp/costnav_topomap:rw
+      - /mnt/harbor:/mnt/harbor:ro
+      - .:/workspace
+    working_dir: /workspace
+    command: >
+      bash -c "if [ \"$${SIM_ROBOT}\" = \"nova_carter\" ]; then
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_carter.yaml;
+        else
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_segway.yaml;
+        fi;
+        COMMON_ARGS='--checkpoint '$${NAVDP_CHECKPOINT}' --depth_anything_checkpoint '$${NAVDP_DEPTH_ANYTHING_CHECKPOINT}' --depth_anything_encoder '$${NAVDP_DEPTH_ANYTHING_ENCODER}' --depth_anything_input_size '$${NAVDP_DEPTH_ANYTHING_INPUT_SIZE}' --depth_anything_max_depth '$${NAVDP_DEPTH_ANYTHING_MAX_DEPTH}' --inference_rate 10.0 --goal_mode '$${NAVDP_GOAL_MODE}' --image_topic /front_stereo_camera/left/image_raw --odom_topic /chassis/odom --goal_pose_topic /goal_pose --goal_image_topic /goal_image --trajectory_topic /vint_trajectory --enable_topic /vint_enable';
+        if [ \"$${NAVDP_USE_CONSTANT_DEPTH}\" = \"1\" ] && [ \"$${NAVDP_DEPTH_MODE}\" = \"depth_anything\" ]; then
+          NAVDP_DEPTH_MODE=constant;
+        fi;
+        if [ \"$${NAVDP_DEPTH_MODE}\" = \"constant\" ]; then
+          /opt/venv/bin/navdp_policy_node $$COMMON_ARGS --depth_mode constant --constant_depth $${NAVDP_CONSTANT_DEPTH};
+        elif [ \"$${NAVDP_DEPTH_MODE}\" = \"topic\" ]; then
+          /opt/venv/bin/navdp_policy_node $$COMMON_ARGS --depth_mode topic --depth_topic $${NAVDP_DEPTH_TOPIC};
+        else
+          /opt/venv/bin/navdp_policy_node $$COMMON_ARGS --depth_mode depth_anything;
+        fi"
+    network_mode: host
+    ipc: host
+    stdin_open: true
+    tty: true
+
+  # ROS2 Trajectory Follower - MPC controller for executing NavDP trajectories
+  ros2-navdp-trajectory-follower:
+    profiles: ["navdp"]
+    image: costnav-ros2-torch:${COSTNAV_VERSION:-0.1.0}
+    container_name: costnav-ros2-navdp-trajectory-follower
+    depends_on:
+      isaac-sim:
+        condition: service_healthy
+    environment:
+      - ROS_DISTRO=jazzy
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+      - DISPLAY=${DISPLAY:-:0}
+      - UV_LINK_MODE=copy
+      - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - .:/workspace
+    working_dir: /workspace
+    command: >
+      bash -c "if [ \"$${SIM_ROBOT}\" = \"nova_carter\" ]; then
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_carter.yaml
+        else
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_segway.yaml
+        fi &&
+        trajectory_follower_node --robot_config $${ROBOT_CONFIG} --trajectory_topic /vint_trajectory"
     network_mode: host
     ipc: host
     stdin_open: true
