@@ -18,6 +18,7 @@ from pathlib import Path
 
 try:
     from huggingface_hub import HfApi, login
+
     try:
         from huggingface_hub import CommitOperationAdd
     except Exception:
@@ -40,10 +41,7 @@ DATASET_ROOT = Path(
 SUMMARY_CSV = Path(
     os.environ.get(
         "COSTNAV_SUMMARY_CSV",
-        str(
-            DATASET_ROOT
-            / "costnav data collection_v3 recording - rosbags_time_summary.csv"
-        ),
+        str(DATASET_ROOT / "costnav data collection_v3 recording - rosbags_time_summary.csv"),
     )
 )
 
@@ -118,9 +116,7 @@ def collect_files():
                 else:
                     dir_key = rel_dir.as_posix()
                     if dir_key not in seen_dirs:
-                        add_directory(
-                            files_by_repo_path, missing_files, rel_dir, abs_dir
-                        )
+                        add_directory(files_by_repo_path, missing_files, rel_dir, abs_dir)
                         seen_dirs.add(dir_key)
                 continue
 
@@ -138,10 +134,7 @@ def collect_files():
                     abs_path = DATASET_ROOT / rel
                     add_file(files_by_repo_path, missing_files, rel, abs_path)
 
-    files_to_upload = [
-        (files_by_repo_path[repo_path], repo_path)
-        for repo_path in sorted(files_by_repo_path)
-    ]
+    files_to_upload = [(files_by_repo_path[repo_path], repo_path) for repo_path in sorted(files_by_repo_path)]
     return files_to_upload, missing_files, total_rows, matched_rows
 
 
