@@ -79,6 +79,8 @@ make start-nucleus
 # make stop-nucleus
 ```
 
+Teleop Dataset is available in https://huggingface.co/datasets/maum-ai/CostNav-Teleop-Dataset/tree/main
+
 ```bash
 # for internal developers
 
@@ -194,7 +196,7 @@ For detailed IL training and evaluation documentation, see:
 - [x] Paper release
 - [x] isaac sim assets release
 - [x] nav2 support for rule-based navigation
-- [ ] cost formula and reference sheet
+- [x] cost formula and reference sheet
 - [x] collected dataset with teleoperation
 - [ ] imitation learning baseline
 
