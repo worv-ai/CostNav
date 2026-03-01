@@ -236,9 +236,7 @@ class NavDPAgent:
         return mask_img[:, :, None]
 
     def _sample_with_goal_embed(self, goal_embed: torch.Tensor, rgbd_embed: torch.Tensor) -> torch.Tensor:
-        noisy_action = torch.randn(
-            (self.sample_num * goal_embed.shape[0], self.predict_size, 3), device=self.device
-        )
+        noisy_action = torch.randn((self.sample_num * goal_embed.shape[0], self.predict_size, 3), device=self.device)
         naction = noisy_action
         self.model.noise_scheduler.set_timesteps(self.model.noise_scheduler.config.num_train_timesteps)
         for k in self.model.noise_scheduler.timesteps[:]:

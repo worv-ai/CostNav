@@ -155,9 +155,9 @@ def main() -> None:
     import torch
 
     available_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 1
-    assert (
-        exp_cfg.num_gpus <= available_gpus
-    ), f"Requested GPUs ({exp_cfg.num_gpus}) > available GPUs ({available_gpus})"
+    assert exp_cfg.num_gpus <= available_gpus, (
+        f"Requested GPUs ({exp_cfg.num_gpus}) > available GPUs ({available_gpus})"
+    )
     assert exp_cfg.num_gpus > 0, "Number of GPUs must be greater than 0"
 
     model_class, model_config_class = get_policy("NavDP_Policy"), get_config("NavDP_Policy")

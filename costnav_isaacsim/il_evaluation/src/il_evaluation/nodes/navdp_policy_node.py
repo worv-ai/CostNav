@@ -222,7 +222,9 @@ class NavDPPolicyNode(Node):
 
         self.get_logger().info("NavDP policy node started (local inference)")
         self.get_logger().info(f"Depth mode: {self.depth_mode}")
-        self.get_logger().info(f"Subscribing to: {image_topic}, {depth_topic}, {odom_topic} (goal_mode={self.goal_mode})")
+        self.get_logger().info(
+            f"Subscribing to: {image_topic}, {depth_topic}, {odom_topic} (goal_mode={self.goal_mode})"
+        )
         self.get_logger().info(f"Publishing trajectory to: {trajectory_topic}")
 
     def image_callback(self, msg: Image) -> None:

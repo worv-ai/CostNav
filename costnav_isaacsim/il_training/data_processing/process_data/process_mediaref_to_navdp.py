@@ -835,7 +835,9 @@ def process_bag(
         if intrinsic_from_topic is not None:
             print(f"{bag_dir.name}: using CameraInfo intrinsic from topic {camera_info_topic}")
         elif camera_info_topic:
-            print(f"{bag_dir.name}: camera_info_topic '{camera_info_topic}' not found/invalid, using fallback intrinsic")
+            print(
+                f"{bag_dir.name}: camera_info_topic '{camera_info_topic}' not found/invalid, using fallback intrinsic"
+            )
 
     obstacle_points_world = _extract_obstacle_points_from_pointcloud(
         bag_dir=bag_dir,
@@ -996,9 +998,7 @@ def main(args: argparse.Namespace) -> None:
 
     depth_estimator: Optional[DepthAnythingEstimator] = None
     if depth_source not in {"topic", "depth_anything", "constant", "auto"}:
-        raise SystemExit(
-            "ERROR: processing.depth_source must be one of: topic, depth_anything, constant, auto"
-        )
+        raise SystemExit("ERROR: processing.depth_source must be one of: topic, depth_anything, constant, auto")
     print(f"Depth source mode: {depth_source}")
 
     depth_anything_ckpt = _find_depth_anything_checkpoint(depth_anything_checkpoint_cfg)
@@ -1027,11 +1027,8 @@ def main(args: argparse.Namespace) -> None:
         raise SystemExit("ERROR: --end-index must be >= --start-index (or -1 for no limit)")
 
     if start_index > 0 or end_index >= 0:
-        bag_dirs = bag_dirs[start_index:end_index if end_index >= 0 else None]
-        print(
-            f"Resume window enabled: start_index={start_index}, "
-            f"end_index={'end' if end_index < 0 else end_index}"
-        )
+        bag_dirs = bag_dirs[start_index : end_index if end_index >= 0 else None]
+        print(f"Resume window enabled: start_index={start_index}, end_index={'end' if end_index < 0 else end_index}")
 
     shard_id = int(args.shard_id)
     num_shards = int(args.num_shards)
