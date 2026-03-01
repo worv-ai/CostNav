@@ -248,16 +248,19 @@ run-nomad:
 	TOPOMAP=$(IL_TOPOMAP) GOAL_IMAGE=$(GOAL_IMAGE) ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile nomad up
 
 # Run Isaac Sim with NavDP policy node and trajectory follower for IL evaluation
-NAVDP_CKPT_DIR ?= /mnt/harbor/users/minhyeok/navdp/runs/navdp_costnav/ckpts
-NAVDP_DEFAULT_CHECKPOINT := $(shell find $(NAVDP_CKPT_DIR) -maxdepth 1 -type f -name 'checkpoint-*navdp.ckpt' 2>/dev/null | sort -V | tail -1)
 NAVDP_EVAL_TIMEOUT ?= 180
 NAVDP_EVAL_NUM_MISSIONS ?= 100
 
-run-navdp: NAVDP_CHECKPOINT ?= $(if $(NAVDP_DEFAULT_CHECKPOINT),$(NAVDP_DEFAULT_CHECKPOINT),checkpoints/navdp.ckpt)
+run-navdp: NAVDP_CHECKPOINT ?= checkpoints/baseline_navdp.ckpt
 run-navdp: HEADLESS ?= True
 run-navdp: OMNI_USER ?= omniverse
 run-navdp: OMNI_PASS ?=
 run-navdp:
+	@if [ ! -f "$(NAVDP_CHECKPOINT)" ]; then \
+		echo "ERROR: NAVDP_CHECKPOINT not found: $(NAVDP_CHECKPOINT)"; \
+		echo "Please run 'make download-baseline-checkpoints-hf' first or set NAVDP_CHECKPOINT explicitly."; \
+		exit 1; \
+	fi
 	xhost +local:docker 2>/dev/null || true
 	OMNI_USER=$(OMNI_USER) OMNI_PASS=$(OMNI_PASS) HEADLESS=$(HEADLESS) $(DOCKER_COMPOSE) --profile navdp down
 	OMNI_USER=$(OMNI_USER) OMNI_PASS=$(OMNI_PASS) HEADLESS=$(HEADLESS) NAVDP_CHECKPOINT=$(NAVDP_CHECKPOINT) $(DOCKER_COMPOSE) --profile navdp up

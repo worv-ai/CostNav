@@ -115,7 +115,18 @@ class NavDPAgent:
         # separate explicit "model backbone encoder" argument.
 
         config = NavDPModelConfig(model_cfg=model_cfg)
-        self.model = NavDPNet.from_pretrained(checkpoint, config=config)
+        self.model = NavDPNet(config)
+        if checkpoint:
+            state_dict = torch.load(checkpoint, map_location=self.device, weights_only=False)
+            if isinstance(state_dict, dict) and "state_dict" in state_dict:
+                state_dict = state_dict["state_dict"]
+            incompatible_keys = self.model.load_state_dict(state_dict, strict=False)
+            if incompatible_keys.missing_keys or incompatible_keys.unexpected_keys:
+                print(
+                    "Incompatible keys: "
+                    f"missing={incompatible_keys.missing_keys}, "
+                    f"unexpected={incompatible_keys.unexpected_keys}"
+                )
         self.model.to(self.device)
         self.model.eval()
 
@@ -234,7 +245,6 @@ class NavDPAgent:
             noise_pred = self.model.predict_noise(naction, k.to(self.device).unsqueeze(0), goal_embed, rgbd_embed)
             naction = self.model.noise_scheduler.step(model_output=noise_pred, timestep=k, sample=naction).prev_sample
         critic_values = self.model.predict_critic(naction, rgbd_embed)
-        negative_traj = torch.cumsum(naction / 4.0, dim=1)[(critic_values).argsort()[0:8]]
         positive_traj = torch.cumsum(naction / 4.0, dim=1)[(-critic_values).argsort()[0:8]]
         return positive_traj
 
