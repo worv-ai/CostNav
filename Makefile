@@ -424,6 +424,16 @@ upload-assets-hf:
 	$(DOCKER_COMPOSE) --profile dev run --rm dev \
 		bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/scripts/assets/upload_assets_hf.py"
 
+# Upload teleop dataset to Hugging Face dataset
+# Runs inside dev Docker container with huggingface_hub
+# Requires HF_TOKEN to be set in .env file
+upload-dataset-hf:
+	@echo "Uploading teleop dataset to Hugging Face..."
+	$(DOCKER_COMPOSE) --profile dev run --rm \
+		-e COSTNAV_DATASET_ROOT="$(COSTNAV_DATASET_ROOT)" \
+		-v "$(COSTNAV_DATASET_ROOT)":"$(COSTNAV_DATASET_ROOT)":ro \
+		dev bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/scripts/assets/upload_assets_hf_dataset.py"
+
 # Download pretrained baseline checkpoints from Hugging Face
 # Downloads ViNT, NoMaD, GNM checkpoints to ./checkpoints/
 download-baseline-checkpoints-hf:

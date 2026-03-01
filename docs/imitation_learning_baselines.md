@@ -240,13 +240,30 @@ uv run python -m il_training.training.train_vint \
     --config il_training/training/visualnav_transformer/configs/vint_costnav.yaml
 ```
 
-#### SLURM Training
+#### Training NoMaD
+
+```bash
+# From CostNav/costnav_isaacsim/
+uv run python -m il_training.training.train_vint \
+    --config il_training/training/visualnav_transformer/configs/nomad_costnav.yaml
+```
+
+#### SLURM Training (ViNT)
 
 For cluster training:
 
 ```bash
 cd costnav_isaacsim/il_training/scripts/
 sbatch train_vint.sbatch
+```
+
+#### SLURM Training (NoMaD)
+
+For cluster training:
+
+```bash
+cd costnav_isaacsim/il_training/scripts/
+sbatch train_nomad.sbatch
 ```
 
 The sbatch script uses `uv run` — no manual venv activation needed.

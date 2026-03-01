@@ -33,6 +33,8 @@ Our key contributions are:
 
 You can find more details in our [technical report](https://arxiv.org/abs/2511.20216).
 
+The full cost benchmark formula with real world references is available in our google drive: https://drive.google.com/drive/folders/1j1MXm6NMkd6HHBwTJi_nSde7-shv4laX?usp=sharing 
+
 ## Getting Started
 
 ### 1. Prerequisites
@@ -79,6 +81,8 @@ make start-nucleus
 # make stop-nucleus
 ```
 
+Teleop Dataset is available in https://huggingface.co/datasets/maum-ai/CostNav-Teleop-Dataset/tree/main
+
 ```bash
 # for internal developers
 
@@ -88,6 +92,9 @@ make start-nucleus
 
 # Upload assets to HuggingFace (for internal developers, requires HF_TOKEN in .env)
 # make upload-assets-hf
+
+# Upload teleop dataset to HuggingFace (for internal developers, requires HF_TOKEN in .env)
+# make upload-dataset-hf
 
 ```
 
@@ -190,9 +197,9 @@ For detailed IL training and evaluation documentation, see:
 - [x] Paper release
 - [x] isaac sim assets release
 - [x] nav2 support for rule-based navigation
-- [ ] cost formula and reference sheet
+- [x] cost formula and reference sheet
+- [x] collected dataset with teleoperation
 - [ ] imitation learning baseline
-- [ ] collected dataset with teleoperation
 
 ## Contributing
 

@@ -1,0 +1,92 @@
+# =============================================================================
+# NoMaD Fine-tuning Config for CostNav Sidewalk Navigation
+# =============================================================================
+
+project_name: costnav-nomad
+run_name: nomad-costnav-finetune
+
+# Training setup
+use_wandb: True  # Set to True if you want to log to wandb
+wandb_entity:  # Your wandb entity/team name
+train: True
+# Optional: fine-tune from pretrained NoMaD checkpoint
+pretrained_checkpoint: # Enter your pretrained checkpoint path here (ex. "${PROJECT_ROOT}/checkpoints/nomad.pth")
+batch_size: 256
+eval_batch_size: 128
+epochs: 15
+gpu_ids: [0]
+num_workers: 8
+lr: 5e-5
+optimizer: adamw
+clipping: False
+max_norm: 1.0
+scheduler: "cosine"
+warmup: True
+warmup_epochs: 2
+seed: 42
+
+# Model params (NoMaD architecture)
+model_type: nomad
+vision_encoder: nomad_vint
+obs_encoder: efficientnet-b0
+encoding_size: 256
+attn_unet: False
+cond_predict_scale: False
+mha_num_attention_heads: 4
+mha_num_attention_layers: 4
+mha_ff_dim_factor: 4
+down_dims: [64, 128, 256]
+
+# Diffusion model params
+num_diffusion_iters: 10
+
+# Goal mask probability (for NoMaD training)
+goal_mask_prob: 0.5
+
+# Normalization for the action space
+normalize: True
+
+# Context
+context_type: temporal
+context_size: 3
+alpha: 1e-4
+
+# Distance bounds for distance and action predictions
+distance:
+  min_dist_cat: 0
+  max_dist_cat: 20
+action:
+  min_dist_cat: 3
+  max_dist_cat: 20
+
+# Action output params
+len_traj_pred: 8
+learn_angle: False
+
+# Dataset specific parameters
+# NOTE: Must match your ViNT-format dataset resolution
+image_size: [85, 64]  # width, height
+
+# CostNav dataset configuration
+# Paths to the CostNav dataset in ViNT format
+# (same format used for ViNT training)
+datasets:
+  costnav_nomad:
+    data_folder: # Enter your data directory here (ex. "/mnt/raid11/workspace/vint_training")
+    train: # Enter your train directory here (ex. "/mnt/raid11/workspace/vint_training_splits/train")
+    test: # Enter your test directory here (ex. "/mnt/raid11/workspace/vint_training_splits/test")
+    end_slack: 3
+    goals_per_obs: 2
+    negative_mining: True
+    waypoint_spacing: 1
+    metric_waypoint_spacing: 0.25  # average spacing between waypoints (meters)
+
+# Logging
+log_dir: # Enter your log directory here (ex. /mnt/harbor/users/${USERNAME}/checkpoint/costnav)
+print_log_freq: 500
+image_log_freq: 5000
+num_images_log: 8
+pairwise_test_freq: 0
+eval_fraction: 0.25
+wandb_log_freq: 10
+eval_freq: 1
