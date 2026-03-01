@@ -206,11 +206,6 @@ For detailed IL training and evaluation documentation, see:
 Help us build a large-scale, ever-expanding benchmark!
 We highly encourage contributions via issues and pull requests, especially adding more navigation baselines!
 
-## Contact
-
-Maintained by the Maum.AI WoRV team.
-For research collaborations or enterprise deployments, please contact https://worv-ai.github.io/.
-
 ## Citation
 
 To Cite CostNav, please use the following bibtex citation
