@@ -199,7 +199,7 @@ For detailed IL training and evaluation documentation, see:
 - [x] nav2 support for rule-based navigation
 - [x] cost formula and reference sheet
 - [x] collected dataset with teleoperation
-- [ ] imitation learning baseline
+- [x] imitation learning baseline
 
 ## Contributing
 
