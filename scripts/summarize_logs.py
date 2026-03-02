@@ -45,22 +45,44 @@ def parse_log(filepath):
             if re.match(r"\[.*?\]\s+Mission \d+", raw) and "Status:" not in clean:
                 break
 
+            def _float(pat: str, text: str):
+                """Return float from first regex match, or None."""
+                m_ = re.search(pat, text)
+                return float(m_.group(1)) if m_ else None
+
+            def _int(pat: str, text: str):
+                """Return int from first regex match, or None."""
+                m_ = re.search(pat, text)
+                return int(m_.group(1)) if m_ else None
+
             if clean.startswith("Status:"):
                 mission["status"] = clean.split(":", 1)[1].strip()
             elif clean.startswith("Reason:"):
                 mission["reason"] = clean.split(":", 1)[1].strip()
             elif clean.startswith("Traveled distance:"):
-                mission["distance"] = float(re.search(r"([\d.]+)m", clean).group(1))
+                val = _float(r"([\d.]+)m", clean)
+                if val is not None:
+                    mission["distance"] = val
             elif clean.startswith("Elapsed time:"):
-                mission["time"] = float(re.search(r"([\d.]+)s", clean).group(1))
+                val = _float(r"([\d.]+)s", clean)
+                if val is not None:
+                    mission["time"] = val
             elif clean.startswith("Average velocity:"):
-                mission["velocity"] = float(re.search(r"[\d.]+", clean.split(":", 1)[1]).group())
+                val = _float(r"([\d.]+)", clean.split(":", 1)[1])
+                if val is not None:
+                    mission["velocity"] = val
             elif clean.startswith("Average mechanical power:"):
-                mission["mech_power"] = float(re.search(r"[\d.]+", clean.split(":", 1)[1]).group())
+                val = _float(r"([\d.]+)", clean.split(":", 1)[1])
+                if val is not None:
+                    mission["mech_power"] = val
             elif clean.startswith("Contact count:"):
-                mission["contact_count"] = int(clean.split(":", 1)[1].strip())
+                val = _int(r"(\d+)", clean.split(":", 1)[1])
+                if val is not None:
+                    mission["contact_count"] = val
             elif clean.startswith("People contact count:"):
-                mission["people_contact"] = int(clean.split(":", 1)[1].strip())
+                val = _int(r"(\d+)", clean.split(":", 1)[1])
+                if val is not None:
+                    mission["people_contact"] = val
             elif "Property contacts" in clean:
 
                 def _g(pat: str) -> int:
@@ -73,17 +95,27 @@ def parse_log(filepath):
                 mission["trash_bin"] = _g(r"trash_bin=(\d+)")
                 mission["mail_box"] = _g(r"mail_box=(\d+)")
             elif clean.startswith("Total impulse:"):
-                mission["total_impulse"] = float(re.search(r"[\d.]+", clean.split(":", 1)[1]).group())
+                val = _float(r"([\d.]+)", clean.split(":", 1)[1])
+                if val is not None:
+                    mission["total_impulse"] = val
             elif clean.startswith("Delta-v count:"):
-                mission["deltav_count"] = int(re.search(r"Delta-v count:\s*(\d+)", clean).group(1))
+                val = _int(r"Delta-v count:\s*(\d+)", clean)
+                if val is not None:
+                    mission["deltav_count"] = val
             elif clean.startswith("Total injury cost:"):
-                mission["injury_cost"] = float(clean.split(":", 1)[1].strip())
+                try:
+                    mission["injury_cost"] = float(clean.split(":", 1)[1].strip())
+                except ValueError:
+                    pass
             elif clean.startswith("Food spoiled:"):
                 mission["food_spoiled"] = clean.split(":", 1)[1].strip().lower() == "true"
 
             i += 1
 
         if "status" in mission:
+            # Skip missions where the service call failed (no real data)
+            if "distance" not in mission and "time" not in mission:
+                continue
             missions.append(mission)
 
     return missions

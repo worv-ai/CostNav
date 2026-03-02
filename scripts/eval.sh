@@ -157,28 +157,54 @@ log_file() {
     echo "$1" >> "$LOG_FILE"
 }
 
+# ROS2 service call timeout in seconds
+ROS2_SERVICE_TIMEOUT="${ROS2_SERVICE_TIMEOUT:-5}"
+
 # Execute ROS2 command in container
 ros2_exec() {
-    docker exec "$CONTAINER" /ros_entrypoint.sh bash -c "$1" 2>&1
+    timeout "$ROS2_SERVICE_TIMEOUT" docker exec "$CONTAINER" /ros_entrypoint.sh bash -c "$1" 2>&1
 }
 
 # Set mission timeout via ROS2 topic
 set_mission_timeout() {
     local timeout_seconds=$1
-    ros2_exec "ros2 topic pub --once /set_mission_timeout std_msgs/msg/Float64 '{data: $timeout_seconds}'" > /dev/null 2>&1
+    ros2_exec "ros2 topic pub --once /set_mission_timeout std_msgs/msg/Float64 '{data: $timeout_seconds}'" > /dev/null 2>&1 || true
 }
 
 # Call start_mission service and wait for response
 start_mission() {
     local result
-    result=$(ros2_exec "ros2 service call /start_mission std_srvs/srv/Trigger {}")
+    local rc=0
+    result=$(ros2_exec "ros2 service call /start_mission std_srvs/srv/Trigger {}") || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        log_file "[WARN] /start_mission service call failed (exit=$rc)"
+    fi
+    echo "$result"
+}
+
+# Call skip_mission service to tell mission manager to stop current mission
+skip_mission() {
+    local result
+    local rc=0
+    result=$(ros2_exec "ros2 service call /skip_mission std_srvs/srv/Trigger {}") || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        log_file "[WARN] /skip_mission service call failed (exit=$rc)"
+    fi
     echo "$result"
 }
 
 # Query mission result from /get_mission_result service
 get_mission_result() {
     local result
-    result=$(ros2_exec "ros2 service call /get_mission_result std_srvs/srv/Trigger {}")
+    local rc=0
+    result=$(ros2_exec "ros2 service call /get_mission_result std_srvs/srv/Trigger {}") || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        if [ "$rc" -eq 124 ]; then
+            log_file "[WARN] /get_mission_result timed out after ${ROS2_SERVICE_TIMEOUT}s"
+        else
+            log_file "[WARN] /get_mission_result service call failed (exit=$rc)"
+        fi
+    fi
     echo "$result"
 }
 
@@ -269,6 +295,8 @@ run_mission() {
                 mission_result="SKIPPED"
                 was_skipped=true
                 log "Mission $mission_num: SKIPPED by user (→ key pressed)"
+                # Tell mission manager to stop the current mission (stops canvas model, disables IL nodes)
+                skip_mission > /dev/null 2>&1
                 break
             fi
 

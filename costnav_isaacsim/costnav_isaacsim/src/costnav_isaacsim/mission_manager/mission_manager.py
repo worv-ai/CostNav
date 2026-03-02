@@ -58,6 +58,7 @@ class MissionResult(Enum):
         "failure_physicalassistance"  # Robot fell down (bad orientation) or impulse health depleted
     )
     FAILURE_FOODSPOILED = "failure_foodspoiled"  # Food spoiled during delivery
+    SKIPPED = "skipped"  # Mission skipped by user
 
 
 class MissionManager:
@@ -209,6 +210,7 @@ class MissionManager:
         self._spin_ros_once()
 
         if self._restart_requested and self._is_mission_active():
+            self._stop_canvas_model()
             self._reset_mission_state()
             self._restart_requested = False
             self._state = MissionState.READY
@@ -278,6 +280,9 @@ class MissionManager:
 
             # Start mission service (manual trigger)
             self._start_service = self._node.create_service(Trigger, "/start_mission", self._handle_start_mission)
+
+            # Skip mission service (allows eval script to skip current mission)
+            self._skip_service = self._node.create_service(Trigger, "/skip_mission", self._handle_skip_mission)
 
             # Mission result service
             self._result_service = self._node.create_service(
@@ -725,6 +730,11 @@ class MissionManager:
             self._topomap_generator = None
             self.config.topomap.enabled = False
 
+    def _stop_canvas_model(self) -> None:
+        """Send stop signal to CANVAS model if canvas is enabled and active."""
+        if self.config.canvas.enabled and self._canvas_generator is not None:
+            self._canvas_generator.send_stop()
+
     def _setup_canvas_generator(self) -> None:
         """Initialize the CanvasInstructionGenerator for CANVAS integration."""
         try:
@@ -862,6 +872,47 @@ class MissionManager:
             self.config.timeout = timeout_value
             logger.info(f"[CONFIG] Mission timeout set to {timeout_value}s")
 
+    def _handle_skip_mission(self, _request, response):
+        """Handle external mission skip trigger.
+
+        Stops the CANVAS model, disables IL baseline nodes, and transitions
+        the mission manager to WAITING_FOR_START so the next start_mission
+        call begins a fresh mission.
+        """
+        if not self._is_mission_active():
+            response.success = False
+            response.message = "No active mission to skip."
+            return response
+
+        logger.info(f"[{self._state.name}] Skip signal received. Stopping current mission.")
+        self._mission_end_time = self._get_current_time_seconds()
+        elapsed = (self._mission_end_time - self._mission_start_time) if self._mission_start_time is not None else 0.0
+        distance = self._get_distance_to_goal()
+
+        self._last_mission_result = MissionResult.SKIPPED
+        self._last_mission_distance = distance if distance is not None else -1.0
+        self._last_elapsed_time = elapsed
+        self._last_traveled_distance = self._traveled_distance
+        self._eval.last_contact_count = self._eval.contact_count
+        self._eval.last_people_contact_count = self._eval.people_contact_count
+        self._eval.last_total_impulse = self._eval.total_impulse
+        self._eval.last_property_contact_counts = dict(self._eval.property_contact_counts)
+        self._eval.last_delta_v_magnitudes_mps = list(self._eval.delta_v_magnitudes_mps)
+        self._eval.last_injury_costs = list(self._eval.injury_costs)
+        self._eval.last_total_injury_cost = self._eval.total_injury_cost
+
+        self._stop_canvas_model()
+        self._disable_il_baseline_nodes()
+        self._state = MissionState.WAITING_FOR_START
+        logger.info(
+            f"[SKIPPED] Mission {self._current_mission} skipped by user. "
+            f"Distance to goal: {self._last_mission_distance:.2f}m, elapsed: {elapsed:.1f}s"
+        )
+
+        response.success = True
+        response.message = "Mission skipped."
+        return response
+
     def _handle_start_mission(self, _request, response):
         """Handle external mission start trigger."""
         if self._state == MissionState.COMPLETED:
@@ -944,7 +995,7 @@ class MissionManager:
         Returns the result of the last completed mission as JSON in the message field.
         Response format:
         {
-            "result": "pending" | "success" | "failure",
+            "result": "pending" | "success" | "failure" | "skipped",
             "result_reason": str | null,  # specific reason (e.g., "orientation", "impulse_health_depletion")
             "mission_number": int,
             "distance_to_goal": float,
@@ -1647,6 +1698,7 @@ class MissionManager:
             # Check for food spoilage before declaring success
             if self._evaluation.check_food_spoilage():
                 self._last_mission_result = MissionResult.FAILURE_FOODSPOILED
+                self._stop_canvas_model()
                 self._disable_il_baseline_nodes()
                 self._state = MissionState.WAITING_FOR_START
                 logger.info(
@@ -1657,6 +1709,7 @@ class MissionManager:
                 return
 
             self._last_mission_result = MissionResult.SUCCESS
+            self._stop_canvas_model()
             self._disable_il_baseline_nodes()
             self._state = MissionState.WAITING_FOR_START
             logger.info(
@@ -1683,6 +1736,7 @@ class MissionManager:
             self._eval.last_delta_v_magnitudes_mps = list(self._eval.delta_v_magnitudes_mps)
             self._eval.last_injury_costs = list(self._eval.injury_costs)
             self._eval.last_total_injury_cost = self._eval.total_injury_cost
+            self._stop_canvas_model()
             self._disable_il_baseline_nodes()
             self._state = MissionState.WAITING_FOR_START
             logger.info(
@@ -1708,6 +1762,7 @@ class MissionManager:
             self._eval.last_delta_v_magnitudes_mps = list(self._eval.delta_v_magnitudes_mps)
             self._eval.last_injury_costs = list(self._eval.injury_costs)
             self._eval.last_total_injury_cost = self._eval.total_injury_cost
+            self._stop_canvas_model()
             self._disable_il_baseline_nodes()
             self._state = MissionState.WAITING_FOR_START
             logger.info(
@@ -1732,6 +1787,7 @@ class MissionManager:
             self._eval.last_delta_v_magnitudes_mps = list(self._eval.delta_v_magnitudes_mps)
             self._eval.last_injury_costs = list(self._eval.injury_costs)
             self._eval.last_total_injury_cost = self._eval.total_injury_cost
+            self._stop_canvas_model()
             self._disable_il_baseline_nodes()
             self._state = MissionState.WAITING_FOR_START
             logger.info(
