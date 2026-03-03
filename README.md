@@ -185,7 +185,7 @@ make build-ros2-torch
 MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
 
 # Terminal 2: Run evaluation
-make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
+make run-eval-vint TIMEOUT=241 NUM_MISSIONS=10
 ```
 
 For detailed IL training and evaluation documentation, see:
