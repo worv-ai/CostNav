@@ -1,7 +1,11 @@
 import argparse
 import os
 import signal
+import subprocess
 import sys
+import zipfile
+from datetime import datetime
+import math
 from typing import List
 
 from dotenv import load_dotenv
@@ -10,6 +14,8 @@ from dotenv import load_dotenv
 SCRIPT_DIR = os.path.dirname(__file__)
 ENV_PATH = os.path.join(SCRIPT_DIR, ".env")
 load_dotenv(ENV_PATH)
+_AUTH_SUB = None
+_FIXER_RAN_FLAG = os.path.join(SCRIPT_DIR, ".fixer_ran")
 
 
 def _expand_env_vars(keys: List[str]) -> None:
@@ -54,8 +60,8 @@ def parse_args():
     parser.add_argument(
         "--mesh-mode",
         type=str,
-        choices=["auto", "manual", "skip"],
-        default=os.getenv("MESH_MODE", "auto"),
+        choices=["auto", "skip"],
+        default=os.getenv("MESH_MODE", "skip"),
         help="Mesh handling mode",
     )
     parser.add_argument("--mesh-prim-path", type=str, default=os.getenv("MESH_PRIM_PATH", "/World/NvbloxMesh"))
@@ -138,9 +144,10 @@ simulation_app = SimulationApp({"headless": args.headless})
 
 from omni.isaac.core.world import World
 from omni.isaac.core.utils.extensions import enable_extension
+import omni.timeline
 import omni.usd
 import carb
-from pxr import Gf, UsdGeom, UsdPhysics, PhysxSchema
+from pxr import Gf, Usd, UsdGeom, UsdPhysics, PhysxSchema
 
 from mesh_utils import ensure_usd_mesh
 from teleop_utils import (
@@ -152,6 +159,28 @@ from teleop_utils import (
 
 
 ROS2_BRIDGE_EXTENSIONS = ("isaacsim.ros2.bridge", "omni.isaac.ros2_bridge")
+NUREC_EXTENSIONS = ("omni.volume", "omni.usd.schema.omni_nurec_types")
+
+
+def _usdz_contains_nurec(path: str) -> bool:
+    if not path or not path.lower().endswith(".usdz"):
+        return False
+    try:
+        with zipfile.ZipFile(path, "r") as zf:
+            return any(name.lower().endswith(".nurec") for name in zf.namelist())
+    except Exception as exc:
+        carb.log_warn(f"[Pipeline] USDZ scan failed: {exc}")
+        return False
+
+
+def _enable_nurec_extensions_if_needed(map_path: str) -> None:
+    if not _usdz_contains_nurec(map_path):
+        return
+    for ext_name in NUREC_EXTENSIONS:
+        if enable_extension(ext_name):
+            carb.log_info(f"[Pipeline] Enabled NuRec extension: {ext_name}")
+        else:
+            carb.log_warn(f"[Pipeline] NuRec extension not available: {ext_name}")
 
 
 def _enable_ros2_bridge_extension():
@@ -186,24 +215,28 @@ def _nucleus_login_from_env() -> bool:
     except Exception:
         pass
 
-    def _is_ok(result):
-        try:
-            return result == omni.client.Result.OK
-        except Exception:
-            return bool(result)
+    try:
+        server_host = omni.client.break_url(server).host
+    except Exception:
+        server_host = None
 
     try:
-        if hasattr(omni.client, "login"):
-            result = omni.client.login(server, user, password)
-        elif hasattr(omni.client, "authenticate"):
-            result = omni.client.authenticate(server, user, password)
-        elif hasattr(omni.client, "set_credential"):
-            result = omni.client.set_credential(server, user, password)
-        else:
-            carb.log_error("[Pipeline] omni.client has no known login/auth API.")
-            return False
+        def _auth_cb(url_prefix: str):
+            try:
+                url = omni.client.break_url(url_prefix)
+            except Exception:
+                return None
+            if url.scheme and url.scheme != "omniverse":
+                return None
+            if server_host and url.host and url.host != server_host:
+                return None
+            return (user, password)
 
-        if _is_ok(result):
+        global _AUTH_SUB
+        _AUTH_SUB = omni.client.register_authentication_callback(_auth_cb)
+
+        result, _ = omni.client.stat(server)
+        if result == omni.client.Result.OK:
             carb.log_info(f"[Pipeline] Nucleus login success: {server}")
             return True
         carb.log_error(f"[Pipeline] Nucleus login failed: {server} (result={result})")
@@ -227,6 +260,35 @@ def _parse_vec3(value: str, default: List[float]) -> List[float]:
     while len(nums) < 3:
         nums.append(default[len(nums)])
     return nums
+
+
+def _parse_quat(value: str) -> List[float] | None:
+    if not value:
+        return None
+    parts = [p.strip() for p in value.split(",") if p.strip()]
+    if len(parts) != 4:
+        return None
+    try:
+        return [float(p) for p in parts]
+    except ValueError:
+        return None
+
+
+def _quat_from_euler_deg(roll: float, pitch: float, yaw: float) -> List[float]:
+    r = math.radians(roll)
+    p = math.radians(pitch)
+    y = math.radians(yaw)
+    cr = math.cos(r / 2.0)
+    sr = math.sin(r / 2.0)
+    cp = math.cos(p / 2.0)
+    sp = math.sin(p / 2.0)
+    cy = math.cos(y / 2.0)
+    sy = math.sin(y / 2.0)
+    w = cr * cp * cy + sr * sp * sy
+    x = sr * cp * cy - cr * sp * sy
+    yv = cr * sp * cy + sr * cp * sy
+    z = cr * cp * sy - sr * sp * cy
+    return [w, x, yv, z]
 
 
 def _parse_res(value: str, default=(1920, 1080)) -> tuple[int, int]:
@@ -253,6 +315,63 @@ def _load_map(map_path: str) -> None:
     carb.log_info(f"[Pipeline] Loaded map: {map_path}")
 
 
+def _map_has_mesh_prim(stage, root_path: str = "/World/Map") -> bool:
+    if stage is None:
+        return False
+    root_prim = stage.GetPrimAtPath(root_path)
+    if not root_prim or not root_prim.IsValid():
+        return False
+    try:
+        root_prim.Load()
+    except Exception:
+        pass
+    for prim in Usd.PrimRange(root_prim):
+        if prim.IsA(UsdGeom.Mesh) or prim.GetTypeName() == "Mesh":
+            return True
+    return False
+
+
+def _set_prim_invisible(stage, prim_path: str) -> bool:
+    if stage is None or not prim_path:
+        return False
+    prim = stage.GetPrimAtPath(prim_path)
+    if not prim or not prim.IsValid():
+        return False
+    try:
+        imageable = UsdGeom.Imageable(prim)
+        imageable.MakeInvisible()
+        return True
+    except Exception:
+        return False
+
+
+def _hide_mesh_geometry(stage, root_path: str = "/World/Map") -> int:
+    if stage is None:
+        return 0
+    root_prim = stage.GetPrimAtPath(root_path)
+    if not root_prim or not root_prim.IsValid():
+        return 0
+    try:
+        root_prim.Load()
+    except Exception:
+        pass
+    hidden = set()
+    for prim in Usd.PrimRange(root_prim):
+        if prim.IsA(UsdGeom.Mesh) or prim.GetTypeName() == "Mesh":
+            target = prim
+            parent = prim.GetParent()
+            if parent and parent.IsValid() and parent.IsA(UsdGeom.Xform):
+                parent_name = (parent.GetName() or "").lower()
+                if "mesh" in parent_name or "nvblox" in parent_name:
+                    target = parent
+            try:
+                UsdGeom.Imageable(target).MakeInvisible()
+                hidden.add(target.GetPath().pathString)
+            except Exception:
+                pass
+    return len(hidden)
+
+
 def _apply_collider(stage, root_path: str) -> None:
     for prim in stage.Traverse():
         if not prim.GetPath().pathString.startswith(root_path):
@@ -263,11 +382,11 @@ def _apply_collider(stage, root_path: str) -> None:
         PhysxSchema.PhysxCollisionAPI.Apply(prim)
 
 
-def _add_mesh(usd_path: str, prim_path: str, offset, rot, scale) -> None:
+def _add_mesh(usd_path: str, prim_path: str, offset, rot, scale) -> bool:
     stage = omni.usd.get_context().get_stage()
     if stage is None:
         carb.log_error("[Pipeline] No USD stage available.")
-        return
+        return False
 
     xform = UsdGeom.Xform.Define(stage, prim_path)
     prim = xform.GetPrim()
@@ -281,6 +400,7 @@ def _add_mesh(usd_path: str, prim_path: str, offset, rot, scale) -> None:
 
     _apply_collider(stage, prim_path)
     carb.log_info(f"[Pipeline] Mesh added: {usd_path} → {prim_path}")
+    return True
 
 
 def _save_stage(path: str) -> None:
@@ -293,6 +413,62 @@ def _save_stage(path: str) -> None:
         carb.log_error(f"[Pipeline] Failed to save stage: {exc}")
 
 
+def _prepare_trial_dirs(base_dir: str) -> tuple[str, str, str]:
+    if not base_dir:
+        return "", "", ""
+    os.makedirs(base_dir, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    trial_name = f"teleop_{stamp}"
+    trial_dir = os.path.join(base_dir, trial_name)
+    suffix = 1
+    while os.path.exists(trial_dir):
+        trial_dir = os.path.join(base_dir, f"{trial_name}_{suffix}")
+        suffix += 1
+    capture_dir = os.path.join(trial_dir, "capture")
+    fixer_dir = os.path.join(trial_dir, "fixer")
+    os.makedirs(capture_dir, exist_ok=False)
+    os.makedirs(fixer_dir, exist_ok=False)
+    return trial_dir, capture_dir, fixer_dir
+
+
+def _run_fixer_to_video(input_dir: str, output_dir: str | None = None, video_dir: str | None = None) -> bool:
+    fixer_script = os.path.join(SCRIPT_DIR, "fixer_to_video.sh")
+    if not os.path.isfile(fixer_script) or not os.access(fixer_script, os.X_OK):
+        carb.log_warn("[Pipeline] fixer_to_video.sh not found or not executable. Skipping Fixer.")
+        return False
+
+    if not input_dir or not os.path.isdir(input_dir):
+        carb.log_warn("[Pipeline] Fixer input dir is missing. Skipping Fixer.")
+        return False
+
+    args = [fixer_script, "--input", input_dir]
+    out_dir = output_dir or os.getenv("FIXER_OUT_DIR") or ""
+    if out_dir:
+        args += ["--output", out_dir]
+    vid_dir = video_dir or os.getenv("FIXER_VIDEO_DIR") or ""
+    if vid_dir:
+        args += ["--video-dir", vid_dir]
+    fixer_fps = os.getenv("FIXER_FPS")
+    if fixer_fps:
+        args += ["--fps", fixer_fps]
+    fixer_timestep = os.getenv("FIXER_TIMESTEP")
+    if fixer_timestep:
+        args += ["--timestep", fixer_timestep]
+
+    carb.log_info(f"[Pipeline] Running Fixer: {args}")
+    result = subprocess.run(args, check=False)
+    if result.returncode == 0:
+        try:
+            with open(_FIXER_RAN_FLAG, "w") as f:
+                f.write("ok\n")
+        except Exception:
+            pass
+        carb.log_info("[Pipeline] Fixer completed.")
+        return True
+    carb.log_error(f"[Pipeline] Fixer failed (exit={result.returncode}).")
+    return False
+
+
 def main():
     _enable_ros2_bridge_extension()
 
@@ -301,6 +477,92 @@ def main():
     simulation_app.update()
 
     _nucleus_login_from_env()
+    _enable_nurec_extensions_if_needed(args.map)
+    simulation_app.update()
+
+    # Map 로드
+    if args.map:
+        _load_map(args.map)
+
+    # Mesh 처리
+    mesh_mode = (args.mesh_mode or "skip").lower()
+    if mesh_mode not in {"auto", "skip"}:
+        carb.log_error("[Pipeline] Invalid mesh mode. Use auto or skip.")
+        sys.exit(1)
+
+    stage = omni.usd.get_context().get_stage()
+    map_has_mesh = _map_has_mesh_prim(stage, root_path="/World/Map")
+
+    if mesh_mode == "auto":
+        if not args.mesh:
+            carb.log_error("[Pipeline] --mesh (or MESH_PATH) is required for auto mode.")
+            sys.exit(1)
+        if map_has_mesh:
+            carb.log_error("[Pipeline] Map already contains mesh geometry. Auto import disabled to prevent duplicates.")
+            sys.exit(1)
+        if not _path_exists(args.mesh):
+            carb.log_error(f"[Pipeline] Mesh not found: {args.mesh}")
+            sys.exit(1)
+
+        mesh_usd = ensure_usd_mesh(args.mesh, args.mesh_cache, force=args.mesh_force_convert)
+        if not mesh_usd:
+            carb.log_error(
+                "[Pipeline] Mesh auto-import failed. If the mesh axes are not aligned, align the map manually and run with --mesh-mode skip."
+            )
+            sys.exit(1)
+
+        offset = _parse_vec3(args.mesh_offset, [0.0, 0.0, 0.0])
+        rot = _parse_vec3(args.mesh_rot, [0.0, 0.0, 0.0])
+        scale = _parse_vec3(args.mesh_scale, [1.0, 1.0, 1.0])
+        if not _add_mesh(mesh_usd, args.mesh_prim_path, offset, rot, scale):
+            carb.log_error(
+                "[Pipeline] Mesh auto-import failed. If the mesh axes are not aligned, align the map manually and run with --mesh-mode skip."
+            )
+            sys.exit(1)
+        _set_prim_invisible(stage, args.mesh_prim_path)
+
+        if args.save_map_on_start or args.save_map:
+            save_path = args.save_map or os.getenv("SAVE_MAP_PATH", "")
+            _save_stage(save_path)
+
+    elif mesh_mode == "skip":
+        if not map_has_mesh:
+            carb.log_error(
+                "[Pipeline] No mesh geometry found in the map. Use --mesh-mode auto with MESH_PATH, or use an already-aligned map."
+            )
+            sys.exit(1)
+        hidden = _hide_mesh_geometry(stage, root_path="/World/Map")
+        if hidden:
+            carb.log_info(f"[Pipeline] Hid mesh geometry: {hidden} prim(s).")
+        carb.log_info("[Pipeline] Mesh import skipped.")
+
+    # 로봇 소환
+    if args.robot and _path_exists(args.robot):
+        import omni.isaac.core.utils.stage as stage_utils
+        from omni.isaac.core.robots import Robot
+        stage_utils.add_reference_to_stage(usd_path=args.robot, prim_path="/World/Segway_E1_ROS2")
+        pos = _parse_vec3(os.getenv("ROBOT_SPAWN_POS", "0,0,0"), [0.0, 0.0, 0.0])
+        quat = _parse_quat(os.getenv("ROBOT_SPAWN_QUAT", ""))
+        if quat is None:
+            rot = os.getenv("ROBOT_SPAWN_ROT", "")
+            if rot:
+                rpy = _parse_vec3(rot, [0.0, 0.0, 0.0])
+                quat = _quat_from_euler_deg(rpy[0], rpy[1], rpy[2])
+        if quat is None:
+            yaw = os.getenv("ROBOT_SPAWN_YAW", "")
+            if yaw:
+                try:
+                    quat = _quat_from_euler_deg(0.0, 0.0, float(yaw))
+                except ValueError:
+                    quat = None
+        world.scene.add(
+            Robot(
+                prim_path="/World/Segway_E1_ROS2",
+                name="segway_e1",
+                position=pos,
+                orientation=quat,
+            )
+        )
 
     # Teleop 실행
     teleop_proc = None
@@ -317,7 +579,10 @@ def main():
         if args.joystick_teleop_cmd:
             teleop_cmd = args.joystick_teleop_cmd
         else:
-            teleop_cmd = build_joystick_teleop_cmd(args.joystick_teleop_config, device=joystick_device)
+            yaml_path = args.joystick_teleop_config
+            if os.path.isdir(yaml_path):
+                yaml_path = os.path.join(yaml_path, "teleop_twist_joy.yaml")
+            teleop_cmd = build_joystick_teleop_cmd(yaml_path, device=joystick_device)
         teleop_proc = launch_background_teleop(teleop_cmd, "joystick")
     elif teleop_mode == "keyboard":
         launch_terminal_teleop(args.keyboard_teleop_cmd, "keyboard")
@@ -325,38 +590,23 @@ def main():
     else:
         carb.log_info("[Pipeline] Teleop disabled.")
 
-    # Map 로드
-    if args.map:
-        _load_map(args.map)
-
-    # Mesh 처리
-    mesh_mode = (args.mesh_mode or "auto").lower()
-    if mesh_mode == "manual":
-        carb.log_warn("[Pipeline] Mesh mode is manual. Import and align mesh in Isaac Sim UI.")
-    elif mesh_mode == "auto" and args.mesh:
-        mesh_usd = ensure_usd_mesh(args.mesh, args.mesh_cache, force=args.mesh_force_convert)
-        if mesh_usd:
-            offset = _parse_vec3(args.mesh_offset, [0.0, 0.0, 0.0])
-            rot = _parse_vec3(args.mesh_rot, [0.0, 0.0, 0.0])
-            scale = _parse_vec3(args.mesh_scale, [1.0, 1.0, 1.0])
-            _add_mesh(mesh_usd, args.mesh_prim_path, offset, rot, scale)
-            if args.save_map_on_start or args.save_map:
-                save_path = args.save_map or os.getenv("SAVE_MAP_PATH", "")
-                _save_stage(save_path)
-        else:
-            carb.log_warn("[Pipeline] Mesh conversion failed. Skipping mesh import.")
-    elif mesh_mode == "skip":
-        carb.log_info("[Pipeline] Mesh import skipped.")
-
-    # 로봇 소환
-    if args.robot and _path_exists(args.robot):
-        import omni.isaac.core.utils.stage as stage_utils
-        from omni.isaac.core.robots import Robot
-        stage_utils.add_reference_to_stage(usd_path=args.robot, prim_path="/World/E1_Robot")
-        world.scene.add(Robot(prim_path="/World/E1_Robot", name="e1_robot", position=_parse_vec3(os.getenv("ROBOT_SPAWN_POS", "0,0,0"), [0.0, 0.0, 0.0])))
-
     world.reset()
     carb.log_info(f"[Pipeline] Ready! Teleop mode: {teleop_mode}")
+
+    timeline = omni.timeline.get_timeline_interface()
+    if timeline is None:
+        carb.log_warn("[Pipeline] Timeline interface not available. Running without play/stop control.")
+    else:
+        try:
+            timeline.set_looping(True)
+            start_time = timeline.get_start_time()
+            end_time = timeline.get_end_time()
+            if end_time <= start_time:
+                timeline.set_end_time(start_time + 1000.0)
+            timeline.set_current_time(start_time)
+        except Exception:
+            pass
+        timeline.play()
 
     # Capture setup
     capture_enabled = bool(args.capture_dir)
@@ -364,8 +614,16 @@ def main():
     capture_max = max(0, int(args.capture_max_frames))
     captured = 0
     frame_idx = 0
+    trial_dir = ""
+    fixer_dir = ""
 
     if capture_enabled:
+        trial_dir, capture_dir, fixer_dir = _prepare_trial_dirs(args.capture_dir)
+        args.capture_dir = capture_dir
+        os.environ["CAPTURE_DIR"] = capture_dir
+        os.environ["FIXER_INPUT_DIR"] = capture_dir
+        os.environ["FIXER_OUT_DIR"] = fixer_dir
+        os.environ["FIXER_VIDEO_DIR"] = trial_dir
         import omni.replicator.core as rep
 
         os.makedirs(args.capture_dir, exist_ok=True)
@@ -377,8 +635,25 @@ def main():
         carb.log_info(f"[Capture] Enabled: dir={args.capture_dir} cam={args.capture_camera} res={res}")
         carb.log_info(f"[Capture] every={capture_every} max_frames={capture_max or 'unlimited'}")
 
+    was_playing = False
+    stop_requested = False
     try:
         while simulation_app.is_running():
+            if timeline is not None:
+                if timeline.is_stopped():
+                    if was_playing:
+                        carb.log_info("[Pipeline] Timeline stopped by user. Exiting simulation loop.")
+                        stop_requested = True
+                        break
+                    timeline.play()
+                    simulation_app.update()
+                    continue
+                if not timeline.is_playing():
+                    timeline.play()
+                    simulation_app.update()
+                    continue
+
+            was_playing = True
             world.step(render=True)
             frame_idx += 1
             if capture_enabled:
@@ -386,8 +661,12 @@ def main():
                     rep.orchestrator.step()
                     captured += 1
                     if capture_max and captured >= capture_max:
-                        carb.log_info("[Capture] Reached capture limit. Stopping capture.")
+                        carb.log_info("[Capture] Reached capture limit. Stopping simulation.")
                         capture_enabled = False
+                        stop_requested = True
+                        if timeline is not None and not timeline.is_stopped():
+                            timeline.stop()
+                        break
     finally:
         if teleop_proc is not None and teleop_proc.poll() is None:
             try:
@@ -395,6 +674,14 @@ def main():
             except Exception:
                 pass
         simulation_app.close()
+
+    if stop_requested:
+        run_fixer = os.getenv("RUN_FIXER_TO_VIDEO", "0") == "1"
+        if run_fixer:
+            input_dir = args.capture_dir or os.getenv("FIXER_INPUT_DIR") or os.getenv("CAPTURE_DIR") or ""
+            _run_fixer_to_video(input_dir, output_dir=fixer_dir or None, video_dir=trial_dir or None)
+        else:
+            carb.log_info("[Pipeline] RUN_FIXER_TO_VIDEO disabled. Skipping Fixer on stop.")
 
 
 if __name__ == "__main__":
