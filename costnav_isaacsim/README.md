@@ -268,7 +268,7 @@ make run-canvas
 make run-eval-canvas
 
 # Or with custom parameters (default: 169s timeout, 3 missions)
-make run-eval-canvas TIMEOUT=169 NUM_MISSIONS=10
+make run-eval-canvas TIMEOUT=241 NUM_MISSIONS=10
 ```
 
 Evaluation logs are saved to `./logs/canvas_evaluation_<timestamp>.log`.

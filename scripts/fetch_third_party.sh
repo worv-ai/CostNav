@@ -6,8 +6,36 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 echo "==> Syncing submodules"
 git -C "${ROOT_DIR}" submodule sync --recursive
 
+PRIVATE_SUBMODULES=("third_party/canvas-costnav")
+
 echo "==> Initializing top-level submodules"
-git -C "${ROOT_DIR}" submodule update --init
+# Build list of public submodules (exclude private ones)
+public_paths=()
+while IFS= read -r path; do
+  skip=false
+  for priv in "${PRIVATE_SUBMODULES[@]}"; do
+    if [[ "${path}" == "${priv}" ]]; then
+      skip=true
+      break
+    fi
+  done
+  if [[ "${skip}" == "false" ]]; then
+    public_paths+=("${path}")
+  fi
+done < <(git -C "${ROOT_DIR}" config -f .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
+
+for path in "${public_paths[@]}"; do
+  git -C "${ROOT_DIR}" submodule update --init -- "${path}"
+done
+
+# Try to initialize private submodules; warn and continue on failure
+for priv in "${PRIVATE_SUBMODULES[@]}"; do
+  echo "==> Initializing private submodule ${priv} (requires access)"
+  if ! GIT_TERMINAL_PROMPT=0 git -C "${ROOT_DIR}" submodule update --init -- "${priv}" 2>/dev/null; then
+    echo "WARNING: Could not initialize private submodule '${priv}'. Skipping."
+    echo "         Request access to the repository if you need this module."
+  fi
+done
 
 if [[ -d "${ROOT_DIR}/third_party/NavDP" ]]; then
   if git -C "${ROOT_DIR}/third_party/NavDP" ls-tree -d HEAD baselines/logoplanner/Pi3 >/dev/null 2>&1; then
