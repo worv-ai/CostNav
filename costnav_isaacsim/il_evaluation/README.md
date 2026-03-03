@@ -243,9 +243,9 @@ MODEL_CHECKPOINT=checkpoints/baseline-gnm.pth make run-gnm
 MODEL_CHECKPOINT=checkpoints/baseline-nomad.pth make run-nomad
 
 # Terminal 2: Run evaluation
-make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
-make run-eval-gnm TIMEOUT=169 NUM_MISSIONS=10
-make run-eval-nomad TIMEOUT=169 NUM_MISSIONS=10
+make run-eval-vint TIMEOUT=241 NUM_MISSIONS=10
+make run-eval-gnm TIMEOUT=241 NUM_MISSIONS=10
+make run-eval-nomad TIMEOUT=241 NUM_MISSIONS=10
 ```
 
 **Evaluation Parameters:**

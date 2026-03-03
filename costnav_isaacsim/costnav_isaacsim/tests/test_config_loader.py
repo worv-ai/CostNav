@@ -329,7 +329,7 @@ class TestMissionConfig:
         """Test MissionConfig default values."""
         config = MissionConfig()
         assert config.timeout == 3600.0
-        assert config.goal_tolerance == 1.0
+        assert config.goal_tolerance == 2.0
         assert config.min_distance == 5.0
         assert config.max_distance == 50.0
         # Verify sub-configs are created
@@ -969,7 +969,7 @@ class TestConfigUsageInMissionManager:
     def test_mission_manager_goal_tolerance(self):
         """Test MissionManager uses goal_tolerance."""
         config = load_mission_config()
-        assert config.goal_tolerance == 1.0
+        assert config.goal_tolerance == 2.0
 
     def test_mission_manager_timeout(self):
         """Test MissionManager uses timeout from YAML."""

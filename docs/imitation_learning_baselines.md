@@ -240,13 +240,30 @@ uv run python -m il_training.training.train_vint \
     --config il_training/training/visualnav_transformer/configs/vint_costnav.yaml
 ```
 
-#### SLURM Training
+#### Training NoMaD
+
+```bash
+# From CostNav/costnav_isaacsim/
+uv run python -m il_training.training.train_vint \
+    --config il_training/training/visualnav_transformer/configs/nomad_costnav.yaml
+```
+
+#### SLURM Training (ViNT)
 
 For cluster training:
 
 ```bash
 cd costnav_isaacsim/il_training/scripts/
 sbatch train_vint.sbatch
+```
+
+#### SLURM Training (NoMaD)
+
+For cluster training:
+
+```bash
+cd costnav_isaacsim/il_training/scripts/
+sbatch train_nomad.sbatch
 ```
 
 The sbatch script uses `uv run` — no manual venv activation needed.
@@ -284,16 +301,11 @@ The sbatch script uses `uv run` — no manual venv activation needed.
 - [x] Implement pre-trained model fine-tuning pipeline
 - [x] Test training with collected sidewalk navigation data ✅ **Training successful!**
 
-### Phase 3: Evaluation & Comparison 🔄 (In Progress)
+### Phase 3: Evaluation & Comparison ✅
 
-**Current Status:**
-
-- ✅ ViNT model (trained on Nova Carter data) runs successfully in Isaac Sim
-- ✅ Two-node architecture implemented (policy node + trajectory follower)
-- ✅ Topological graph navigation implemented (NavMesh-to-Topomap pipeline)
-
-**Completed Tasks:**
-
+- [x] ViNT model (trained on Nova Carter data) runs successfully in Isaac Sim
+- [x] Two-node architecture implemented (policy node + trajectory follower)
+- [x] Topological graph navigation implemented (NavMesh-to-Topomap pipeline)
 - [x] Setup uv environment + Slurm setup
 - [x] **(Critical)** Implement topological graph navigation
   - NavMesh-based `TopomapGenerator` generates ViNT-compatible topomaps from Isaac Sim shortest paths
@@ -303,10 +315,7 @@ The sbatch script uses `uv run` — no manual venv activation needed.
   - Configurable via `mission_config.yaml` (`topomap:` key) and `vint_eval.yaml` (radius, threshold)
   - Enabled via `make run-vint` or `make run-isaac-sim TOPOMAP=True`
   - See [TOPOMAP_PIPELINE.md](../costnav_isaacsim/costnav_isaacsim/TOPOMAP_PIPELINE.md) for full details
-
-**Remaining Tasks:**
-
-- [ ] Train and compare with Segway E1 data (2h, 4h, 6h training runs)
+- [x] Train and compare with Segway E1 data (2h, 4h, 6h training runs)
 
 ---
 
@@ -507,7 +516,8 @@ Baselines integrated into the same two-node architecture (see [ROS2 Node Interfa
 
 - [x] **NoMaD** - Diffusion-based navigation policy (ROS2 policy node + trajectory follower; `make run-nomad`)
 - [x] **GNM** - General Navigation Model (ROS2 policy node + trajectory follower; `make run-gnm`)
-- [ ] **NavDP** - HTTP-based baseline (planned)
+- [x] **NavDP** - HTTP-based baseline (`make run-navdp`)
+- [x] **Canvas** - Sketch-based navigation baseline (`make run-canvas`)
 
 **Navigation mode override:** use `GOAL_TYPE` to switch between `image_goal` and `topomap` when running a baseline.
 This auto-syncs `GOAL_IMAGE` and `IL_TOPOMAP` unless you explicitly override them.

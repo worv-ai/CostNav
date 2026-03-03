@@ -239,7 +239,7 @@ make run-eval-canvas
 With custom parameters:
 
 ```bash
-make run-eval-canvas TIMEOUT=169 NUM_MISSIONS=20
+make run-eval-canvas TIMEOUT=241 NUM_MISSIONS=20
 ```
 
 ### Evaluation Parameters

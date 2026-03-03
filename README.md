@@ -33,6 +33,8 @@ Our key contributions are:
 
 You can find more details in our [technical report](https://arxiv.org/abs/2511.20216).
 
+The full cost benchmark formula with real world references is available in our google drive: https://drive.google.com/drive/folders/1j1MXm6NMkd6HHBwTJi_nSde7-shv4laX?usp=sharing
+
 ## Getting Started
 
 ### 1. Prerequisites
@@ -48,6 +50,8 @@ git clone https://github.com/worv-ai/CostNav.git
 cd CostNav
 make fetch-third-party # we use third-party submodules for reference or dependencies
 ```
+
+> **Note:** The `third_party/canvas-costnav` submodule is a **private repository**. If you don't have access, it will be skipped automatically during `make fetch-third-party`.
 
 ### 3. Configure environment variables
 
@@ -79,6 +83,8 @@ make start-nucleus
 # make stop-nucleus
 ```
 
+Teleop Dataset is available in https://huggingface.co/datasets/maum-ai/CostNav-Teleop-Dataset/tree/main
+
 ```bash
 # for internal developers
 
@@ -88,6 +94,9 @@ make start-nucleus
 
 # Upload assets to HuggingFace (for internal developers, requires HF_TOKEN in .env)
 # make upload-assets-hf
+
+# Upload teleop dataset to HuggingFace (for internal developers, requires HF_TOKEN in .env)
+# make upload-dataset-hf
 
 ```
 
@@ -176,7 +185,7 @@ make build-ros2-torch
 MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
 
 # Terminal 2: Run evaluation
-make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
+make run-eval-vint TIMEOUT=241 NUM_MISSIONS=10
 ```
 
 For detailed IL training and evaluation documentation, see:
@@ -190,19 +199,14 @@ For detailed IL training and evaluation documentation, see:
 - [x] Paper release
 - [x] isaac sim assets release
 - [x] nav2 support for rule-based navigation
-- [ ] cost formula and reference sheet
-- [ ] imitation learning baseline
-- [ ] collected dataset with teleoperation
+- [x] cost formula and reference sheet
+- [x] collected dataset with teleoperation
+- [x] imitation learning baseline
 
 ## Contributing
 
 Help us build a large-scale, ever-expanding benchmark!
 We highly encourage contributions via issues and pull requests, especially adding more navigation baselines!
-
-## Contact
-
-Maintained by the Maum.AI WoRV team.
-For research collaborations or enterprise deployments, please contact https://worv-ai.github.io/.
 
 ## Citation
 
