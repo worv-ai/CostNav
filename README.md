@@ -33,7 +33,7 @@ Our key contributions are:
 
 You can find more details in our [technical report](https://arxiv.org/abs/2511.20216).
 
-The full cost benchmark formula with real world references is available in our google drive: https://drive.google.com/drive/folders/1j1MXm6NMkd6HHBwTJi_nSde7-shv4laX?usp=sharing 
+The full cost benchmark formula with real world references is available in our google drive: https://drive.google.com/drive/folders/1j1MXm6NMkd6HHBwTJi_nSde7-shv4laX?usp=sharing
 
 ## Getting Started
 
@@ -50,6 +50,8 @@ git clone https://github.com/worv-ai/CostNav.git
 cd CostNav
 make fetch-third-party # we use third-party submodules for reference or dependencies
 ```
+
+> **Note:** The `third_party/canvas-costnav` submodule is a **private repository**. If you don't have access, it will be skipped automatically during `make fetch-third-party`.
 
 ### 3. Configure environment variables
 

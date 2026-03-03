@@ -30,6 +30,7 @@
 [submodule "third_party/diffusion_policy"]
 	path = third_party/diffusion_policy
 	url = https://github.com/real-stanford/diffusion_policy.git
+# private repository – skipped automatically for unauthorized users
 [submodule "third_party/canvas-costnav"]
 	path = third_party/canvas-costnav
 	url = https://github.com/MaumAI-Company/canvas-costnav
