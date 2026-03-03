@@ -31,7 +31,7 @@ done
 # Try to initialize private submodules; warn and continue on failure
 for priv in "${PRIVATE_SUBMODULES[@]}"; do
   echo "==> Initializing private submodule ${priv} (requires access)"
-  if ! git -C "${ROOT_DIR}" submodule update --init -- "${priv}" 2>/dev/null; then
+  if ! GIT_TERMINAL_PROMPT=0 git -C "${ROOT_DIR}" submodule update --init -- "${priv}" 2>/dev/null; then
     echo "WARNING: Could not initialize private submodule '${priv}'. Skipping."
     echo "         Request access to the repository if you need this module."
   fi
