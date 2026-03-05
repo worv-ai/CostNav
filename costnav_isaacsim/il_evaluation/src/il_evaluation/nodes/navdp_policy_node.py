@@ -43,9 +43,7 @@ class NavDPPolicyNode(BasePolicyNode):
 
         resolved_goal_type = goal_type or "image_goal"
         if resolved_goal_type != "image_goal":
-            raise ValueError(
-                f"NavDP only supports goal_type='image_goal' in this wrapper, got '{resolved_goal_type}'."
-            )
+            raise ValueError(f"NavDP only supports goal_type='image_goal' in this wrapper, got '{resolved_goal_type}'.")
 
         self.depth_anything_checkpoint = str(
             model_cfg.get("depth_anything_checkpoint", "checkpoints/depth_anything_v2_vits.pth")
