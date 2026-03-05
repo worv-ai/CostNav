@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-ros2-torch build-navdp run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint run-gnm run-nomad run-navdp run-canvas start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint run-eval-gnm run-eval-nomad run-eval-navdp run-eval-canvas download-assets-omniverse download-assets-hf upload-assets-hf download-baseline-checkpoints-hf start-nucleus stop-nucleus
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-ros2-torch build-navdp run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint run-gnm run-nomad run-navdp run-canvas start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint run-eval-gnm run-eval-nomad run-eval-navdp run-eval-canvas download-assets-omniverse download-assets-hf upload-assets-hf upload-dataset-hf download-baseline-checkpoints-hf start-nucleus stop-nucleus
 
 # Load environment variables from .env file if it exists
 # Variables can still be overridden from command line
@@ -247,23 +247,18 @@ run-nomad:
 	$(DOCKER_COMPOSE) --profile nomad down
 	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) TOPOMAP=$(IL_TOPOMAP) GOAL_IMAGE=$(GOAL_IMAGE) ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile nomad up
 
-# Run Isaac Sim with NavDP policy node and trajectory follower for IL evaluation
-NAVDP_EVAL_TIMEOUT ?= 180
-NAVDP_EVAL_NUM_MISSIONS ?= 100
-
-run-navdp: NAVDP_CHECKPOINT ?= checkpoints/baseline_navdp.ckpt
-run-navdp: HEADLESS ?= True
-run-navdp: OMNI_USER ?= omniverse
-run-navdp: OMNI_PASS ?=
+run-navdp: MODEL_CHECKPOINT ?= checkpoints/navdp.ckpt
+run-navdp: ALIGN_HEADING = True
+run-navdp: GOAL_IMAGE = True
 run-navdp:
-	@if [ ! -f "$(NAVDP_CHECKPOINT)" ]; then \
-		echo "ERROR: NAVDP_CHECKPOINT not found: $(NAVDP_CHECKPOINT)"; \
-		echo "Please run 'make download-baseline-checkpoints-hf' first or set NAVDP_CHECKPOINT explicitly."; \
+	@if [ ! -f "$(MODEL_CHECKPOINT)" ]; then \
+		echo "ERROR: MODEL_CHECKPOINT not found: $(MODEL_CHECKPOINT)"; \
+		echo "Please put the checkpoint file under ./checkpoints/ or set MODEL_CHECKPOINT explicitly."; \
 		exit 1; \
 	fi
 	xhost +local:docker 2>/dev/null || true
-	OMNI_USER=$(OMNI_USER) OMNI_PASS=$(OMNI_PASS) HEADLESS=$(HEADLESS) $(DOCKER_COMPOSE) --profile navdp down
-	OMNI_USER=$(OMNI_USER) OMNI_PASS=$(OMNI_PASS) HEADLESS=$(HEADLESS) NAVDP_CHECKPOINT=$(NAVDP_CHECKPOINT) $(DOCKER_COMPOSE) --profile navdp up
+	$(DOCKER_COMPOSE) --profile navdp down
+	TOPOMAP=$(IL_TOPOMAP) GOAL_IMAGE=$(GOAL_IMAGE) ALIGN_HEADING=$(ALIGN_HEADING) GOAL_TYPE=$(GOAL_TYPE) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile navdp up
 
 # Run Isaac Sim with CANVAS instruction generation enabled
 # Starts Isaac Sim + RViz with canvas.enabled=true in mission config
@@ -399,7 +394,7 @@ run-eval-nomad:
 	@bash scripts/eval.sh nomad $(TIMEOUT) $(NUM_MISSIONS)
 
 # Run NavDP evaluation (requires running navdp instance via make run-navdp)
-# Usage: make run-eval-navdp
+# Usage: make run-eval-navdp TIMEOUT=20 NUM_MISSIONS=10
 # Output: ./logs/navdp_evaluation_<timestamp>.log
 run-eval-navdp:
 	@if ! docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-navdp"; then \
@@ -413,10 +408,10 @@ run-eval-navdp:
 		exit 1; \
 	fi
 	@echo "Starting NavDP evaluation..."
-	@echo "  Timeout per mission: $(NAVDP_EVAL_TIMEOUT)s"
-	@echo "  Number of missions:  $(NAVDP_EVAL_NUM_MISSIONS)"
+	@echo "  Timeout per mission: $(TIMEOUT)s"
+	@echo "  Number of missions:  $(NUM_MISSIONS)"
 	@echo ""
-	@bash scripts/eval.sh navdp $(NAVDP_EVAL_TIMEOUT) $(NAVDP_EVAL_NUM_MISSIONS)
+	@bash scripts/eval.sh navdp $(TIMEOUT) $(NUM_MISSIONS)
 
 # Run Canvas evaluation (requires running canvas instance via make run-canvas)
 # Usage: make run-eval-canvas TIMEOUT=20 NUM_MISSIONS=10
@@ -481,7 +476,6 @@ download-baseline-checkpoints-hf:
 	@echo "Downloading baseline checkpoints from Hugging Face..."
 	$(DOCKER_COMPOSE) --profile dev run --rm dev \
 		bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/scripts/assets/download_baseline_checkpoints_hf.py"
-
 # =============================================================================
 # Nucleus Server Targets
 # =============================================================================

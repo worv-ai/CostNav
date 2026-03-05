@@ -12,7 +12,7 @@ which are not installable via `uv` on a bare-metal host.
 | ----------- | -------------------------------------------------------------------- |
 | **Image**   | `Dockerfile.ros_torch` (ROS2 Jazzy + PyTorch)                        |
 | **Install** | `uv pip install -e .` inside the container                           |
-| **Run**     | `make run-vint` (docker-compose)                                     |
+| **Run**     | `make run-vint` / `make run-navdp` (docker-compose)                  |
 | **Debug**   | VSCode devcontainer (`ros2-vint-dev` service)                        |
 | **Test**    | `docker build -f Dockerfile.ros_torch .` → `pytest` inside container |
 
@@ -28,7 +28,7 @@ This evaluation framework is adapted from the [NavDP](https://github.com/InternR
 > Shanghai AI Laboratory, Tsinghua University, Zhejiang University, The University of Hong Kong
 > [Paper](https://arxiv.org/abs/2505.08712) | [GitHub](https://github.com/InternRobotics/NavDP) | [Project Page](https://wzcai99.github.io/navigation-diffusion-policy.github.io/)
 
-The baseline implementations (ViNT, NoMaD, GNM) are derived from:
+The baseline implementations (ViNT, NoMaD, GNM, NavDP) are derived from:
 
 - NavDP baselines: `third_party/NavDP/baselines/`
 - Original [visualnav-transformer](https://github.com/robodhruv/visualnav-transformer) repository
@@ -38,6 +38,7 @@ The baseline implementations (ViNT, NoMaD, GNM) are derived from:
 - **ViNT** (Visual Navigation Transformer) - ✅ Implemented
 - **NoMaD** (No Map Diffusion) - ✅ Implemented
 - **GNM** (General Navigation Model) - ✅ Implemented
+- **NavDP** (Navigation Diffusion Policy) - ✅ Implemented
 
 ## Installation
 
@@ -70,15 +71,11 @@ There are two main approaches for testing IL evaluation:
 This approach runs the complete stack (Isaac Sim + IL policy) in Docker containers.
 
 **Prerequisites:**
-Download the pretrained checkpoints from Hugging Face or train your own model:
+Place pretrained checkpoints in `checkpoints/` or train your own model.
 
-```bash
-make download-baseline-checkpoints-hf
-```
+See [Download Pretrained Checkpoints](../il_training/README.md#download-pretrained-checkpoints) for expected filenames.
 
-See [Download Pretrained Checkpoints](../il_training/README.md#download-pretrained-checkpoints) for more information.
-
-**Note:** The `MODEL_CHECKPOINT` environment variable must point to the selected baseline's model weights (`.pth` file).
+**Note:** The `MODEL_CHECKPOINT` environment variable must point to the selected baseline's model weights (`.pth` for ViNT/GNM/NoMaD, `.ckpt` for NavDP).
 
 1. **Build the shared IL image** (first time only):
 
@@ -97,12 +94,15 @@ See [Download Pretrained Checkpoints](../il_training/README.md#download-pretrain
 
    # NoMaD
    MODEL_CHECKPOINT=checkpoints/baseline-nomad.pth make run-nomad
+
+   # NavDP
+   MODEL_CHECKPOINT=checkpoints/navdp.ckpt make run-navdp
    ```
 
    This starts Isaac Sim, the selected policy node, and the shared trajectory follower (`ros2-trajectory-follower`).
 
    > **Heading alignment (`ALIGN_HEADING=True`)** is enabled by default for all IL baselines
-   > (ViNT, GNM, NoMaD). This aligns the robot's initial heading with the first topomap
+   > (ViNT, GNM, NoMaD, NavDP). This aligns the robot's initial heading with the first topomap
    > waypoint direction before navigation begins. IL models perform poorly when the initial
    > heading is misaligned with the trajectory, so this is a **requirement** for reliable
    > IL evaluation — not just an optional parameter. Unlike Canvas (which handles arbitrary
@@ -133,11 +133,13 @@ See [Download Pretrained Checkpoints](../il_training/README.md#download-pretrain
    make run-eval-vint
    make run-eval-gnm
    make run-eval-nomad
+   make run-eval-navdp
 
    # Or customize the evaluation parameters
    make run-eval-vint TIMEOUT=120 NUM_MISSIONS=10
    make run-eval-gnm TIMEOUT=120 NUM_MISSIONS=10
    make run-eval-nomad TIMEOUT=120 NUM_MISSIONS=10
+   make run-eval-navdp TIMEOUT=120 NUM_MISSIONS=10
    ```
 
    This will automatically run consecutive missions and generate evaluation logs in `./logs/<baseline>_evaluation_<timestamp>.log`.
@@ -174,7 +176,7 @@ This approach is useful for development and debugging within the devcontainer.
 
 ## Topics
 
-### Policy Node (ViNT/GNM/NoMaD)
+### Policy Node (ViNT/GNM/NoMaD/NavDP)
 
 All IL baselines share the same `/model_*` topics to keep the trajectory follower and tooling model-agnostic.
 
@@ -182,10 +184,14 @@ All IL baselines share the same `/model_*` topics to keep the trajectory followe
 | --------- | ------------------------------------- | ------------------- | -------------------------------------------------- |
 | Subscribe | `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image` | Camera image input (configurable via robot config) |
 | Subscribe | `/goal_image`                         | `sensor_msgs/Image` | Goal image (ImageGoal mode, transient local)       |
+| Subscribe | `/goal_pose`                          | `geometry_msgs/PoseStamped` | Point goal in world frame (NavDP only, used for point+image fusion) |
+| Subscribe | `/chassis/odom`                       | `nav_msgs/Odometry` | Robot odometry for point-goal transform (NavDP only) |
 | Subscribe | `/model_enable`                       | `std_msgs/Bool`     | Enable/disable policy execution                    |
 | Publish   | `/model_trajectory`                   | `nav_msgs/Path`     | Predicted trajectory (len_traj_pred waypoints)     |
 | Publish   | `/model_reached_goal`                 | `std_msgs/Bool`     | True when topomap goal node is reached             |
 | Service   | `/model_reset_agent`                  | `std_srvs/Trigger`  | Reset agent memory for new mission                 |
+
+NavDP does not subscribe to a depth topic in this wrapper. It estimates depth online from RGB using Depth Anything V2 (configured in `navdp_eval.yaml`).
 
 ### Trajectory Follower Node
 
@@ -198,7 +204,7 @@ All IL baselines share the same `/model_*` topics to keep the trajectory followe
 
 ## Parameters
 
-### Policy Node (ViNT/GNM/NoMaD)
+### Policy Node (ViNT/GNM/NoMaD/NavDP)
 
 | Parameter        | Type   | Default                | Description                                                   |
 | ---------------- | ------ | ---------------------- | ------------------------------------------------------------- |
@@ -209,7 +215,9 @@ All IL baselines share the same `/model_*` topics to keep the trajectory followe
 | `--topomap_dir`  | string | `/tmp/costnav_topomap` | Topomap image directory                                       |
 | `--log_level`    | string | `info`                 | Log level (`debug`, `info`, `warn`, `error`, `fatal`)         |
 
-All other parameters (`inference_rate`, `device`, `goal_type`, `visualize_debug_images`, `topomap_goal_node`, `topomap_radius`, `topomap_close_threshold`) are read from the selected model config (`vint_eval.yaml`, `gnm_eval.yaml`, or `nomad_eval.yaml`). Topic names (`image`, `goal_image`) are read from the robot config YAML. The `--goal_type` CLI argument, when provided, overrides the `goal_type` value from the model config.
+All other parameters (`inference_rate`, `device`, `goal_type`, `visualize_debug_images`, `topomap_goal_node`, `topomap_radius`, `topomap_close_threshold`) are read from the selected model config (`vint_eval.yaml`, `gnm_eval.yaml`, `nomad_eval.yaml`, or `navdp_eval.yaml`). Topic names (`image`, `goal_image`) are read from the robot config YAML. The `--goal_type` CLI argument, when provided, overrides the `goal_type` value from the model config.
+
+NavDP-specific inference settings (Depth Anything checkpoint/encoder/input size/max depth, memory/predict sizes, and point-image blend weight) are configured in `navdp_eval.yaml`.
 
 ### Trajectory Follower Node
 
@@ -241,11 +249,13 @@ The evaluation system runs consecutive missions and collects comprehensive metri
 MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
 MODEL_CHECKPOINT=checkpoints/baseline-gnm.pth make run-gnm
 MODEL_CHECKPOINT=checkpoints/baseline-nomad.pth make run-nomad
+MODEL_CHECKPOINT=checkpoints/navdp.ckpt make run-navdp
 
 # Terminal 2: Run evaluation
-make run-eval-vint TIMEOUT=241 NUM_MISSIONS=10
-make run-eval-gnm TIMEOUT=241 NUM_MISSIONS=10
-make run-eval-nomad TIMEOUT=241 NUM_MISSIONS=10
+make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
+make run-eval-gnm TIMEOUT=169 NUM_MISSIONS=10
+make run-eval-nomad TIMEOUT=169 NUM_MISSIONS=10
+make run-eval-navdp TIMEOUT=169 NUM_MISSIONS=10
 ```
 
 **Evaluation Parameters:**
@@ -304,7 +314,7 @@ The evaluation system tracks the following metrics per mission:
 
 ### Initial Heading Alignment
 
-IL baselines (ViNT, GNM, NoMaD) default to `ALIGN_HEADING=True` in the Makefile targets (`run-vint`, `run-gnm`, `run-nomad`). This flag tells Isaac Sim to rotate the robot so its initial heading points toward the first topomap waypoint before navigation begins.
+IL baselines (ViNT, GNM, NoMaD, NavDP) default to `ALIGN_HEADING=True` in the Makefile targets (`run-vint`, `run-gnm`, `run-nomad`, `run-navdp`). This flag tells Isaac Sim to rotate the robot so its initial heading points toward the first topomap waypoint before navigation begins.
 
 **Why this is required for IL evaluation:**
 
@@ -321,6 +331,7 @@ In contrast, classical planners like Nav2 and learned methods like Canvas handle
 | ViNT   | **`True`**              | IL model requires aligned initial heading    |
 | GNM    | **`True`**              | IL model requires aligned initial heading    |
 | NoMaD  | **`True`**              | IL model requires aligned initial heading    |
+| NavDP  | **`True`**              | IL model requires aligned initial heading    |
 
 To disable heading alignment for testing purposes:
 
@@ -337,22 +348,26 @@ il_evaluation/
 │   ├── vint_eval.yaml                # Model + inference config
 │   ├── gnm_eval.yaml                 # Model + inference config
 │   ├── nomad_eval.yaml               # Model + inference config
+│   ├── navdp_eval.yaml               # NavDP model + inference config
 │   ├── robot_carter.yaml             # Nova Carter robot config
 │   └── robot_segway.yaml             # Segway E1 robot config
 └── src/il_evaluation/        # Python package source
     ├── agents/               # Policy inference agents
     │   ├── base_agent.py
     │   ├── gnm_agent.py
+    │   ├── navdp_agent.py
     │   ├── nomad_agent.py
     │   └── vint_agent.py
     ├── models/               # Neural network architectures
     │   ├── base_model.py
+    │   ├── depth_anything_estimator.py
     │   ├── gnm_network.py
     │   ├── traj_opt.py
     │   └── vint_network.py
     ├── nodes/                # ROS2 nodes (entry points)
     │   ├── base_policy_node.py       # Shared policy node logic
     │   ├── gnm_policy_node.py        # GNM inference (~4Hz)
+    │   ├── navdp_policy_node.py      # NavDP inference (~10Hz)
     │   ├── nomad_policy_node.py      # NoMaD inference (~4Hz)
     │   ├── vint_policy_node.py       # ViNT inference (~4Hz)
     │   └── trajectory_follower_node.py  # MPC controller (~20Hz)
@@ -532,6 +547,22 @@ topomap_close_threshold: 3.0
 
 These configs mirror `vint_eval.yaml` for navigation mode, inference rate, and topomap parameters. `nomad_eval.yaml` additionally includes diffusion-specific fields (`num_diffusion_iters`, `num_samples`, `beta_schedule`) and `action_stats` for unnormalizing trajectory deltas.
 
+### navdp_eval.yaml (Model + Inference Config)
+
+`navdp_eval.yaml` contains both shared policy-node fields and NavDP-specific fields:
+
+- Shared: `inference_rate`, `device`, `goal_type`, `visualize_debug_images`
+- Depth Anything: `depth_anything_checkpoint`, `depth_anything_encoder`, `depth_anything_input_size`, `depth_anything_max_depth`
+- NavDP model/runtime: `image_size`, `memory_size`, `predict_size`, `temporal_depth`, `heads`, `token_dim`, `channels`, `dropout`, `sample_num`, `depth_scale`
+- Fusion: `point_image_blend_alpha`
+
+Depth mode for this wrapper is fixed to **Depth Anything from RGB** (no depth-topic mode). Configure it by editing the `depth_anything_*` fields in `navdp_eval.yaml`.
+
+Default checkpoint paths are workspace-relative:
+
+- NavDP policy checkpoint: `checkpoints/navdp.ckpt`
+- Depth Anything checkpoint: `checkpoints/depth_anything_v2_vits.pth`
+
 ### robot_carter.yaml / robot_segway.yaml (Robot Parameters)
 
 ```yaml
@@ -555,7 +586,7 @@ trajectory_follower:
 
 | Issue                          | Cause                                  | Solution                                                        |
 | ------------------------------ | -------------------------------------- | --------------------------------------------------------------- |
-| **Model checkpoint not found** | Invalid path or missing file           | Verify `checkpoint` parameter points to valid `.pth` file       |
+| **Model checkpoint not found** | Invalid path or missing file           | Verify `checkpoint` parameter points to valid model file (`.pth` or `.ckpt`) |
 | **CUDA out of memory**         | GPU memory exhausted                   | Reduce `context_size` or use smaller batch during inference     |
 | **No trajectory published**    | Camera topic not connected             | Check `/front_stereo_camera/left/image_raw` topic is publishing |
 | **Robot not moving**           | Trajectory follower not receiving data | Verify `/model_trajectory` and `/chassis/odom` topics           |
