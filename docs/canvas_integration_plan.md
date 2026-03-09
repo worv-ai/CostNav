@@ -246,7 +246,7 @@ make run-eval-canvas TIMEOUT=241 NUM_MISSIONS=20
 
 | Parameter      | Default | Description                                         |
 | -------------- | ------- | --------------------------------------------------- |
-| `TIMEOUT`      | 169     | Mission timeout in seconds (based on S_EvalTimeout) |
+| `TIMEOUT`      | 241     | Mission timeout in seconds (based on S_EvalTimeout) |
 | `NUM_MISSIONS` | 3       | Number of consecutive missions to evaluate          |
 
 ### Output

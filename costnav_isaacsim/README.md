@@ -267,7 +267,7 @@ make run-canvas
 # Step 3 (terminal 3): Run evaluation
 make run-eval-canvas
 
-# Or with custom parameters (default: 169s timeout, 3 missions)
+# Or with custom parameters (default: 241s timeout, 3 missions)
 make run-eval-canvas TIMEOUT=241 NUM_MISSIONS=10
 ```
 
@@ -999,7 +999,7 @@ make run-eval-canvas
 The `run-eval-canvas` target runs consecutive missions and collects comprehensive metrics:
 
 ```bash
-# Run with default parameters (169s timeout, 3 missions)
+# Run with default parameters (241s timeout, 3 missions)
 make run-eval-canvas
 
 # Run with custom parameters
@@ -1010,7 +1010,7 @@ make run-eval-canvas TIMEOUT=1169 NUM_MISSIONS=20
 
 | Parameter      | Default | Description                    |
 | -------------- | ------- | ------------------------------ |
-| `TIMEOUT`      | 169     | Mission timeout in seconds     |
+| `TIMEOUT`      | 241     | Mission timeout in seconds     |
 | `NUM_MISSIONS` | 3       | Number of missions to evaluate |
 
 **Output:** Evaluation logs are saved to `./logs/canvas_evaluation_<timestamp>.log` with per-mission results and aggregate statistics.
