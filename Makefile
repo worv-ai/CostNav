@@ -247,7 +247,7 @@ run-nomad:
 	$(DOCKER_COMPOSE) --profile nomad down
 	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) TOPOMAP=$(IL_TOPOMAP) GOAL_IMAGE=$(GOAL_IMAGE) ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile nomad up
 
-run-navdp: MODEL_CHECKPOINT ?= checkpoints/navdp.ckpt
+run-navdp: MODEL_CHECKPOINT ?= checkpoints/baseline-navdp.ckpt
 run-navdp: ALIGN_HEADING = True
 run-navdp: GOAL_IMAGE = True
 run-navdp:

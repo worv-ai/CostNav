@@ -15,7 +15,8 @@ x-ros2-service: &ros2-service
 services:
   # Isaac Sim environment
   isaac-sim:
-    profiles: ["isaac-sim", "nav2", "teleop", "vint", "gnm", "nomad", "navdp", "canvas"]
+    profiles:
+      ["isaac-sim", "nav2", "teleop", "vint", "gnm", "nomad", "navdp", "canvas"]
     image: costnav-isaacsim-${ISAAC_SIM_VERSION}:${COSTNAV_VERSION}
     container_name: costnav-isaac-sim
     deploy:
@@ -394,7 +395,7 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
       - SIM_ROBOT=${SIM_ROBOT:-segway_e1}
       - GOAL_TYPE=${GOAL_TYPE:-}
-      - MODEL_CHECKPOINT=${MODEL_CHECKPOINT:-checkpoints/navdp.ckpt}
+      - MODEL_CHECKPOINT=${MODEL_CHECKPOINT:-checkpoints/baseline-navdp.ckpt}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - /tmp/costnav_topomap:/tmp/costnav_topomap:rw

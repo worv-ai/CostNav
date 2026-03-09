@@ -96,7 +96,7 @@ See [Download Pretrained Checkpoints](../il_training/README.md#download-pretrain
    MODEL_CHECKPOINT=checkpoints/baseline-nomad.pth make run-nomad
 
    # NavDP
-   MODEL_CHECKPOINT=checkpoints/navdp.ckpt make run-navdp
+   MODEL_CHECKPOINT=checkpoints/baseline-navdp.ckpt make run-navdp
    ```
 
    This starts Isaac Sim, the selected policy node, and the shared trajectory follower (`ros2-trajectory-follower`).
@@ -180,16 +180,16 @@ This approach is useful for development and debugging within the devcontainer.
 
 All IL baselines share the same `/model_*` topics to keep the trajectory follower and tooling model-agnostic.
 
-| Direction | Topic                                 | Type                | Description                                        |
-| --------- | ------------------------------------- | ------------------- | -------------------------------------------------- |
-| Subscribe | `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image` | Camera image input (configurable via robot config) |
-| Subscribe | `/goal_image`                         | `sensor_msgs/Image` | Goal image (ImageGoal mode, transient local)       |
+| Direction | Topic                                 | Type                        | Description                                                         |
+| --------- | ------------------------------------- | --------------------------- | ------------------------------------------------------------------- |
+| Subscribe | `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image`         | Camera image input (configurable via robot config)                  |
+| Subscribe | `/goal_image`                         | `sensor_msgs/Image`         | Goal image (ImageGoal mode, transient local)                        |
 | Subscribe | `/goal_pose`                          | `geometry_msgs/PoseStamped` | Point goal in world frame (NavDP only, used for point+image fusion) |
-| Subscribe | `/chassis/odom`                       | `nav_msgs/Odometry` | Robot odometry for point-goal transform (NavDP only) |
-| Subscribe | `/model_enable`                       | `std_msgs/Bool`     | Enable/disable policy execution                    |
-| Publish   | `/model_trajectory`                   | `nav_msgs/Path`     | Predicted trajectory (len_traj_pred waypoints)     |
-| Publish   | `/model_reached_goal`                 | `std_msgs/Bool`     | True when topomap goal node is reached             |
-| Service   | `/model_reset_agent`                  | `std_srvs/Trigger`  | Reset agent memory for new mission                 |
+| Subscribe | `/chassis/odom`                       | `nav_msgs/Odometry`         | Robot odometry for point-goal transform (NavDP only)                |
+| Subscribe | `/model_enable`                       | `std_msgs/Bool`             | Enable/disable policy execution                                     |
+| Publish   | `/model_trajectory`                   | `nav_msgs/Path`             | Predicted trajectory (len_traj_pred waypoints)                      |
+| Publish   | `/model_reached_goal`                 | `std_msgs/Bool`             | True when topomap goal node is reached                              |
+| Service   | `/model_reset_agent`                  | `std_srvs/Trigger`          | Reset agent memory for new mission                                  |
 
 NavDP does not subscribe to a depth topic in this wrapper. It estimates depth online from RGB using Depth Anything V2 (configured in `navdp_eval.yaml`).
 
@@ -249,7 +249,7 @@ The evaluation system runs consecutive missions and collects comprehensive metri
 MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
 MODEL_CHECKPOINT=checkpoints/baseline-gnm.pth make run-gnm
 MODEL_CHECKPOINT=checkpoints/baseline-nomad.pth make run-nomad
-MODEL_CHECKPOINT=checkpoints/navdp.ckpt make run-navdp
+MODEL_CHECKPOINT=checkpoints/baseline-navdp.ckpt make run-navdp
 
 # Terminal 2: Run evaluation
 make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
@@ -560,7 +560,7 @@ Depth mode for this wrapper is fixed to **Depth Anything from RGB** (no depth-to
 
 Default checkpoint paths are workspace-relative:
 
-- NavDP policy checkpoint: `checkpoints/navdp.ckpt`
+- NavDP policy checkpoint: `checkpoints/baseline-navdp.ckpt`
 - Depth Anything checkpoint: `checkpoints/depth_anything_v2_vits.pth`
 
 ### robot_carter.yaml / robot_segway.yaml (Robot Parameters)
@@ -584,15 +584,15 @@ trajectory_follower:
 
 ### Common Issues
 
-| Issue                          | Cause                                  | Solution                                                        |
-| ------------------------------ | -------------------------------------- | --------------------------------------------------------------- |
+| Issue                          | Cause                                  | Solution                                                                     |
+| ------------------------------ | -------------------------------------- | ---------------------------------------------------------------------------- |
 | **Model checkpoint not found** | Invalid path or missing file           | Verify `checkpoint` parameter points to valid model file (`.pth` or `.ckpt`) |
-| **CUDA out of memory**         | GPU memory exhausted                   | Reduce `context_size` or use smaller batch during inference     |
-| **No trajectory published**    | Camera topic not connected             | Check `/front_stereo_camera/left/image_raw` topic is publishing |
-| **Robot not moving**           | Trajectory follower not receiving data | Verify `/model_trajectory` and `/chassis/odom` topics           |
-| **MPC solver fails**           | Invalid trajectory or constraints      | Check trajectory waypoints are valid; try increasing `dt`       |
-| **Path not visible in RViz**   | Transform or QoS mismatch              | Set Fixed Frame to `base_link`; increase Transform Tolerance    |
-| **Trajectory jumps**           | Memory queue not reset on new mission  | Call `/model_reset_agent` service when starting new mission     |
+| **CUDA out of memory**         | GPU memory exhausted                   | Reduce `context_size` or use smaller batch during inference                  |
+| **No trajectory published**    | Camera topic not connected             | Check `/front_stereo_camera/left/image_raw` topic is publishing              |
+| **Robot not moving**           | Trajectory follower not receiving data | Verify `/model_trajectory` and `/chassis/odom` topics                        |
+| **MPC solver fails**           | Invalid trajectory or constraints      | Check trajectory waypoints are valid; try increasing `dt`                    |
+| **Path not visible in RViz**   | Transform or QoS mismatch              | Set Fixed Frame to `base_link`; increase Transform Tolerance                 |
+| **Trajectory jumps**           | Memory queue not reset on new mission  | Call `/model_reset_agent` service when starting new mission                  |
 
 ### Debug Commands
 
