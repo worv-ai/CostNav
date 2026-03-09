@@ -129,7 +129,7 @@ See [Download Pretrained Checkpoints](../il_training/README.md#download-pretrain
 3. **Run automated evaluation** (in terminal 2):
 
    ```bash
-   # Run evaluation with default settings (3 missions, 169s timeout)
+   # Run evaluation with default settings (3 missions, 241s timeout)
    make run-eval-vint
    make run-eval-gnm
    make run-eval-nomad
