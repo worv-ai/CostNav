@@ -52,6 +52,30 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     cd /workspace/costnav_isaacsim/il_evaluation && \
     uv sync --no-dev --quiet
 
+# InternNav has transitive imports (agent/env/evaluator) that require
+# additional runtime deps not declared in il_evaluation pyproject.
+# uv can place the project env at /opt/venv or .venv depending on version/config,
+# so resolve the python path dynamically.
+RUN set -e; \
+    if [ -x /opt/venv/bin/python ]; then \
+      PYBIN=/opt/venv/bin/python; \
+    elif [ -x /workspace/costnav_isaacsim/il_evaluation/.venv/bin/python ]; then \
+      PYBIN=/workspace/costnav_isaacsim/il_evaluation/.venv/bin/python; \
+    else \
+      echo "ERROR: Python env not found after uv sync" >&2; \
+      exit 1; \
+    fi; \
+    uv pip install --python "$PYBIN" \
+      "setuptools<81" \
+      packaging \
+      ftfy \
+      "gym==0.26.2" \
+      gym-notices \
+      msgpack \
+      msgpack-numpy \
+      numpy-quaternion \
+      "open3d==0.19.0"
+
 COPY docker/ros_entrypoint.sh /ros_entrypoint.sh
 RUN chmod +x /ros_entrypoint.sh
 

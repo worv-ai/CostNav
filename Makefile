@@ -251,6 +251,22 @@ run-navdp: MODEL_CHECKPOINT ?= checkpoints/baseline-navdp.ckpt
 run-navdp: ALIGN_HEADING = True
 run-navdp: GOAL_IMAGE = True
 run-navdp:
+	@if ! docker image inspect $(ISAAC_SIM_IMAGE) >/dev/null 2>&1; then \
+		echo "==> Missing Isaac Sim image ($(ISAAC_SIM_IMAGE)); building..."; \
+		$(MAKE) build-isaac-sim; \
+	fi
+	@if ! docker image inspect $(COSTNAV_ROS2_IMAGE) >/dev/null 2>&1; then \
+		echo "==> Missing ROS2 image ($(COSTNAV_ROS2_IMAGE)); building..."; \
+		$(MAKE) build-ros2; \
+	fi
+	@if ! docker image inspect $(COSTNAV_ROS2_TORCH_IMAGE) >/dev/null 2>&1; then \
+		echo "==> Missing ROS2 Torch image ($(COSTNAV_ROS2_TORCH_IMAGE)); building..."; \
+		$(MAKE) build-ros2-torch; \
+	fi
+	@if ! docker run --rm --entrypoint python $(COSTNAV_ROS2_TORCH_IMAGE) -c "import pkg_resources, ftfy, gym, msgpack_numpy, quaternion, open3d" >/dev/null 2>&1; then \
+		echo "==> ROS2 Torch image is missing NavDP runtime deps; rebuilding..."; \
+		$(MAKE) build-ros2-torch; \
+	fi
 	@if [ ! -f "$(MODEL_CHECKPOINT)" ]; then \
 		echo "ERROR: MODEL_CHECKPOINT not found: $(MODEL_CHECKPOINT)"; \
 		echo "Please put the checkpoint file under ./checkpoints/ or set MODEL_CHECKPOINT explicitly."; \
