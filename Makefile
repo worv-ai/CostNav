@@ -498,6 +498,13 @@ start-nucleus:
 			if [ -f generate-sample-insecure-secrets.sh ]; then ./generate-sample-insecure-secrets.sh; fi; \
 			touch nucleus-stack.env.configured; \
 		fi
+	@echo "Patching Nucleus compose file with log rotation..."
+	@cd $(NUCLEUS_STACK_DIR)/base_stack && \
+		if ! grep -q 'x-logging' nucleus-stack-no-ssl.yml; then \
+			sed -i '/^services:/i\x-logging: \&default-logging\n  logging:\n    driver: json-file\n    options:\n      max-size: "10m"\n      max-file: "3"\n' nucleus-stack-no-ssl.yml && \
+			sed -i '/^  nucleus-/s/:.*/&\n    <<: *default-logging/' nucleus-stack-no-ssl.yml && \
+			sed -i '/^  utl-monpx:/s/:.*/&\n    <<: *default-logging/' nucleus-stack-no-ssl.yml; \
+		fi
 	@echo "Logging into NGC registry..."
 	@bash -c 'source .env && echo "$${NGC_PASS}" | docker login nvcr.io -u "$${NGC_USER:-\$$oauthtoken}" --password-stdin'
 	@echo "Starting Nucleus containers..."
