@@ -250,6 +250,8 @@ run-nomad:
 run-navdp: MODEL_CHECKPOINT ?= checkpoints/baseline-navdp.ckpt
 run-navdp: ALIGN_HEADING = True
 run-navdp: GOAL_IMAGE = True
+run-navdp: HEADLESS ?= True
+run-navdp: OMNI_URL ?= omniverse://localhost
 run-navdp:
 	@if ! docker image inspect $(ISAAC_SIM_IMAGE) >/dev/null 2>&1; then \
 		echo "==> Missing Isaac Sim image ($(ISAAC_SIM_IMAGE)); building..."; \
@@ -274,7 +276,7 @@ run-navdp:
 	fi
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile navdp down
-	TOPOMAP=$(IL_TOPOMAP) GOAL_IMAGE=$(GOAL_IMAGE) ALIGN_HEADING=$(ALIGN_HEADING) GOAL_TYPE=$(GOAL_TYPE) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile navdp up
+	TOPOMAP=$(IL_TOPOMAP) GOAL_IMAGE=$(GOAL_IMAGE) ALIGN_HEADING=$(ALIGN_HEADING) HEADLESS=$(HEADLESS) OMNI_URL=$(OMNI_URL) GOAL_TYPE=$(GOAL_TYPE) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile navdp up
 
 # Run Isaac Sim with CANVAS instruction generation enabled
 # Starts Isaac Sim + RViz with canvas.enabled=true in mission config

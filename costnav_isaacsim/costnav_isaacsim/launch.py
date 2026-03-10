@@ -77,6 +77,7 @@ def main():
         launcher.run()
     except Exception:
         logger.exception("CostNav Isaac Sim launcher crashed")
+        raise
     finally:
         launcher.close()
 
