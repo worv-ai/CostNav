@@ -46,7 +46,7 @@ class NavDPPolicyNode(BasePolicyNode):
             raise ValueError(f"NavDP only supports goal_type='image_goal' in this wrapper, got '{resolved_goal_type}'.")
 
         self.depth_anything_checkpoint = str(
-            model_cfg.get("depth_anything_checkpoint", "checkpoints/depth_anything_v2_vits.pth")
+            model_cfg.get("depth_anything_checkpoint", "checkpoints/depth_anything_v2_metric_vkitti_vits.pth")
         )
         self.depth_anything_encoder = str(model_cfg.get("depth_anything_encoder", "vits"))
         self.depth_anything_input_size = int(model_cfg.get("depth_anything_input_size", 518))

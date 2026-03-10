@@ -19,7 +19,7 @@ point_image_blend_alpha: 0.5
 goal_pose_topic: "/goal_pose"
 
 # DepthAnything runtime options
-depth_anything_checkpoint: "checkpoints/depth_anything_v2_vits.pth"
+depth_anything_checkpoint: "checkpoints/depth_anything_v2_metric_vkitti_vits.pth"
 depth_anything_encoder: "vits"
 depth_anything_input_size: 518
 depth_anything_max_depth: 20.0

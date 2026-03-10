@@ -561,7 +561,7 @@ Depth mode for this wrapper is fixed to **Depth Anything from RGB** (no depth-to
 Default checkpoint paths are workspace-relative:
 
 - NavDP policy checkpoint: `checkpoints/baseline-navdp.ckpt`
-- Depth Anything checkpoint: `checkpoints/depth_anything_v2_vits.pth`
+- Depth Anything checkpoint: `checkpoints/depth_anything_v2_metric_vkitti_vits.pth`
 
 ### robot_carter.yaml / robot_segway.yaml (Robot Parameters)
 
