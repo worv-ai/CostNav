@@ -15,7 +15,6 @@ dependencies = [
     "torch>=2.0.0",
     "torchvision>=0.15.0",
     "efficientnet-pytorch>=0.7.1",
-    "diffusers>=0.30.0",
     "einops>=0.7.0",
     # Image processing
     "opencv-python>=4.8.0",
@@ -31,9 +30,18 @@ dependencies = [
     "casadi>=3.7.2",
     "transforms3d>=0.4.2",
     "pydantic>=2.0.0",
-    # NavDP local inference
-    "diffusers",
+    # NavDP local inference + transitive runtime deps from InternNav
+    "diffusers>=0.30.0",
     "transformers<4.56",
+    "setuptools<81",
+    "packaging",
+    "ftfy",
+    "gym==0.26.2",
+    "gym-notices",
+    "msgpack",
+    "msgpack-numpy",
+    "numpy-quaternion",
+    "open3d==0.19.0",
 ]
 
 [[tool.uv.index]]

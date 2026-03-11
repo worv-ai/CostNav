@@ -49,8 +49,6 @@ services:
       - GOAL_IMAGE=${GOAL_IMAGE:-False}
       - ALIGN_HEADING=${ALIGN_HEADING:-False}
       - CANVAS=${CANVAS:-False}
-      - HEADLESS=${HEADLESS:-True}
-      - OMNI_URL=${OMNI_URL:-omniverse://localhost}
     volumes:
       - .:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -70,12 +68,7 @@ services:
       - "-ic"
       - |
           set -e
-          if [ "$${HEADLESS}" = "True" ] || [ "$${HEADLESS}" = "true" ] || [ "$${HEADLESS}" = "1" ]; then
-            HEADLESS_FLAG="--headless"
-          else
-            HEADLESS_FLAG=""
-          fi
-          exec /workspace/costnav_isaacsim/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-20} --robot $${SIM_ROBOT:-segway_e1} --food-enabled $${FOOD:-True} --topomap-enabled $${TOPOMAP:-False} --goal-image-enabled $${GOAL_IMAGE:-False} --align-initial-heading-to-path $${ALIGN_HEADING:-False} --canvas-enabled $${CANVAS:-False} $${HEADLESS_FLAG}
+          exec /workspace/costnav_isaacsim/costnav_isaacsim/launch.py --people $${NUM_PEOPLE:-20} --robot $${SIM_ROBOT:-segway_e1} --food-enabled $${FOOD:-True} --topomap-enabled $${TOPOMAP:-False} --goal-image-enabled $${GOAL_IMAGE:-False} --align-initial-heading-to-path $${ALIGN_HEADING:-False} --canvas-enabled $${CANVAS:-False}
     healthcheck:
       test:
         [
@@ -410,21 +403,13 @@ services:
       - /tmp/costnav_topomap:/tmp/costnav_topomap:rw
       - .:/workspace
     working_dir: /workspace
-    command:
-      - bash
-      - -lc
-      - |
-          set -e
-          if [ "$${SIM_ROBOT}" = "nova_carter" ]; then
-            ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_carter.yaml
-          else
-            ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_segway.yaml
-          fi
-          GOAL_ARG=""
-          if [ -n "$${GOAL_TYPE}" ]; then
-            GOAL_ARG="--goal_type $${GOAL_TYPE}"
-          fi
-          exec /opt/venv/bin/navdp_policy_node --checkpoint "$${MODEL_CHECKPOINT}" --model_config /workspace/costnav_isaacsim/il_evaluation/configs/navdp_eval.yaml --robot_config "$${ROBOT_CONFIG}" $${GOAL_ARG} --topomap_dir /tmp/costnav_topomap
+    command: >
+      bash -c "if [ \"$${SIM_ROBOT}\" = \"nova_carter\" ]; then
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_carter.yaml;
+        else
+          ROBOT_CONFIG=/workspace/costnav_isaacsim/il_evaluation/configs/robot_segway.yaml;
+        fi;
+        navdp_policy_node --checkpoint $${MODEL_CHECKPOINT} --model_config /workspace/costnav_isaacsim/il_evaluation/configs/navdp_eval.yaml --robot_config $${ROBOT_CONFIG} $${GOAL_TYPE:+--goal_type $${GOAL_TYPE}} --topomap_dir /tmp/costnav_topomap"
     network_mode: host
     ipc: host
     stdin_open: true
