@@ -21,7 +21,7 @@ dependencies = [
     "opencv-python>=4.8.0",
     "pillow>=10.0.0",
     # Data handling
-    "numpy>=1.24.0,<2",  # cv_bridge from ROS2 requires numpy<2
+    "numpy>=1.24.0,<3",  # cv_bridge from ROS2 requires numpy<2
     "pyyaml>=6.0.0",
     # vint_train for loading checkpoints trained with visualnav-transformer
     "vint_train",
