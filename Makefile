@@ -250,6 +250,7 @@ run-nomad:
 run-navdp: MODEL_CHECKPOINT ?= checkpoints/baseline-navdp.ckpt
 run-navdp: ALIGN_HEADING = True
 run-navdp: GOAL_IMAGE = True
+run-navdp: IL_TOPOMAP = False
 run-navdp:
 	@if ! docker image inspect $(ISAAC_SIM_IMAGE) >/dev/null 2>&1; then \
 		echo "==> Missing Isaac Sim image ($(ISAAC_SIM_IMAGE)); building..."; \
