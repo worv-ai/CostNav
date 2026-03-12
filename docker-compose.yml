@@ -391,6 +391,7 @@ services:
     environment:
       - ROS_DISTRO=jazzy
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/workspace/fastdds.xml
       - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
       - DISPLAY=${DISPLAY:-:0}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
