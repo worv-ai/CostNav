@@ -452,6 +452,8 @@ class TrajectoryFollowerNode(Node):
         # Get odom topic from config (default: /chassis/odom)
         self.odom_topic = robot_cfg.get("topics", {}).get("odom", "/chassis/odom")
 
+        self.trajectory_topic = "/model_trajectory"
+
         # Trajectory follower parameters from config
         follower_cfg = robot_cfg.get("trajectory_follower", {})
         self.control_rate = follower_cfg.get("control_rate", 20.0)
@@ -503,7 +505,7 @@ class TrajectoryFollowerNode(Node):
         )
 
         # Subscribers
-        self.trajectory_sub = self.create_subscription(Path, "/model_trajectory", self.trajectory_callback, 10)
+        self.trajectory_sub = self.create_subscription(Path, self.trajectory_topic, self.trajectory_callback, 10)
         self.odom_sub = self.create_subscription(Odometry, self.odom_topic, self.odom_callback, sensor_qos)
         self.enable_sub = self.create_subscription(Bool, "/trajectory_follower_enable", self.enable_callback, 10)
 
@@ -517,7 +519,7 @@ class TrajectoryFollowerNode(Node):
         self.get_logger().info(f"Trajectory follower node started. Control rate: {self.control_rate} Hz")
         self.get_logger().info("Controller: MPC (NavDP reference)")
         self.get_logger().info(f"Max velocities: linear={self.max_linear_vel}, angular={self.max_angular_vel}")
-        self.get_logger().info(f"Subscribing to: /model_trajectory, {self.odom_topic}")
+        self.get_logger().info(f"Subscribing to: {self.trajectory_topic}, {self.odom_topic}")
         self.get_logger().info("Publishing to: /cmd_vel")
 
     def trajectory_callback(self, msg: Path):

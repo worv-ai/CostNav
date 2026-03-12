@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import argparse
 import os
-from typing import List, Optional, Type
+from typing import Any, List, Optional, Type
 
 from PIL import Image as PILImage
 
@@ -30,9 +30,6 @@ from std_srvs.srv import Trigger
 import tf2_ros
 from transforms3d.euler import euler2quat
 from transforms3d.quaternions import qmult, quat2mat
-
-from il_evaluation.agents.base_agent import BaseAgent
-
 
 LOG_LEVEL_MAP = {
     "debug": rclpy.logging.LoggingSeverity.DEBUG,
@@ -69,7 +66,7 @@ class BasePolicyNode(Node):
         *,
         model_name: str,
         node_name: str,
-        agent_cls: Type[BaseAgent],
+        agent_cls: Type[Any],
     ) -> None:
         super().__init__(node_name)
 
@@ -94,6 +91,8 @@ class BasePolicyNode(Node):
             model_cfg = yaml.safe_load(f)
         with open(robot_config, "r") as f:
             robot_cfg = yaml.safe_load(f)
+        self.model_cfg = model_cfg
+        self.robot_cfg = robot_cfg
 
         # Parameters from model config
         self.inference_rate = model_cfg.get("inference_rate", 4.0)
@@ -118,9 +117,10 @@ class BasePolicyNode(Node):
 
         # Initialize agent
         self.get_logger().info(f"Loading {self.model_name} model from {checkpoint}")
-        self.agent = self._agent_cls(
-            model_path=checkpoint,
+        self.agent = self._create_agent(
+            checkpoint=checkpoint,
             model_config_path=model_config,
+            model_cfg=model_cfg,
             device=device,
         )
         self.agent.reset(batch_size=1)
@@ -183,6 +183,8 @@ class BasePolicyNode(Node):
 
         # Enable/disable subscription
         self.enable_sub = self.create_subscription(Bool, self.MODEL_ENABLE_TOPIC, self.enable_callback, 10)
+        # Optional model-specific subscribers.
+        self._setup_extra_subscribers(robot_cfg, sensor_qos)
 
         # Services for mission control
         self._reset_service = self.create_service(Trigger, self.MODEL_RESET_SERVICE, self._handle_reset_agent)
@@ -290,6 +292,37 @@ class BasePolicyNode(Node):
         except Exception as e:
             self.get_logger().error(f"Failed to convert image: {e}")
 
+    def _create_agent(
+        self,
+        *,
+        checkpoint: str,
+        model_config_path: str,
+        model_cfg: dict,
+        device: str,
+    ):
+        """Factory hook for model-specific agent construction."""
+        return self._agent_cls(
+            model_path=checkpoint,
+            model_config_path=model_config_path,
+            device=device,
+        )
+
+    def _setup_extra_subscribers(self, robot_cfg: dict, sensor_qos: QoSProfile) -> None:
+        """Hook for model-specific extra ROS subscriptions."""
+        del robot_cfg, sensor_qos
+
+    def _reset_extra_state(self) -> None:
+        """Hook for model-specific state reset."""
+
+    def _inference_custom(self) -> bool:
+        """Hook for model-specific inference.
+
+        Returns:
+            True if inference has been handled by the subclass and default
+            goal_type inference should be skipped.
+        """
+        return False
+
     def goal_image_callback(self, msg: Image):
         """Process incoming goal image (for ImageGoal mode).
 
@@ -346,6 +379,7 @@ class BasePolicyNode(Node):
             # Reset topomap navigation state
             self._topomap_closest_node = 0
             self._topomap_reached_goal = False
+            self._reset_extra_state()
             response.success = True
             response.message = f"{self.model_name} agent memory queue reset successfully"
             self.get_logger().info("Agent reset via service call")
@@ -411,15 +445,17 @@ class BasePolicyNode(Node):
         if self.current_image is None:
             return
 
-        # In image_goal mode, wait for goal image before starting inference
-        if self.goal_type == "image_goal" and self.goal_image is None:
-            return
-
-        # In topomap mode, wait until the topomap has been loaded via service
-        if self.goal_type == "topomap" and not self.topomap:
-            return
-
         try:
+            if self._inference_custom():
+                return
+            # In image_goal mode, wait for goal image before starting inference
+            if self.goal_type == "image_goal" and self.goal_image is None:
+                return
+
+            # In topomap mode, wait until the topomap has been loaded via service
+            if self.goal_type == "topomap" and not self.topomap:
+                return
+
             if self.goal_type == "topomap":
                 self._inference_topomap()
             elif self.goal_type == "image_goal" and self.goal_image is not None:
