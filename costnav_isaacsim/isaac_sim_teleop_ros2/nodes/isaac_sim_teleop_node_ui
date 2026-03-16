@@ -5,7 +5,7 @@
 # Check if running in an interactive terminal
 if [ ! -t 0 ]; then
     echo "Not running in an interactive terminal. Launching in new terminal..."
-    
+
     # Try different terminal emulators
     if command -v gnome-terminal &> /dev/null; then
         gnome-terminal -- bash -c "export SIM_ROBOT=${SIM_ROBOT}; source /opt/ros/${ROS_DISTRO}/setup.bash; source install/setup.bash 2>/dev/null || true; $(dirname $0)/isaac_sim_teleop_node; exec bash"
@@ -23,4 +23,3 @@ else
     # Running in interactive terminal, just execute the node
     exec $(dirname $0)/isaac_sim_teleop_node "$@"
 fi
-

@@ -96,4 +96,3 @@ Edit the launch file and change `xterm -e` to:
 - `gnome-terminal --` for GNOME Terminal
 - `konsole -e` for KDE Konsole
 - `xfce4-terminal -e` for XFCE Terminal
-

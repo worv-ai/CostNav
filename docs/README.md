@@ -136,16 +136,16 @@ API documentation is auto-generated from docstrings using `mkdocstrings`:
 ```python
 def example_function(param1: str, param2: int) -> bool:
     """Short description.
-    
+
     Longer description with more details.
-    
+
     Args:
         param1: Description of param1
         param2: Description of param2
-        
+
     Returns:
         Description of return value
-        
+
     Example:
         ```python
         result = example_function("test", 42)
@@ -171,4 +171,3 @@ When adding new features, ensure documentation includes:
 - **GitHub Issues**: https://github.com/worv-ai/CostNav/issues
 - **Discussions**: https://github.com/worv-ai/CostNav/discussions
 - **Documentation Issues**: Tag with `documentation` label
-

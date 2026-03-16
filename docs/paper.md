@@ -28,4 +28,3 @@ If you use CostNav in your research, please cite our paper:
 <object data="assets/CostNav.pdf" type="application/pdf" width="100%" height="800px">
   <p>Your browser does not support PDFs. <a href="assets/CostNav.pdf">Download the PDF</a> instead.</p>
 </object>
-

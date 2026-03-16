@@ -86,4 +86,3 @@ params:
     seq_length: 4
     bounds_loss_coef: 0.001  # Reduced from 0.01
     games_to_track: 1  # Log every single episode without averaging (default: 100)
-    
