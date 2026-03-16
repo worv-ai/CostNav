@@ -181,7 +181,7 @@ tiled_camera = TiledCameraCfg(
   - Goal position (x, y) in base frame [2D]
   - Base linear velocity (vx, vy, vz) [3D]
   - Base angular velocity (wx, wy, wz) [3D]
-  
+
 - **Visual** (optional, 25,600D):
   - RGB-D image (4 channels × 80 × 80 pixels)
   - Flattened to 1D vector for concatenation
@@ -335,4 +335,3 @@ gym.register(
 ```bash
 python scripts/rl_games/train.py --task=My-Custom-Version
 ```
-

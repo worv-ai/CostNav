@@ -77,4 +77,3 @@ echo "To run:"
 echo "  export SIM_ROBOT=nova_carter  # or segway_e1"
 echo "  ros2 launch isaac_sim_teleop_ros2 teleop_isaac_sim.launch.py"
 echo ""
-

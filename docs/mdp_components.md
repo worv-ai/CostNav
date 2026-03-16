@@ -63,7 +63,7 @@ def rgbd_processed(
 - **Channels**: `[R, G, B, D]`
 - **RGB Normalization**: Divided by 255.0 → [0, 1]
 - **Depth Normalization**: Clamped to [0, 20m], divided by 20.0 → [0, 1]
-- **Special Handling**: 
+- **Special Handling**:
   - Infinity values in depth set to 0
   - NaN values replaced with 0
   - Ensures numerical stability
@@ -144,10 +144,10 @@ def _resample(self, env_ids: Sequence[int]):
     # Sample random indices from safe positions
     indices = torch.randint(0, num_safe_positions, (num_resets,))
     sampled_positions = self.safe_positions[indices]
-    
+
     # Set goal position
     self.pos_command_w[env_ids] = sampled_positions
-    
+
     # Set heading (two modes)
     if self.cfg.simple_heading:
         # Point towards goal
@@ -167,7 +167,7 @@ def _update_command(self):
     # Transform goal from world frame to base frame
     target_vec = pos_command_w - robot_pos_w
     pos_command_b = quat_apply_inverse(robot_quat, target_vec)
-    
+
     # Transform heading
     heading_command_b = wrap_to_pi(heading_w - robot_heading_w)
 ```
@@ -293,14 +293,14 @@ time_out = time_out(time_out=True)
 def reset_root_state_from_safe_positions(env, safe_positions, velocity_range):
     # Sample random safe position
     position = random_choice(safe_positions)
-    
+
     # Random yaw orientation
     yaw = uniform(-π, π)
-    
+
     # Zero velocity
     velocity = [0, 0, 0]
     angular_velocity = [0, 0, 0]
-    
+
     # Set robot state
     env.scene["robot"].write_root_state_to_sim(position, orientation, velocity, angular_velocity)
 ```
@@ -317,4 +317,3 @@ The MDP components work together to create a navigation task where:
 - Episodes end on success, failure, or timeout
 
 This design enables learning cost-effective navigation policies that balance speed, safety, and goal achievement.
-

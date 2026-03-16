@@ -60,7 +60,7 @@ The robot has three types of joints, each with different actuator configurations
 
 ### 1. Wheel Joints (4 wheels)
 
-**Joint Names**: 
+**Joint Names**:
 - `front_left_wheel_joint`
 - `front_right_wheel_joint`
 - `rear_left_wheel_joint`
@@ -81,7 +81,7 @@ The robot has three types of joints, each with different actuator configurations
 )
 ```
 
-**Purpose**: 
+**Purpose**:
 - Velocity-controlled wheels
 - Delayed actuation simulates realistic motor response
 - Damping provides stability
@@ -289,13 +289,13 @@ Energy consumption is estimated using a simple physics-based model:
 def compute_navigation_energy_step(env):
     # Get robot mass
     mass = 50.0  # kg (estimated)
-    
+
     # Get planar velocity
     speed = norm(robot.root_lin_vel[:, :2])
-    
+
     # Power = m * g * v (simplified model)
     power = mass * 9.81 * speed
-    
+
     return {"power": power, "speed": speed, "mass": mass}
 ```
 
@@ -324,4 +324,3 @@ Simplifications:
 - No payload dynamics
 
 These simplifications enable faster simulation while maintaining realistic navigation behavior.
-
