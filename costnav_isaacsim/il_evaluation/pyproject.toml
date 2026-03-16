@@ -20,7 +20,7 @@ dependencies = [
     "opencv-python>=4.8.0",
     "pillow>=10.0.0",
     # Data handling
-    "numpy>=1.24.0,<2",  # cv_bridge from ROS2 requires numpy<2
+    "numpy>=1.24.0,<3",  # cv_bridge from ROS2 requires numpy<2
     "pyyaml>=6.0.0",
     # vint_train for loading checkpoints trained with visualnav-transformer
     "vint_train",
@@ -32,8 +32,8 @@ dependencies = [
     "pydantic>=2.0.0",
     # NavDP local inference + transitive runtime deps from InternNav
     "diffusers>=0.30.0",
-    "transformers<4.56",
-    "setuptools<81",
+    "transformers<5.4",
+    "setuptools<83",
     "packaging",
     "ftfy",
     "gym==0.26.2",
