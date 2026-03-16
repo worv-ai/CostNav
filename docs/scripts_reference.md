@@ -504,4 +504,3 @@ make build-isaac-lab COSTNAV_VERSION=0.2.0
 3. Use `--headless=False` to visualize behavior
 4. Check logs for NaN/Inf values
 5. Reduce `num_envs` to simplify debugging
-

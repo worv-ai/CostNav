@@ -88,13 +88,23 @@ uv run pytest --cov=costnav_isaaclab --cov-report=xml
 ### :white_check_mark: Pre-commit Checks
 
 ```bash
+# Install pre-commit and pre-push hooks
+./scripts/setup-pre-commit.sh
+
 # Format code
 ruff check --fix
 ruff format
 
+# Run pre-push checks manually
+pre-commit run --hook-stage pre-push --all-files
+
 # Run tests
 uv run pytest
 ```
+
+!!! info "Pre-push Hooks"
+    The project includes pre-push hooks that run `ruff check` and `ruff format --check` before pushing.
+    If the push is blocked, fix the reported issues and try again.
 
 ---
 

@@ -140,4 +140,3 @@ Ensure these ROS2 packages are installed:
 - `std_msgs`
 - `nav_msgs`
 - `rosgraph_msgs`
-
