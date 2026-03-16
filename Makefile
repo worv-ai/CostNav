@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-ros2-torch run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint run-gnm run-nomad run-canvas start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint run-eval-gnm run-eval-nomad run-eval-canvas download-assets-omniverse download-assets-hf upload-assets-hf download-baseline-checkpoints-hf start-nucleus stop-nucleus
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-ros2-torch build-navdp run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint run-gnm run-nomad run-navdp run-canvas start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint run-eval-gnm run-eval-nomad run-eval-navdp run-eval-canvas download-assets-omniverse download-assets-hf upload-assets-hf upload-dataset-hf download-baseline-checkpoints-hf start-nucleus stop-nucleus
 
 # Load environment variables from .env file if it exists
 # Variables can still be overridden from command line
@@ -205,6 +205,9 @@ run-teleop:
 build-ros2-torch:
 	$(DOCKER_BUILD) -f Dockerfile.ros_torch -t $(COSTNAV_ROS2_TORCH_IMAGE) .
 
+# NavDP reuses the same ROS2 + PyTorch image
+build-navdp: build-ros2-torch
+
 # Run Isaac Sim with ViNT policy node and trajectory follower for IL baseline evaluation
 # Set MODEL_CHECKPOINT environment variable to specify model weights (default: checkpoints/baseline-vint.pth)
 # Topomap generation is enabled by default for ViNT navigation
@@ -243,6 +246,36 @@ run-nomad:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile nomad down
 	NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) TOPOMAP=$(IL_TOPOMAP) GOAL_IMAGE=$(GOAL_IMAGE) ALIGN_HEADING=$(ALIGN_HEADING) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile nomad up
+
+run-navdp: MODEL_CHECKPOINT ?= checkpoints/baseline-navdp.ckpt
+run-navdp: ALIGN_HEADING = True
+run-navdp: GOAL_IMAGE = True
+run-navdp: IL_TOPOMAP = False
+run-navdp:
+	@if ! docker image inspect $(ISAAC_SIM_IMAGE) >/dev/null 2>&1; then \
+		echo "==> Missing Isaac Sim image ($(ISAAC_SIM_IMAGE)); building..."; \
+		$(MAKE) build-isaac-sim; \
+	fi
+	@if ! docker image inspect $(COSTNAV_ROS2_IMAGE) >/dev/null 2>&1; then \
+		echo "==> Missing ROS2 image ($(COSTNAV_ROS2_IMAGE)); building..."; \
+		$(MAKE) build-ros2; \
+	fi
+	@if ! docker image inspect $(COSTNAV_ROS2_TORCH_IMAGE) >/dev/null 2>&1; then \
+		echo "==> Missing ROS2 Torch image ($(COSTNAV_ROS2_TORCH_IMAGE)); building..."; \
+		$(MAKE) build-ros2-torch; \
+	fi
+	@if ! docker run --rm --entrypoint python $(COSTNAV_ROS2_TORCH_IMAGE) -c "import pkg_resources, ftfy, gym, msgpack_numpy, quaternion, open3d" >/dev/null 2>&1; then \
+		echo "==> ROS2 Torch image is missing NavDP runtime deps; rebuilding..."; \
+		$(MAKE) build-ros2-torch; \
+	fi
+	@if [ ! -f "$(MODEL_CHECKPOINT)" ]; then \
+		echo "ERROR: MODEL_CHECKPOINT not found: $(MODEL_CHECKPOINT)"; \
+		echo "Please put the checkpoint file under ./checkpoints/ or set MODEL_CHECKPOINT explicitly."; \
+		exit 1; \
+	fi
+	xhost +local:docker 2>/dev/null || true
+	$(DOCKER_COMPOSE) --profile navdp down
+	TOPOMAP=$(IL_TOPOMAP) GOAL_IMAGE=$(GOAL_IMAGE) ALIGN_HEADING=$(ALIGN_HEADING) GOAL_TYPE=$(GOAL_TYPE) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile navdp up
 
 # Run Isaac Sim with CANVAS instruction generation enabled
 # Starts Isaac Sim + RViz with canvas.enabled=true in mission config
@@ -377,6 +410,26 @@ run-eval-nomad:
 	@echo ""
 	@bash scripts/eval.sh nomad $(TIMEOUT) $(NUM_MISSIONS)
 
+# Run NavDP evaluation (requires running navdp instance via make run-navdp)
+# Usage: make run-eval-navdp TIMEOUT=20 NUM_MISSIONS=10
+# Output: ./logs/navdp_evaluation_<timestamp>.log
+run-eval-navdp:
+	@if ! docker ps --format '{{.Names}}' | grep -qx "costnav-ros2-navdp"; then \
+		echo "ERROR: 'make run-navdp' is not running."; \
+		echo ""; \
+		echo "Please start navdp first in a separate terminal:"; \
+		echo "  make run-navdp"; \
+		echo ""; \
+		echo "Then run this command again:"; \
+		echo "  make run-eval-navdp"; \
+		exit 1; \
+	fi
+	@echo "Starting NavDP evaluation..."
+	@echo "  Timeout per mission: $(TIMEOUT)s"
+	@echo "  Number of missions:  $(NUM_MISSIONS)"
+	@echo ""
+	@bash scripts/eval.sh navdp $(TIMEOUT) $(NUM_MISSIONS)
+
 # Run Canvas evaluation (requires running canvas instance via make run-canvas)
 # Usage: make run-eval-canvas TIMEOUT=20 NUM_MISSIONS=10
 # Output: ./logs/canvas_evaluation_<timestamp>.log
@@ -440,7 +493,6 @@ download-baseline-checkpoints-hf:
 	@echo "Downloading baseline checkpoints from Hugging Face..."
 	$(DOCKER_COMPOSE) --profile dev run --rm dev \
 		bash -c "uv pip install --system --break-system-packages huggingface_hub && python3 /workspace/scripts/assets/download_baseline_checkpoints_hf.py"
-
 # =============================================================================
 # Nucleus Server Targets
 # =============================================================================

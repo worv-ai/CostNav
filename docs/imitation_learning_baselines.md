@@ -363,14 +363,14 @@ CostNav uses **ROS2** as its communication layer. The ViNT container runs two no
 
 **Key ROS2 Topics (between containers):**
 
-| Topic                                 | Type                  | Direction        | Description                     |
-| :------------------------------------ | :-------------------- | :--------------- | :------------------------------ |
+| Topic                                 | Type                  | Direction          | Description                     |
+| :------------------------------------ | :-------------------- | :----------------- | :------------------------------ |
 | `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image`   | Isaac Sim → Policy | Camera images for policy        |
 | `/chassis/odom`                       | `nav_msgs/Odometry`   | Isaac Sim → Policy | Robot odometry for MPC          |
 | `/goal_image`                         | `sensor_msgs/Image`   | Isaac Sim → Policy | Goal image (ImageGoal mode)     |
 | `/cmd_vel`                            | `geometry_msgs/Twist` | Policy → Isaac Sim | Velocity commands to robot      |
-| `/model_enable`                        | `std_msgs/Bool`       | Isaac Sim → Policy | Enable/disable policy execution |
-| `/model_trajectory`                    | `nav_msgs/Path`       | Internal (Policy)  | Policy → Trajectory Follower    |
+| `/model_enable`                       | `std_msgs/Bool`       | Isaac Sim → Policy | Enable/disable policy execution |
+| `/model_trajectory`                   | `nav_msgs/Path`       | Internal (Policy)  | Policy → Trajectory Follower    |
 
 All IL baselines share the same `/model_*` topic names so the trajectory follower and RViz configs remain model-agnostic.
 
@@ -516,7 +516,7 @@ Baselines integrated into the same two-node architecture (see [ROS2 Node Interfa
 
 - [x] **NoMaD** - Diffusion-based navigation policy (ROS2 policy node + trajectory follower; `make run-nomad`)
 - [x] **GNM** - General Navigation Model (ROS2 policy node + trajectory follower; `make run-gnm`)
-- [x] **NavDP** - HTTP-based baseline (`make run-navdp`)
+- [x] **NavDP** - End-to-end mapless navigation diffusion policy with sim-to-real transfer (`make run-navdp`)
 - [x] **Canvas** - Sketch-based navigation baseline (`make run-canvas`)
 
 **Navigation mode override:** use `GOAL_TYPE` to switch between `image_goal` and `topomap` when running a baseline.
@@ -534,22 +534,13 @@ GOAL_TYPE=topomap MODEL_CHECKPOINT=checkpoints/nomad.pth make run-nomad
 
 ### Baseline Comparison
 
-| Feature               | ViNT          | NoMaD         | GNM           | NavDP               |
-| --------------------- | ------------- | ------------- | ------------- | ------------------- |
-| **Architecture**      | Transformer   | Diffusion     | CNN           | Diffusion + Critic  |
-| **Goal Support**      | Image, NoGoal | Image, NoGoal | Image, NoGoal | Point, Image, Pixel |
-| **Trajectory Length** | 8 waypoints   | 8 waypoints   | 5 waypoints   | 24 waypoints        |
-| **Context Frames**    | 5             | 5             | 5             | 8                   |
-| **Implementation**    | ✅ Implemented | ✅ Implemented | ✅ Implemented | Planned             |
-
-### References
-
-- [ViNT: A Foundation Model for Visual Navigation](https://arxiv.org/abs/2306.14846)
-- [NoMaD: Goal Masked Diffusion Policies](https://arxiv.org/abs/2310.07896)
-- [GNM: A General Navigation Model](https://arxiv.org/abs/2210.03370)
-- [NavDP Paper](https://arxiv.org/abs/2505.08712)
-- [NavDP GitHub](https://github.com/OpenRobotLab/NavDP)
-- See also: [NavDP Baseline Integration](navdp.md)
+| Feature               | ViNT           | NoMaD          | GNM            | NavDP               |
+| --------------------- | -------------- | -------------- | -------------- | ------------------- |
+| **Architecture**      | Transformer    | Diffusion      | CNN            | Diffusion + Critic  |
+| **Goal Support**      | Image, NoGoal  | Image, NoGoal  | Image, NoGoal  | Point, Image, Pixel |
+| **Trajectory Length** | 8 waypoints    | 8 waypoints    | 5 waypoints    | 24 waypoints        |
+| **Context Frames**    | 5              | 5              | 5              | 8                   |
+| **Implementation**    | ✅ Implemented | ✅ Implemented | ✅ Implemented | ✅ Implemented      |
 
 ---
 
@@ -557,14 +548,18 @@ GOAL_TYPE=topomap MODEL_CHECKPOINT=checkpoints/nomad.pth make run-nomad
 
 ### Research Papers
 
-1. **GNM**: Shah et al., "GNM: A General Navigation Model to Drive Any Robot", ICRA 2023
-2. **ViNT**: Shah et al., "ViNT: A Foundation Model for Visual Navigation", CoRL 2023
-3. **NoMaD**: Sridhar et al., "NoMaD: Goal Masking Diffusion Policies for Navigation and Exploration", 2023
+1. **GNM**: Shah et al., "GNM: A General Navigation Model to Drive Any Robot", ICRA 2023 ([arXiv](https://arxiv.org/abs/2210.03370))
+2. **ViNT**: Shah et al., "ViNT: A Foundation Model for Visual Navigation", CoRL 2023 ([arXiv](https://arxiv.org/abs/2306.14846))
+3. **NoMaD**: Sridhar et al., "NoMaD: Goal Masking Diffusion Policies for Navigation and Exploration", 2023 ([arXiv](https://arxiv.org/abs/2310.07896))
+4. **NavDP**: Cai et al., "NavDP: Learning Sim-to-Real Navigation Diffusion Policy with Privileged Information Guidance", 2025 ([arXiv](https://arxiv.org/abs/2505.08712))
+5. **CANVAS**: Choi et al., "CANVAS: Commonsense-Aware Navigation System for Intuitive Human-Robot Interaction", ICRA 2025 ([arXiv](https://arxiv.org/abs/2410.01273))
 
 ### Code References
 
 - [visualnav-transformer](https://github.com/robodhruv/visualnav-transformer) - ViNT, NoMaD, GNM implementations
+- [NavDP](https://github.com/OpenRobotLab/NavDP) - Navigation diffusion policy
 - [MediaRef](https://github.com/open-world-agents/MediaRef) - Lightweight media references
+- See also: [NavDP Baseline Integration](navdp.md)
 
 ### Related CostNav Documentation
 

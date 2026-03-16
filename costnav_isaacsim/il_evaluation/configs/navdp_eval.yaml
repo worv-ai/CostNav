@@ -1,0 +1,37 @@
+# NavDP Evaluation Configuration for CostNav
+# This config is used by navdp_policy_node during inference.
+
+# Shared policy-node parameters
+inference_rate: 10.0
+device: "cuda:0"
+goal_type: "image_goal"           # Kept for shared schema; NavDP wrapper runs point+image fusion.
+topomap_goal_node: -1             # Unused by NavDP (kept for shared schema)
+topomap_radius: 4                 # Unused by NavDP (kept for shared schema)
+topomap_close_threshold: 3.0      # Unused by NavDP (kept for shared schema)
+visualize_debug_images: true
+
+# NavDP eval is fixed to:
+# - depth: DepthAnything
+# - goal: point + image fusion
+point_image_blend_alpha: 0.5
+
+# Goal topic (point goal for fusion mode)
+goal_pose_topic: "/goal_pose"
+
+# DepthAnything runtime options
+depth_anything_checkpoint: "checkpoints/depth_anything_v2_metric_vkitti_vits.pth"
+depth_anything_encoder: "vits"
+depth_anything_input_size: 518
+depth_anything_max_depth: 20.0
+
+# NavDP model architecture/inference options
+image_size: 224
+memory_size: 8
+predict_size: 24
+temporal_depth: 16
+heads: 8
+token_dim: 384
+channels: 3
+dropout: 0.1
+sample_num: 32
+depth_scale: 10000.0

@@ -6,6 +6,7 @@
 from il_evaluation.agents.base_agent import BaseAgent
 from il_evaluation.agents.gnm_agent import GNMAgent, NoGoalGNMAgent
 from il_evaluation.agents.nomad_agent import NoMaDAgent
+from il_evaluation.agents.navdp_agent import NavDPAgent
 from il_evaluation.agents.vint_agent import NoGoalViNTAgent, ViNTAgent
 
-__all__ = ["BaseAgent", "ViNTAgent", "NoGoalViNTAgent", "GNMAgent", "NoGoalGNMAgent", "NoMaDAgent"]
+__all__ = ["BaseAgent", "ViNTAgent", "NoGoalViNTAgent", "GNMAgent", "NoGoalGNMAgent", "NoMaDAgent", "NavDPAgent"]

@@ -1,0 +1,51 @@
+# Convert MediaRef-format bags to InternNav NavDP dataset structure
+paths:
+  input_dir: /mnt/raid11/datasets/CostNav/costnav_mediaref_v3_planned_resized # MediaRef dataset root
+  output_dir: /mnt/raid11/datasets/CostNav/navdp_training_vits_pg0 # Output NavDP dataset root
+
+# CostNav dataset configuration
+costnav:
+  image_topic: "/front_stereo_camera/left/image_raw/compressed"
+  odom_topic: "/chassis/odom"
+  depth_topic: # optional depth topic (unused when depth_source=depth_anything)
+  camera_info_topic: "/front_stereo_camera/left/camera_info"
+  pointcloud_topic: "/front_3d_lidar/lidar_points"
+  tf_topic: "/tf"
+  tf_static_topic: "/tf_static"
+  base_frame: "base_link"
+  camera_frame: "front_stereo_camera_left_rgb" # if TF not found, converter falls back to camera_height
+  ang_offset: 0.0
+
+processing:
+  sample_rate: 4.0
+  group_name: costnav
+  scene_name: # if empty, uses bag name
+  min_length: 10
+  camera_height: 1.0
+  # Depth source: topic | depth_anything | constant | auto
+  # auto: topic -> depth_anything (if both unavailable, raise error)
+  depth_source: depth_anything
+  # Optional: explicit checkpoint path for DepthAnything.
+  # If empty, converter searches common defaults under checkpoints/.
+  depth_anything_checkpoint: /mnt/harbor/users/minhyeok/depthAnything/depth_anything_v2_vits.pth
+  depth_anything_encoder: vits
+  depth_anything_input_size: 518
+  depth_anything_max_depth: 20.0
+  depth_m: 1.0
+  depth_scale: 10000.0
+  path_step: 1
+  use_camera_info_intrinsic: true
+  use_tf_extrinsic: true
+  obstacle_downsample: 8
+  obstacle_max_points: 30000
+  obstacle_min_range: 0.2
+  obstacle_max_range: 30.0
+  filter_backwards: true
+  overwrite: false
+
+camera:
+  # If omitted, defaults are derived from image size.
+  fx:
+  fy:
+  cx:
+  cy:

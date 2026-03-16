@@ -15,7 +15,6 @@ dependencies = [
     "torch>=2.0.0",
     "torchvision>=0.15.0",
     "efficientnet-pytorch>=0.7.1",
-    "diffusers>=0.30.0",
     "einops>=0.7.0",
     # Image processing
     "opencv-python>=4.8.0",
@@ -30,6 +29,19 @@ dependencies = [
     "scipy>=1.15.3",
     "casadi>=3.7.2",
     "transforms3d>=0.4.2",
+    "pydantic>=2.0.0",
+    # NavDP local inference + transitive runtime deps from InternNav
+    "diffusers>=0.30.0",
+    "transformers<4.56",
+    "setuptools<81",
+    "packaging",
+    "ftfy",
+    "gym==0.26.2",
+    "gym-notices",
+    "msgpack",
+    "msgpack-numpy",
+    "numpy-quaternion",
+    "open3d==0.19.0",
 ]
 
 [[tool.uv.index]]
@@ -57,6 +69,8 @@ gnm_policy_node = "il_evaluation.nodes.gnm_policy_node:main"
 # Main NoMaD policy node entry point
 # Usage: nomad_policy_node --checkpoint /path/to/model.pth --model_config /path/to/config.yaml --robot_config /path/to/robot.yaml
 nomad_policy_node = "il_evaluation.nodes.nomad_policy_node:main"
+# NavDP policy node (local inference, no server)
+navdp_policy_node = "il_evaluation.nodes.navdp_policy_node:main"
 # Trajectory follower node for executing trajectories at high rate
 # Usage: trajectory_follower_node --robot_config configs/robot_carter.yaml
 trajectory_follower_node = "il_evaluation.nodes.trajectory_follower_node:main"

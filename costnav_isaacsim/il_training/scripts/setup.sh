@@ -22,7 +22,10 @@ export PROJECT_ROOT
 
 # ── 1. git submodules (only the ones il_training needs) ──────────────────────
 echo "▸ Initialising git submodules …"
-git -C "$PROJECT_ROOT" submodule update --init third_party/diffusion_policy third_party/visualnav-transformer
+git -C "$PROJECT_ROOT" submodule update --init \
+    third_party/diffusion_policy \
+    third_party/visualnav-transformer \
+    third_party/InternNav
 
 # ── 2. patch diffusion_policy ────────────────────────────────────────────────
 if [ ! -f "$DIFFUSION_POLICY_INIT" ]; then
@@ -38,5 +41,38 @@ fi
 # old build where it was missing).
 echo "▸ Running uv sync …"
 cd "$SCRIPT_DIR/.."
-uv sync --reinstall-package diffusion-policy --quiet
+
+# Ray wheels currently support cp311/cp312/cp313, so avoid creating a cp314 venv.
+UV_PYTHON_BIN="${UV_PYTHON:-}"
+if [[ -z "$UV_PYTHON_BIN" ]]; then
+    for candidate in python3.13 python3.12 python3.11; do
+        if command -v "$candidate" >/dev/null 2>&1; then
+            UV_PYTHON_BIN="$candidate"
+            break
+        fi
+    done
+fi
+
+if [[ -z "$UV_PYTHON_BIN" ]] && command -v python3 >/dev/null 2>&1; then
+    PY_MM="$(python3 - <<'PY'
+import sys
+print(f"{sys.version_info.major}.{sys.version_info.minor}")
+PY
+)"
+    if [[ "$PY_MM" == "3.11" || "$PY_MM" == "3.12" || "$PY_MM" == "3.13" ]]; then
+        UV_PYTHON_BIN="python3"
+    fi
+fi
+
+if [[ -z "$UV_PYTHON_BIN" ]]; then
+    UV_PYTHON_BIN="3.12"
+    echo "▸ No system Python 3.11/3.12/3.13 found; using uv-managed Python $UV_PYTHON_BIN"
+fi
+
+if command -v "$UV_PYTHON_BIN" >/dev/null 2>&1; then
+    echo "▸ Using Python interpreter: $UV_PYTHON_BIN ($($UV_PYTHON_BIN --version 2>&1))"
+else
+    echo "▸ Using Python requirement for uv: $UV_PYTHON_BIN"
+fi
+uv sync --python "$UV_PYTHON_BIN" --reinstall-package diffusion-policy --quiet
 echo "✔ Done"
