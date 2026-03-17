@@ -535,13 +535,6 @@ services:
     command: /bin/bash -c "source /opt/ros/jazzy/setup.bash && python3 cmd_vel_publisher.py --config config/segway_e1.yml"
     network_mode: host
     ipc: host
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
     tty: true
 
   # ROS2 with ViNT policy - for devcontainer development

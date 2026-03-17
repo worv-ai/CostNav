@@ -25,9 +25,9 @@ class TrajectoryMapEditorConfig(BaseModel):
     # BGRA Color
     human_traj_color: tuple[int, int, int, int] = (0, 0, 255, 255)
     robot_traj_color: tuple[int, int, int, int] = (255, 0, 0, 255)  # Alpha will be adjusted on code
-    line_max_alpha: int = 0.7  # Max alpha value for the line
-    human_traj_thickness: float = 3
-    robot_traj_thickness: float = 5
+    line_max_alpha: float = 0.7  # Max alpha value for the line
+    human_traj_thickness: int = 3
+    robot_traj_thickness: int = 5
 
     map_radius: float = 8  # meters
     output_size: tuple[int, int] = (378, 378)

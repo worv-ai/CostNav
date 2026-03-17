@@ -57,10 +57,10 @@ RUN rosdep init && \
 
 # setup colcon mixin and metadata
 RUN colcon mixin add default \
-        https://raw.githubusercontent.com/colcon/colcon-mixin-repository/master/index.yaml && \
+    https://raw.githubusercontent.com/colcon/colcon-mixin-repository/master/index.yaml && \
     colcon mixin update && \
     colcon metadata add default \
-        https://raw.githubusercontent.com/colcon/colcon-metadata-repository/master/index.yaml && \
+    https://raw.githubusercontent.com/colcon/colcon-metadata-repository/master/index.yaml && \
     colcon metadata update
 
 # install ros2 packages
@@ -70,13 +70,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 FROM base-ros AS pytorch-installs
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        ccache \
-        cmake \
-        libjpeg-dev \
-        libpng-dev \
-        python3-pip \
-        python-is-python3 \
-        python3-dev && \
+    ccache \
+    cmake \
+    libjpeg-dev \
+    libpng-dev \
+    python3-pip \
+    python-is-python3 \
+    python3-dev && \
     rm -rf /var/lib/apt/lists/*
 # Remove PEP 668 restriction (safe in containers)
 RUN rm -f /usr/lib/python*/EXTERNALLY-MANAGED
@@ -88,20 +88,20 @@ RUN pip3 install torchelastic
 RUN IS_CUDA=$(python3 -c 'import torch ; print(torch.cuda._is_compiled())'); \
     echo "Is torch compiled with cuda: ${IS_CUDA}"; \
     if test "${IS_CUDA}" != "True"; then \
-        exit 1; \
+    exit 1; \
     fi
 
 FROM base-ros AS official
 LABEL com.nvidia.volumes.needed="nvidia_driver"
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        libjpeg-dev \
-        libpng-dev \
-        python-is-python3 \
-        python3-dev \
-        python3-pip \
-        ffmpeg \
-        cuda-compiler-12-8 \
-        && rm -rf /var/lib/apt/lists/*
+    libjpeg-dev \
+    libpng-dev \
+    python-is-python3 \
+    python3-dev \
+    python3-pip \
+    ffmpeg \
+    cuda-compiler-12-8 \
+    && rm -rf /var/lib/apt/lists/*
 # Copy Python packages from pytorch-installs stage
 COPY --from=pytorch-installs /usr/local/lib/python3.12 /usr/local/lib/python3.12
 COPY --from=pytorch-installs /usr/local/bin /usr/local/bin
@@ -120,13 +120,9 @@ ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 # Remove PEP 668 restriction (safe in containers)
 RUN rm -f /usr/lib/python*/EXTERNALLY-MANAGED
 
-# ─── flash-attn (needs torch visible, no isolation) ───────────────────
+# flash-attn requires --no-build-isolation (needs torch visible at build time)
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install flash-attn==2.7.4.post1 --no-build-isolation
-
-# compatibility fix: tf_transformations comes with an outdated version of transforms3d
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade transforms3d
 
 WORKDIR /workspace
 
@@ -137,7 +133,7 @@ COPY pyproject.toml README.md ./
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system -e . fastapi[standard]
+    uv pip install --system -e .
 
 # Copy source code
 COPY src/ ./src/
