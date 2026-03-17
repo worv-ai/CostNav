@@ -236,42 +236,25 @@ make run-eval-vint TIMEOUT=30 NUM_MISSIONS=20
 
 ### 6. Run Canvas (Sketch-Based Navigation)
 
-Run the Canvas sketch-based navigation baseline. Canvas converts NavMesh shortest paths to pixel-space trajectory annotations and publishes them as instructions for an external inference service.
+Canvas converts NavMesh shortest paths to pixel-space trajectory annotations and uses a vision-language model to predict velocity commands. The model worker runs separately on a GPU server.
 
 ```bash
-# Start Isaac Sim + RViz with Canvas enabled
-make run-canvas
+# 1. Build the Canvas Docker image (one-time)
+make build-canvas
+
+# 2. Launch the model worker on a GPU server (see canvas/README.md for details)
+
+# 3. Start Isaac Sim + Canvas agent
+make run-canvas MODEL_WORKER_URI=http://<gpu-server>:<MODEL_WORKER_PORT>
 ```
 
-This starts:
-
-- **Isaac Sim**: Street Sidewalk environment with robot and Canvas bridge enabled
-- **RViz**: Visualization of navigation markers and mission progress
-
-You can trigger missions while Canvas is running:
+To run automated evaluation:
 
 ```bash
-make start-mission
-```
-
-To run automated evaluation with metrics collection:
-
-```bash
-# Step 1 (terminal 1): Start Canvas (Isaac Sim + RViz)
-make run-canvas
-
-# Step 2 (terminal 2): Start the Canvas agent (private repo)
-# The Canvas agent lives in a separate private repository (with no plan to open-source)
-# and must be started manually before evaluation.
-
-# Step 3 (terminal 3): Run evaluation
-make run-eval-canvas
-
-# Or with custom parameters (default: 241s timeout, 3 missions)
 make run-eval-canvas TIMEOUT=241 NUM_MISSIONS=10
 ```
 
-Evaluation logs are saved to `./logs/canvas_evaluation_<timestamp>.log`.
+For detailed setup (model worker, configuration, evaluation), see [`costnav_isaacsim/canvas/README.md`](canvas/README.md).
 
 ---
 
@@ -956,17 +939,20 @@ This starts:
 
 ### Makefile Targets (IL Baselines)
 
-| Target             | Description                                              |
-| ------------------ | -------------------------------------------------------- |
-| `build-ros2-torch` | Build ROS2 Jazzy + PyTorch Docker image for IL baselines |
-| `run-vint`         | Run Isaac Sim + ViNT policy + trajectory follower        |
-| `run-eval-vint`    | Run automated ViNT evaluation with metrics collection    |
-| `run-gnm`          | Run Isaac Sim + GNM policy + trajectory follower         |
-| `run-eval-gnm`     | Run automated GNM evaluation with metrics collection     |
-| `run-nomad`        | Run Isaac Sim + NoMaD policy + trajectory follower       |
-| `run-eval-nomad`   | Run automated NoMaD evaluation with metrics collection   |
-| `run-canvas`       | Run Isaac Sim + RViz with Canvas bridge enabled          |
-| `run-eval-canvas`  | Run automated Canvas evaluation with metrics collection  |
+| Target             | Description                                                       |
+| ------------------ | ----------------------------------------------------------------- |
+| `build-ros2-torch` | Build ROS2 Jazzy + PyTorch Docker image for IL baselines          |
+| `run-vint`         | Run Isaac Sim + ViNT policy + trajectory follower                 |
+| `run-eval-vint`    | Run automated ViNT evaluation with metrics collection             |
+| `run-gnm`          | Run Isaac Sim + GNM policy + trajectory follower                  |
+| `run-eval-gnm`     | Run automated GNM evaluation with metrics collection              |
+| `run-nomad`        | Run Isaac Sim + NoMaD policy + trajectory follower                |
+| `run-eval-nomad`   | Run automated NoMaD evaluation with metrics collection            |
+| `run-navdp`        | Run Isaac Sim + NavDP policy                                      |
+| `run-eval-navdp`   | Run automated NavDP evaluation with metrics collection            |
+| `build-canvas`     | Build Canvas Docker image                                         |
+| `run-canvas`       | Run Isaac Sim + Canvas agent (neural planner + cmd_vel publisher) |
+| `run-eval-canvas`  | Run automated Canvas evaluation with metrics collection           |
 
 ### Configuration Files
 
@@ -975,52 +961,6 @@ This starts:
 - **Training config**: `il_training/training/visualnav_transformer/configs/vint_costnav.yaml`
 
 > **See Also**: [IL Training Documentation](il_training/README.md) | [IL Evaluation Documentation](il_evaluation/README.md) for detailed setup and usage.
-
-### Canvas (Sketch-Based Navigation Baseline)
-
-Canvas is a sketch-based navigation baseline that converts NavMesh shortest paths to pixel-space trajectory annotations and publishes them as instructions for an external inference service. The inference service produces velocity commands (`/cmd_vel`) to drive the robot.
-
-#### Quick Start: Run Canvas Evaluation
-
-```bash
-# Step 1 (terminal 1): Start Isaac Sim + RViz with Canvas enabled
-make run-canvas
-
-# Step 2 (terminal 2): Start the Canvas agent (private repo)
-# The Canvas agent lives in a separate private repository (with no plan to open-source)
-# and must be started manually before evaluation.
-
-# Step 3 (terminal 3): Run evaluation
-make run-eval-canvas
-```
-
-#### Automated Evaluation
-
-The `run-eval-canvas` target runs consecutive missions and collects comprehensive metrics:
-
-```bash
-# Run with default parameters (241s timeout, 3 missions)
-make run-eval-canvas
-
-# Run with custom parameters
-make run-eval-canvas TIMEOUT=1169 NUM_MISSIONS=20
-```
-
-**Evaluation Parameters:**
-
-| Parameter      | Default | Description                    |
-| -------------- | ------- | ------------------------------ |
-| `TIMEOUT`      | 241     | Mission timeout in seconds     |
-| `NUM_MISSIONS` | 3       | Number of missions to evaluate |
-
-**Output:** Evaluation logs are saved to `./logs/canvas_evaluation_<timestamp>.log` with per-mission results and aggregate statistics.
-
-#### Makefile Targets (Canvas)
-
-| Target            | Description                                       |
-| ----------------- | ------------------------------------------------- |
-| `run-canvas`      | Start Isaac Sim + RViz with Canvas bridge enabled |
-| `run-eval-canvas` | Run automated evaluation with metrics collection  |
 
 ---
 

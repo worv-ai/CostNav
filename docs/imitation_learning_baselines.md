@@ -517,7 +517,7 @@ Baselines integrated into the same two-node architecture (see [ROS2 Node Interfa
 - [x] **NoMaD** - Diffusion-based navigation policy (ROS2 policy node + trajectory follower; `make run-nomad`)
 - [x] **GNM** - General Navigation Model (ROS2 policy node + trajectory follower; `make run-gnm`)
 - [x] **NavDP** - End-to-end mapless navigation diffusion policy with sim-to-real transfer (`make run-navdp`)
-- [x] **Canvas** - Sketch-based navigation baseline (`make run-canvas`)
+- [x] **[Canvas](../costnav_isaacsim/canvas/README.md)** - Sketch-based navigation baseline (`make run-canvas`)
 
 **Navigation mode override:** use `GOAL_TYPE` to switch between `image_goal` and `topomap` when running a baseline.
 This auto-syncs `GOAL_IMAGE` and `IL_TOPOMAP` unless you explicitly override them.
@@ -552,7 +552,7 @@ GOAL_TYPE=topomap MODEL_CHECKPOINT=checkpoints/nomad.pth make run-nomad
 2. **ViNT**: Shah et al., "ViNT: A Foundation Model for Visual Navigation", CoRL 2023 ([arXiv](https://arxiv.org/abs/2306.14846))
 3. **NoMaD**: Sridhar et al., "NoMaD: Goal Masking Diffusion Policies for Navigation and Exploration", 2023 ([arXiv](https://arxiv.org/abs/2310.07896))
 4. **NavDP**: Cai et al., "NavDP: Learning Sim-to-Real Navigation Diffusion Policy with Privileged Information Guidance", 2025 ([arXiv](https://arxiv.org/abs/2505.08712))
-5. **CANVAS**: Choi et al., "CANVAS: Commonsense-Aware Navigation System for Intuitive Human-Robot Interaction", ICRA 2025 ([arXiv](https://arxiv.org/abs/2410.01273))
+5. **CANVAS**: Choi et al., "CANVAS: Commonsense-Aware Navigation System for Intuitive Human-Robot Interaction", ICRA 2025 ([Project](https://worv-ai.github.io/canvas/))
 
 ### Code References
 
