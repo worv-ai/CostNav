@@ -552,7 +552,7 @@ GOAL_TYPE=topomap MODEL_CHECKPOINT=checkpoints/nomad.pth make run-nomad
 2. **ViNT**: Shah et al., "ViNT: A Foundation Model for Visual Navigation", CoRL 2023 ([arXiv](https://arxiv.org/abs/2306.14846))
 3. **NoMaD**: Sridhar et al., "NoMaD: Goal Masking Diffusion Policies for Navigation and Exploration", 2023 ([arXiv](https://arxiv.org/abs/2310.07896))
 4. **NavDP**: Cai et al., "NavDP: Learning Sim-to-Real Navigation Diffusion Policy with Privileged Information Guidance", 2025 ([arXiv](https://arxiv.org/abs/2505.08712))
-5. **CANVAS**: Choi et al., "CANVAS: Commonsense-Aware Navigation System for Intuitive Human-Robot Interaction", ICRA 2025 ([arXiv](https://arxiv.org/abs/2410.01273))
+5. **CANVAS**: Choi et al., "CANVAS: Commonsense-Aware Navigation System for Intuitive Human-Robot Interaction", ICRA 2025 ([Project](https://worv-ai.github.io/canvas/))
 
 ### Code References
 

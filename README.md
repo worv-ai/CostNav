@@ -190,7 +190,7 @@ CostNav supports the following IL baselines, adapted from the [NavDP](https://gi
 | **NoMaD**  | [arXiv](https://arxiv.org/abs/2310.07896) | Diffusion              | ImageGoal, NoGoal            |
 | **GNM**    | [arXiv](https://arxiv.org/abs/2210.03370) | CNN                    | ImageGoal, NoGoal            |
 | **NavDP**  | [arXiv](https://arxiv.org/abs/2505.08712) | Diffusion + Critic     | PointGoal, ImageGoal, NoGoal |
-| **Canvas** | [arXiv](https://arxiv.org/abs/2410.01273) | Vision-Language Action | Sketch+Language Goal         |
+| **Canvas** | [Project](https://worv-ai.github.io/canvas/) | Vision-Language Action | Sketch+Language Goal         |
 
 ### Quick Start
 
