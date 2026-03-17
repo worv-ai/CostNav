@@ -25,11 +25,12 @@ CostNav introduces a **paradigm shift** in how we evaluate navigation systems: f
 Our key contributions are:
 
 1. **High-Fidelity Physics Simulation with Dynamics for effective Real-World Economic Scenarios.**
-   a. Supporting Segway E1 delivery robot, food cargo dynamics with popcorn, detailed collision dynamics, pedestrians
-2. **Real-world referenced Cost-Revenue Model with Break-Even Point Analysis.**
-   a. Supporting Energy Cost, Pedestrian Safety Cost, Property Damage Cost, Repair Cost
-3. **Rule based Navigation Evaluation (Coming up soon: Learning based Navigation Evaluation and Dataset)**
-   a. Comparing Profitability between Nav2 with GPS and Nav2 with AMCL localization
+    * Supporting Segway E1 delivery robot, food cargo dynamics with popcorn, detailed collision dynamics, pedestrians
+1. **Real-world referenced Cost-Revenue Model with Break-Even Point Analysis.**
+    * Supporting Energy Cost, Pedestrian Safety Cost, Property Damage Cost, Repair Cost
+1. **Rule-Based and Learning-Based Navigation Evaluation with Multiple IL Baselines**
+    * Comparing Profitability between Nav2 with GPS and Nav2 with AMCL localization
+    * IL Baselines: ViNT, GNM, NoMaD, NavDP, and CANVAS
 
 You can find more details in our [technical report](https://arxiv.org/abs/2511.20216).
 
@@ -183,6 +184,7 @@ CostNav/
 | Component               | Test Environment               | Runtime                | Notes                                          |
 | ----------------------- | ------------------------------ | ---------------------- | ---------------------------------------------- |
 | `costnav_isaacsim`      | `Dockerfile` (isaac-sim stage) | NVIDIA Isaac Sim 5.1.0 | Requires NGC + GPU                             |
+| `canvas`                | `Dockerfile` in canvas folder  | ROS2 Jazzy + PyTorch   | GPU inference                                  |
 | `il_training`           | `uv`                           | Bare-metal / SLURM     | CPU-only for data processing; GPU for training |
 | `il_evaluation`         | `Dockerfile.ros_torch`         | ROS2 Jazzy + PyTorch   | GPU inference                                  |
 | `isaac_sim_teleop_ros2` | `Dockerfile.ros`               | ROS2 Jazzy             | Joystick teleoperation                         |
