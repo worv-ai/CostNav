@@ -1,0 +1,22 @@
+services:
+  model_worker:
+    image: canvas:${CANVAS_VERSION:-latest}
+    command: uvicorn main:app --host 0.0.0.0 --port ${MODEL_WORKER_PORT}
+    volumes:
+      - ${MODEL_PATH}:/app/model
+    environment:
+      - MODEL_PATH=/app/model
+      - LD_LIBRARY_PATH=
+      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}
+    working_dir: /workspace/src/canvas/model_worker
+    ports:
+      - "${MODEL_WORKER_PORT}:${MODEL_WORKER_PORT}"
+    shm_size: '32gb'
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

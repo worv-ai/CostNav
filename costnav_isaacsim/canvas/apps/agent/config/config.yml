@@ -1,0 +1,9 @@
+odom_topic: /chassis/odom
+rgb_front_topic: /front_stereo_camera/left/image_raw
+rgb_image_type: Image # CompressedImage | Image
+cmd_vel_msg_type: Twist  # "TwistStamped" or "Twist"
+
+rate: 20
+
+visualize: true
+reached_distance: 0.7

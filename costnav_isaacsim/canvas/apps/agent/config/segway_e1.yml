@@ -1,0 +1,12 @@
+vel_topic: /cmd_vel
+cmd_vel_msg_type: "Twist"        # plain Twist
+
+# linear and angular speed limits for the robot
+max_v: 15 # m/s
+max_w: 10 # rad/s
+v_gain: 1.0  # proportional gain for linear velocity
+w_gain: 1.0  # proportional gain for angular velocity
+
+# velocity filtering
+zero_velocity_threshold_linear: 0.0
+zero_velocity_threshold_angular: 0.0
