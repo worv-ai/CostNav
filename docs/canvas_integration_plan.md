@@ -222,39 +222,7 @@ Replace the Nav2 goal-publishing step with CANVAS scenario publishing:
 
 ## Evaluation
 
-Automated Canvas evaluation uses the same evaluation framework as Nav2 and ViNT. The `make run-eval-canvas` target runs consecutive missions, collects per-mission metrics, and generates a summary log.
-
-### Running Evaluation
-
-```bash
-# Step 1: Launch the model worker on a GPU server (see costnav_isaacsim/canvas/README.md)
-
-# Step 2 (terminal 1): Start Isaac Sim + Canvas agent
-make run-canvas MODEL_WORKER_URI=http://<gpu-server>:<MODEL_WORKER_PORT>
-
-# Step 3 (terminal 2): Run evaluation
-make run-eval-canvas
-```
-
-With custom parameters:
-
-```bash
-make run-eval-canvas TIMEOUT=241 NUM_MISSIONS=20
-```
-
-### Evaluation Parameters
-
-| Parameter      | Default | Description                                         |
-| -------------- | ------- | --------------------------------------------------- |
-| `TIMEOUT`      | 241     | Mission timeout in seconds (based on S_EvalTimeout) |
-| `NUM_MISSIONS` | 3       | Number of consecutive missions to evaluate          |
-
-### Output
-
-Evaluation logs are saved to `./logs/canvas_evaluation_<timestamp>.log`. Each log contains:
-
-- **Per-mission results**: status (success/failure/skipped), traveled distance, elapsed time, average velocity, contact counts, impulse, injury cost, and property damage breakdown
-- **Aggregate statistics**: success rate, averages across all completed missions (excluding and including skipped)
+For setup and usage of `make run-canvas` and `make run-eval-canvas`, see [`costnav_isaacsim/canvas/README.md`](../costnav_isaacsim/canvas/README.md).
 
 ### How It Works
 
@@ -264,12 +232,5 @@ Evaluation logs are saved to `./logs/canvas_evaluation_<timestamp>.log`. Each lo
 4. The inference service receives the instructions and drives the robot via `/cmd_vel`.
 5. The evaluation script polls `/get_mission_result` until the mission completes (success, failure, or timeout).
 6. After all missions, a summary is printed to the console and written to the log file.
-
-### Makefile Targets
-
-| Target            | Description                                             |
-| ----------------- | ------------------------------------------------------- |
-| `run-canvas`      | Start Isaac Sim + RViz with Canvas bridge enabled       |
-| `run-eval-canvas` | Run automated Canvas evaluation with metrics collection |
 
 ---

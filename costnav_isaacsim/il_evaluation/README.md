@@ -230,61 +230,6 @@ All control parameters (`control_rate`, `max_linear_vel`, `max_angular_vel`, `tr
 
 ## Evaluation
 
-### Automated Evaluation Workflow
-
-The evaluation system runs consecutive missions and collects comprehensive metrics including:
-
-- Success rate (goal reached within timeout)
-- Traveled distance and elapsed time
-- Average velocity and mechanical power
-- Contact counts and impulses
-- Property damage metrics
-- Delta-v (collision severity) metrics
-- Injury cost estimates
-
-**Running Automated Evaluation:**
-
-```bash
-# Terminal 1: Start a baseline stack
-MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
-MODEL_CHECKPOINT=checkpoints/baseline-gnm.pth make run-gnm
-MODEL_CHECKPOINT=checkpoints/baseline-nomad.pth make run-nomad
-MODEL_CHECKPOINT=checkpoints/baseline-navdp.ckpt make run-navdp
-
-# Terminal 2: Run evaluation
-make run-eval-vint TIMEOUT=169 NUM_MISSIONS=10
-make run-eval-gnm TIMEOUT=169 NUM_MISSIONS=10
-make run-eval-nomad TIMEOUT=169 NUM_MISSIONS=10
-make run-eval-navdp TIMEOUT=169 NUM_MISSIONS=10
-```
-
-**Evaluation Parameters:**
-
-- `TIMEOUT`: Maximum time per mission in seconds (default: 169s)
-- `NUM_MISSIONS`: Number of consecutive missions to run (default: 3)
-- `ALIGN_HEADING`: Align robot heading with first topomap waypoint before navigation (default: `True` for IL baselines). **Required** for reliable IL evaluation — see [Initial Heading Alignment](#initial-heading-alignment) below.
-
-**Output:**
-
-- Logs are saved to `./logs/<baseline>_evaluation_<timestamp>.log`
-- Real-time progress is displayed in the terminal
-- Summary statistics are generated at the end
-
-**Interactive Controls:**
-
-- Press `→` (right arrow) during a mission to skip it
-
-### Manual Mission Triggering
-
-For development and debugging, you can manually trigger individual missions:
-
-```bash
-# After starting a baseline stack (make run-*)
-make start-mission
-```
-
-This calls the `/start_mission` ROS2 service to begin a new navigation task.
-
 ### Evaluation Metrics
 
 The evaluation system tracks the following metrics per mission:

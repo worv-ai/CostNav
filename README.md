@@ -51,7 +51,6 @@ cd CostNav
 make fetch-third-party # we use third-party submodules for reference or dependencies
 ```
 
-
 ### 3. Configure environment variables
 
 1. Copy `.env.example` to `.env`.
@@ -141,6 +140,7 @@ make run-eval-teleop # run evaluation in teleop mode
 CostNav/
 ├── costnav_isaacsim/
 │   ├── costnav_isaacsim/          # Isaac Sim simulation & mission management
+│   ├── canvas/                    # Canvas sketch-based navigation agent
 │   ├── il_training/               # IL data processing + model training
 │   ├── il_evaluation/             # IL inference + ROS2 policy nodes
 │   ├── isaac_sim_teleop_ros2/     # ROS2 teleoperation package
@@ -161,7 +161,38 @@ CostNav/
 | `isaac_sim_teleop_ros2` | `Dockerfile.ros`               | ROS2 Jazzy             | Joystick teleoperation                         |
 | `nav2_params`           | `Dockerfile.ros`               | ROS2 Jazzy             | Launch files only, no unit tests               |
 
-## Running IL Baselines (ViNT)
+## Running Canvas (Sketch-Based Navigation)
+
+Canvas is a sketch+language based vision-language action model for commonsense-aware navigation. It predicts velocity commands from trajectory annotations and language instructions. The model worker runs separately on a GPU server.
+
+```bash
+# 1. Build the Canvas Docker image
+make build-canvas
+
+# 2. Launch the model worker on a GPU server (see costnav_isaacsim/canvas/README.md)
+
+# 3. Start Isaac Sim + Canvas agent
+make run-canvas MODEL_WORKER_URI=http://<gpu-server>:<MODEL_WORKER_PORT>
+
+# 4. Run evaluation
+make run-eval-canvas TIMEOUT=241 NUM_MISSIONS=10
+```
+
+For detailed setup, see [`costnav_isaacsim/canvas/README.md`](costnav_isaacsim/canvas/README.md).
+
+## Running IL Baselines
+
+CostNav supports the following IL baselines, adapted from the [NavDP](https://github.com/InternRobotics/NavDP) benchmark:
+
+| Baseline   | Paper                                     | Architecture           | Supported Tasks              |
+| ---------- | ----------------------------------------- | ---------------------- | ---------------------------- |
+| **ViNT**   | [arXiv](https://arxiv.org/abs/2306.14846) | Transformer            | ImageGoal, NoGoal            |
+| **NoMaD**  | [arXiv](https://arxiv.org/abs/2310.07896) | Diffusion              | ImageGoal, NoGoal            |
+| **GNM**    | [arXiv](https://arxiv.org/abs/2210.03370) | CNN                    | ImageGoal, NoGoal            |
+| **NavDP**  | [arXiv](https://arxiv.org/abs/2505.08712) | Diffusion + Critic     | PointGoal, ImageGoal, NoGoal |
+| **Canvas** | [arXiv](https://arxiv.org/abs/2410.01273) | Vision-Language Action | Sketch+Language Goal         |
+
+### Quick Start
 
 1. Download pretrained checkpoints from Hugging Face
 

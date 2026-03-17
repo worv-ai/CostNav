@@ -30,7 +30,15 @@ Evaluation pipeline for CostNav using Docker Compose. This setup runs the **neur
 
 ## Quick Start
 
-### 1. Build the Docker Image
+### 1. Download Model Checkpoint
+
+```bash
+make download-baseline-checkpoints-hf
+```
+
+This downloads `canvas-costnav` into the `checkpoints/` directory.
+
+### 2. Build the Docker Image
 
 ```bash
 cd costnav_isaacsim/canvas/docker
@@ -43,7 +51,7 @@ This builds `canvas:latest`. You can override the image name and tag:
 IMAGE_NAME=my-registry/canvas IMAGE_TAG=v1.0 ./build.sh
 ```
 
-### 2. Launch the Model Worker (GPU Server)
+### 3. Launch the Model Worker (GPU Server)
 
 > **Note:** A dedicated GPU server is recommended for production, but running both the simulation and model worker on the same desktop works fine — though it will degrade model inference performance due to shared GPU resources. Verified on:
 >
@@ -85,7 +93,7 @@ IMAGE_NAME=my-registry/canvas IMAGE_TAG=v1.0 ./build.sh
    docker compose up
    ```
 
-### 3. Run Canvas
+### 4. Run Canvas
 
 From the repository root:
 
@@ -101,7 +109,7 @@ Optional parameters:
 make run-canvas MODEL_WORKER_URI=http://<gpu-server>:<MODEL_WORKER_PORT> NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True
 ```
 
-### 4. Run Evaluation
+### 5. Run Evaluation
 
 ```bash
 # Terminal 1
