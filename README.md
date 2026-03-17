@@ -146,21 +146,23 @@ CostNav/
 │   ├── il_evaluation/             # IL inference + ROS2 policy nodes
 │   ├── isaac_sim_teleop_ros2/     # ROS2 teleoperation package
 │   └── nav2_params/               # Nav2 launch files & parameters
-├── Dockerfile                     # Isaac Sim & Isaac Lab (multi-stage)
-├── Dockerfile.ros                 # ROS2 Jazzy (teleop + nav2)
-├── Dockerfile.ros_torch           # ROS2 Jazzy + PyTorch (IL evaluation)
-└── docker-compose.yml
+├── docker/
+│   ├── Dockerfile                 # Isaac Sim & Isaac Lab (multi-stage)
+│   ├── Dockerfile.ros             # ROS2 Jazzy (teleop + nav2)
+│   ├── Dockerfile.ros_torch       # ROS2 Jazzy + PyTorch (IL evaluation)
+│   ├── docker-compose.yml
+│   └── ros_entrypoint.sh
 ```
 
 ### Component Environments
 
-| Component               | Test Environment               | Runtime                | Notes                                          |
-| ----------------------- | ------------------------------ | ---------------------- | ---------------------------------------------- |
-| `costnav_isaacsim`      | `Dockerfile` (isaac-sim stage) | NVIDIA Isaac Sim 5.1.0 | Requires NGC + GPU                             |
-| `il_training`           | `uv`                           | Bare-metal / SLURM     | CPU-only for data processing; GPU for training |
-| `il_evaluation`         | `Dockerfile.ros_torch`         | ROS2 Jazzy + PyTorch   | GPU inference                                  |
-| `isaac_sim_teleop_ros2` | `Dockerfile.ros`               | ROS2 Jazzy             | Joystick teleoperation                         |
-| `nav2_params`           | `Dockerfile.ros`               | ROS2 Jazzy             | Launch files only, no unit tests               |
+| Component               | Test Environment                       | Runtime                | Notes                                          |
+| ----------------------- | -------------------------------------- | ---------------------- | ---------------------------------------------- |
+| `costnav_isaacsim`      | `docker/Dockerfile` (isaac-sim stage)  | NVIDIA Isaac Sim 5.1.0 | Requires NGC + GPU                             |
+| `il_training`           | `uv`                                   | Bare-metal / SLURM     | CPU-only for data processing; GPU for training |
+| `il_evaluation`         | `docker/Dockerfile.ros_torch`          | ROS2 Jazzy + PyTorch   | GPU inference                                  |
+| `isaac_sim_teleop_ros2` | `docker/Dockerfile.ros`                | ROS2 Jazzy             | Joystick teleoperation                         |
+| `nav2_params`           | `docker/Dockerfile.ros`                | ROS2 Jazzy             | Launch files only, no unit tests               |
 
 ## Running IL Baselines (ViNT)
 

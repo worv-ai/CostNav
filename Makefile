@@ -7,9 +7,9 @@ include .env
 export
 endif
 
-DOCKERFILE ?= Dockerfile
+DOCKERFILE ?= docker/Dockerfile
 DOCKER_BUILD ?= docker build
-DOCKER_COMPOSE ?= docker compose
+DOCKER_COMPOSE ?= docker compose --project-directory . -f docker/docker-compose.yml
 
 # Version defaults (can be overridden by .env or command line)
 ISAAC_SIM_VERSION ?= 5.1.0
@@ -92,7 +92,7 @@ fetch-third-party:
 
 # Build the ROS2 runtime Docker image
 build-ros2:
-	$(DOCKER_BUILD) -f Dockerfile.ros -t $(COSTNAV_ROS2_IMAGE) .
+	$(DOCKER_BUILD) -f docker/Dockerfile.ros -t $(COSTNAV_ROS2_IMAGE) .
 
 # Run the ROS2 runtime container
 run-ros2:
@@ -203,7 +203,7 @@ run-teleop:
 
 # Build the shared ROS2 + PyTorch image for IL baselines (ViNT/GNM/NoMaD)
 build-ros2-torch:
-	$(DOCKER_BUILD) -f Dockerfile.ros_torch -t $(COSTNAV_ROS2_TORCH_IMAGE) .
+	$(DOCKER_BUILD) -f docker/Dockerfile.ros_torch -t $(COSTNAV_ROS2_TORCH_IMAGE) .
 
 # NavDP reuses the same ROS2 + PyTorch image
 build-navdp: build-ros2-torch

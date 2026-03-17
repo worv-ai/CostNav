@@ -4,8 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "Dockerfile.ros"
-      - "Dockerfile.ros_torch"
+      - "docker/Dockerfile.ros"
+      - "docker/Dockerfile.ros_torch"
       - "costnav_isaacsim/isaac_sim_teleop_ros2/**"
       - "costnav_isaacsim/il_evaluation/**"
       - "third_party/visualnav-transformer/**"
@@ -45,7 +45,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile.ros
+          file: docker/Dockerfile.ros
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/ros2:latest
@@ -79,7 +79,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile.ros_torch
+          file: docker/Dockerfile.ros_torch
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/vint:latest

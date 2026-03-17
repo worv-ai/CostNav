@@ -30,7 +30,7 @@ jobs:
           filters: |
             costnav:
               - 'costnav_isaacsim/costnav_isaacsim/**'
-              - 'Dockerfile'
+              - 'docker/Dockerfile'
             il-training:
               - 'costnav_isaacsim/il_training/**'
               - 'third_party/visualnav-transformer/**'
@@ -38,7 +38,7 @@ jobs:
             il-evaluation:
               - 'costnav_isaacsim/il_evaluation/**'
               - 'third_party/visualnav-transformer/**'
-              - 'Dockerfile.ros_torch'
+              - 'docker/Dockerfile.ros_torch'
 
 
   # ── Lint ────────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ jobs:
           fetch-depth: 1
           submodules: false
       - name: Build test image
-        run: docker build --target base --tag costnav-base:test -f Dockerfile .
+        run: docker build --target base --tag costnav-base:test -f docker/Dockerfile .
       - name: Run tests
         run: |
           docker run --rm -v ${{ github.workspace }}:/workspace costnav-base:test bash -c "
@@ -127,7 +127,7 @@ jobs:
           git submodule update --init --depth 1 \
             third_party/visualnav-transformer
       - name: Build evaluation image
-        run: docker build --tag costnav-eval:test -f Dockerfile.ros_torch .
+        run: docker build --tag costnav-eval:test -f docker/Dockerfile.ros_torch .
       - name: Run tests
         run: |
           docker run --rm costnav-eval:test bash -c "
