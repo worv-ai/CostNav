@@ -35,6 +35,33 @@ You can find more details in our [technical report](https://arxiv.org/abs/2511.2
 
 The full cost benchmark formula with real world references is available in our google drive: https://drive.google.com/drive/folders/1j1MXm6NMkd6HHBwTJi_nSde7-shv4laX?usp=sharing
 
+## Media
+
+### Navigation Comparison
+
+
+https://github.com/user-attachments/assets/3393a8ce-edab-4940-aa4a-1301c544651e
+
+Side-by-side comparison of rule-based and learning-based navigation methods in CostNav's urban sidewalk environment.
+
+
+### Physics Simulation
+
+
+https://github.com/user-attachments/assets/7c61f56f-e23f-444b-a3ef-54653f38f397
+
+CostNav's high-fidelity physics simulation enables the modeling of real-world economic scenarios, including critical failures like food spoilage and robot rollovers.
+
+### Benchmark Comparison
+<img width="1414" height="376" alt="bench_comparison" src="https://github.com/user-attachments/assets/c0d132f5-3c11-427f-9408-e2e8b232d5eb" />
+
+Comparison of existing navigation benchmarks (UnrealZoo, OpenBench, Arena-RosNav, Urban-Sim, DeliveryBench) that focus on task-oriented metrics versus CostNav's integration of physics simulation with comprehensive economic cost modeling.
+
+### Economic Model
+<img width="2523" height="1044" alt="figure2 drawio" src="https://github.com/user-attachments/assets/6c1083d7-361c-42ca-b6d3-8b57ee413bcf" />
+
+CostNav's framework linking navigation performance to business value through profit-per-run measurement.
+
 ## Getting Started
 
 ### 1. Prerequisites
