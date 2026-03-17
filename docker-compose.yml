@@ -502,6 +502,48 @@ services:
     stdin_open: true
     tty: true
 
+  # Canvas neural planner - queries remote model worker, publishes velocity predictions
+  canvas-neural-planner:
+    profiles: ["canvas"]
+    image: canvas:${CANVAS_VERSION:-latest}
+    container_name: costnav-canvas-neural-planner
+    environment:
+      - MODEL_WORKER_URI=${MODEL_WORKER_URI:-http://localhost:8200}
+    depends_on:
+      isaac-sim:
+        condition: service_healthy
+    volumes:
+      - ./costnav_isaacsim/canvas/apps/agent/config:/workspace/src/canvas/agent/neural_planner/config
+      - ./costnav_isaacsim/canvas/apps/agent/maps:/workspace/src/canvas/agent/neural_planner/maps
+    working_dir: /workspace/src/canvas/agent/neural_planner
+    command: /bin/bash -c "source /opt/ros/jazzy/setup.bash && python3 neural_planner.py --config config/config.yml"
+    network_mode: host
+    ipc: host
+    tty: true
+
+  # Canvas cmd_vel publisher - converts predictions to safe velocity commands
+  canvas-cmd-vel-publisher:
+    profiles: ["canvas"]
+    image: canvas:${CANVAS_VERSION:-latest}
+    container_name: costnav-canvas-cmd-vel-publisher
+    depends_on:
+      isaac-sim:
+        condition: service_healthy
+    volumes:
+      - ./costnav_isaacsim/canvas/apps/agent/config:/workspace/src/canvas/agent/cmd_vel_publisher/config
+    working_dir: /workspace/src/canvas/agent/cmd_vel_publisher
+    command: /bin/bash -c "source /opt/ros/jazzy/setup.bash && python3 cmd_vel_publisher.py --config config/segway_e1.yml"
+    network_mode: host
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    tty: true
+
   # ROS2 with ViNT policy - for devcontainer development
   ros2-vint-dev:
     profiles: ["vint-dev"]

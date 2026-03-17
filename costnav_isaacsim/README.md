@@ -236,38 +236,41 @@ make run-eval-vint TIMEOUT=30 NUM_MISSIONS=20
 
 ### 6. Run Canvas (Sketch-Based Navigation)
 
-Run the Canvas sketch-based navigation baseline. Canvas converts NavMesh shortest paths to pixel-space trajectory annotations and publishes them as instructions for an external inference service.
+Canvas converts NavMesh shortest paths to pixel-space trajectory annotations and uses a vision-language model to predict velocity commands. The model worker runs separately on a GPU server.
+
+**Step 1**: Build the Canvas Docker image (one-time):
 
 ```bash
-# Start Isaac Sim + RViz with Canvas enabled
-make run-canvas
+cd costnav_isaacsim/canvas/docker && ./build.sh
 ```
 
-This starts:
+**Step 2**: Launch the model worker on a GPU server (see [`costnav_isaacsim/canvas/README.md`](canvas/README.md) for details):
 
-- **Isaac Sim**: Street Sidewalk environment with robot and Canvas bridge enabled
-- **RViz**: Visualization of navigation markers and mission progress
+```bash
+cd costnav_isaacsim/canvas/apps/model_workers
+cp .env.pub .env  # edit MODEL_PATH, MODEL_WORKER_PORT
+docker compose up
+```
 
-You can trigger missions while Canvas is running:
+**Step 3**: Start Isaac Sim + Canvas agent:
+
+```bash
+make run-canvas MODEL_WORKER_URI=http://<gpu-server>:<MODEL_WORKER_PORT>
+```
+
+This starts Isaac Sim, RViz, the neural planner, and the cmd_vel publisher. You can trigger missions:
 
 ```bash
 make start-mission
 ```
 
-To run automated evaluation with metrics collection:
+To run automated evaluation:
 
 ```bash
-# Step 1 (terminal 1): Start Canvas (Isaac Sim + RViz)
-make run-canvas
+# Terminal 1: Start Canvas
+make run-canvas MODEL_WORKER_URI=http://<gpu-server>:<MODEL_WORKER_PORT>
 
-# Step 2 (terminal 2): Start the Canvas agent (private repo)
-# The Canvas agent lives in a separate private repository (with no plan to open-source)
-# and must be started manually before evaluation.
-
-# Step 3 (terminal 3): Run evaluation
-make run-eval-canvas
-
-# Or with custom parameters (default: 241s timeout, 3 missions)
+# Terminal 2: Run evaluation
 make run-eval-canvas TIMEOUT=241 NUM_MISSIONS=10
 ```
 
@@ -983,14 +986,12 @@ Canvas is a sketch-based navigation baseline that converts NavMesh shortest path
 #### Quick Start: Run Canvas Evaluation
 
 ```bash
-# Step 1 (terminal 1): Start Isaac Sim + RViz with Canvas enabled
-make run-canvas
+# Step 1: Launch the model worker on a GPU server (see costnav_isaacsim/canvas/README.md)
 
-# Step 2 (terminal 2): Start the Canvas agent (private repo)
-# The Canvas agent lives in a separate private repository (with no plan to open-source)
-# and must be started manually before evaluation.
+# Step 2 (terminal 1): Start Isaac Sim + Canvas agent
+make run-canvas MODEL_WORKER_URI=http://<gpu-server>:<MODEL_WORKER_PORT>
 
-# Step 3 (terminal 3): Run evaluation
+# Step 3 (terminal 2): Run evaluation
 make run-eval-canvas
 ```
 

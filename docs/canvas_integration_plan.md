@@ -1,6 +1,7 @@
 # CostNav → CANVAS Integration Plan
 
 > **CANVAS project page:** <https://worv-ai.github.io/canvas/>
+> **Canvas agent setup:** [`costnav_isaacsim/canvas/README.md`](../costnav_isaacsim/canvas/README.md)
 
 ## Goal
 
@@ -226,13 +227,12 @@ Automated Canvas evaluation uses the same evaluation framework as Nav2 and ViNT.
 ### Running Evaluation
 
 ```bash
-# Step 1 (terminal 1): Start Canvas (Isaac Sim + RViz)
-make run-canvas
+# Step 1: Launch the model worker on a GPU server (see costnav_isaacsim/canvas/README.md)
 
-# Step 2 (terminal 2): Start the Canvas agent (private repo)
-**The Canvas agent** must be running. The agent lives in a separate private repository (with no plan to open-source) and must be started manually before evaluation.
+# Step 2 (terminal 1): Start Isaac Sim + Canvas agent
+make run-canvas MODEL_WORKER_URI=http://<gpu-server>:<MODEL_WORKER_PORT>
 
-# Step 3 (terminal 3): Run evaluation
+# Step 3 (terminal 2): Run evaluation
 make run-eval-canvas
 ```
 

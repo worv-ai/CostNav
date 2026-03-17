@@ -517,7 +517,7 @@ Baselines integrated into the same two-node architecture (see [ROS2 Node Interfa
 - [x] **NoMaD** - Diffusion-based navigation policy (ROS2 policy node + trajectory follower; `make run-nomad`)
 - [x] **GNM** - General Navigation Model (ROS2 policy node + trajectory follower; `make run-gnm`)
 - [x] **NavDP** - End-to-end mapless navigation diffusion policy with sim-to-real transfer (`make run-navdp`)
-- [x] **Canvas** - Sketch-based navigation baseline (`make run-canvas`)
+- [x] **[Canvas](../costnav_isaacsim/canvas/README.md)** - Sketch-based navigation baseline (`make run-canvas`)
 
 **Navigation mode override:** use `GOAL_TYPE` to switch between `image_goal` and `topomap` when running a baseline.
 This auto-syncs `GOAL_IMAGE` and `IL_TOPOMAP` unless you explicitly override them.

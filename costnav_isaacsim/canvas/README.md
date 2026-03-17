@@ -1,18 +1,17 @@
-# Canvas-CostNav
+# Canvas
 
 Evaluation pipeline for CostNav using Docker Compose. This setup runs the **neural planner** and **cmd_vel_publisher** agents against a simulation (or real) environment, with a remote model worker serving inference on a GPU server.
 
 ## Architecture
 
 ```
-+------------------+         +-------------------------+
-|   GPU Server     |         |   Evaluation Host       |
-|   (e.g. H100)    |         |   (Docker Compose)      |
-|                  |  HTTP   |                         |
-|  model_worker  <----------->  neural_planner         |
-|  :MODEL_WORKER_  |         |  cmd_vel_publisher      |
-|   PORT           |         |                         |
-+------------------+         +-------+-----------------+
++------------------+         +--------------------------------------+
+|   GPU Server     |         |   Evaluation Host (make run-canvas)  |
+|                  |  HTTP   |                                      |
+|  model_worker  <----------->  neural_planner                      |
+|  :MODEL_WORKER_  |         |  cmd_vel_publisher                   |
+|   PORT           |         |  Isaac Sim + RViz                    |
++------------------+         +-------+----------------------------+-+
                                      |  ROS 2 topics
                                      v
                              +-------+-----------------+
@@ -21,18 +20,20 @@ Evaluation pipeline for CostNav using Docker Compose. This setup runs the **neur
                              +-------------------------+
 ```
 
+> **Note:** The model worker must be launched separately on a GPU server before running `make run-canvas`.
+
 ## Prerequisites
 
 - Docker & Docker Compose
 - NVIDIA GPU + NVIDIA Container Toolkit
-- ROS 2 Jazzy (bundled inside the Docker image)
+- Canvas Docker image built (see below)
 
 ## Quick Start
 
 ### 1. Build the Docker Image
 
 ```bash
-cd docker
+cd costnav_isaacsim/canvas/docker
 ./build.sh
 ```
 
@@ -45,6 +46,7 @@ IMAGE_NAME=my-registry/canvas IMAGE_TAG=v1.0 ./build.sh
 ### 2. Launch the Model Worker (GPU Server)
 
 > **Note:** A dedicated GPU server is recommended for production, but running both the simulation and model worker on the same desktop works fine — though it will degrade model inference performance due to shared GPU resources. Verified on:
+>
 > - **Motherboard:** ASUS ROG STRIX B760-G GAMING WIFI
 > - **CPU:** Intel Core i7-13700K (16 cores / 24 threads)
 > - **RAM:** 64 GB
@@ -64,7 +66,7 @@ IMAGE_NAME=my-registry/canvas IMAGE_TAG=v1.0 ./build.sh
 2. Submit via SLURM (recommended):
 
    ```bash
-   cd apps/model_workers
+   cd costnav_isaacsim/canvas/apps/model_workers
    sbatch model_worker.sbatch
    ```
 
@@ -77,37 +79,37 @@ IMAGE_NAME=my-registry/canvas IMAGE_TAG=v1.0 ./build.sh
    Alternatively, to run directly without SLURM:
 
    ```bash
-   cd apps/model_workers
+   cd costnav_isaacsim/canvas/apps/model_workers
    cp .env.pub .env
    # Edit .env to set CUDA_VISIBLE_DEVICES manually
    docker compose up
    ```
 
-### 3. Launch the Agent Services (Evaluation Host)
+### 3. Run Canvas
 
-1. Copy the environment template and configure it:
+From the repository root:
 
-   ```bash
-   cd apps/agent
-   cp .env.pub .env
-   ```
+```bash
+make run-canvas MODEL_WORKER_URI=http://<gpu-server>:<MODEL_WORKER_PORT>
+```
 
-2. Edit `.env`:
+This launches Isaac Sim, RViz, the neural planner, and the cmd_vel publisher as a single Docker Compose stack.
 
-   | Variable           | Example            | Description                                     |
-   | ------------------ | ------------------ | ----------------------------------------------- |
-   | `MODEL_WORKER_URI` | `http://<ip>:8200` | URL of the model worker (IP:port of GPU server) |
-   | `CANVAS_VERSION`   | `latest`           | Docker image tag                                |
+Optional parameters:
 
-3. Start the agent services:
+```bash
+make run-canvas MODEL_WORKER_URI=http://<gpu-server>:<MODEL_WORKER_PORT> NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True
+```
 
-   ```bash
-   docker compose up
-   ```
+### 4. Run Evaluation
 
-   This starts two ROS 2 nodes:
-   - **neural_planner** - processes sensor data, queries model worker, publishes velocity predictions
-   - **cmd_vel_publisher** - converts predictions to safe velocity commands for the robot
+```bash
+# Terminal 1
+make run-canvas MODEL_WORKER_URI=http://<gpu-server>:<MODEL_WORKER_PORT>
+
+# Terminal 2
+make run-eval-canvas TIMEOUT=241 NUM_MISSIONS=10
+```
 
 ## Configuration
 
@@ -177,30 +179,21 @@ occupied_thresh: 0.65
 free_thresh: 0.196
 ```
 
-### Customization
-
-To use a different robot or config, update the Docker Compose command:
-
-```yaml
-command: /bin/bash -c "source /opt/ros/jazzy/setup.bash && python3 neural_planner.py --config config/<your_config.yml>"
-```
-
 ## Project Structure
 
 ```
-canvas-costnav/
+costnav_isaacsim/canvas/
 ├── docker/
 │   ├── Dockerfile           # CUDA 12.8 + ROS 2 Jazzy + PyTorch 2.7.1
 │   ├── build.sh             # Build script (canvas:latest)
 │   └── ros_entrypoint.sh    # ROS 2 environment wrapper
 ├── apps/
 │   ├── agent/               # Neural planner + velocity publisher
-│   │   ├── docker-compose.yml
-│   │   ├── .env.pub         # Environment template
 │   │   ├── config/          # YAML configs
 │   │   └── maps/            # Map images + metadata
-│   └── model_workers/       # Model inference service
+│   └── model_workers/       # Model inference service (run separately)
 │       ├── docker-compose.yml
+│       ├── model_worker.sbatch
 │       └── .env.pub         # Environment template
 ├── src/canvas/              # Python package
 │   ├── agent/

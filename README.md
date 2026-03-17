@@ -51,7 +51,6 @@ cd CostNav
 make fetch-third-party # we use third-party submodules for reference or dependencies
 ```
 
-> **Note:** The `third_party/canvas-costnav` submodule is a **private repository**. If you don't have access, it will be skipped automatically during `make fetch-third-party`.
 
 ### 3. Configure environment variables
 

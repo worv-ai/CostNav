@@ -277,13 +277,17 @@ run-navdp:
 	$(DOCKER_COMPOSE) --profile navdp down
 	TOPOMAP=$(IL_TOPOMAP) GOAL_IMAGE=$(GOAL_IMAGE) ALIGN_HEADING=$(ALIGN_HEADING) GOAL_TYPE=$(GOAL_TYPE) MODEL_CHECKPOINT=$(MODEL_CHECKPOINT) $(DOCKER_COMPOSE) --profile navdp up
 
-# Run Isaac Sim with CANVAS instruction generation enabled
-# Starts Isaac Sim + RViz with canvas.enabled=true in mission config
-# Usage: make run-canvas NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True
+# Build the Canvas Docker image
+build-canvas:
+	cd costnav_isaacsim/canvas/docker && ./build.sh
+
+# Run Isaac Sim with Canvas agent (neural planner + cmd_vel publisher)
+# Requires a running model worker (launched separately on a GPU server)
+# Usage: make run-canvas MODEL_WORKER_URI=http://<gpu-server>:<MODEL_WORKER_PORT> NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True
 run-canvas:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile canvas down
-	CANVAS=True NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) $(DOCKER_COMPOSE) --profile canvas up
+	CANVAS=True MODEL_WORKER_URI=$(MODEL_WORKER_URI) NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) $(DOCKER_COMPOSE) --profile canvas up
 
 # =============================================================================
 # ROS Bag Recording Targets

@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 echo "==> Syncing submodules"
 git -C "${ROOT_DIR}" submodule sync --recursive
 
-PRIVATE_SUBMODULES=("third_party/canvas-costnav")
+PRIVATE_SUBMODULES=()
 
 echo "==> Initializing top-level submodules"
 # Build list of public submodules (exclude private ones)

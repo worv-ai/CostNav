@@ -30,4 +30,3 @@
 [submodule "third_party/diffusion_policy"]
 	path = third_party/diffusion_policy
 	url = https://github.com/real-stanford/diffusion_policy.git
-# private repository – skipped automatically for unauthorized users
