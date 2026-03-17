@@ -1,6 +1,6 @@
 [project]
 name = "canvas"
-version = "0.1.0"
+version = "1.0.0"
 description = "Inference pipeline for Canvas autonomous robot navigation"
 readme = "README.md"
 license = { text = "MIT" }

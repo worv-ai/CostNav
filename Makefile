@@ -14,7 +14,7 @@ DOCKER_COMPOSE ?= docker compose
 # Version defaults (can be overridden by .env or command line)
 ISAAC_SIM_VERSION ?= 5.1.0
 ISAAC_LAB_VERSION ?= 2.2.0
-COSTNAV_VERSION ?= 0.1.0
+COSTNAV_VERSION ?= 1.0.0
 
 # ROS configuration
 ROS_DISTRO ?= jazzy

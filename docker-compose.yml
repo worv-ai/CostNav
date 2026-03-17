@@ -1,6 +1,6 @@
 # Define a reusable block for ROS2 service configuration
 x-ros2-service: &ros2-service
-  image: costnav-ros2-jazzy:${COSTNAV_VERSION:-0.1.0}
+  image: costnav-ros2-jazzy:${COSTNAV_VERSION:-1.0.0}
   volumes:
     - ./costnav_isaacsim/nav2_params:/workspace/costnav_isaacsim/nav2_params
     - ./fastdds.xml:/workspace/fastdds.xml:ro
@@ -302,7 +302,7 @@ services:
   # ROS2 with ViNT policy
   ros2-vint:
     profiles: ["vint"]
-    image: costnav-ros2-torch:${COSTNAV_VERSION:-0.1.0}
+    image: costnav-ros2-torch:${COSTNAV_VERSION:-1.0.0}
     container_name: costnav-ros2-vint
     deploy:
       resources:
@@ -345,7 +345,7 @@ services:
   # ROS2 Trajectory Follower - MPC controller for executing IL trajectories
   ros2-trajectory-follower:
     profiles: ["vint", "gnm", "nomad", "navdp"]
-    image: costnav-ros2-torch:${COSTNAV_VERSION:-0.1.0}
+    image: costnav-ros2-torch:${COSTNAV_VERSION:-1.0.0}
     container_name: costnav-ros2-trajectory-follower
     depends_on:
       isaac-sim:
@@ -376,7 +376,7 @@ services:
   # ROS2 with NavDP policy (local inference) + trajectory follower
   ros2-navdp:
     profiles: ["navdp"]
-    image: costnav-ros2-torch:${COSTNAV_VERSION:-0.1.0}
+    image: costnav-ros2-torch:${COSTNAV_VERSION:-1.0.0}
     container_name: costnav-ros2-navdp
     deploy:
       resources:
@@ -419,7 +419,7 @@ services:
   # ROS2 with GNM policy
   ros2-gnm:
     profiles: ["gnm"]
-    image: costnav-ros2-torch:${COSTNAV_VERSION:-0.1.0}
+    image: costnav-ros2-torch:${COSTNAV_VERSION:-1.0.0}
     container_name: costnav-ros2-gnm
     deploy:
       resources:
@@ -462,7 +462,7 @@ services:
   # ROS2 with NoMaD policy
   ros2-nomad:
     profiles: ["nomad"]
-    image: costnav-ros2-torch:${COSTNAV_VERSION:-0.1.0}
+    image: costnav-ros2-torch:${COSTNAV_VERSION:-1.0.0}
     container_name: costnav-ros2-nomad
     deploy:
       resources:
@@ -540,7 +540,7 @@ services:
   # ROS2 with ViNT policy - for devcontainer development
   ros2-vint-dev:
     profiles: ["vint-dev"]
-    image: costnav-ros2-torch:${COSTNAV_VERSION:-0.1.0}
+    image: costnav-ros2-torch:${COSTNAV_VERSION:-1.0.0}
     container_name: costnav-ros2-vint-dev
     deploy:
       resources:

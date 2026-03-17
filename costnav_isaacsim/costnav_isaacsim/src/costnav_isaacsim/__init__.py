@@ -11,4 +11,4 @@ Usage:
     from costnav_isaacsim.mission_manager import MissionManager
 """
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
