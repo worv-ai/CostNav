@@ -206,7 +206,7 @@ costnav_isaacsim/canvas/
 ├── src/canvas/              # Python package
 │   ├── agent/
 │   │   ├── neural_planner/  # ROS 2 node: sensor → model → velocity
-│   │   └── cmd_vel_publisher/ # ROS 2 node: velocity → safe commands
+│   │   └── cmd_vel_publisher/ # Publishes velocity to ROS topic each timestep
 │   └── model_worker/        # FastAPI app: InternVL3 inference
 └── pyproject.toml
 ```

@@ -215,10 +215,10 @@ CostNav supports the following IL baselines, adapted from the [NavDP](https://gi
 
 | Baseline   | Paper                                     | Architecture           | Supported Tasks              |
 | ---------- | ----------------------------------------- | ---------------------- | ---------------------------- |
-| **ViNT**   | [arXiv](https://arxiv.org/abs/2306.14846) | Transformer            | ImageGoal, NoGoal            |
-| **NoMaD**  | [arXiv](https://arxiv.org/abs/2310.07896) | Diffusion              | ImageGoal, NoGoal            |
-| **GNM**    | [arXiv](https://arxiv.org/abs/2210.03370) | CNN                    | ImageGoal, NoGoal            |
-| **NavDP**  | [arXiv](https://arxiv.org/abs/2505.08712) | Diffusion + Critic     | PointGoal, ImageGoal, NoGoal |
+| **ViNT**   | [Project](https://general-navigation-models.github.io/vint/) | Transformer            | ImageGoal, NoGoal            |
+| **NoMaD**  | [Project](https://general-navigation-models.github.io/nomad/) | Diffusion              | ImageGoal, NoGoal            |
+| **GNM**    | [Project](https://general-navigation-models.github.io/) | CNN                    | ImageGoal, NoGoal            |
+| **NavDP**  | [Project](https://wzcai99.github.io/navigation-diffusion-policy.github.io/) | Diffusion + Critic     | PointGoal, ImageGoal, NoGoal |
 | **Canvas** | [Project](https://worv-ai.github.io/canvas/) | Vision-Language Action | Sketch+Language Goal         |
 
 ### Quick Start
