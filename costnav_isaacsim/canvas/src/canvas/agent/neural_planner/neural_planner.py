@@ -517,8 +517,10 @@ class NeuralPlanner(Node):
 
     def _inference_model_thread(self):
         """Wrapper that runs inference_model in the thread pool and clears the in-flight flag."""
-        self.inference_model()
-        self._inference_in_flight.clear()
+        try:
+            self.inference_model()
+        finally:
+            self._inference_in_flight.clear()
 
     def inference_model(self):
         try:

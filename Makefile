@@ -584,6 +584,10 @@ start-nucleus:
 					--nucleus-url omniverse://localhost \
 					--timeout 30" \
 			&& break; \
+			if [ $$attempt -eq 3 ]; then \
+				echo "Upload failed after 3 attempts." >&2; \
+				exit 1; \
+			fi; \
 			echo "Upload attempt $$attempt failed. Retrying..."; \
 			sleep 1; \
 		done; \
