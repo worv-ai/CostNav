@@ -1,8 +1,8 @@
 import logging
 import os
 import threading
-import time
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from copy import copy, deepcopy
 from dataclasses import dataclass
 
@@ -23,8 +23,7 @@ import rclpy
 from builtin_interfaces.msg import Time
 from geometry_msgs.msg import Point, PointStamped, Twist, TwistStamped
 from nav_msgs.msg import Odometry
-from rclpy.callback_groups import ReentrantCallbackGroup
-from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
+from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage, Image, PointCloud2, TimeReference
 from std_msgs.msg import Bool, Header, Int32MultiArray, String
@@ -87,6 +86,8 @@ class NeuralPlannerConfig:
 
     signal_reached_distance: float = 2.0
 
+    stale_msg_threshold: float = 0.5  # Warn if a sensor message is older than this many seconds
+
 
 class NeuralPlanner(Node):
     def __init__(self, config: NeuralPlannerConfig):
@@ -94,32 +95,20 @@ class NeuralPlanner(Node):
         self.config = config
         self.logger = self.get_logger()
 
-        self.group = ReentrantCallbackGroup()
-
         # initialize subscribers
-        self.create_subscription(
-            Bool, config.start_pause_topic, self.start_pause_callback, 1, callback_group=self.group
-        )
-        self.create_subscription(Bool, config.stop_model_topic, self.stop_model_callback, 1, callback_group=self.group)
-        self.create_subscription(Bool, config.exit_topic, self.exit_callback, 1, callback_group=self.group)
+        self.create_subscription(Bool, config.start_pause_topic, self.start_pause_callback, 1)
+        self.create_subscription(Bool, config.stop_model_topic, self.stop_model_callback, 1)
+        self.create_subscription(Bool, config.exit_topic, self.exit_callback, 1)
 
+        self.create_subscription(String, config.instruction_scenario_topic, self.instruction_scenario_callback, 1)
         self.create_subscription(
-            String, config.instruction_scenario_topic, self.instruction_scenario_callback, 1, callback_group=self.group
-        )
-        self.create_subscription(
-            Int32MultiArray,
-            config.instruction_annotation_topic,
-            self.instruction_annotation_callback,
-            1,
-            callback_group=self.group,
+            Int32MultiArray, config.instruction_annotation_topic, self.instruction_annotation_callback, 1
         )
 
         self._init_states()
         self.initialize_sensors(config)
 
-        self.create_subscription(
-            Bool, config.eval_resetting_topic, self.eval_resetting_callback, 1, callback_group=self.group
-        )
+        self.create_subscription(Bool, config.eval_resetting_topic, self.eval_resetting_callback, 10)
 
         # initialize publishers
         self.eval_start_publisher = self.create_publisher(Time, config.eval_start_topic, 1)
@@ -148,8 +137,7 @@ class NeuralPlanner(Node):
         self.scenario = None
         self.annotation = None
 
-        self.lock = threading.Lock()
-        self.processor_lock = threading.Lock()
+        self._processor_lock = threading.Lock()  # Guards processor access across main + inference threads
 
         self.processor = None
         self._init_processor()
@@ -161,6 +149,11 @@ class NeuralPlanner(Node):
         self.state = "init"
         self.eval_reset_in_progress = False
         self.eval_reset_done = 0
+        self.eval_reset_wait_start = None
+
+        # Thread pool for non-blocking model inference (single worker to serialize calls)
+        self._inference_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="inference")
+        self._inference_in_flight = threading.Event()  # Set while inference is running
 
         self.create_timer(1.0 / self.config.rate, self.loop)
 
@@ -181,13 +174,13 @@ class NeuralPlanner(Node):
         self.processor = CanvasOnlineProcessor(sketch_map=sketch_map)
 
     def initialize_sensors(self, config: NeuralPlannerConfig):
-        self.create_subscription(Odometry, config.odom_topic, self.odom_callback, 1, callback_group=self.group)
+        self.create_subscription(Odometry, config.odom_topic, self.odom_callback, 1)
 
         if config.rgb_image_type == "CompressedImage":
             image_type = CompressedImage
         elif config.rgb_image_type == "Image":
             image_type = Image
-        self.create_subscription(image_type, config.rgb_front_topic, self.rgb_callback, 1, callback_group=self.group)
+        self.create_subscription(image_type, config.rgb_front_topic, self.rgb_callback, 1)
 
         # cmd_vel subscriber - resolve message type
         if config.cmd_vel_msg_type == "TwistStamped":
@@ -200,9 +193,7 @@ class NeuralPlanner(Node):
             )
 
         # Subscribe to raw (pre-gain) cmd_vel for model action history input
-        self.create_subscription(
-            cmd_vel_msg_cls, config.cmd_vel_model_input_topic, self.cmd_vel_callback, 1, callback_group=self.group
-        )
+        self.create_subscription(cmd_vel_msg_cls, config.cmd_vel_model_input_topic, self.cmd_vel_callback, 1)
 
     def get_logger(self, level=logging.INFO) -> logging.Logger:
         logger = logging.getLogger("neural_planner")
@@ -222,26 +213,47 @@ class NeuralPlanner(Node):
     def _cur_stamp_sec(self) -> float:
         return self.get_clock().now().nanoseconds * 1e-9
 
+    def _warn_if_stale(self, topic: str, header: Header):
+        """Log a warning if the message timestamp is too old compared to the current clock."""
+        msg_sec = header.stamp.sec + header.stamp.nanosec * 1e-9
+        if msg_sec == 0:
+            return  # Timestamp not set
+        now_sec = self._cur_stamp_sec()
+        age = now_sec - msg_sec
+        if age < 0 or age > 1e8:
+            return  # Clock domain mismatch (e.g. sim time vs wall clock)
+        if age > self.config.stale_msg_threshold:
+            self.logger.warning(
+                f"Stale message on {topic}: age={age:.2f}s (threshold={self.config.stale_msg_threshold}s)"
+            )
+
     def start_pause_callback(self, msg: Bool):
-        with self.lock:
-            if msg.data:  # start
-                self.logger.info("Received start signal")
-                self.start()
-            else:  # pause
-                self.logger.info("Received pause signal")
-                self.pause()
+        if msg.data:  # start
+            self.logger.info("Received start signal")
+            self.start()
+        else:  # pause
+            self.logger.info("Received pause signal")
+            self.pause()
 
     def stop_model_callback(self, msg: Bool):
-        with self.lock:
-            if msg.data:
-                self.logger.info("Received stop signal")
-                self.stop()
+        if msg.data:
+            self.logger.info("Received stop signal")
+            self.stop()
 
     def stop(self):
         if self.state not in ["running", "pause"]:
             self.logger.error(f"Stop signal received but state is not running or pause. current state :{self.state}")
             return
         self.state = "stopped"
+        self.model_state_publish()
+        # Stop velocity commands
+        self.stop_publisher.publish(Bool(data=True))
+
+    def pause(self):
+        if self.state != "running":
+            self.logger.error(f"Pause signal received but state is not running. current state :{self.state}")
+            return
+        self.state = "pause"
         self.model_state_publish()
         # Stop velocity commands
         self.stop_publisher.publish(Bool(data=True))
@@ -260,15 +272,14 @@ class NeuralPlanner(Node):
         if not self.config.is_eval:
             self.logger.error("Received eval_resetting signal but is_eval is False")
             rclpy.try_shutdown()
-        with self.lock:
-            if msg.data:  # start resetting
-                self.logger.info("Received eval reset start")
-                self.eval_reset_in_progress = True
-            else:  # stop resetting
-                self.logger.info("Received eval reset end")
-                if self.eval_reset_in_progress:
-                    self.eval_reset_done += 1
-                self.eval_reset_in_progress = False
+        if msg.data:  # start resetting
+            self.logger.info("Received eval reset start")
+            self.eval_reset_in_progress = True
+        else:  # stop resetting
+            self.logger.info("Received eval reset end")
+            if self.eval_reset_in_progress:
+                self.eval_reset_done += 1
+            self.eval_reset_in_progress = False
 
     def model_state_publish(self):
         self.model_state_publisher.publish(String(data=self.state))
@@ -300,74 +311,61 @@ class NeuralPlanner(Node):
             self.new_annotation = True
 
     def set_scenario(self):
-        with self.lock:
-            self.state = "resetting"
-            # Stop velocity commands
-            self.stop_publisher.publish(Bool(data=True))
-            self.model_state_publish()
-            # Reset
-            with self.processor_lock:
-                self._init_processor()
-                annotated_scenario = AnnotatedScenario(scenario=self.scenario, annotation=self.annotation)
-                self.processor.reset(annotated_scenario)
-            self.logger.info("Annotated scenario set")
-            self._init_states()
-            # Update state
-            if not self.config.is_eval:
-                self.state = "waiting"
-                self.model_state_publish()
-                return
-
-        # lock is released
-        self.wait_for_eval_reset()
-        self.state = "waiting"
+        self.state = "resetting"
+        # Stop velocity commands
+        self.stop_publisher.publish(Bool(data=True))
         self.model_state_publish()
+        # Reset
+        with self._processor_lock:
+            self._init_processor()
+            annotated_scenario = AnnotatedScenario(scenario=self.scenario, annotation=self.annotation)
+            self.processor.reset(annotated_scenario)
+        self.logger.info("Annotated scenario set")
+        self._init_states()
+        # Update state
+        if not self.config.is_eval:
+            self.state = "waiting"
+            self.model_state_publish()
+            return
 
-    def wait_for_eval_reset(self):
-        # If eval is on, wait for 2 reset signals to start
+        # start waiting for eval reset and return
         if self.eval_reset_done > 1:
             self.logger.error("Sim Reset count is more than 1, Simulator reset multiple time")
             rclpy.try_shutdown()
-        elapsed_time = 0
-        timeout = 60
-        while elapsed_time < timeout:
-            time.sleep(0.5)
-            # If sim reset is done, break
-            if self.eval_reset_done > 0:
-                self.logger.info("Simulator reset done")
-                break
-        else:
-            self.logger.error("Timeout reached, reset count is not less than 2")
-            rclpy.try_shutdown()
-        self.eval_reset_done = 0
+            return
+        self.eval_reset_wait_start = self.get_clock().now().nanoseconds
+
+    def _is_processor_ready(self) -> bool:
+        """Check if the processor exists and has been reset."""
+        return self.processor is not None and self.processor._is_reset_called
 
     def odom_callback(self, msg: Odometry):
+        self._warn_if_stale("odom", msg.header)
         msg = copy(msg)
         self.last_odom = msg
 
-        with self.processor_lock:
-            if hasattr(self, "processor") and self.processor is not None:
+        with self._processor_lock:
+            if self._is_processor_ready():
                 self.processor.append_message(topic="GLOBAL_ODOM", msg=msg)
 
     def rgb_callback(self, msg: Image | CompressedImage):
+        self._warn_if_stale("rgb_front", msg.header)
         msg = copy(msg)
         self.last_rgb = msg
 
-        with self.processor_lock:
-            if hasattr(self, "processor") and self.processor is not None:
+        with self._processor_lock:
+            if self._is_processor_ready():
                 self.processor.append_message(topic="RGB_FRONT", msg=msg)
 
     def cmd_vel_callback(self, msg: TwistStamped | Twist):
         """Callback for cmd_vel topic to append to processor"""
-        if self.processor is None:
-            return
-        if not self.processor._is_reset_called:
+        if not self._is_processor_ready():
             return
         try:
             msg = copy(msg)
             # Twist messages don't have a header, so provide the current timestamp
             t = None if hasattr(msg, "header") else self.get_clock().now().nanoseconds
-            with self.processor_lock:
+            with self._processor_lock:
                 self.processor.append_message(topic="CMD_VEL", msg=msg, t=t)
         except Exception as e:
             self.logger.error(f"Error in cmd_vel_callback: {e}", exc_info=True)
@@ -386,16 +384,31 @@ class NeuralPlanner(Node):
         return True
 
     def loop(self):
-        if not self.state == "running":
+        # waiting for eval reset
+        if self.state == "resetting" and self.eval_reset_wait_start is not None:
+            if self.eval_reset_done > 0:
+                self.logger.info("Simulator reset done")
+                self.eval_reset_done = 0
+                self.eval_reset_wait_start = None
+                self.state = "waiting"
+                self.model_state_publish()
+                return
+            timeout = 180 * 1_000_000_000
+            cur_time = self.get_clock().now().nanoseconds
+            if cur_time - self.eval_reset_wait_start >= timeout:
+                self.logger.error("Timeout reached for waiting for eval reset")
+                rclpy.try_shutdown()
+                return
+            # continue waiting for eval reset
             return
 
-        with self.lock:
-            if not self.state == "running":
-                return
-            if not self.has_required_messages():
-                return
+        if self.state != "running":
+            return
 
-            self.odom_queue.append(deepcopy(self.last_odom))
+        if not self.has_required_messages():
+            return
+
+        self.odom_queue.append(deepcopy(self.last_odom))
 
         if self.check_reached(self.last_odom, self.config.signal_reached_distance):
             self.reached_goal_publisher.publish(Bool(data=True))
@@ -406,27 +419,19 @@ class NeuralPlanner(Node):
             self.logger.info("Reached goal")
             return
 
-        with self.lock:
-            if not self.state == "running":
-                return
-            last_predicted_delta = self._cur_stamp_sec() - self.last_predicted_time
-            if last_predicted_delta >= 0.25:
-                self.last_predicted_time = self._cur_stamp_sec()
-                self.inference_model()
-
-    def pause(self):
         if self.state != "running":
-            self.logger.error(f"Pause signal received but state is not running. current state :{self.state}")
             return
-        self.state = "pause"
-        self.model_state_publish()
-        # Stop velocity commands
-        self.stop_publisher.publish(Bool(data=True))
+        last_predicted_delta = self._cur_stamp_sec() - self.last_predicted_time
+        if last_predicted_delta >= 0.25 and not self._inference_in_flight.is_set():
+            self.last_predicted_time = self._cur_stamp_sec()
+            self._inference_in_flight.set()
+            self._inference_executor.submit(self._inference_model_thread)
 
     def get_distance_to_goal(self, odom: Odometry):
         if self.annotation is None:
             return float("inf")
-        goal_x, goal_y = self.processor.coords2pose(self.processor._trajectory_map_editor.human_trajectory[-1])
+        with self._processor_lock:
+            goal_x, goal_y = self.processor.coords2pose(self.processor._trajectory_map_editor.human_trajectory[-1])
         return np.sqrt((odom.pose.pose.position.x - goal_x) ** 2 + (odom.pose.pose.position.y - goal_y) ** 2)
 
     def check_reached(self, odom: Odometry, reached_distance: float):
@@ -510,9 +515,14 @@ class NeuralPlanner(Node):
         except Exception as e:
             self.logger.error(f"Error publishing camera visualization: {e}", exc_info=True)
 
+    def _inference_model_thread(self):
+        """Wrapper that runs inference_model in the thread pool and clears the in-flight flag."""
+        self.inference_model()
+        self._inference_in_flight.clear()
+
     def inference_model(self):
         try:
-            with self.processor_lock:
+            with self._processor_lock:
                 state = self.processor.extract_state(detail=self.config.visualize)
             state_extraction_time = self.get_clock().now().to_msg()
 
@@ -576,6 +586,7 @@ class NeuralPlanner(Node):
             self.logger.error(f"Model output error occurred: {e}", exc_info=True)
 
     def shutdown_callback(self):
+        self._inference_executor.shutdown()
         self.stop_publisher.publish(Bool(data=True))
 
 
@@ -597,7 +608,7 @@ if __name__ == "__main__":
     rclpy.init()
     sg = NeuralPlanner(config)
     try:
-        executor = MultiThreadedExecutor()
+        executor = SingleThreadedExecutor()
         executor.add_node(sg)
         executor.spin()
     except ExternalShutdownException:
