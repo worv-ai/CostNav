@@ -569,18 +569,24 @@ start-nucleus:
 	@echo ""
 	@echo "Uploading assets to Nucleus using Isaac Sim container..."
 	@if docker image inspect $(ISAAC_SIM_IMAGE) >/dev/null 2>&1; then \
-		docker run --rm \
-			--network host \
-			--entrypoint /bin/bash \
-			-v $(PWD)/assets:/workspace/assets:ro \
-			-v $(PWD)/scripts:/workspace/scripts:ro \
-			-e "OMNI_USER=$(OMNI_USER)" \
-			-e "OMNI_PASS=$(OMNI_PASS)" \
-			$(ISAAC_SIM_IMAGE) \
-			-c "PYTHONPATH=/isaac-sim/kit/extscore/omni.client.lib:\$$PYTHONPATH /isaac-sim/python.sh /workspace/scripts/assets/upload_assets_to_nucleus.py \
-				--local-path /workspace/assets \
-				--nucleus-url omniverse://localhost \
-				--timeout 120"; \
+		for attempt in 1 2 3; do \
+			echo "Upload attempt $$attempt/3..."; \
+			docker run --rm \
+				--network host \
+				--entrypoint /bin/bash \
+				-v $(PWD)/assets:/workspace/assets:ro \
+				-v $(PWD)/scripts:/workspace/scripts:ro \
+				-e "OMNI_USER=$(OMNI_USER)" \
+				-e "OMNI_PASS=$(OMNI_PASS)" \
+				$(ISAAC_SIM_IMAGE) \
+				-c "PYTHONPATH=/isaac-sim/kit/extscore/omni.client.lib:\$$PYTHONPATH /isaac-sim/python.sh /workspace/scripts/assets/upload_assets_to_nucleus.py \
+					--local-path /workspace/assets \
+					--nucleus-url omniverse://localhost \
+					--timeout 30" \
+			&& break; \
+			echo "Upload attempt $$attempt failed. Retrying..."; \
+			sleep 1; \
+		done; \
 	else \
 		echo ""; \
 		echo "WARNING: Isaac Sim image not found: $(ISAAC_SIM_IMAGE)"; \
