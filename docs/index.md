@@ -21,6 +21,8 @@
   ![CostNav Logo](assets/images/motivation2.png){ width="100%" }
 </figure>
 
+<img alt="CostNav Demo" src="assets/videos/comparison_part1.gif" style="width: 100%; max-width: 100%;" />
+
 ## :dart: Overview
 
 CostNav evaluates navigation policies with a unified cost model that captures **SLA compliance**, **operational cost**, **profitability**, and **break-even time**---not just success rate.
