@@ -86,6 +86,7 @@ nav:
     - Nav2 Baseline: nav2_baseline.md
     - IL Baselines: baselines.md
     - Teleoperation: teleop_guide.md
+    - Teleop Dataset: teleop_dataset.md
     - Topomap Pipeline: topomap_pipeline.md
     - Evaluation: evaluation.md
   - Cost Model: cost_model.md
