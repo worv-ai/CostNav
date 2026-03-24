@@ -61,20 +61,24 @@ graph LR
 
 - **[Quick Reference](quick_reference.md)**: Essential commands and configurations
 - **[Architecture Overview](architecture.md)**: Understand the codebase structure and how components work together
-- **[Environment Versions](environment_versions.md)**: Learn about v0, v1, and v2 environments and when to use each
+- **[Assets Setup](assets_setup.md)**: Download and configure Omniverse USD assets
 
 ### :brain: Core Concepts
 
+- **[Environment Versions](environment_versions.md)**: Learn about v0, v1, and v2 environments and when to use each
 - **[MDP Components](mdp_components.md)**: Deep dive into observations, actions, rewards, and terminations
 - **[Robot Configuration](robot_configuration.md)**: Detailed explanation of the COCO robot's physical properties, actuators, and sensors
 - **[Cost Model](cost_model.md)**: Understanding business metrics: SLA compliance, operational costs, and profitability
 
 ### :mortar_board: Guides
 
-- **[Training Guide](training_guide.md)**: Complete guide to training navigation policies with RL-Games and other frameworks
+- **[Isaac Sim Integration](isaacsim_guide.md)**: Docker setup, running Nav2, IL baselines, and mission management
+- **[Training (RL)](training_guide.md)**: Complete guide to training navigation policies with RL-Games and other frameworks
+- **[Baselines (IL / Nav2)](baselines.md)**: Imitation learning and rule-based navigation baselines
+- **[Teleoperation](teleop_guide.md)**: Joystick-based robot control in Isaac Sim
+- **[Topomap Pipeline](topomap_pipeline.md)**: Generate ViNT-compatible topological maps from NavMesh
 
 ### :books: Reference
 
-- **[API Reference](api.md)**: Auto-generated API documentation for all modules
 - **[Scripts Reference](scripts_reference.md)**: Comprehensive reference for all training, evaluation, and utility scripts
-- **[Food Delivery Business](references/FOOD_DELIVERY_BUSINESS.md)**: Industry data and economics for food delivery robots
+- **[Food Delivery Economics](references/FOOD_DELIVERY_BUSINESS.md)**: Industry data and economics for food delivery robots

@@ -36,12 +36,11 @@ theme:
         icon: material/brightness-4
         name: Switch to light mode
 
+exclude_docs: |
+  TODO/
+
 plugins:
   - search
-  - mkdocstrings:
-      handlers:
-        python:
-          paths: [costnav_isaaclab/source/costnav_isaaclab]
 
 markdown_extensions:
   - admonition
@@ -77,19 +76,19 @@ nav:
   - Getting Started:
     - Quick Reference: quick_reference.md
     - Architecture Overview: architecture.md
-    - Environment Versions: environment_versions.md
+    - Assets Setup: assets_setup.md
   - Core Concepts:
+    - Environment Versions: environment_versions.md
     - MDP Components: mdp_components.md
     - Robot Configuration: robot_configuration.md
     - Cost Model: cost_model.md
   - Guides:
-    - Training Guide: training_guide.md
+    - Isaac Sim Integration: isaacsim_guide.md
+    - Training (RL): training_guide.md
+    - Baselines (IL / Nav2): baselines.md
+    - Teleoperation: teleop_guide.md
+    - Topomap Pipeline: topomap_pipeline.md
   - Reference:
-    - API Reference: api.md
     - Scripts Reference: scripts_reference.md
-    - Food Delivery Business: references/FOOD_DELIVERY_BUSINESS.md
-  - Paper: paper.md
-  - Development:
-    - Contributing: contributing.md
-    - Roadmap: TODO.md
-    - Nav2 Implementation: nav2/nav2_implementation_plan.md
+    - Food Delivery Economics: references/FOOD_DELIVERY_BUSINESS.md
+  - Contributing: contributing.md
