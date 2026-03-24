@@ -83,7 +83,7 @@ make start-nucleus
     cd costnav_isaacsim/canvas/apps/model_workers
     cp .env.pub .env
     # Edit .env: set MODEL_PATH to your checkpoint directory
-    #   MODEL_PATH=<path_to>/checkpoints/canvas-costnav
+    #   MODEL_PATH=/path/to/your/CostNav/checkpoints/canvas-costnav
     docker compose --env-file .env up
     # Listens on port 8200 by default
     cd -

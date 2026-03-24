@@ -9,7 +9,8 @@ Joystick-based teleoperation for Isaac Sim robots (Nova Carter, Segway E1), publ
 
 ---
 
-## Porting Notes: ROS1 to ROS2
+<details>
+<summary>Porting Notes: ROS1 to ROS2</summary>
 
 This document describes the minimal port of `isaac_sim_ros_integration/src/isaac_sim_teleop` from ROS1 to ROS2, focusing on joystick to `/cmd_vel` functionality.
 
@@ -149,3 +150,5 @@ Ensure these ROS2 packages are installed:
 - `std_msgs`
 - `nav_msgs`
 - `rosgraph_msgs`
+
+</details>
