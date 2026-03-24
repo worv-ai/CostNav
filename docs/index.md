@@ -50,11 +50,13 @@ make fetch-third-party
 cp .env.example .env
 # Set NGC_PASS (https://org.ngc.nvidia.com/setup/api-keys)
 # Set PROJECT_ROOT as the absolute path of cloned CostNav
+# Set HF_TOKEN (https://huggingface.co/settings/tokens)
 
 make build-ros2
 make build-isaac-sim
 
-make download-assets-hf
+make download-assets-hf            # requires HF_TOKEN
+make download-baseline-checkpoints-hf  # download pretrained IL models
 make start-nucleus
 ```
 
@@ -66,11 +68,12 @@ make start-nucleus
     make run-nav2
     # Defaults: NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True TUNED=True AMCL=False
 
-    make start-mission    # start single mission
-    make run-eval-nav2    # run evaluation
+    # Then run ONE of the following:
+    make start-mission    # single mission
+    make run-eval-nav2    # batch evaluation
     ```
 
-=== "Canvas (Sketch-Based Navigation)"
+=== "Canvas (VLA Learning-Based Navigation)"
 
     ```bash
     # 1. Build the Canvas Docker image
@@ -158,25 +161,18 @@ See **[Baselines](baselines.md)** for reproduction instructions.
 
 ## :book: Documentation
 
-### :zap: Getting Started
+### :book: User Guide
 
-- **[Quick Reference](quick_reference.md)**: Essential commands and configurations
+- **[Quick Reference](quick_reference.md)**: Installation, commands, and project structure
 - **[Assets Setup](assets_setup.md)**: Download and configure Omniverse USD assets
-
-### :brain: Core Concepts
-
-- **[Cost Model](cost_model.md)**: SLA compliance, operational costs, and profitability
-
-### :mortar_board: Guides
-
-- **[Isaac Sim Integration](isaacsim_guide.md)**: Docker setup, running Nav2, IL baselines, and mission management
+- **[Isaac Sim Integration](isaacsim_guide.md)**: Docker architecture, running Nav2, IL baselines, and mission management
 - **[Baselines (IL / Nav2)](baselines.md)**: Imitation learning and rule-based navigation baselines
-- **[Teleoperation](teleop_guide.md)**: Joystick-based robot control in Isaac Sim
+- **[Teleoperation](teleop_guide.md)**: Joystick-based robot control for data collection
 - **[Topomap Pipeline](topomap_pipeline.md)**: Generate ViNT-compatible topological maps from NavMesh
 
-### :books: Reference
+### :moneybag: Cost Model
 
-- **[Food Delivery Economics](references/FOOD_DELIVERY_BUSINESS.md)**: Industry data and economics for food delivery robots
+- **[Cost Model](cost_model.md)**: CAPEX, OPEX, revenue, and break-even analysis with real-world referenced parameters
 
 ## :page_facing_up: Citation
 

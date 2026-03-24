@@ -1,474 +1,191 @@
 # :zap: Quick Reference
 
-This page provides quick commands and code snippets for common tasks in CostNav.
+Quick commands for common tasks in CostNav.
 
 ---
 
 ## :package: Installation
 
-=== ":whale: Docker (Recommended)"
+### Prerequisites
 
-    ```bash
-    # Clone repository
-    git clone https://github.com/worv-ai/CostNav.git
-    cd CostNav
+- Linux host PC (Ubuntu 24.04 preferred)
+- NVIDIA GPU with recent graphics drivers
+- Docker with NVIDIA container toolkit
 
-    # Initialize submodules
-    git submodule update --init --recursive
+### Setup
 
-    # Configure environment
-    cp .env.example .env
-    # Edit .env with your settings
+```bash
+git clone https://github.com/worv-ai/CostNav.git
+cd CostNav
+make fetch-third-party
+```
 
-    # Start Isaac Lab container
-    docker compose --profile isaac-lab up -d
+### Configure Environment
 
-    # Enter container
-    docker exec -it costnav-isaac-lab bash
-    ```
+1. Copy `.env.example` to `.env`
+2. Set `NGC_PASS` — create an API key at [NGC](https://org.ngc.nvidia.com/setup/api-keys)
+3. Set `PROJECT_ROOT` as the absolute path of cloned `CostNav`
+4. Set `HF_TOKEN` — create a token at [HuggingFace](https://huggingface.co/settings/tokens) (required for asset download)
 
-=== ":computer: Manual Installation"
+### Build
 
-    ```bash
-    # Install Isaac Lab first (see Isaac Lab docs)
+```bash
+make build-ros2
+make build-isaac-sim
+```
 
-    # Install CostNav
-    cd CostNav
-    python -m pip install -e costnav_isaaclab/source/costnav_isaaclab
-    python -m pip install -e ".[dev]"
+### Download Assets
 
-    # Verify installation
-    python costnav_isaaclab/scripts/list_envs.py
-    ```
+```bash
+make download-assets-hf            # requires HF_TOKEN
+make download-baseline-checkpoints-hf  # download pretrained IL models
+make start-nucleus
+# make stop-nucleus  # when done
+```
+
+Teleop dataset: [maum-ai/CostNav-Teleop-Dataset](https://huggingface.co/datasets/maum-ai/CostNav-Teleop-Dataset)
 
 ---
 
-## :rocket: Training
-
-### :sparkles: Quick Start
-
-=== "RL-Games"
+## :rocket: Running Nav2 (Rule-Based Navigation)
 
 ```bash
-cd costnav_isaaclab
+make run-nav2
+# Defaults: NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True TUNED=True AMCL=False
 
-# Train with default settings (vector observations only)
-python scripts/rl_games/train.py \
-    --task=Template-Costnav-Isaaclab-v2-NavRL \
-    --headless
-
-# Train with cameras (RGB-D observations)
-python scripts/rl_games/train.py \
-    --task=Template-Costnav-Isaaclab-v2-NavRL \
-    --enable_cameras \
-    --headless
+# Then run ONE of the following:
+make start-mission    # single mission
+make run-eval-nav2    # batch evaluation
 ```
 
-=== "SKRL"
-
-```bash
-cd costnav_isaaclab
-
-# Train with default settings (vector observations only)
-python scripts/skrl/train.py \
-    --task=Template-Costnav-Isaaclab-v2-NavRL \
-    --headless
-
-# Train with cameras (RGB-D observations)
-python scripts/skrl/train.py \
-    --task=Template-Costnav-Isaaclab-v2-NavRL \
-    --enable_cameras \
-    --headless
-```
-
-### :keyboard: Common Training Commands
-
-| Use Case | RL-Games | SKRL |
-|:---------|:---------|:-----|
-| Resume from checkpoint | `--resume` | `--checkpoint=PATH` |
-| More environments (faster) | `--num_envs=128` | `--num_envs=128` |
-| With visualization | Remove `--headless` | Remove `--headless` |
-| Wandb tracking | `--track` | `--track` |
-| SLURM cluster | `sbatch train.sbatch` | `sbatch train.sbatch` |
-
-??? example "Full Command Examples"
-
-=== "RL-Games"
-
-    ```bash
-    # Resume from checkpoint
-    python scripts/rl_games/train.py \
-        --task=Template-Costnav-Isaaclab-v2-NavRL \
-        --resume
-
-    # Train with more environments (faster)
-    python scripts/rl_games/train.py \
-        --task=Template-Costnav-Isaaclab-v2-NavRL \
-        --num_envs=128 \
-        --headless
-
-    # Train with visualization (slower, for debugging)
-    python scripts/rl_games/train.py \
-        --task=Template-Costnav-Isaaclab-v2-NavRL \
-        --enable_cameras
-    ```
-
-=== "SKRL"
-
-    ```bash
-    # Resume from checkpoint
-    python scripts/skrl/train.py \
-        --task=Template-Costnav-Isaaclab-v2-NavRL \
-        --checkpoint=logs/skrl/.../checkpoints/best_agent.pt
-
-    # Train with more environments (faster)
-    python scripts/skrl/train.py \
-        --task=Template-Costnav-Isaaclab-v2-NavRL \
-        --num_envs=128 \
-        --headless
-
-    # Train with visualization (slower, for debugging)
-    python scripts/skrl/train.py \
-        --task=Template-Costnav-Isaaclab-v2-NavRL \
-        --enable_cameras
-
-    # Train with wandb tracking
-    python scripts/skrl/train.py \
-        --task=Template-Costnav-Isaaclab-v2-NavRL \
-        --headless \
-        --track \
-        --wandb-project-name=costnav
-    ```
+This starts Isaac Sim with the Street Sidewalk environment and Segway E1 robot, along with the ROS2 Nav2 stack.
 
 ---
 
-## :bar_chart: Evaluation
+## :robot: Running IL Baselines
 
-### :clipboard: Evaluate Trained Policy
+CostNav supports the following IL baselines, adapted from [NavDP](https://github.com/InternRobotics/NavDP):
 
-=== "RL-Games"
+| Baseline   | Architecture           | Supported Tasks              | Run Command | Eval Command |
+|:-----------|:-----------------------|:-----------------------------|:------------|:-------------|
+| **ViNT**   | Transformer            | ImageGoal, NoGoal            | `make run-vint` | `make run-eval-vint` |
+| **NoMaD**  | Diffusion              | ImageGoal, NoGoal            | `make run-nomad` | `make run-eval-nomad` |
+| **GNM**    | CNN                    | ImageGoal, NoGoal            | `make run-gnm` | `make run-eval-gnm` |
+| **NavDP**  | Diffusion + Critic     | PointGoal, ImageGoal, NoGoal | `make run-navdp` | `make run-eval-navdp` |
+| **Canvas** | Vision-Language Action | Sketch+Language Goal         | `make run-canvas` | `make run-eval-canvas` |
 
-```bash
-# Evaluate with metrics
-python scripts/rl_games/evaluate.py \
-    --task=Template-Costnav-Isaaclab-v2-NavRL \
-    --enable_cameras \
-    --checkpoint=logs/rl_games/Template-Costnav-Isaaclab-v2-NavRL/nn/last_checkpoint.pth
-
-# Visualize policy
-python scripts/rl_games/play.py \
-    --task=Template-Costnav-Isaaclab-v2-NavRL \
-    --enable_cameras \
-    --checkpoint=logs/rl_games/Template-Costnav-Isaaclab-v2-NavRL/nn/last_checkpoint.pth
-```
-
-=== "SKRL"
+### Quick Start
 
 ```bash
-# Evaluate with metrics
-python scripts/skrl/evaluate.py \
-    --task=Template-Costnav-Isaaclab-v2-NavRL \
-    --enable_cameras \
-    --checkpoint=logs/skrl/Template-Costnav-Isaaclab-v2-NavRL/checkpoints/best_agent.pt
+# 1. Download pretrained checkpoints
+make download-baseline-checkpoints-hf
 
-# Visualize policy
-python scripts/skrl/play.py \
-    --task=Template-Costnav-Isaaclab-v2-NavRL \
-    --enable_cameras \
-    --checkpoint=logs/skrl/Template-Costnav-Isaaclab-v2-NavRL/checkpoints/best_agent.pt
+# 2. Build docker image
+make build-ros2-torch
 
-# Use last checkpoint (instead of best)
-python scripts/skrl/evaluate.py \
-    --task=Template-Costnav-Isaaclab-v2-NavRL \
-    --enable_cameras \
-    --use_last_checkpoint
+# 3. Run (example: ViNT)
+# Terminal 1: Start the ViNT stack
+make run-vint
+
+# Terminal 2: Run evaluation
+make run-eval-vint
 ```
 
-### :balance_scale: Baseline Comparisons
+### :art: Canvas (VLA Learning-Based Navigation)
 
-| Baseline | Command |
-|:---------|:--------|
-| :zero: Zero agent | `python scripts/zero_agent.py --task=Template-Costnav-Isaaclab-v2-NavRL` |
-| :game_die: Random agent | `python scripts/random_agent.py --task=Template-Costnav-Isaaclab-v2-NavRL` |
-| :robot: Deterministic | `python scripts/test_controller.py --task=Template-Costnav-Isaaclab-v2-NavRL` |
+```bash
+# 1. Build the Canvas Docker image
+make build-canvas
+
+# 2. Launch the model worker on a GPU server
+cd costnav_isaacsim/canvas/apps/model_workers
+cp .env.pub .env
+# Edit .env: set MODEL_PATH to your checkpoint directory
+docker compose --env-file .env up
+cd -
+
+# 3. Start Isaac Sim + Canvas agent
+make run-canvas
+# Default: MODEL_WORKER_URI=http://localhost:8200
+
+# 4. Run evaluation
+make run-eval-canvas
+```
+
+See **[Baselines](baselines.md)** for detailed Canvas model worker setup.
 
 ---
 
-## :mag: Monitoring
-
-### :chart_with_upwards_trend: TensorBoard
-
-=== "RL-Games"
+## :joystick: Running Teleop (Data Collection)
 
 ```bash
-# Start TensorBoard
-tensorboard --logdir costnav_isaaclab/logs/rl_games --port 6006
+make run-teleop
+# Defaults: NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True TOPOMAP=True
 
-# Open in browser: http://localhost:6006
+make run-rosbag       # start rosbag record
+make start-mission    # start single mission
+make stop-rosbag      # stop rosbag record when mission is completed
+make run-eval-teleop  # run evaluation
 ```
 
-=== "SKRL"
-
-```bash
-# Start TensorBoard
-tensorboard --logdir costnav_isaaclab/logs/skrl --port 6006
-
-# Open in browser: http://localhost:6006
-```
-
-### :dart: Key Metrics to Watch
-
-| Metric | Description | Target |
-|:-------|:------------|:-------|
-| `rewards/iter` | Total reward per iteration | :arrow_up: Increasing |
-| `Episode/arrive_rate` | Success rate | :arrow_up: > 50% |
-| `Episode/collision_rate` | Collision rate | :arrow_down: < 10% |
-| `losses/kl` | Policy change magnitude | :wavy_dash: < 0.02 |
-| `cost_model/sla_compliance` | SLA compliance rate | :arrow_up: > 70% |
+> **Tip:** Press **Ctrl+C once** to stop teleop. The teardown runs automatically — do not press Ctrl+C again while containers are being cleaned up.
 
 ---
 
-## :hammer_and_wrench: Testing and Debugging
+## :file_folder: Project Structure
 
-### :white_check_mark: Verify Environment Setup
-
-```bash
-# List all environments
-python scripts/list_envs.py
-
-# Test controller
-python scripts/test_controller.py --task=Template-Costnav-Isaaclab-v2-NavRL
-
-# Test rewards
-python scripts/test_v2_rewards.py --task=Template-Costnav-Isaaclab-v2-NavRL
+```
+CostNav/
+├── costnav_isaacsim/
+│   ├── costnav_isaacsim/          # Isaac Sim simulation & mission management
+│   ├── canvas/                    # Canvas sketch-based navigation agent
+│   ├── il_training/               # IL data processing + model training
+│   ├── il_evaluation/             # IL inference + ROS2 policy nodes
+│   ├── isaac_sim_teleop_ros2/     # ROS2 teleoperation package
+│   └── nav2_params/               # Nav2 launch files & parameters
+├── Dockerfile                     # Isaac Sim & Isaac Lab (multi-stage)
+├── Dockerfile.ros                 # ROS2 Jazzy (teleop + nav2)
+├── Dockerfile.ros_torch           # ROS2 Jazzy + PyTorch (IL evaluation)
+└── docker-compose.yml
 ```
 
-### :eye: Debug Observations
+### Component Environments
 
-```python
-# In Python
-import gymnasium as gym
-env = gym.make("Template-Costnav-Isaaclab-v2-NavRL", num_envs=1)
-obs, info = env.reset()
-
-# Check observation shape
-print(f"Observation shape: {obs['policy'].shape}")
-
-# Check observation values
-print(f"Observation min: {obs['policy'].min()}")
-print(f"Observation max: {obs['policy'].max()}")
-print(f"Observation mean: {obs['policy'].mean()}")
-```
-
-### :moneybag: Debug Rewards
-
-```python
-# Enable reward printing in config
-rewards:
-    print_rewards = RewTerm(
-        func=mdp.print_rewards,
-        weight=0.0,
-        params={"print_every_n_steps": 10},
-    )
-```
-
----
-
-## :gear: Configuration
-
-### :balance_scale: Modify Reward Weights
-
-Edit `costnav_isaaclab_env_cfg.py`:
-
-```python
-@configclass
-class RewardsCfg:
-    # Increase arrival reward
-    arrived_reward = RewTerm(
-        func=loc_mdp.is_terminated_term,
-        weight=30000.0,  # Changed from 20000.0
-        params={"term_keys": "arrive"}
-    )
-
-    # Increase collision penalty
-    collision_penalty = RewTerm(
-        func=loc_mdp.is_terminated_term,
-        weight=-500.0,  # Changed from -200.0
-        params={"term_keys": "collision"}
-    )
-```
-
-### :eye: Modify Observation Space
-
-Edit `costnav_isaaclab_env_cfg.py`:
-
-```python
-@configclass
-class ObservationsCfg:
-    @configclass
-    class PolicyCfg(ObsGroup):
-        # Add new observation
-        robot_height = ObsTerm(func=mdp.base_pos_z)
-
-        # Modify existing observation
-        pose_command = ObsTerm(
-            func=mdp.pose_command_2d,
-            params={"command_name": "pose_command"},
-            scale=10.0,  # Changed from 5.0
-        )
-```
-
-### :joystick: Modify Action Space
-
-Edit `coco_robot_cfg.py`:
-
-```python
-# Change velocity limits
-max_velocity = 6.0  # Changed from 4.0
-
-# Change steering limits
-max_steering_angle = 50 * torch.pi / 180  # Changed from 40°
-```
-
----
-
-## :world_map: Safe Position Management
-
-### :mag: Generate Safe Positions
-
-```bash
-cd costnav_isaaclab/source/costnav_isaaclab/costnav_isaaclab/tasks/manager_based/costnav_isaaclab_v2_NavRL
-
-# Generate with visualization
-python find_safe_positions.py --visualize_raycasts
-
-# Generate without visualization (faster)
-python find_safe_positions.py
-```
-
-### :white_check_mark: Validate Safe Positions
-
-```bash
-# Validate existing positions
-python safe_area_validator.py
-
-# Check for collisions
-python check_impulse.py
-```
+| Component               | Runtime                | Notes                                          |
+|:------------------------|:-----------------------|:-----------------------------------------------|
+| `costnav_isaacsim`      | NVIDIA Isaac Sim 5.1.0 | Requires NGC + GPU                             |
+| `canvas`                | ROS2 Jazzy + PyTorch   | GPU inference                                  |
+| `il_training`           | Bare-metal / SLURM     | CPU-only for data processing; GPU for training |
+| `il_evaluation`         | ROS2 Jazzy + PyTorch   | GPU inference                                  |
+| `isaac_sim_teleop_ros2` | ROS2 Jazzy             | Joystick teleoperation                         |
+| `nav2_params`           | ROS2 Jazzy             | Launch files only                              |
 
 ---
 
 ## :rotating_light: Common Issues
 
-### :x: "No module named 'isaaclab'"
+### :x: Nucleus server won't start
 
 ??? solution "Solution"
     ```bash
-    # Ensure Isaac Lab is in Python path
-    export PYTHONPATH=/path/to/isaac-lab/source:$PYTHONPATH
-
-    # Or use the compatibility layer (already included in CostNav)
+    make stop-nucleus
+    make start-nucleus
     ```
 
 ### :boom: "CUDA out of memory"
 
 ??? solution "Solution"
+    Reduce `NUM_PEOPLE` or ensure no other GPU processes are running:
     ```bash
-    # Reduce number of environments
-    python scripts/rl_games/train.py --task=... --num_envs=32
-
-    # Disable cameras
-    python scripts/rl_games/train.py --task=... # Remove --enable_cameras
-
-    # Use smaller image resolution (edit config)
+    make run-nav2 NUM_PEOPLE=5
     ```
 
-### :warning: "Reward is NaN"
+### :warning: Docker containers not cleaning up
 
 ??? solution "Solution"
     ```bash
-    # Test reward function
-    python scripts/test_v2_rewards.py --task=Template-Costnav-Isaaclab-v2-NavRL
-
-    # Check for division by zero in reward functions
-    # Check observation normalization is enabled
+    docker compose down --remove-orphans
     ```
-
-### :zzz: "Policy not learning"
-
-??? solution "Solution"
-    1. Verify reward function: `python scripts/test_v2_rewards.py`
-    2. Check observations are informative (not constant)
-    3. Try simpler task first (v0 or v1)
-    4. Reduce learning rate or increase minibatch size
-    5. Check for NaN/Inf in logs
-
----
-
-## :memo: Code Snippets
-
-### :moneybag: Custom Reward Function
-
-```python
-# In mdp/rewards.py
-def my_custom_reward(env: ManagerBasedRLEnv) -> torch.Tensor:
-    """Custom reward function."""
-    robot = env.scene["robot"]
-
-    # Get robot velocity
-    velocity = robot.data.root_lin_vel_b[:, 0]
-
-    # Reward forward motion
-    reward = velocity.clamp(min=0.0)
-
-    return reward
-
-# In costnav_isaaclab_env_cfg.py
-@configclass
-class RewardsCfg:
-    my_reward = RewTerm(func=mdp.my_custom_reward, weight=1.0)
-```
-
-### :eye: Custom Observation
-
-```python
-# In mdp/observations.py
-def my_custom_observation(env: ManagerBasedEnv) -> torch.Tensor:
-    """Custom observation function."""
-    robot = env.scene["robot"]
-
-    # Get robot height
-    height = robot.data.root_pos_w[:, 2]
-
-    return height.unsqueeze(-1)
-
-# In costnav_isaaclab_env_cfg.py
-@configclass
-class ObservationsCfg:
-    @configclass
-    class PolicyCfg(ObsGroup):
-        robot_height = ObsTerm(func=mdp.my_custom_observation)
-```
-
-### :stop_sign: Custom Termination
-
-```python
-# In mdp/terminations.py
-def my_custom_termination(env: ManagerBasedRLEnv) -> torch.Tensor:
-    """Custom termination condition."""
-    robot = env.scene["robot"]
-
-    # Terminate if robot is too high
-    height = robot.data.root_pos_w[:, 2]
-    too_high = height > 2.0
-
-    return too_high
-
-# In costnav_isaaclab_env_cfg.py
-@configclass
-class TerminationsCfg:
-    my_termination = DoneTerm(func=mdp.my_custom_termination)
-```
 
 ---
 
@@ -476,7 +193,9 @@ class TerminationsCfg:
 
 | Resource | Link |
 |:---------|:-----|
-| :octocat: GitHub | [github.com/worv-ai/CostNav](https://github.com/worv-ai/CostNav) |
+| :fontawesome-brands-github: GitHub | [github.com/worv-ai/CostNav](https://github.com/worv-ai/CostNav) |
 | :book: Documentation | [worv-ai.github.io/CostNav](https://worv-ai.github.io/CostNav) |
-| :green_book: Isaac Lab | [isaac-sim.github.io/IsaacLab](https://isaac-sim.github.io/IsaacLab) |
 | :robot: Isaac Sim | [developer.nvidia.com/isaac-sim](https://developer.nvidia.com/isaac-sim) |
+| :package: Sim Assets | [maum-ai/CostNav](https://huggingface.co/datasets/maum-ai/CostNav) |
+| :floppy_disk: Teleop Dataset | [maum-ai/CostNav-Teleop-Dataset](https://huggingface.co/datasets/maum-ai/CostNav-Teleop-Dataset) |
+| :brain: Baseline Models | [maum-ai/CostNav_baseline](https://huggingface.co/maum-ai/CostNav_baseline) |

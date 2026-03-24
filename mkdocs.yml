@@ -65,6 +65,12 @@ markdown_extensions:
       alternate_style: true
   - pymdownx.tasklist:
       custom_checkbox: true
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
 
 extra:
   social:
@@ -73,16 +79,12 @@ extra:
 
 nav:
   - Home: index.md
-  - Getting Started:
+  - User Guide:
     - Quick Reference: quick_reference.md
     - Assets Setup: assets_setup.md
-  - Core Concepts:
-    - Cost Model: cost_model.md
-  - Guides:
     - Isaac Sim Integration: isaacsim_guide.md
     - Baselines (IL / Nav2): baselines.md
     - Teleoperation: teleop_guide.md
     - Topomap Pipeline: topomap_pipeline.md
-  - Reference:
-    - Food Delivery Economics: references/FOOD_DELIVERY_BUSINESS.md
+  - Cost Model: cost_model.md
   - Contributing: contributing.md

@@ -1,6 +1,6 @@
-# :handshake: Contributing to CostNav
+# :handshake: Contributing
 
-We welcome contributions to CostNav! This document provides guidelines for contributing to the project.
+Help us build a large-scale, ever-expanding benchmark! We highly encourage contributions via issues and pull requests, especially adding more navigation baselines.
 
 ---
 
@@ -9,102 +9,102 @@ We welcome contributions to CostNav! This document provides guidelines for contr
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/amazing-feature`
 3. Make your changes
-4. Commit your changes: `git commit -m 'Add amazing feature'`
-5. Push to the branch: `git push origin feature/amazing-feature`
-6. Open a Pull Request
+4. Run pre-commit checks: `pre-commit run --all-files`
+5. Commit and push
+6. Open a Pull Request using our [PR template](#pull-request-format)
+
+---
+
+## :white_check_mark: Pre-commit Hooks
+
+The project uses [pre-commit](https://pre-commit.com/) with Ruff for linting and formatting.
+
+```bash
+# Install hooks
+./scripts/setup-pre-commit.sh
+
+# Run manually
+pre-commit run --all-files
+
+# Format code
+ruff check --fix
+ruff format
+```
+
+!!! info "Pre-push Hooks"
+    Pre-push hooks run `ruff check` and `ruff format --check` before pushing. If blocked, fix the reported issues and try again.
+
+---
+
+## :page_facing_up: Pull Request Format
+
+Use our PR template with the following title format:
+
+```
+[Priority Emoji] [Pattern]: Brief description
+```
+
+| Emoji | Meaning |
+|:------|:--------|
+| :fire: | New feature implementation |
+| :rocket: | Urgent fix |
+| :test_tube: | Experimental / refactor |
+| :memo: | Documentation / configuration |
+| :zap: | Cleanup / refactor |
+
+**Examples:**
+
+- `:fire: Add: domain adaptation module with adversarial training`
+- `:rocket: Fix: urgent data collection script for demo`
+- `:memo: Docs: update README with installation instructions`
+
+### PR Checklist
+
+- [ ] :dart: Purpose: New feature / Bug fix / Docs / Refactoring
+- [ ] :repeat: Reproduce: Execution commands included
+- [ ] :bar_chart: Changes: Summary of main changes
+- [ ] :test_tube: Testing: Verified locally
+- [ ] :thinking: Review Focus: Areas where feedback is needed
 
 ---
 
 ## :memo: Documentation
 
-We use [MkDocs](https://www.mkdocs.org/) with the [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/) theme for our documentation.
+We use [MkDocs](https://www.mkdocs.org/) with [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/).
 
-### :computer: Running Documentation Locally
+```bash
+# Install dependencies
+pip install mkdocs-material pymdown-extensions
 
-To run the documentation locally, you need to have `uv` installed.
-
-=== "Using uv"
-
-    ```bash
-    # Install dependencies
-    uv pip install -e ".[dev]"
-
-    # Serve the documentation
-    mkdocs serve
-    ```
-
-=== "Using pip"
-
-    ```bash
-    # Install dependencies
-    pip install mkdocs-material mkdocstrings[python] pymdown-extensions
-
-    # Serve the documentation
-    mkdocs serve
-    ```
-
-This will start a local server at `http://127.0.0.1:8000/`. The documentation will automatically reload when you make changes.
-
-### :pencil: Writing Documentation
+# Serve locally
+mkdocs serve
+```
 
 | Location | Content |
 |:---------|:--------|
 | `docs/` | All documentation files |
 | `mkdocs.yml` | Documentation configuration |
-| Docstrings | API documentation (auto-generated) |
-
-!!! tip "Markdown Features"
-    We support many Markdown extensions including:
-
-    - :white_check_mark: Admonitions (`!!! note`)
-    - :white_check_mark: Code tabs (`=== "Tab 1"`)
-    - :white_check_mark: Mermaid diagrams (` ```mermaid `)
-    - :white_check_mark: Emoji (`:rocket:`)
-    - :white_check_mark: Task lists (`- [x] Done`)
 
 ---
 
-## :computer: Code Contributions
+## :dart: Roadmap
 
-### :art: Coding Standards
+### Completed
 
-| Aspect | Standard |
-|:-------|:---------|
-| Formatter | [Ruff](https://docs.astral.sh/ruff/) |
-| Linter | [Ruff](https://docs.astral.sh/ruff/) |
-| Type hints | Required for public APIs |
-| Docstrings | Google style |
+- [x] Paper release
+- [x] Isaac Sim assets release
+- [x] Nav2 support for rule-based navigation
+- [x] Cost formula and reference sheet
+- [x] Collected dataset with teleoperation
+- [x] Imitation learning baselines
 
-### :test_tube: Running Tests
+### Coming Soon
 
-```bash
-# Run all tests
-uv run pytest
-
-# Run with coverage
-uv run pytest --cov=costnav_isaaclab --cov-report=xml
-```
-
-### :white_check_mark: Pre-commit Checks
-
-```bash
-# Install pre-commit and pre-push hooks
-./scripts/setup-pre-commit.sh
-
-# Format code
-ruff check --fix
-ruff format
-
-# Run pre-push checks manually
-pre-commit run --hook-stage pre-push --all-files
-
-# Run tests
-uv run pytest
-```
-
-!!! info "Pre-push Hooks"
-    The project includes pre-push hooks that run `ruff check` and `ruff format --check` before pushing.
-    If the push is blocked, fix the reported issues and try again.
+- [ ] Diverse maps and robot platforms
+- [ ] Expanded scenarios testing robustness under challenging conditions
+- [ ] Cost-aware reward shaping for RL training
+- [ ] Cloud inference cost modeling for VLA policies
+- [ ] Open challenges for the community to beat baselines
 
 ---
 
@@ -112,12 +112,12 @@ uv run pytest
 
 When reporting bugs, please include:
 
-- [ ] :computer: Operating system and version
-- [ ] :snake: Python version
-- [ ] :robot: Isaac Sim and Isaac Lab versions
-- [ ] :page_facing_up: Complete error message/traceback
-- [ ] :repeat: Steps to reproduce
-- [ ] :crystal_ball: Expected vs actual behavior
+- [ ] Operating system and version
+- [ ] Python version
+- [ ] Isaac Sim version
+- [ ] Complete error message / traceback
+- [ ] Steps to reproduce
+- [ ] Expected vs actual behavior
 
 ---
 
@@ -125,19 +125,6 @@ When reporting bugs, please include:
 
 When suggesting features, please include:
 
-- [ ] :dart: Clear description of the feature
-- [ ] :question: Problem it solves
-- [ ] :memo: Example use cases
-- [ ] :art: Mockups or diagrams (if applicable)
-
----
-
-## :shield: Code of Conduct
-
-Please be respectful and constructive in all interactions. We're all here to build something great together!
-
----
-
-## :pray: Thank You!
-
-Thank you for considering contributing to CostNav. Your contributions help make this project better for everyone!
+- [ ] Clear description of the feature
+- [ ] Problem it solves
+- [ ] Example use cases
