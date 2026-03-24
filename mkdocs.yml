@@ -89,4 +89,5 @@ nav:
     - Topomap Pipeline: topomap_pipeline.md
     - Evaluation: evaluation.md
   - Cost Model: cost_model.md
+  - Third-Party References: third_party.md
   - Contributing: contributing.md
