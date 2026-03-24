@@ -246,7 +246,7 @@ See **[Evaluation](evaluation.md)** for the unified eval script, collected metri
 
 1. **GNM**: Shah et al., "[GNM: A General Navigation Model to Drive Any Robot](https://general-navigation-models.github.io/)", ICRA 2023
 2. **ViNT**: Shah et al., "[ViNT: A Foundation Model for Visual Navigation](https://general-navigation-models.github.io/vint/)", CoRL 2023
-3. **NoMaD**: Sridhar et al., "[NoMaD: Goal Masking Diffusion Policies for Navigation and Exploration](https://general-navigation-models.github.io/nomad/)", 2023
+3. **NoMaD**: Sridhar et al., "[NoMaD: Goal Masking Diffusion Policies for Navigation and Exploration](https://general-navigation-models.github.io/nomad/)", ICRA 2025
 4. **NavDP**: Cai et al., "[NavDP: Learning Sim-to-Real Navigation Diffusion Policy](https://wzcai99.github.io/navigation-diffusion-policy.github.io/)", 2025
 5. **CANVAS**: Choi et al., "[CANVAS: Commonsense-Aware Navigation System](https://worv-ai.github.io/canvas/)", ICRA 2025
 
