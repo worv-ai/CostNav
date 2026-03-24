@@ -1,6 +1,6 @@
 # CostNav
 
-<img width="3200" height="1344" alt="image" src="https://github.com/user-attachments/assets/dd16349c-5126-415d-9d34-38c3e7137d9e" />
+<img alt="CostNav Logo" src="docs/assets/images/motivation2.png" />
 
 <div align="center">
   <a href="https://arxiv.org/abs/2511.20216"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2511.20216-b31b1b.svg?style=flat"></a>
@@ -25,12 +25,12 @@ CostNav introduces a **paradigm shift** in how we evaluate navigation systems: f
 Our key contributions are:
 
 1. **High-Fidelity Physics Simulation with Dynamics for effective Real-World Economic Scenarios.**
-    * Supporting Segway E1 delivery robot, food cargo dynamics with popcorn, detailed collision dynamics, pedestrians
+   - Supporting Segway E1 delivery robot, food cargo dynamics with popcorn, detailed collision dynamics, pedestrians
 1. **Real-world referenced Cost-Revenue Model with Break-Even Point Analysis.**
-    * Supporting Energy Cost, Pedestrian Safety Cost, Property Damage Cost, Repair Cost
+   - Supporting Energy Cost, Pedestrian Safety Cost, Property Damage Cost, Repair Cost
 1. **Rule-Based and Learning-Based Navigation Evaluation with Multiple IL Baselines**
-    * Comparing Profitability between Nav2 with GPS and Nav2 with AMCL localization
-    * IL Baselines: ViNT, GNM, NoMaD, NavDP, and CANVAS
+   - Comparing Profitability between Nav2 with GPS and Nav2 with AMCL localization
+   - IL Baselines: ViNT, GNM, NoMaD, NavDP, and CANVAS
 
 You can find more details in our [technical report](https://arxiv.org/abs/2511.20216).
 
@@ -38,28 +38,29 @@ The full cost benchmark formula with real world references is available in our g
 
 ## Media
 
+<video src="docs/assets/videos/comparison_part1.mp4" controls></video>
+
 ### Navigation Comparison
 
-
-https://github.com/user-attachments/assets/3393a8ce-edab-4940-aa4a-1301c544651e
+<video src="docs/assets/videos/comparison_part2.mp4" controls></video>
 
 Side-by-side comparison of rule-based and learning-based navigation methods in CostNav's urban sidewalk environment.
 
-
 ### Physics Simulation
 
-
-https://github.com/user-attachments/assets/7c61f56f-e23f-444b-a3ef-54653f38f397
+<video src="docs/assets/videos/costnav_popcorn.mp4" controls></video>
 
 CostNav's high-fidelity physics simulation enables the modeling of real-world economic scenarios, including critical failures like food spoilage and robot rollovers.
 
 ### Benchmark Comparison
-<img width="1414" height="376" alt="bench_comparison" src="https://github.com/user-attachments/assets/c0d132f5-3c11-427f-9408-e2e8b232d5eb" />
+
+<img alt="Benchmark Comparison" src="docs/assets/images/bench_comparison.png" />
 
 Comparison of existing navigation benchmarks (UnrealZoo, OpenBench, Arena-RosNav, Urban-Sim, DeliveryBench) that focus on task-oriented metrics versus CostNav's integration of physics simulation with comprehensive economic cost modeling.
 
 ### Economic Model
-<img width="2523" height="1044" alt="figure2 drawio" src="https://github.com/user-attachments/assets/6c1083d7-361c-42ca-b6d3-8b57ee413bcf" />
+
+<img alt="Economic Model" src="docs/assets/images/figure2.drawio.png" />
 
 CostNav's framework linking navigation performance to business value through profit-per-run measurement.
 
@@ -213,13 +214,13 @@ For detailed setup, see [`costnav_isaacsim/canvas/README.md`](costnav_isaacsim/c
 
 CostNav supports the following IL baselines, adapted from the [NavDP](https://github.com/InternRobotics/NavDP) benchmark:
 
-| Baseline   | Paper                                     | Architecture           | Supported Tasks              |
-| ---------- | ----------------------------------------- | ---------------------- | ---------------------------- |
-| **ViNT**   | [Project](https://general-navigation-models.github.io/vint/) | Transformer            | ImageGoal, NoGoal            |
-| **NoMaD**  | [Project](https://general-navigation-models.github.io/nomad/) | Diffusion              | ImageGoal, NoGoal            |
-| **GNM**    | [Project](https://general-navigation-models.github.io/) | CNN                    | ImageGoal, NoGoal            |
+| Baseline   | Paper                                                                       | Architecture           | Supported Tasks              |
+| ---------- | --------------------------------------------------------------------------- | ---------------------- | ---------------------------- |
+| **ViNT**   | [Project](https://general-navigation-models.github.io/vint/)                | Transformer            | ImageGoal, NoGoal            |
+| **NoMaD**  | [Project](https://general-navigation-models.github.io/nomad/)               | Diffusion              | ImageGoal, NoGoal            |
+| **GNM**    | [Project](https://general-navigation-models.github.io/)                     | CNN                    | ImageGoal, NoGoal            |
 | **NavDP**  | [Project](https://wzcai99.github.io/navigation-diffusion-policy.github.io/) | Diffusion + Critic     | PointGoal, ImageGoal, NoGoal |
-| **Canvas** | [Project](https://worv-ai.github.io/canvas/) | Vision-Language Action | Sketch+Language Goal         |
+| **Canvas** | [Project](https://worv-ai.github.io/canvas/)                                | Vision-Language Action | Sketch+Language Goal         |
 
 ### Quick Start
 
