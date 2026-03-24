@@ -160,6 +160,23 @@ CostNav/
 | `isaac_sim_teleop_ros2` | ROS2 Jazzy             | Joystick teleoperation                         |
 | `nav2_params`           | ROS2 Jazzy             | Launch files only                              |
 
+### Docker Compose Profiles
+
+| Profile     | Services                           | Command              | Use Case                       |
+|:------------|:-----------------------------------|:---------------------|:-------------------------------|
+| `nav2`      | Isaac Sim + ROS2 Nav2              | `make run-nav2`      | Full navigation stack          |
+| `isaac-sim` | Isaac Sim only                     | `make run-isaac-sim` | Simulation development         |
+| `ros2`      | ROS2 Nav2 only                     | `make run-ros2`      | Nav2 tuning (requires sim)     |
+| `teleop`    | Isaac Sim + Teleop                 | `make run-teleop`    | Manual driving (joystick)      |
+| `vint`      | Isaac Sim + ViNT Policy + Follower | `make run-vint`      | ViNT IL baseline evaluation    |
+| `canvas`    | Isaac Sim + RViz + Canvas Bridge   | `make run-canvas`    | Canvas VLA navigation          |
+
+```bash
+# Direct docker compose usage
+docker compose --profile nav2 up
+docker compose --profile nav2 down
+```
+
 ---
 
 ## :rotating_light: Common Issues

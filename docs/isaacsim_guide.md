@@ -1,166 +1,14 @@
 # :joystick: Isaac Sim Integration Guide
 
-The `costnav_isaacsim` module provides a **simulation bridge** between NVIDIA Isaac Sim and ROS2, a **rule-based Nav2 baseline**, **imitation learning baselines** (ViNT, NoMaD, GNM, NavDP, Canvas), and a **multi-container Docker architecture** that separates simulation from navigation for modularity.
+The `costnav_isaacsim` module provides a **simulation bridge** between NVIDIA Isaac Sim and ROS2, with a **multi-container Docker architecture** that separates simulation from navigation for modularity.
 
----
-
-## :white_check_mark: Prerequisites
-
-- **Docker** with NVIDIA Container Toolkit
-- **NVIDIA GPU** with driver **525.60.11+**
-- **X11 display forwarding** configured on the host
-
----
-
-## :hammer_and_wrench: Building Docker Images
-
-```bash
-# Isaac Sim container
-make build-isaac-sim
-
-# ROS2 Nav2 runtime container
-make build-ros2
-
-# ROS2 + PyTorch container (for IL baseline evaluation)
-make build-ros2-torch
-```
-
----
-
-## :rocket: Running Navigation Stacks
-
-### Nav2 (Rule-Based)
-
-```bash
-# Run Isaac Sim + ROS2 Nav2 together
-make run-nav2
-
-# With animated people in the scene
-make run-nav2 NUM_PEOPLE=20
-
-# Trigger a mission (in a second terminal)
-make start-mission
-```
-
-This launches the Street Sidewalk environment with Nova Carter, the full Nav2 stack (AMCL, planner, controller, costmaps), and optionally animated pedestrians.
-
-### IL Baselines (ViNT, NoMaD, GNM, NavDP, Canvas)
-
-Download pretrained checkpoints first:
-
-```bash
-make download-baseline-checkpoints-hf
-```
-
-Run any baseline:
-
-```bash
-make run-vint
-make run-nomad
-make run-gnm
-make run-navdp
-```
-
-Override the goal type or model checkpoint:
-
-```bash
-GOAL_TYPE=image_goal MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
-GOAL_TYPE=topomap MODEL_CHECKPOINT=checkpoints/vint.pth make run-vint
-```
-
-Run automated evaluation with metrics collection:
-
-```bash
-make run-eval-vint
-make run-eval-vint TIMEOUT=30 NUM_MISSIONS=20
-
-make run-eval-nomad
-make run-eval-gnm
-make run-eval-navdp
-```
-
-**Canvas** (sketch-based navigation) requires a separate model worker:
-
-```bash
-# Build Canvas image (one-time)
-make build-canvas
-
-# Start Isaac Sim + Canvas agent
-make run-canvas MODEL_WORKER_URI=http://<gpu-server>:<port>
-
-# Automated evaluation
-make run-eval-canvas TIMEOUT=241 NUM_MISSIONS=10
-```
-
-### Teleop (Joystick Control)
-
-```bash
-make run-teleop
-make run-teleop SIM_ROBOT=nova_carter NUM_PEOPLE=20
-make run-teleop SIM_ROBOT=segway_e1 NUM_PEOPLE=20
-```
-
-!!! tip
-    Press ++ctrl+c++ once to stop teleop. The teardown runs automatically -- do not press it again while containers are being cleaned up.
-
-### Running Services Separately
-
-```bash
-# Terminal 1: Isaac Sim only
-make run-isaac-sim
-
-# Terminal 2: ROS2 Nav2 only (after Isaac Sim is ready)
-make run-ros2
-```
-
----
-
-## :whale: Docker Compose Profiles
-
-| Profile     | Services                           | Command              | Use Case                       |
-| ----------- | ---------------------------------- | -------------------- | ------------------------------ |
-| `nav2`      | Isaac Sim + ROS2 Nav2              | `make run-nav2`      | Full navigation stack          |
-| `isaac-sim` | Isaac Sim only                     | `make run-isaac-sim` | Simulation development         |
-| `ros2`      | ROS2 Nav2 only                     | `make run-ros2`      | Nav2 tuning (requires sim)     |
-| `teleop`    | Isaac Sim + Teleop                 | `make run-teleop`    | Manual driving (joystick)      |
-| `vint`      | Isaac Sim + ViNT Policy + Follower | `make run-vint`      | ViNT IL baseline evaluation    |
-| `canvas`    | Isaac Sim + RViz + Canvas Bridge   | `make run-canvas`    | Canvas sketch-based navigation |
-
-You can also use profiles directly with Docker Compose:
-
-```bash
-docker compose --profile nav2 up
-docker compose --profile nav2 down
-```
-
----
-
-## :people_holding_hands: Animated People (PeopleAPI)
-
-CostNav supports spawning animated pedestrians using NVIDIA's PeopleAPI extension.
-
-**Features:**
-
-- Natural NavMesh-based walking with dynamic avoidance
-- Configurable count via `NUM_PEOPLE` environment variable (default: 20)
-- Random spawning distributed across all NavMesh-enabled areas
-
-**Requirements:**
-
-- The USD scene must have a baked NavMesh
-- PeopleAPI extension (auto-loaded from `third_party/PeopleAPI/exts`)
-- Isaac Sim built-in character assets
-
-```bash
-make run-nav2 NUM_PEOPLE=10
-make run-teleop NUM_PEOPLE=5
-```
+For running specific stacks, see: **[Baselines](baselines.md)** | **[Teleoperation](teleop_guide.md)** | **[Quick Reference](quick_reference.md)**
 
 ---
 
 ## :dart: Mission Manager
 
-The mission manager orchestrates automated navigation missions with NavMesh-based position sampling and RViz visualization.
+The mission manager orchestrates automated navigation missions with NavMesh-based position sampling, food spoilage tracking, injury cost estimation, and RViz visualization.
 
 ### Triggering Missions
 
@@ -170,25 +18,50 @@ make start-mission
 
 # Via ROS2 service
 ros2 service call /start_mission std_srvs/srv/Trigger {}
+
+# Skip current mission
+ros2 service call /skip_mission std_srvs/srv/Trigger {}
+
+# Query mission result
+ros2 service call /get_mission_result std_srvs/srv/Trigger {}
 ```
 
-Each call runs a single mission. Calling it while a mission is running restarts with a new mission.
+Each call runs a single mission. Calling `/start_mission` while a mission is running restarts with a new mission.
 
 ### Configuration
 
-Missions are configured via `config/mission_config.yaml`:
+Missions are configured via `costnav_isaacsim/costnav_isaacsim/config/mission_config.yaml`:
 
 ```yaml
 mission:
-  timeout: 3600.0          # Mission timeout (seconds)
+  timeout: null            # No timeout (set float e.g. 3600.0 for 1 hour)
+
 distance:
-  min: 5.0                 # Minimum start-goal distance (meters)
-  max: 50.0                # Maximum start-goal distance (meters)
+  min: 20.0                # Minimum start-goal distance (meters)
+  max: 1000.0              # Maximum start-goal distance (meters)
+
 sampling:
-  max_attempts: 100        # Max attempts to sample valid positions
-  validate_path: true      # Validate navigable path exists
+  max_attempts: 100        # Max attempts to find valid start/goal pair
+  validate_path: true      # Require valid navigable path
+  edge_margin: 1.0         # Min distance from navmesh edges (meters)
+
 nav2:
   wait_time: 10.0          # Wait for Nav2 initialization (seconds)
+  initial_pose_delay: 2.0  # Delay after setting initial pose (seconds)
+
+food:
+  enabled: true            # Enable food spoilage evaluation
+  spoilage_threshold: 0.05 # 5% loss allowed before failure
+
+injury:
+  enabled: true            # Enable pedestrian injury cost estimation
+  method: "delta_v"        # delta-v based AIS injury model
+  robot_mass: 50.0         # Robot mass in kg
+
+manager:
+  teleport_settle_steps: 30           # Physics settle steps after teleport
+  clear_costmaps_on_mission_start: true
+  align_initial_heading_to_path: false
 ```
 
 Override via CLI:
@@ -197,22 +70,87 @@ Override via CLI:
 python launch.py --mission-timeout 600 --min-distance 10.0 --max-distance 100.0
 ```
 
+Override timeout at runtime:
+
+```bash
+ros2 topic pub /set_mission_timeout std_msgs/msg/Float64 "{data: 300.0}"
+```
+
 ### State Machine
 
-The manager steps through these states each simulation tick:
+```mermaid
+graph TD
+    subgraph Init["1. Initialization"]
+        direction LR
+        A[INIT] --> B[WAITING_FOR_NAV2] --> C[WAITING_FOR_START]
+    end
 
-| #  | State                      | Description                                      |
-| -- | -------------------------- | ------------------------------------------------ |
-| 1  | `INIT`                     | Initialize ROS2 node, NavMesh sampler, markers   |
-| 2  | `WAITING_FOR_NAV2`         | Wait for Nav2 stack readiness                    |
-| 3  | `WAITING_FOR_START`        | Wait for `/start_mission` trigger                |
-| 4  | `READY`                    | Sample start/goal positions from NavMesh         |
-| 5  | `TELEPORTING`              | Teleport robot to start position                 |
-| 6  | `SETTLING`                 | Wait for physics to settle (5 steps)             |
-| 7  | `PUBLISHING_INITIAL_POSE`  | Publish initial pose to `/initialpose` for AMCL  |
-| 8  | `PUBLISHING_GOAL`          | Publish goal pose to `/goal_pose` for Nav2       |
-| 9  | `WAITING_FOR_COMPLETION`   | Monitor navigation progress                      |
-| 10 | `COMPLETED`                | Mission finished                                 |
+    subgraph Setup["2. Mission Setup"]
+        direction LR
+        D[READY] --> E[TELEPORTING] --> F[SETTLING]
+    end
+
+    subgraph Setup2["3. Pose & Costmap"]
+        direction LR
+        G[PUB_INITIAL_POSE] --> H[CLEARING_COSTMAPS]
+    end
+
+    subgraph Goal["4. Goal Dispatch"]
+        direction LR
+        I{Goal Type}
+        I -->|Nav2 / IL| PG[PUB_GOAL]
+        I -->|Topomap| LT[LOADING_TOPOMAP] --> PG
+        I -->|CANVAS| LC[LOADING_CANVAS] --> PG
+    end
+
+    subgraph Exec["5. Execution & Evaluation"]
+        direction LR
+        J["WAITING_FOR_COMPLETION
+        (tracks: impulse, delta-v,
+        contacts, food, orientation)"]
+    end
+
+    C -->|/start_mission| D
+    F --> G
+    H --> I
+    PG --> J
+    J -->|next mission| C
+    J -->|all done| K[COMPLETED]
+
+    style Init fill:#e0e0e0,color:#000
+    style Setup fill:#e8f5e9,color:#000
+    style Setup2 fill:#e8f5e9,color:#000
+    style Goal fill:#e8eaf6,color:#000
+    style Exec fill:#fff3e0,color:#000
+    style I fill:#7c4dff,color:#fff
+    style K fill:#009688,color:#fff
+```
+
+| Phase | State | Description |
+|:------|:------|:------------|
+| **Init** | `INIT` | Initialize ROS2 node, NavMesh sampler, evaluation manager, markers |
+| | `WAITING_FOR_NAV2` | Wait for Nav2 stack readiness |
+| | `WAITING_FOR_START` | Wait for `/start_mission` trigger |
+| **Setup** | `READY` | Sample start/goal positions from NavMesh; reset eval counters |
+| | `TELEPORTING` | Teleport robot to start position |
+| | `SETTLING` | Wait for physics to settle (30 steps); setup food tracking & contact reporting |
+| | `PUBLISHING_INITIAL_POSE` | Publish initial pose to `/initialpose` for AMCL |
+| | `CLEARING_COSTMAPS` | Clear Nav2 global/local costmaps (best-effort, 2s timeout) |
+| **Goal** | `PUBLISHING_GOAL` | Publish goal pose to `/goal_pose` for Nav2 |
+| | `LOADING_TOPOMAP` | Wait for policy node to reload [topomap](topomap_pipeline.md) (if topomap enabled) |
+| | `LOADING_CANVAS` | Wait for CANVAS planner ready (if canvas enabled, 15s timeout) |
+| **Exec** | `WAITING_FOR_COMPLETION` | Monitor navigation; **continuously tracks**: collision impulse, delta-v, pedestrian/property contacts, food piece count, robot orientation |
+| | `COMPLETED` | All missions finished; final eval results available via `/get_mission_result` |
+
+### Mission Results
+
+| Result | Condition |
+|:-------|:----------|
+| `SUCCESS` | Robot reached goal within tolerance (default: 2.0m) |
+| `FAILURE_TIMEOUT` | Mission timeout exceeded |
+| `FAILURE_PHYSICALASSISTANCE` | Robot fell (tilt > 0.5 rad) or impulse health depleted |
+| `FAILURE_FOODSPOILED` | Food loss exceeded spoilage threshold (default: 5%) |
+| `SKIPPED` | Mission skipped via `/skip_mission` service |
 
 ### RViz Markers
 
@@ -234,12 +172,40 @@ Set the RViz fixed frame to `map` and add Marker displays for each topic.
 | `/chassis/odom`                | `nav_msgs/Odometry`       | Robot odometry |
 | `/tf`, `/tf_static`            | `tf2_msgs/TFMessage`      | Transform tree |
 | `/front_3d_lidar/lidar_points` | `sensor_msgs/PointCloud2` | 3D LiDAR data |
+| `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image` | Front camera image |
 
 ### Subscribed by Isaac Sim
 
 | Topic      | Type                  | Description                 |
 | ---------- | --------------------- | --------------------------- |
-| `/cmd_vel` | `geometry_msgs/Twist` | Velocity commands from Nav2 |
+| `/cmd_vel` | `geometry_msgs/Twist` | Velocity commands            |
+
+### Mission Manager Publishers
+
+| Topic | Type | Description |
+|-------|------|-------------|
+| `/initialpose` | `PoseWithCovarianceStamped` | AMCL initial pose |
+| `/goal_pose` | `PoseStamped` | Nav2 navigation goal |
+| `/model_enable` | `Bool` | Enable/disable IL policy node |
+| `/trajectory_follower_enable` | `Bool` | Enable/disable trajectory follower |
+| `/goal_image` | `Image` | Goal camera image (if enabled) |
+| `/start_marker` | `Marker` | RViz start position |
+| `/goal_marker` | `Marker` | RViz goal position |
+
+### Mission Manager Subscribers
+
+| Topic | Type | Description |
+|-------|------|-------------|
+| `/chassis/odom` | `Odometry` | Robot position/orientation tracking |
+| `/set_mission_timeout` | `Float64` | Dynamic timeout configuration |
+
+### Mission Manager Services
+
+| Service | Type | Description |
+|---------|------|-------------|
+| `/start_mission` | `Trigger` | Start a new mission |
+| `/skip_mission` | `Trigger` | Skip current mission |
+| `/get_mission_result` | `Trigger` | Query mission result (JSON in message) |
 
 ### Nav2 Topics
 
@@ -251,7 +217,7 @@ Set the RViz fixed frame to `map` and add Marker displays for each topic.
 | `/global_costmap/costmap` | `nav_msgs/OccupancyGrid`   | Global costmap |
 | `/plan`                   | `nav_msgs/Path`             | Global path    |
 
-### ViNT-Specific Topics
+### IL Baseline Topics
 
 | Topic               | Type                | Direction | Description                        |
 | ------------------- | ------------------- | --------- | ---------------------------------- |
@@ -259,45 +225,61 @@ Set the RViz fixed frame to `map` and add Marker displays for each topic.
 | `/model_enable`     | `std_msgs/Bool`     | Subscribe | Enable/disable policy execution    |
 | `/goal_image`       | `sensor_msgs/Image` | Subscribe | Goal image for ImageGoal mode      |
 
----
+### CANVAS Topics (if enabled)
 
-## :compass: Sending Navigation Goals
+| Topic | Type | Description |
+|-------|------|-------------|
+| `/instruction_scenario` | `String` | Scenario JSON |
+| `/instruction_annotation` | `Int32MultiArray` | Pixel-space trajectory annotation |
+| `/start_pause` | `Bool` | Start/pause CANVAS planner |
+| `/stop_model` | `Bool` | Stop CANVAS model |
+| `/reached_goal` | `Bool` | CANVAS goal reached signal |
+| `/model_state` | `String` | CANVAS model state |
 
-### Via RViz2
+### Sending Navigation Goals
 
-1. Launch the nav2 profile: `make run-nav2`
-2. Open RViz2 in the ROS2 container
-3. Click **2D Goal Pose** and click on the map to set the goal
+Each stack receives goals differently. The mission manager handles this automatically based on the active profile.
 
-### Via Command Line
+=== "Nav2 (Rule-Based)"
 
-```bash
-ros2 topic pub /goal_pose geometry_msgs/PoseStamped \
-  "{header: {frame_id: 'map'}, pose: {position: {x: 5.0, y: 3.0, z: 0.0}, orientation: {w: 1.0}}}"
-```
+    Nav2 receives a goal pose via `/goal_pose`:
 
-### Via Python
+    ```bash
+    # Via RViz2: Click "2D Goal Pose" on the map
+    # Via CLI:
+    ros2 topic pub /goal_pose geometry_msgs/PoseStamped \
+      "{header: {frame_id: 'map'}, pose: {position: {x: 5.0, y: 3.0, z: 0.0}, orientation: {w: 1.0}}}"
+    ```
 
-```python
-from nav2_simple_commander.robot_navigator import BasicNavigator
-from geometry_msgs.msg import PoseStamped
+=== "IL Baselines (ViNT, NoMaD, GNM)"
 
-navigator = BasicNavigator()
-navigator.waitUntilNav2Active()
+    Receive a **goal image** captured at the goal position via `/goal_image`, or use a **topomap** (sequence of images along the NavMesh path). The mission manager publishes the goal image automatically when `goal_image.enabled: true`.
 
-goal_pose = PoseStamped()
-goal_pose.header.frame_id = 'map'
-goal_pose.pose.position.x = 5.0
-goal_pose.pose.position.y = 3.0
-goal_pose.pose.orientation.w = 1.0
+    ```bash
+    # Enable goal image mode
+    python launch.py --goal-image-enabled true
 
-navigator.goToPose(goal_pose)
-navigator.waitUntilTaskComplete()
-```
+    # Or use topomap mode
+    python launch.py --topomap-enabled true
+    ```
+
+=== "NavDP"
+
+    Receives both a **goal pose** via `/goal_pose` (point goal) and a **goal image** via `/goal_image`, then fuses them using point+image blending (`point_image_blend_alpha`, default: 0.5). Also uses DepthAnything for depth estimation.
+
+=== "CANVAS"
+
+    Receives a **scenario** (sketch + language instruction) via `/instruction_scenario` and a pixel-space **trajectory annotation** via `/instruction_annotation`. The mission manager generates these from the NavMesh shortest path when `canvas.enabled: true`.
+
+    ```bash
+    python launch.py --canvas-enabled true
+    ```
 
 ---
 
 ## :gear: launch.py Reference
+
+### Simulation
 
 | Argument            | Default                      | Description                               |
 | ------------------- | ---------------------------- | ----------------------------------------- |
@@ -308,11 +290,27 @@ navigator.waitUntilTaskComplete()
 | `--rendering_dt`    | `1/30` (0.0333s)             | Rendering timestep                        |
 | `--debug`           | `false`                      | Enable debug logging                      |
 | `--people`          | `20`                         | Number of animated people to spawn        |
+
+### Mission
+
+| Argument            | Default                      | Description                               |
+| ------------------- | ---------------------------- | ----------------------------------------- |
 | `--config`          | `config/mission_config.yaml` | Path to mission config file               |
-| `--mission-timeout` | (from config)                | Override mission timeout                  |
-| `--min-distance`    | (from config)                | Override minimum start-goal distance      |
-| `--max-distance`    | (from config)                | Override maximum start-goal distance      |
-| `--nav2-wait`       | (from config)                | Override Nav2 wait time                   |
+| `--mission-timeout` | (from config)                | Override mission timeout (seconds)        |
+| `--min-distance`    | (from config)                | Override minimum start-goal distance (m)  |
+| `--max-distance`    | (from config)                | Override maximum start-goal distance (m)  |
+| `--nav2-wait`       | (from config)                | Override Nav2 wait time (seconds)         |
+
+### Features
+
+| Argument                       | Default | Description                               |
+| ------------------------------ | ------- | ----------------------------------------- |
+| `--food-enabled`               | (config) | Enable food spoilage evaluation           |
+| `--food-spoilage-threshold`    | (config) | Fraction of pieces allowed to lose        |
+| `--goal-image-enabled`         | (config) | Enable goal image for ViNT ImageGoal      |
+| `--topomap-enabled`            | (config) | Enable NavMesh-based topomap generation   |
+| `--canvas-enabled`             | (config) | Enable CANVAS instruction generation      |
+| `--align-initial-heading-to-path` | (config) | Align start heading to NavMesh path    |
 
 `--robot` defaults to the `SIM_ROBOT` environment variable when set.
 
@@ -322,15 +320,20 @@ navigator.waitUntilTaskComplete()
 
 ### Common Issues
 
-| Issue                                  | Solution                                                    |
-| -------------------------------------- | ----------------------------------------------------------- |
-| Isaac Sim fails to start               | Check GPU drivers and NVIDIA Container Toolkit installation |
-| ROS2 container starts before sim ready | Use `make run-nav2` (has health check dependency)           |
-| No ROS2 topics visible                 | Verify `ROS_DOMAIN_ID` matches between containers           |
-| Map not loading                        | Check Omniverse server connectivity                         |
-| Robot not moving                       | Verify `/cmd_vel` is being published                        |
-| People not spawning                    | Check that NavMesh is baked in the USD scene                |
-| People not moving                      | Verify NavMesh is enabled and baked correctly               |
+| Issue | Solution |
+|:------|:---------|
+| Isaac Sim fails to start | Check GPU drivers and NVIDIA Container Toolkit installation |
+| ROS2 container starts before sim ready | Use `make run-nav2` (has health check dependency) |
+| No ROS2 topics visible | Verify `ROS_DOMAIN_ID` matches between containers |
+| Map not loading | Check Omniverse Nucleus server connectivity (`make start-nucleus`) |
+| Robot not moving | Verify `/cmd_vel` is being published |
+| People not spawning | Check that NavMesh is baked in the USD scene |
+| Robot falls after teleport | Increase `manager.teleport_settle_steps` in config |
+| CANVAS planner not ready | Check model worker is running, increase `canvas.planner_ready_timeout` |
+| Nav2 costmap clear fails | Install `nav2_msgs` package (warning only, mission continues) |
+| Food spoilage not detected | Ensure `food.enabled: true` and robot is `segway_e1` |
+| Goal image capture fails | Ensure `omni.replicator` is available in Isaac Sim |
+| Topomap path validation fails | Check NavMesh coverage, or set `sampling.validate_path: false` |
 
 ### Debug Commands
 
@@ -345,6 +348,9 @@ ros2 run tf2_tools view_frames
 # Check Nav2 status
 ros2 lifecycle list /bt_navigator
 ros2 service call /bt_navigator/get_state lifecycle_msgs/srv/GetState
+
+# Check mission result
+ros2 service call /get_mission_result std_srvs/srv/Trigger
 
 # View container logs
 docker logs costnav-isaac-sim

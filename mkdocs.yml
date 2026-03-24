@@ -83,8 +83,10 @@ nav:
     - Quick Reference: quick_reference.md
     - Assets Setup: assets_setup.md
     - Isaac Sim Integration: isaacsim_guide.md
-    - Baselines (IL / Nav2): baselines.md
+    - Nav2 Baseline: nav2_baseline.md
+    - IL Baselines: baselines.md
     - Teleoperation: teleop_guide.md
     - Topomap Pipeline: topomap_pipeline.md
+    - Evaluation: evaluation.md
   - Cost Model: cost_model.md
   - Contributing: contributing.md

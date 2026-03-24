@@ -8,40 +8,26 @@ The pipeline queries the NavMesh for the shortest path between two positions, in
 
 ### Pipeline Steps
 
-```
-Start/Goal positions
-        │
-        ▼
-┌──────────────────────┐
-│  NavMesh shortest    │  query_shortest_path() → sparse waypoints (turns/corners)
-│  path query          │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│  Waypoint            │  interpolate_waypoints() → dense waypoints every 0.5 m
-│  interpolation       │  with heading = atan2(Δy, Δx)
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│  Virtual camera      │  setup_camera() → USD Camera prim + Replicator annotator
-│  setup               │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│  Image capture loop  │  For each waypoint:
-│                      │    1. Move camera to (x, y, z + offset)
-│                      │    2. Set orientation from heading
-│                      │    3. Step simulation (render flush)
-│                      │    4. Save RGB as {i}.png
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│  Cleanup             │  Remove camera prim, release render resources
-└──────────────────────┘
+```mermaid
+graph TD
+    A["Start/Goal Positions"] --> B["NavMesh Shortest Path Query"]
+    B --> C["Waypoint Interpolation"]
+    C --> D["Virtual Camera Setup"]
+    D --> E["Image Capture Loop"]
+    E --> F["Cleanup"]
+
+    B -.- B1["query_shortest_path()<br/>→ sparse waypoints (turns/corners)"]
+    C -.- C1["interpolate_waypoints()<br/>→ dense waypoints every 0.5 m<br/>heading = atan2(Δy, Δx)"]
+    D -.- D1["setup_camera()<br/>→ USD Camera prim + Replicator annotator"]
+    E -.- E1["For each waypoint:<br/>1. Move camera to (x, y, z + offset)<br/>2. Set orientation from heading<br/>3. Step simulation (render flush)<br/>4. Save RGB as {i}.png"]
+    F -.- F1["Remove camera prim,<br/>release render resources"]
+
+    style A fill:#009688,color:#fff
+    style B fill:#4db6ac,color:#fff
+    style C fill:#4db6ac,color:#fff
+    style D fill:#4db6ac,color:#fff
+    style E fill:#4db6ac,color:#fff
+    style F fill:#4db6ac,color:#fff
 ```
 
 ## Enable via Makefile

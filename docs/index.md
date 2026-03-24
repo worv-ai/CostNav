@@ -165,10 +165,12 @@ See **[Baselines](baselines.md)** for reproduction instructions.
 
 - **[Quick Reference](quick_reference.md)**: Installation, commands, and project structure
 - **[Assets Setup](assets_setup.md)**: Download and configure Omniverse USD assets
-- **[Isaac Sim Integration](isaacsim_guide.md)**: Docker architecture, running Nav2, IL baselines, and mission management
-- **[Baselines (IL / Nav2)](baselines.md)**: Imitation learning and rule-based navigation baselines
+- **[Isaac Sim Integration](isaacsim_guide.md)**: Mission manager, ROS2 topics, and launch.py reference
+- **[Nav2 Baseline](nav2_baseline.md)**: Rule-based navigation with ROS2 Nav2
+- **[IL Baselines](baselines.md)**: ViNT, NoMaD, GNM, NavDP, and CANVAS
 - **[Teleoperation](teleop_guide.md)**: Joystick-based robot control for data collection
 - **[Topomap Pipeline](topomap_pipeline.md)**: Generate ViNT-compatible topological maps from NavMesh
+- **[Evaluation](evaluation.md)**: Unified eval script, metrics, and log output
 
 ### :moneybag: Cost Model
 

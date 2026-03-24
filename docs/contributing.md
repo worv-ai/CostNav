@@ -100,11 +100,15 @@ mkdocs serve
 
 ### Coming Soon
 
-- [ ] Diverse maps and robot platforms
-- [ ] Expanded scenarios testing robustness under challenging conditions
+- [ ] Diverse maps (suburban, rural, port, orchard) beyond urban sidewalk
+- [ ] Additional robot platforms (different form factors, price points)
+- [ ] Various sensor configurations (stereo cameras, depth cameras, mmWave radar, ultrasonic)
+- [ ] Different hardware tiers (budget RGB-only vs. premium multi-sensor suites)
+- [ ] Expanded scenarios testing robustness under challenging conditions (rain, night, crowds)
 - [ ] Cost-aware reward shaping for RL training
 - [ ] Cloud inference cost modeling for VLA policies
-- [ ] Open challenges for the community to beat baselines
+- [ ] On-device vs. cloud inference cost comparison
+- [ ] Open challenges and leaderboard for the community to beat baselines
 
 ---
 

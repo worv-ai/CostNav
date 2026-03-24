@@ -1,6 +1,6 @@
-# :compass: Navigation Baselines
+# :compass: IL Baselines
 
-CostNav provides both **learning-based** (imitation learning) and **rule-based** (Nav2) navigation baselines for benchmarking sidewalk robot policies.
+CostNav provides **learning-based** (imitation learning) navigation baselines for benchmarking sidewalk robot policies. For rule-based navigation, see **[Nav2 Baseline](nav2_baseline.md)**.
 
 ---
 
@@ -8,38 +8,76 @@ CostNav provides both **learning-based** (imitation learning) and **rule-based**
 
 ### Supported Algorithms
 
-| Algorithm | Type | Framework | Goal Support |
-|-----------|------|-----------|-------------|
-| **NavDP** | Diffusion Policy | NavDP | Point, Image, Pixel, No-Goal, Mixed |
-| **ViNT** | Visual Transformer | visualnav-transformer | Image, No-Goal |
-| **NoMaD** | Diffusion Model | visualnav-transformer | Image, No-Goal |
-| **GNM** | General Navigation | visualnav-transformer | Image, No-Goal |
-| **CANVAS** | Sketch-based | canvas | Point Goal |
+| Algorithm  | Type               | Framework             | Goal Support                        |
+| ---------- | ------------------ | --------------------- | ----------------------------------- |
+| **NavDP**  | Diffusion Policy   | NavDP                 | Point, Image, Pixel, No-Goal, Mixed |
+| **ViNT**   | Visual Transformer | visualnav-transformer | Image, No-Goal                      |
+| **NoMaD**  | Diffusion Model    | visualnav-transformer | Image, No-Goal                      |
+| **GNM**    | General Navigation | visualnav-transformer | Image, No-Goal                      |
+| **CANVAS** | Sketch-based       | canvas                | Point Goal                          |
 
 ### Architecture
 
-All IL baselines share a **two-node ROS2 architecture**:
+#### ViNT / NoMaD / GNM / NavDP
 
-- **Policy Node** (~10 Hz): Runs model inference, publishes trajectory
-- **Trajectory Follower Node** (~20 Hz): MPC controller tracking the trajectory
+Two-node ROS2 architecture with local model inference:
 
+```mermaid
+graph LR
+    subgraph Isaac["Isaac Sim Container"]
+        SIM["Physics Sim\nRobot + ROS2 Bridge"]
+    end
+
+    subgraph IL["IL Container (ROS2 Jazzy)"]
+        PN["Policy Node\n~10 Hz\n(model inference)"]
+        TF["Trajectory Follower\n~20 Hz\n(MPC controller)"]
+        PN -->|/model_trajectory| TF
+    end
+
+    SIM -->|"/camera, /odom"| PN
+    TF -->|/cmd_vel| SIM
+
+    style Isaac fill:#76B900,color:#fff
+    style IL fill:#1565c0,color:#fff
 ```
-Isaac Sim Container              IL Container (ROS2 Jazzy)
-┌────────────────────┐          ┌────────────────────────────────┐
-│ Physics sim        │          │ policy_node (~10Hz)            │
-│ Robot + ROS2 Bridge│◄────────►│ trajectory_follower_node (~20Hz)│
-└────────────────────┘          └────────────────────────────────┘
-         ROS2 Topics (via ROS_DOMAIN_ID)
+
+#### CANVAS
+
+Three-node architecture with remote VLA inference:
+
+```mermaid
+graph LR
+    subgraph Isaac["Isaac Sim Container"]
+        SIM["Physics Sim\nRobot + ROS2 Bridge"]
+    end
+
+    subgraph Canvas["Canvas Container (ROS2 Jazzy)"]
+        NP["Neural Planner\n(sends HTTP requests)"]
+        CV["cmd_vel_publisher\n(action → velocity)"]
+        NP -->|/vel_predict| CV
+    end
+
+    subgraph GPU["GPU Server"]
+        MW["Model Worker\n(VLA inference)\nport 8200"]
+    end
+
+    SIM -->|"/camera, /odom"| NP
+    NP <-->|HTTP| MW
+    CV -->|/cmd_vel| SIM
+
+    style Isaac fill:#76B900,color:#fff
+    style Canvas fill:#1565c0,color:#fff
+    style GPU fill:#e65100,color:#fff
 ```
 
 **Key ROS2 Topics:**
 
-| Topic | Type | Direction | Description |
-|-------|------|-----------|-------------|
-| `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image` | Isaac Sim → Policy | Camera images |
-| `/chassis/odom` | `nav_msgs/Odometry` | Isaac Sim → Policy | Robot odometry |
-| `/cmd_vel` | `geometry_msgs/Twist` | Policy → Isaac Sim | Velocity commands |
-| `/model_trajectory` | `nav_msgs/Path` | Internal | Policy → Trajectory Follower |
+| Topic                                 | Type                  | Direction          | Description                  |
+| ------------------------------------- | --------------------- | ------------------ | ---------------------------- |
+| `/front_stereo_camera/left/image_raw` | `sensor_msgs/Image`   | Isaac Sim → Policy | Camera images                |
+| `/chassis/odom`                       | `nav_msgs/Odometry`   | Isaac Sim → Policy | Robot odometry               |
+| `/cmd_vel`                            | `geometry_msgs/Twist` | Policy → Isaac Sim | Velocity commands            |
+| `/model_trajectory`                   | `nav_msgs/Path`       | Internal           | Policy → Trajectory Follower |
 
 ### Running IL Baselines
 
@@ -120,7 +158,7 @@ Download pretrained checkpoints first:
 make download-baseline-checkpoints-hf
 ```
 
-Train models:
+Train models (ViNT, NoMaD, GNM, NavDP):
 
 ```bash
 cd CostNav/costnav_isaacsim
@@ -132,6 +170,10 @@ uv run python -m il_training.training.train_vint \
 # Train NoMaD
 uv run python -m il_training.training.train_vint \
     --config il_training/training/visualnav_transformer/configs/nomad_costnav.yaml
+
+# Train NavDP
+uv run python -m il_training.training.train_navdp \
+    --config il_training/training/configs/navdp_costnav.yaml
 ```
 
 For SLURM cluster training:
@@ -140,55 +182,50 @@ For SLURM cluster training:
 cd costnav_isaacsim/il_training/scripts/
 sbatch train_vint.sbatch
 sbatch train_nomad.sbatch
+sbatch train_navdp.sbatch
 ```
 
-### NavDP HTTP Server Mode
+!!! warning "CANVAS Training Not Open-Sourced"
+CANVAS training code is not included in this repository. Only pretrained checkpoints and the inference pipeline (model worker + agent) are provided.
 
-NavDP also supports a **decoupled HTTP-based architecture** for evaluation, where policies run on separate GPUs:
+### NavDP Data Processing
+
+NavDP requires a separate data processing step to convert teleoperation data into its LeRobot-compatible format with DepthAnything depth estimation:
 
 ```bash
-# Start policy server
-cd third_party/NavDP/baselines/navdp
-python navdp_server.py --port 8888 --checkpoint ./checkpoints/model.ckpt
+cd CostNav/costnav_isaacsim
 
-# Run evaluation
-cd third_party/NavDP
-python eval_pointgoal_wheeled.py \
-    --scene_dir ./asset_scenes/cluttered_easy \
-    --num_envs 4 \
-    --port 8888
+# Convert MediaRef bags to NavDP format (with DepthAnything depth)
+uv run python -m il_training.data_processing.process_data.process_mediaref_bags \
+    --config data_processing/configs/navdp_processing_config.yaml
 ```
 
-**API Endpoints:**
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/navigator_reset` | POST | Initialize agent with camera intrinsics and batch size |
-| `/pointgoal_step` | POST | Point goal navigation step |
-| `/imagegoal_step` | POST | Image goal navigation step |
-| `/nogoal_step` | POST | Exploration step (no goal) |
+NavDP training uses point+image fusion with DepthAnything-generated depth maps, 24-step trajectory prediction, and 8-frame context windows.
 
 ### Baseline Comparison
 
-| Feature | ViNT | NoMaD | GNM | NavDP |
-|---------|------|-------|-----|-------|
-| **Architecture** | Transformer | Diffusion | CNN | Diffusion + Critic |
-| **Goal Support** | Image, NoGoal | Image, NoGoal | Image, NoGoal | Point, Image, Pixel |
-| **Trajectory Length** | 8 waypoints | 8 waypoints | 5 waypoints | 24 waypoints |
-| **Context Frames** | 5 | 5 | 5 | 8 |
+| Feature               | ViNT          | NoMaD         | GNM           | NavDP               |
+| --------------------- | ------------- | ------------- | ------------- | ------------------- |
+| **Architecture**      | Transformer   | Diffusion     | CNN           | Diffusion + Critic  |
+| **Goal Support**      | Image, NoGoal | Image, NoGoal | Image, NoGoal | Point, Image, Pixel |
+| **Trajectory Length** | 8 waypoints   | 8 waypoints   | 5 waypoints   | 24 waypoints        |
+| **Context Frames**    | 5             | 5             | 5             | 8                   |
 
 ### Heading Alignment
 
-IL baselines (ViNT, GNM, NoMaD, NavDP) default to `ALIGN_HEADING=True`. This aligns the robot's initial heading with the first topomap waypoint direction before navigation begins. IL models are trained on forward-moving demonstration trajectories, so they cannot handle arbitrary initial headings — the model receives out-of-distribution observations and produces poor actions.
+!!! warning "IL baselines require heading alignment"
+    IL baselines (ViNT, GNM, NoMaD, NavDP) default to `ALIGN_HEADING=True`. Disabling this will cause poor performance — these models are trained on forward-moving demonstration trajectories and cannot handle arbitrary initial headings (out-of-distribution observations).
 
-| Method | `ALIGN_HEADING` default | Reason |
-|--------|------------------------|--------|
-| Nav2 | `False` | Classical planner handles arbitrary headings |
-| Canvas | `False` | Learned policy handles arbitrary headings |
-| ViNT | **`True`** | IL model requires aligned initial heading |
-| GNM | **`True`** | IL model requires aligned initial heading |
-| NoMaD | **`True`** | IL model requires aligned initial heading |
-| NavDP | **`True`** | IL model requires aligned initial heading |
+This aligns the robot's initial heading with the first topomap waypoint direction before navigation begins.
+
+| Method | `ALIGN_HEADING` default | Reason                                       |
+| ------ | ----------------------- | -------------------------------------------- |
+| Nav2   | `False`                 | Classical planner handles arbitrary headings |
+| Canvas | `False`                 | Learned policy handles arbitrary headings    |
+| ViNT   | **`True`**              | IL model requires aligned initial heading    |
+| GNM    | **`True`**              | IL model requires aligned initial heading    |
+| NoMaD  | **`True`**              | IL model requires aligned initial heading    |
+| NavDP  | **`True`**              | IL model requires aligned initial heading    |
 
 ```bash
 # Disable for testing
@@ -197,58 +234,9 @@ ALIGN_HEADING=False MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
 
 ---
 
-## :robot: Nav2 Rule-Based Baseline
+## :bar_chart: Evaluation
 
-CostNav integrates the **ROS2 Navigation Stack 2** as a rule-based baseline for comparison with learning-based approaches.
-
-### Supported Robots
-
-| Robot | Command |
-|-------|---------|
-| Nova Carter | `SIM_ROBOT=nova_carter make run-nav2` |
-| Segway E1 | `SIM_ROBOT=segway_e1 make run-nav2` |
-
-### Features
-
-- Full Nav2 integration with Isaac Sim
-- Mission orchestration with automated start/goal sampling from NavMesh
-- Two localization modes: AMCL (realistic) and ground truth (benchmarking)
-- Cost model integration: energy, distance, time, collision, and food spoilage tracking
-
-### Localization Modes
-
-```bash
-# AMCL mode (default — realistic)
-SIM_ROBOT=nova_carter make run-nav2
-
-# Ground truth mode (benchmarking)
-SIM_ROBOT=nova_carter AMCL=False make run-nav2
-```
-
----
-
-## :bar_chart: Evaluation Metrics
-
-All baselines are evaluated using CostNav's unified economic metrics:
-
-| Metric | Description |
-|--------|-------------|
-| **SLA Compliance** | Percentage of deliveries within time budget |
-| **Operating Margin** | Revenue - Operating Costs |
-| **Break-even Time** | Time to recover capital investment |
-| **Cost per Mission** | Average cost per navigation task |
-
-**Safety Metrics:**
-
-- Contact count (total collisions)
-- Total impulse (N·s)
-- Property damage by type (fire hydrant, traffic light, street lamp, bollard, building)
-- Delta-v count and average injury cost estimate
-
-**Food Delivery Metrics:**
-
-- Food pieces (initial → final)
-- Food loss fraction
+See **[Evaluation](evaluation.md)** for the unified eval script, collected metrics, and log output.
 
 ---
 
@@ -256,11 +244,11 @@ All baselines are evaluated using CostNav's unified economic metrics:
 
 ### Research Papers
 
-1. **GNM**: Shah et al., "GNM: A General Navigation Model to Drive Any Robot", ICRA 2023
-2. **ViNT**: Shah et al., "ViNT: A Foundation Model for Visual Navigation", CoRL 2023
-3. **NoMaD**: Sridhar et al., "NoMaD: Goal Masking Diffusion Policies for Navigation and Exploration", 2023
-4. **NavDP**: Cai et al., "NavDP: Learning Sim-to-Real Navigation Diffusion Policy", 2025
-5. **CANVAS**: Choi et al., "CANVAS: Commonsense-Aware Navigation System", ICRA 2025
+1. **GNM**: Shah et al., "[GNM: A General Navigation Model to Drive Any Robot](https://general-navigation-models.github.io/)", ICRA 2023
+2. **ViNT**: Shah et al., "[ViNT: A Foundation Model for Visual Navigation](https://general-navigation-models.github.io/vint/)", CoRL 2023
+3. **NoMaD**: Sridhar et al., "[NoMaD: Goal Masking Diffusion Policies for Navigation and Exploration](https://general-navigation-models.github.io/nomad/)", 2023
+4. **NavDP**: Cai et al., "[NavDP: Learning Sim-to-Real Navigation Diffusion Policy](https://wzcai99.github.io/navigation-diffusion-policy.github.io/)", 2025
+5. **CANVAS**: Choi et al., "[CANVAS: Commonsense-Aware Navigation System](https://worv-ai.github.io/canvas/)", ICRA 2025
 
 ### Code
 
