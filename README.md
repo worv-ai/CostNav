@@ -38,17 +38,17 @@ The full cost benchmark formula with real world references is available in our g
 
 ## Media
 
-<video src="https://github.com/worv-ai/CostNav/raw/main/docs/assets/videos/comparison_part1.mp4" controls></video>
+<img alt="CostNav Demo" src="docs/assets/videos/comparison_part1.gif" />
 
 ### Navigation Comparison
 
-<video src="https://github.com/worv-ai/CostNav/raw/main/docs/assets/videos/comparison_part2.mp4" controls></video>
+<img alt="Navigation Comparison" src="docs/assets/videos/comparison_part2.gif" />
 
 Side-by-side comparison of rule-based and learning-based navigation methods in CostNav's urban sidewalk environment.
 
 ### Physics Simulation
 
-<video src="https://github.com/worv-ai/CostNav/raw/main/docs/assets/videos/costnav_popcorn.mp4" controls></video>
+<img alt="Physics Simulation" src="docs/assets/videos/costnav_popcorn.gif" />
 
 CostNav's high-fidelity physics simulation enables the modeling of real-world economic scenarios, including critical failures like food spoilage and robot rollovers.
 

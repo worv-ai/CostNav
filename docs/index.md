@@ -114,9 +114,7 @@ See **[Quick Reference](quick_reference.md)** for all commands.
 | :---------------- | :-------------------------------------------------------------------------------------------------------------------------------- |
 | :truck: Segway E1 | Four-wheeled sidewalk courier platform with configurable drive models, cameras, and LiDAR for learning or rule-based controllers. |
 
-<video controls autoplay muted loop playsinline style="width: 100%; max-width: 100%;">
-  <source src="assets/videos/costnav_popcorn.mp4" type="video/mp4">
-</video>
+<img alt="Physics Simulation" src="assets/videos/costnav_popcorn.gif" style="width: 100%; max-width: 100%;" />
 
 <p style="text-align: center;"><em>High-fidelity physics simulation enables modeling of real-world economic scenarios, including food spoilage and robot rollovers.</em></p>
 
@@ -153,9 +151,7 @@ No method is currently economically viable. Best: CANVAS at -27.36$/run. Pedestr
   ![Cost breakdown](assets/images/results_cost.png){ width="100%" }
 </figure>
 
-<video controls autoplay muted loop playsinline style="width: 100%; max-width: 100%;">
-  <source src="assets/videos/comparison_part2.mp4" type="video/mp4">
-</video>
+<img alt="Navigation Comparison" src="assets/videos/comparison_part2.gif" style="width: 100%; max-width: 100%;" />
 
 See **[Baselines](baselines.md)** for reproduction instructions.
 
