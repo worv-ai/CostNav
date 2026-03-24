@@ -36,12 +36,11 @@ theme:
         icon: material/brightness-4
         name: Switch to light mode
 
+exclude_docs: |
+  TODO/
+
 plugins:
   - search
-  - mkdocstrings:
-      handlers:
-        python:
-          paths: [costnav_isaaclab/source/costnav_isaaclab]
 
 markdown_extensions:
   - admonition
@@ -66,6 +65,12 @@ markdown_extensions:
       alternate_style: true
   - pymdownx.tasklist:
       custom_checkbox: true
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
 
 extra:
   social:
@@ -74,22 +79,15 @@ extra:
 
 nav:
   - Home: index.md
-  - Getting Started:
+  - User Guide:
     - Quick Reference: quick_reference.md
-    - Architecture Overview: architecture.md
-    - Environment Versions: environment_versions.md
-  - Core Concepts:
-    - MDP Components: mdp_components.md
-    - Robot Configuration: robot_configuration.md
-    - Cost Model: cost_model.md
-  - Guides:
-    - Training Guide: training_guide.md
-  - Reference:
-    - API Reference: api.md
-    - Scripts Reference: scripts_reference.md
-    - Food Delivery Business: references/FOOD_DELIVERY_BUSINESS.md
-  - Paper: paper.md
-  - Development:
-    - Contributing: contributing.md
-    - Roadmap: TODO.md
-    - Nav2 Implementation: nav2/nav2_implementation_plan.md
+    - Assets Setup: assets_setup.md
+    - Isaac Sim Integration: isaacsim_guide.md
+    - Nav2 Baseline: nav2_baseline.md
+    - IL Baselines: baselines.md
+    - Teleoperation: teleop_guide.md
+    - Topomap Pipeline: topomap_pipeline.md
+    - Evaluation: evaluation.md
+  - Cost Model: cost_model.md
+  - Third-Party References: third_party.md
+  - Contributing: contributing.md

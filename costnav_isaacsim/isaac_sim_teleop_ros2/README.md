@@ -1,146 +1,154 @@
 # Isaac Sim Teleop ROS2
 
-ROS2 port of the Isaac Sim teleoperation package. This package provides joystick-based teleoperation for Isaac Sim robots, publishing to `/cmd_vel`.
+Joystick-based teleoperation for Isaac Sim robots (Nova Carter, Segway E1), publishing to `/cmd_vel`.
 
-## Overview
+> **Full documentation:** [Teleoperation Guide](https://worv-ai.github.io/CostNav/teleop_guide/)
+>
+> - [Quick Start](../../docs/teleop_guide.md)
+> - [Terminal UI](../../docs/teleop_guide.md#terminal-ui)
 
-This is a minimal port from ROS1 to ROS2, focusing on the core functionality of using a joystick to publish velocity commands to `/cmd_vel`.
+---
 
-## Key Changes from ROS1
+<details>
+<summary>Porting Notes: ROS1 to ROS2</summary>
 
-- **ROS2 API**: Migrated from `rospy` to `rclpy`
-- **Node Structure**: Converted to ROS2 node class-based architecture
-- **Launch Files**: Converted from XML to Python launch files
-- **QoS Profiles**: Added ROS2 QoS profile support
-- **Time API**: Updated to use ROS2 time API (`get_clock().now()`)
-- **Publishers/Subscribers**: Updated to ROS2 API
+This document describes the minimal port of `isaac_sim_ros_integration/src/isaac_sim_teleop` from ROS1 to ROS2, focusing on joystick to `/cmd_vel` functionality.
 
-## Dependencies
+### Files Ported
 
-- ROS2 (Humble or later recommended)
-- Python 3
-- `joy` package for ROS2
-- Standard ROS2 message packages:
-  - `geometry_msgs`
-  - `sensor_msgs`
-  - `std_msgs`
-  - `nav_msgs`
+#### Core Python Modules
 
-## Building
+1. **robot.py** - Robot abstraction classes
+   - No changes needed (pure Python logic)
+   - Robot types preserved: NovaCarter, SegwayE1
 
-```bash
-cd /path/to/your/ros2_workspace
-colcon build --packages-select isaac_sim_teleop_ros2
-source install/setup.bash
+2. **state.py** - Control state management
+   - No changes needed (dataclass with message types)
+
+3. **action_publisher.py** - Action publishing for robot-specific actions
+   - Updated to accept ROS2 node reference
+   - Changed publisher creation to use `node.create_publisher()`
+   - Updated message publishing to use ROS2 API
+
+4. **monitoring.py** - Terminal UI for teleoperation monitoring
+   - No changes needed (uses curses, independent of ROS)
+
+5. **img_latency_manager.py** - Image latency tracking
+   - Updated to accept ROS2 node reference
+   - Changed to use `node.create_subscription()` and `node.create_publisher()`
+   - Updated time API to use `node.get_clock().now().to_msg()`
+
+#### Main Node
+
+**nodes/isaac_sim_teleop_node** - Main teleoperation node
+- Converted from rospy script to ROS2 Node class
+- Changed from `rospy.init_node()` to class-based `Node` initialization
+- Updated all publishers/subscribers to use ROS2 API:
+  - `rospy.Publisher()` → `self.create_publisher()`
+  - `rospy.Subscriber()` → `self.create_subscription()`
+- Changed parameters from `rospy.get_param()` to `self.declare_parameter()` and `self.get_parameter()`
+- Replaced `rospy.Rate()` with `self.create_timer()`
+- Updated time API:
+  - `rospy.Time.now()` → `self.get_clock().now().to_msg()`
+- Changed main loop from `while not rospy.is_shutdown()` to timer callback
+- Updated cleanup to use ROS2 node lifecycle
+
+#### Launch Files
+
+**launch/teleop_isaac_sim.launch.py** - ROS2 Python launch file
+- Converted from XML to Python launch file
+- Changed from `<arg>` tags to `DeclareLaunchArgument`
+- Changed from `<node>` tags to `Node` actions
+- Updated parameter passing to use ROS2 launch API
+- Preserved all original launch arguments
+
+#### Package Configuration
+
+1. **package.xml**
+   - Updated to format 3
+   - Changed `<buildtool_depend>catkin</buildtool_depend>` to `<buildtool_depend>ament_cmake</buildtool_depend>`
+   - Added `<buildtool_depend>ament_cmake_python</buildtool_depend>`
+   - Added `rosgraph_msgs` dependency
+   - Changed to `<export><build_type>ament_cmake</build_type></export>`
+
+2. **CMakeLists.txt**
+   - Converted from catkin to ament_cmake
+   - Changed `catkin_python_setup()` to `ament_python_install_package()`
+   - Changed `catkin_install_python()` to standard `install(PROGRAMS ...)`
+   - Updated install paths to use ROS2 conventions
+
+3. **setup.py**
+   - Converted from catkin setup to standard setuptools
+   - Removed catkin-specific imports
+   - Updated to ROS2 package structure
+
+### Key Differences from ROS1
+
+#### API Changes
+
+| ROS1 | ROS2 |
+|------|------|
+| `rospy.init_node()` | `rclpy.init()` + `Node` class |
+| `rospy.Publisher()` | `node.create_publisher()` |
+| `rospy.Subscriber()` | `node.create_subscription()` |
+| `rospy.get_param()` | `node.declare_parameter()` + `node.get_parameter()` |
+| `rospy.Time.now()` | `node.get_clock().now()` |
+| `rospy.Rate()` | `node.create_timer()` |
+| `rospy.spin()` | `rclpy.spin()` |
+| XML launch files | Python launch files |
+
+#### Message Publishing
+
+ROS1:
+```python
+pub.publish(Bool(data=True))
 ```
 
-## Usage
-
-### Basic Usage
-
-Set the robot type via environment variable and launch:
-
-```bash
-export SIM_ROBOT=nova_carter  # or segway_e1
-ros2 launch isaac_sim_teleop_ros2 teleop_isaac_sim.launch.py
+ROS2:
+```python
+msg = Bool()
+msg.data = True
+pub.publish(msg)
 ```
 
-### Topics
+#### Time API
 
-**Published:**
-
-- `/cmd_vel` (`geometry_msgs/msg/Twist`) - Velocity commands for the robot
-- `/is_model` (`std_msgs/msg/Bool`) - Whether model control is active
-
-**Subscribed:**
-
-- `/joy` (`sensor_msgs/msg/Joy`) - Joystick input
-- `/cmd_vel_model` (`geometry_msgs/msg/Twist`) - Model velocity commands (optional)
-- `/odom` (`nav_msgs/msg/Odometry`) - Odometry feedback (optional)
-
-### Supported Robots
-
-- `nova_carter` - Nova Carter robot
-- `segway_e1` - Segway E1 robot
-
-### Launch Arguments
-
-- `joy_node_name` (default: 'joy_node') - Name of the joy node
-- `joy_deadzone` (default: '0.12') - Deadzone for joystick
-- `use_teleport` (default: 'true') - Enable teleport functionality
-- `use_clock` (default: 'false') - Use clock topic
-- `use_people_pose` (default: 'true') - Use people pose topic
-- `use_wheel_odom` (default: 'false') - Use wheel odometry
-- `auto_restart_on_collision` (default: 'true') - Auto restart on collision
-- `use_control_topic` (default: 'false') - Use control topic mode
-- `frame_id` (default: 'teleop') - Frame ID for teleop
-- `odom_topic` (default: '/odom') - Odometry topic name
-- `img_list` (default: '') - Comma-separated list of image topics
-
-### Joystick Controls
-
-- **Left Stick (Left/Right)**: Angular velocity control
-- **Right Stick (Up/Down)**: Linear velocity control
-- **Left Bumper (LB)**: Decrease max linear velocity (hold to continuously decrease)
-- **Right Bumper (RB)**: Increase max linear velocity (hold to continuously increase)
-- **Left Stick Button (LSB)**: Emergency stop toggle
-- **Right Stick Button (RSB)**: Linear rate lock toggle
-- **Right Trigger (RT)**: Model input switch / control request (depends on `use_control_topic`)
-- **X Button**: Teleport to previous pose (if `use_teleport` enabled) — **NOT YET IMPLEMENTED**: publishes to `/robot_pose` but no subscriber currently handles teleportation in Isaac Sim
-- **Y Button**: Teleport to initial pose (if `use_teleport` enabled) — **NOT YET IMPLEMENTED**: same as X Button
-
-## Topics
-
-### Published
-
-- `/cmd_vel` (geometry_msgs/TwistStamped) - Velocity commands
-- `/is_model` (std_msgs/Bool) - Model control status
-- `/robot_pose` (geometry_msgs/Pose) - Robot pose for teleport (optional)
-- `/control_request` (std_msgs/Bool) - Control request (optional)
-
-### Subscribed
-
-- `/joy` (sensor_msgs/Joy) - Joystick input
-- `/odom` (nav_msgs/Odometry) - Odometry
-- `/cmd_vel_model` (geometry_msgs/TwistStamped) - Model velocity commands
-- `/clock` (rosgraph_msgs/Clock) - Simulation clock (optional)
-- `/people_pose` (geometry_msgs/PoseArray) - People poses (optional)
-- `/wheel_odom` (nav_msgs/Odometry) - Wheel odometry (optional)
-- `/collision_event` (geometry_msgs/PointStamped) - Collision events (optional)
-- `/control_report` (std_msgs/String) - Control status report (optional)
-
-## Troubleshooting
-
-### Terminal UI Issues
-
-If you see `Error: addwstr() returned ERR`, this means the terminal UI cannot be initialized. The node will continue to work without the visual monitoring. Common causes:
-
-1. **Terminal too small**: Resize your terminal to at least **50x15 characters** (width x height)
-2. **Running in non-interactive environment**: The terminal UI requires a proper terminal
-3. **Locale issues**: Make sure your locale supports UTF-8
-
-The node will automatically disable the terminal UI and continue publishing `/cmd_vel` commands.
-
-To check your terminal size: `echo "Terminal: $(tput cols)x$(tput lines)"`
-
-### No Joystick Detected
-
-```bash
-# Check if joystick is connected
-ls -l /dev/input/js0
-
-# Test joystick with joy node
-ros2 run joy joy_node
-ros2 topic echo /joy
+ROS1:
+```python
+stamp = rospy.Time.now()
 ```
 
-### Robot Not Moving
+ROS2:
+```python
+stamp = self.get_clock().now().to_msg()
+```
 
-1. Verify `SIM_ROBOT` environment variable is set
-2. Check `/cmd_vel` is being published: `ros2 topic echo /cmd_vel`
-3. Ensure emergency stop is not engaged (press Left Stick Button to toggle)
-4. Check joystick deadzone setting
+### What Was NOT Changed
 
-## License
+- Core robot control logic
+- Joystick button/axis mappings
+- Velocity computation algorithms
+- Terminal UI (curses-based monitoring)
+- Control state management
+- All robot-specific configurations
 
-BSD
+### Testing Recommendations
+
+1. Test with each robot type (nova_carter, segway_e1) by setting `SIM_ROBOT`
+2. Verify joystick controls work correctly
+3. Test teleport functionality (if enabled)
+4. Verify `/cmd_vel` publishing
+5. Test emergency stop and velocity locking features
+6. Verify model input switching (if used)
+
+### Dependencies
+
+Ensure these ROS2 packages are installed:
+- `joy` (ROS2 version)
+- `geometry_msgs`
+- `sensor_msgs`
+- `std_msgs`
+- `nav_msgs`
+- `rosgraph_msgs`
+
+</details>

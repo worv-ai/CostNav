@@ -237,8 +237,6 @@ data/
 
 # Ignore assets (but keep README)
 /assets/
-!assets/README.md
 
 .nucleus-stack/
 checkpoints/
-*.mp4

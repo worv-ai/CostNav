@@ -8,19 +8,35 @@ git -C "${ROOT_DIR}" submodule sync --recursive
 
 PRIVATE_SUBMODULES=()
 
+# Large submodules fetched last (they take a long time to clone)
+DEFERRED_SUBMODULES=(
+  "third_party/IsaacLab"
+)
+
 echo "==> Initializing top-level submodules"
-# Build list of public submodules (exclude private ones)
+# Build list of public submodules (exclude private and deferred ones)
 public_paths=()
+deferred_paths=()
 while IFS= read -r path; do
   skip=false
-  for priv in "${PRIVATE_SUBMODULES[@]}"; do
+  for priv in "${PRIVATE_SUBMODULES[@]+"${PRIVATE_SUBMODULES[@]}"}"; do
     if [[ "${path}" == "${priv}" ]]; then
       skip=true
       break
     fi
   done
   if [[ "${skip}" == "false" ]]; then
-    public_paths+=("${path}")
+    defer=false
+    for def in "${DEFERRED_SUBMODULES[@]}"; do
+      if [[ "${path}" == "${def}" ]]; then
+        defer=true
+        deferred_paths+=("${path}")
+        break
+      fi
+    done
+    if [[ "${defer}" == "false" ]]; then
+      public_paths+=("${path}")
+    fi
   fi
 done < <(git -C "${ROOT_DIR}" config -f .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
 
@@ -29,7 +45,7 @@ for path in "${public_paths[@]}"; do
 done
 
 # Try to initialize private submodules; warn and continue on failure
-for priv in "${PRIVATE_SUBMODULES[@]}"; do
+for priv in "${PRIVATE_SUBMODULES[@]+"${PRIVATE_SUBMODULES[@]}"}"; do
   echo "==> Initializing private submodule ${priv} (requires access)"
   if ! GIT_TERMINAL_PROMPT=0 git -C "${ROOT_DIR}" submodule update --init -- "${priv}" 2>/dev/null; then
     echo "WARNING: Could not initialize private submodule '${priv}'. Skipping."
@@ -74,5 +90,11 @@ while IFS= read -r path; do
     git -C "${ROOT_DIR}/${path}" submodule update --init --recursive
   fi
 done < <(git -C "${ROOT_DIR}" config -f .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
+
+# Initialize large/deferred submodules last
+for path in "${deferred_paths[@]+"${deferred_paths[@]}"}"; do
+  echo "==> Initializing large submodule ${path} (this may take a while)"
+  git -C "${ROOT_DIR}" submodule update --init -- "${path}"
+done
 
 echo "==> Third-party fetch complete"

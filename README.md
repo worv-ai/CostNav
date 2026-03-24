@@ -1,6 +1,6 @@
 # CostNav
 
-<img width="3200" height="1344" alt="image" src="https://github.com/user-attachments/assets/dd16349c-5126-415d-9d34-38c3e7137d9e" />
+<img alt="CostNav Logo" src="docs/assets/images/motivation2.png" />
 
 <div align="center">
   <a href="https://arxiv.org/abs/2511.20216"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2511.20216-b31b1b.svg?style=flat"></a>
@@ -25,12 +25,12 @@ CostNav introduces a **paradigm shift** in how we evaluate navigation systems: f
 Our key contributions are:
 
 1. **High-Fidelity Physics Simulation with Dynamics for effective Real-World Economic Scenarios.**
-    * Supporting Segway E1 delivery robot, food cargo dynamics with popcorn, detailed collision dynamics, pedestrians
+   - Supporting Segway E1 delivery robot, food cargo dynamics with popcorn, detailed collision dynamics, pedestrians
 1. **Real-world referenced Cost-Revenue Model with Break-Even Point Analysis.**
-    * Supporting Energy Cost, Pedestrian Safety Cost, Property Damage Cost, Repair Cost
+   - Supporting Energy Cost, Pedestrian Safety Cost, Property Damage Cost, Repair Cost
 1. **Rule-Based and Learning-Based Navigation Evaluation with Multiple IL Baselines**
-    * Comparing Profitability between Nav2 with GPS and Nav2 with AMCL localization
-    * IL Baselines: ViNT, GNM, NoMaD, NavDP, and CANVAS
+   - Comparing Profitability between Nav2 with GPS and Nav2 with AMCL localization
+   - IL Baselines: ViNT, GNM, NoMaD, NavDP, and CANVAS
 
 You can find more details in our [technical report](https://arxiv.org/abs/2511.20216).
 
@@ -38,229 +38,47 @@ The full cost benchmark formula with real world references is available in our g
 
 ## Media
 
+<video src="docs/assets/videos/comparison_part1.mp4" controls></video>
+
 ### Navigation Comparison
 
-
-https://github.com/user-attachments/assets/3393a8ce-edab-4940-aa4a-1301c544651e
+<video src="docs/assets/videos/comparison_part2.mp4" controls></video>
 
 Side-by-side comparison of rule-based and learning-based navigation methods in CostNav's urban sidewalk environment.
 
-
 ### Physics Simulation
 
-
-https://github.com/user-attachments/assets/7c61f56f-e23f-444b-a3ef-54653f38f397
+<video src="docs/assets/videos/costnav_popcorn.mp4" controls></video>
 
 CostNav's high-fidelity physics simulation enables the modeling of real-world economic scenarios, including critical failures like food spoilage and robot rollovers.
 
 ### Benchmark Comparison
-<img width="1414" height="376" alt="bench_comparison" src="https://github.com/user-attachments/assets/c0d132f5-3c11-427f-9408-e2e8b232d5eb" />
+
+<img alt="Benchmark Comparison" src="docs/assets/images/bench_comparison.png" />
 
 Comparison of existing navigation benchmarks (UnrealZoo, OpenBench, Arena-RosNav, Urban-Sim, DeliveryBench) that focus on task-oriented metrics versus CostNav's integration of physics simulation with comprehensive economic cost modeling.
 
 ### Economic Model
-<img width="2523" height="1044" alt="figure2 drawio" src="https://github.com/user-attachments/assets/6c1083d7-361c-42ca-b6d3-8b57ee413bcf" />
+
+<img alt="Economic Model" src="docs/assets/images/figure2.drawio.png" />
 
 CostNav's framework linking navigation performance to business value through profit-per-run measurement.
 
-## Getting Started
-
-### 1. Prerequisites
-
-- Linux host PC (Ubuntu 24.04 preferred)
-- NVIDIA GPU (dependency of isaac-sim) with recent graphics drivers
-- Docker with nvidia container toolkit.
-
-### 2. Clone and fetch references
-
-```bash
-git clone https://github.com/worv-ai/CostNav.git
-cd CostNav
-make fetch-third-party # we use third-party submodules for reference or dependencies
-```
-
-### 3. Configure environment variables
-
-1. Copy `.env.example` to `.env`.
-2. Set `NGC_PASS` by making an account and an api key in https://org.ngc.nvidia.com/setup/api-keys
-3. Set `PROJECT_ROOT` as the absolute path of cloned `CostNav`.
-
-### 4. Build dependencies
-
-```bash
-cd CostNav
-make build-ros2
-make build-isaac-sim
-```
-
-### 5. Download Assets
-
-```bash
-# for open source users
-
-# Download assets from HuggingFace
-make download-assets-hf
-
-# Start local Nucleus server, upload local assets to nucleus omniverse
-make start-nucleus
-
-
-# Stop Nucleus server
-# make stop-nucleus
-```
-
-Teleop Dataset is available in https://huggingface.co/datasets/maum-ai/CostNav-Teleop-Dataset/tree/main
-
-```bash
-# for internal developers
-
-# Or download from Omniverse (for internal developers)
-# make download-assets-omniverse
-
-
-# Upload assets to HuggingFace (for internal developers, requires HF_TOKEN in .env)
-# make upload-assets-hf
-
-# Upload teleop dataset to HuggingFace (for internal developers, requires HF_TOKEN in .env)
-# make upload-dataset-hf
-
-```
-
-## Running Nav2 (Rule-Based Navigation)
-
-For rule-based navigation using ROS2 Nav2 stack with Isaac Sim, see the [costnav_isaacsim README](costnav_isaacsim/README.md) for detailed setup and usage.
-
-```bash
-
-# Run Nav2 navigation (Isaac Sim + ROS2 Nav2)
-# Usage: make run-nav2 NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True TUNED=True AMCL=False
-make run-nav2
-
-
-make start-mission # start single mission
-
-make run-eval-nav2 # run evaluation in nav2
-```
-
-This starts Isaac Sim with the Street Sidewalk environment and Segway E1 robot, along with the ROS2 Nav2 stack for classical navigation.
-
-## Running Teleop (For Data Collection)
-
-```bash
-
-# Usage: make run-teleop NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True TOPOMAP=True
-make run-teleop
-
-make run-rosbag # start rosbag record
-
-make start-mission # start single mission
-
-make stop-rosbag # stop rosbag record when mission is completed
-
-make run-eval-teleop # run evaluation in teleop mode
-```
-
-> **Tip:** Press **Ctrl+C once** to stop teleop. The teardown will run automatically — do not press Ctrl+C again while containers are being cleaned up.
-
-## Project Structure
-
-```
-CostNav/
-├── costnav_isaacsim/
-│   ├── costnav_isaacsim/          # Isaac Sim simulation & mission management
-│   ├── canvas/                    # Canvas sketch-based navigation agent
-│   ├── il_training/               # IL data processing + model training
-│   ├── il_evaluation/             # IL inference + ROS2 policy nodes
-│   ├── isaac_sim_teleop_ros2/     # ROS2 teleoperation package
-│   └── nav2_params/               # Nav2 launch files & parameters
-├── Dockerfile                     # Isaac Sim & Isaac Lab (multi-stage)
-├── Dockerfile.ros                 # ROS2 Jazzy (teleop + nav2)
-├── Dockerfile.ros_torch           # ROS2 Jazzy + PyTorch (IL evaluation)
-└── docker-compose.yml
-```
-
-### Component Environments
-
-| Component               | Test Environment               | Runtime                | Notes                                          |
-| ----------------------- | ------------------------------ | ---------------------- | ---------------------------------------------- |
-| `costnav_isaacsim`      | `Dockerfile` (isaac-sim stage) | NVIDIA Isaac Sim 5.1.0 | Requires NGC + GPU                             |
-| `canvas`                | `Dockerfile` in canvas folder  | ROS2 Jazzy + PyTorch   | GPU inference                                  |
-| `il_training`           | `uv`                           | Bare-metal / SLURM     | CPU-only for data processing; GPU for training |
-| `il_evaluation`         | `Dockerfile.ros_torch`         | ROS2 Jazzy + PyTorch   | GPU inference                                  |
-| `isaac_sim_teleop_ros2` | `Dockerfile.ros`               | ROS2 Jazzy             | Joystick teleoperation                         |
-| `nav2_params`           | `Dockerfile.ros`               | ROS2 Jazzy             | Launch files only, no unit tests               |
-
-## Running Canvas (Sketch-Based Navigation)
-
-Canvas is a sketch+language based vision-language action model for commonsense-aware navigation. It predicts velocity commands from trajectory annotations and language instructions. The model worker runs separately on a GPU server.
-
-```bash
-# 1. Build the Canvas Docker image
-make build-canvas
-
-# 2. Launch the model worker on a GPU server (see costnav_isaacsim/canvas/README.md)
-
-# 3. Start Isaac Sim + Canvas agent
-make run-canvas MODEL_WORKER_URI=http://<gpu-server>:<MODEL_WORKER_PORT>
-
-# 4. Run evaluation
-make run-eval-canvas TIMEOUT=241 NUM_MISSIONS=10
-```
-
-For detailed setup, see [`costnav_isaacsim/canvas/README.md`](costnav_isaacsim/canvas/README.md).
-
-## Running IL Baselines
-
-CostNav supports the following IL baselines, adapted from the [NavDP](https://github.com/InternRobotics/NavDP) benchmark:
-
-| Baseline   | Paper                                     | Architecture           | Supported Tasks              |
-| ---------- | ----------------------------------------- | ---------------------- | ---------------------------- |
-| **ViNT**   | [Project](https://general-navigation-models.github.io/vint/) | Transformer            | ImageGoal, NoGoal            |
-| **NoMaD**  | [Project](https://general-navigation-models.github.io/nomad/) | Diffusion              | ImageGoal, NoGoal            |
-| **GNM**    | [Project](https://general-navigation-models.github.io/) | CNN                    | ImageGoal, NoGoal            |
-| **NavDP**  | [Project](https://wzcai99.github.io/navigation-diffusion-policy.github.io/) | Diffusion + Critic     | PointGoal, ImageGoal, NoGoal |
-| **Canvas** | [Project](https://worv-ai.github.io/canvas/) | Vision-Language Action | Sketch+Language Goal         |
-
-### Quick Start
-
-1. Download pretrained checkpoints from Hugging Face
-
-```bash
-make download-baseline-checkpoints-hf
-```
-
-This downloads pretrained model files (`baseline-vint.pth`, `baseline-gnm.pth`, `baseline-nomad.pth`) into the `checkpoints/` directory.
-
-2. Build a docker image
-
-```bash
-make build-ros2-torch
-```
-
-3. Run the evaluation
-
-```bash
-# Terminal 1: Start the ViNT stack
-MODEL_CHECKPOINT=checkpoints/baseline-vint.pth make run-vint
-
-# Terminal 2: Run evaluation
-make run-eval-vint TIMEOUT=241 NUM_MISSIONS=10
-```
-
-For detailed IL training and evaluation documentation, see:
-
-- [IL Training README](costnav_isaacsim/il_training/README.md)
-- [IL Evaluation README](costnav_isaacsim/il_evaluation/README.md)
-- [IL Design Document](docs/imitation_learning_baselines.md)
-
-## What's next?
-
-- [x] Paper release
-- [x] isaac sim assets release
-- [x] nav2 support for rule-based navigation
-- [x] cost formula and reference sheet
-- [x] collected dataset with teleoperation
-- [x] imitation learning baseline
+## Documentation
+
+Full documentation is available at **[worv-ai.github.io/CostNav](https://worv-ai.github.io/CostNav/)**.
+
+| Guide | Description |
+|:------|:------------|
+| [Quick Reference](https://worv-ai.github.io/CostNav/quick_reference/) | Installation, commands, and project structure |
+| [Assets Setup](https://worv-ai.github.io/CostNav/assets_setup/) | Download and configure Omniverse USD assets |
+| [Isaac Sim Integration](https://worv-ai.github.io/CostNav/isaacsim_guide/) | Mission manager, ROS2 topics, and launch.py reference |
+| [Nav2 Baseline](https://worv-ai.github.io/CostNav/nav2_baseline/) | Rule-based navigation with ROS2 Nav2 |
+| [IL Baselines](https://worv-ai.github.io/CostNav/baselines/) | ViNT, NoMaD, GNM, NavDP, and CANVAS |
+| [Teleoperation](https://worv-ai.github.io/CostNav/teleop_guide/) | Joystick-based robot control for data collection |
+| [Evaluation](https://worv-ai.github.io/CostNav/evaluation/) | Unified eval script, metrics, and log output |
+| [Cost Model](https://worv-ai.github.io/CostNav/cost_model/) | CAPEX, OPEX, revenue, and break-even analysis |
+| [Contributing](https://worv-ai.github.io/CostNav/contributing/) | How to contribute, roadmap, and PR guidelines |
 
 ## Contributing
 
