@@ -1,6 +1,6 @@
 # :robot: Nav2 Baseline
 
-CostNav integrates the **ROS2 Navigation Stack 2** as a rule-based baseline for comparison with learning-based approaches. For IL baselines, see **[IL Baselines](baselines.md)**.
+CostNav integrates the **[ROS2 Navigation Stack 2](https://docs.nav2.org/)** as a rule-based baseline for comparison with learning-based approaches. For IL baselines, see **[IL Baselines](baselines.md)**.
 
 ---
 
@@ -21,6 +21,13 @@ make run-eval-nav2    # batch evaluation
 |:------------|:--------------------------------------|
 | Nova Carter | `SIM_ROBOT=nova_carter make run-nav2` |
 | Segway E1   | `SIM_ROBOT=segway_e1 make run-nav2`   |
+
+## Architecture
+
+<figure markdown="span">
+  ![Nav2 Architecture](assets/images/nav2_architecture.png){ width="100%" }
+  <figcaption>Nav2 architecture: BT Navigator Server orchestrates Controller, Planner, Behavior, and Smoother servers.</figcaption>
+</figure>
 
 ## Features
 
