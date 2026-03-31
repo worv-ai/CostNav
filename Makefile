@@ -567,30 +567,39 @@ start-nucleus:
 	cd $(NUCLEUS_STACK_DIR)/base_stack && \
 		docker compose --env-file nucleus-stack.env -f nucleus-stack-no-ssl.yml up -d
 	@echo ""
-	@echo "Uploading assets to Nucleus using Isaac Sim container..."
+	@echo "Waiting for Nucleus server to be ready..."
 	@if docker image inspect $(ISAAC_SIM_IMAGE) >/dev/null 2>&1; then \
-		for attempt in 1 2 3; do \
-			echo "Upload attempt $$attempt/3..."; \
-			docker run --rm \
-				--network host \
-				--entrypoint /bin/bash \
-				-v $(PWD)/assets:/workspace/assets:ro \
+		for i in $$(seq 1 24); do \
+			if timeout 10 docker run --rm --network host --entrypoint /bin/bash \
 				-v $(PWD)/scripts:/workspace/scripts:ro \
-				-e "OMNI_USER=$(OMNI_USER)" \
-				-e "OMNI_PASS=$(OMNI_PASS)" \
+				-e "OMNI_USER=$(OMNI_USER)" -e "OMNI_PASS=$(OMNI_PASS)" \
 				$(ISAAC_SIM_IMAGE) \
-				-c "PYTHONPATH=/isaac-sim/kit/extscore/omni.client.lib:\$$PYTHONPATH /isaac-sim/python.sh /workspace/scripts/assets/upload_assets_to_nucleus.py \
-					--local-path /workspace/assets \
-					--nucleus-url omniverse://localhost \
-					--timeout 30" \
-			&& break; \
-			if [ $$attempt -eq 3 ]; then \
-				echo "Upload failed after 3 attempts." >&2; \
+				-c "PYTHONPATH=/isaac-sim/kit/extscore/omni.client.lib:\$$PYTHONPATH /isaac-sim/python.sh /workspace/scripts/assets/probe_nucleus.py" \
+			>/dev/null 2>&1; then \
+				echo "Nucleus server is ready."; \
+				break; \
+			fi; \
+			if [ $$i -eq 24 ]; then \
+				echo "ERROR: Nucleus server did not become ready within 120 seconds."; \
 				exit 1; \
 			fi; \
-			echo "Upload attempt $$attempt failed. Retrying..."; \
-			sleep 1; \
+			sleep 5; \
 		done; \
+	fi
+	@echo ""
+	@echo "Uploading assets to Nucleus using Isaac Sim container..."
+	@if docker image inspect $(ISAAC_SIM_IMAGE) >/dev/null 2>&1; then \
+		docker run --rm \
+			--network host \
+			--entrypoint /bin/bash \
+			-v $(PWD)/assets:/workspace/assets:ro \
+			-v $(PWD)/scripts:/workspace/scripts:ro \
+			-e "OMNI_USER=$(OMNI_USER)" \
+			-e "OMNI_PASS=$(OMNI_PASS)" \
+			$(ISAAC_SIM_IMAGE) \
+			-c "PYTHONPATH=/isaac-sim/kit/extscore/omni.client.lib:\$$PYTHONPATH /isaac-sim/python.sh /workspace/scripts/assets/upload_assets_to_nucleus.py \
+				--local-path /workspace/assets \
+				--nucleus-url omniverse://localhost"; \
 	else \
 		echo ""; \
 		echo "WARNING: Isaac Sim image not found: $(ISAAC_SIM_IMAGE)"; \
