@@ -58,6 +58,11 @@ class TrajectoryMapEditor:
         self.robot_trajectory = []
         self.human_trajectory = []
 
+        # Pre-allocate crop buffer to avoid np.full on every call
+        radius = int(self.config.map_radius / self.map_yml["resolution"])
+        c = self.map_image.shape[2]
+        self._crop_template = np.full((radius * 2, radius * 2, c), (127, 127, 127, 255), dtype=self.map_image.dtype)
+
     def get_local_state(self, detail: bool = False) -> NDArray | None:
         """
         This method return local map array.
@@ -141,14 +146,15 @@ class TrajectoryMapEditor:
         return yaw
 
     def _draw_local_state(self, map_array: NDArray, odom: tuple[NDArray, NDArray], is_empty: bool = False) -> NDArray:
-        # Draw trajectories
-        map_array = self._draw_trajectory(map_array, self.human_trajectory, odom, "human", use_overlay=not is_empty)
-        map_array = self._draw_trajectory(map_array, self.robot_trajectory, odom, "robot")
+        # Draw all elements onto a single overlay canvas, then blend once
+        overlay = np.zeros_like(map_array)
+        self._draw_trajectory_onto(overlay, self.human_trajectory, odom, "human")
+        self._draw_trajectory_onto(overlay, self.robot_trajectory, odom, "robot")
+        self._draw_arrow_onto(overlay, odom, self.config.current_color)
 
-        # Draw arrow in the middle of the cropped map
-        map_array = self._draw_arrow(map_array, odom, self.config.current_color)
-
-        return map_array
+        if is_empty:
+            return overlay
+        return self.overlay_two_image(map_array, overlay)
 
     def _crop_map(self, image: NDArray, odom: tuple[NDArray, NDArray]) -> np.ndarray:
         """
@@ -157,7 +163,6 @@ class TrajectoryMapEditor:
         """
         h, w, c = image.shape
         radius = int(self.config.map_radius / self.map_yml["resolution"])
-        padding_value = (127, 127, 127, 255)
 
         # Convert robot pose to pixel coordinates
         position, _ = odom
@@ -165,9 +170,8 @@ class TrajectoryMapEditor:
         pixel_x, pixel_y = self.canvas.pose2coords((x, y))
         pixel_x, pixel_y = int(pixel_x), int(pixel_y)
 
-        # Create output canvas with padding color
-        output_size = (radius * 2, radius * 2)
-        cropped_map = np.full((output_size[0], output_size[1], c), padding_value, dtype=image.dtype)
+        # Copy from pre-allocated template instead of np.full every call
+        cropped_map = self._crop_template.copy()
 
         # Calculate source region bounds in original image
         src_x_start = max(0, pixel_x - radius)
@@ -308,50 +312,71 @@ class TrajectoryMapEditor:
         valid_segments = valid_segments.astype(np.int32)
         return valid_segments
 
-    def line_to_image(self, image, line_coords, color, thickness, timewise=True):
+    def line_to_image(self, canvas, line_coords, color, thickness, timewise=True):
         """
-        Draw the line coordinates on the image
+        Draw line segments onto the canvas using vectorized numpy rasterization.
+
+        Rasterizes all segments at 1px width using vectorized Bresenham interpolation.
+        Thickness is applied externally via cv2.dilate in _draw_trajectory_onto.
 
         Args:
-            image: The image to draw the line
-            line_coords: The line coordinates to draw in (y1, x1, y2, x2) format
-            color: The color of the line
+            canvas: The canvas to draw on (modified in-place)
+            line_coords: The line coordinates in (y1, x1, y2, x2) format, shape (N, 4)
+            color: The color of the line (BGRA)
+            thickness: The thickness of the line
             timewise: If True, the line will be faded out over time
-                    If False, the line will be faded in over time
         """
-        canvas = np.zeros_like(image)
-        color = np.array(color)
-        # get 0 value indices
-        indices = np.where(color == 0)[0]
         N = len(line_coords)
-        for i in range(N):
-            y1, x1, y2, x2 = line_coords[i]
-            # Draw line
-            # value is getting smaller over time
-            # Because all the values are 255, it will be white
-            fraction = (i + 1) / N
-            if timewise:
-                # For alpha=0.7, go from 255 down to 0.3*255
-                start = 255
-                end = 0
-            else:
-                # For alpha=0.7, go from 0.3*255 up to 255
-                start = 0
-                end = 255
-            value = start + fraction * (end - start)
+        if N == 0:
+            return
 
-            # set alpha value
-            color[indices] = int(value)
-            canvas = cv2.line(
-                canvas,
-                (x1, y1),
-                (x2, y2),
-                color=tuple(color.tolist()),
-                thickness=thickness,
-                lineType=self.config.line_type,
-            )
+        color = np.array(color, dtype=np.uint8)
+        zero_indices = np.where(color == 0)[0]
+        max_alpha = self.config.line_max_alpha
+        h, w = canvas.shape[:2]
 
-        return canvas
+        # Per-segment fading values REVERSED (new=255, old=0) so that cv2.dilate MAX
+        # preserves z-order (newer segments spread over older). Inverted back after dilate.
+        fractions = np.arange(1, N + 1, dtype=np.float32) / N
+        if timewise:
+            seg_fading = (255.0 * fractions).astype(np.uint8)
+        else:
+            seg_fading = (255.0 * (1.0 - fractions)).astype(np.uint8)
+        # Uniform alpha for all segments (line_max_alpha applied to alpha channel only)
+        alpha_u8 = np.uint8(255 * max_alpha)
+
+        # Extract segment endpoints
+        y1s = line_coords[:, 0]
+        x1s = line_coords[:, 1]
+        y2s = line_coords[:, 2]
+        x2s = line_coords[:, 3]
+
+        # Number of pixels per segment (Bresenham step count)
+        steps = np.maximum(np.abs(x2s - x1s), np.abs(y2s - y1s)).astype(np.int32) + 1
+        total_pixels = int(steps.sum())
+
+        # Build flat interpolation parameter t for all pixels (vectorized)
+        cum_offsets = np.zeros(N, dtype=np.int64)
+        np.cumsum(steps[:-1], out=cum_offsets[1:])
+        local_idx = np.arange(total_pixels) - np.repeat(cum_offsets, steps)
+        denom = np.repeat(np.maximum(steps - 1, 1), steps).astype(np.float32)
+        t = local_idx / denom
+
+        # Interpolate all pixel coordinates at once
+        x_flat = np.round(np.repeat(x1s, steps) + t * np.repeat(x2s - x1s, steps)).astype(np.int32)
+        y_flat = np.round(np.repeat(y1s, steps) + t * np.repeat(y2s - y1s, steps)).astype(np.int32)
+        fading_flat = np.repeat(seg_fading, steps)
+
+        # Write 1px thin lines with correct fading and alpha
+        valid = (y_flat >= 0) & (y_flat < h) & (x_flat >= 0) & (x_flat < w)
+        yv = y_flat[valid]
+        xv = x_flat[valid]
+        fv = fading_flat[valid]
+        canvas[yv, xv] = color
+        canvas[yv, xv, zero_indices[0]] = fv
+        if len(zero_indices) > 1:
+            canvas[yv, xv, zero_indices[1]] = fv
+        canvas[yv, xv, 3] = alpha_u8
 
     def overlay_two_image(self, image, overlay):
         mask = overlay[:, :, 3] > 0
@@ -365,25 +390,20 @@ class TrajectoryMapEditor:
         image[mask, 3] = new_alpha * 255
         return image
 
-    def _draw_trajectory(
+    def _draw_trajectory_onto(
         self,
-        image: NDArray,
+        canvas: NDArray,
         trajectory: list | np.ndarray,
         odom: tuple[NDArray, NDArray],
         traj_type: str,
-        use_overlay: bool = True,
-    ) -> NDArray:
-        """Draw trajectory on the image."""
-        # Check if the trajectory is empty, return the image if it is
+    ) -> None:
+        """Draw trajectory directly onto the provided canvas (no overlay)."""
         if len(trajectory) == 0:
-            return image
+            return
 
-        # Calculate current coordinates
         position, _ = odom
         x, y, _ = position
         cur_x, cur_y = self.canvas.pose2coords((x, y))
-
-        # Calculate radius
         radius = int(self.config.map_radius / self.map_yml["resolution"])
 
         if traj_type == "robot":
@@ -398,15 +418,22 @@ class TrajectoryMapEditor:
             raise ValueError("Invalid trajectory type")
 
         line_coords = self.calculate_in_bound_coordinates(radius, pixel_coords)
-        canvas = self.line_to_image(image, line_coords, color, thickness, timewise=True)
-        canvas[..., 3] = self.config.line_max_alpha * canvas[..., 3]
 
-        if use_overlay:
-            # Overlay the trajectory on the map
-            image = self.overlay_two_image(image, canvas)
-
-            return image
-        return canvas
+        # Draw on temporary canvas with reversed fading, dilate, invert fading back, then copy.
+        # Reversed fading (new=255) ensures dilate MAX preserves z-order (newest on top).
+        temp = np.zeros_like(canvas)
+        self.line_to_image(temp, line_coords, color, thickness, timewise=True)
+        if thickness > 1:
+            # Compensate for diagonal thinning with larger elliptical kernel
+            k = thickness + 2
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+            cv2.dilate(temp, kernel, dst=temp)
+        # Invert fading channels back to correct visual direction (old=bright, new=dark)
+        zero_indices = np.where(np.array(color) == 0)[0]
+        drawn = temp[:, :, 3] > 0
+        for idx in zero_indices:
+            temp[drawn, idx] = 255 - temp[drawn, idx]
+        canvas[drawn] = temp[drawn]
 
     def calculate_arrow_end(self, map_array: NDArray, odom: tuple[NDArray, NDArray]) -> tuple[int, int, int, int]:
         """Calculate arrow end point from image center"""
@@ -429,27 +456,21 @@ class TrajectoryMapEditor:
         end_y = y + diff_y
         return x, y, end_x, end_y
 
-    def _draw_arrow(self, map_array: NDArray, odom: tuple[NDArray, NDArray], color: tuple) -> NDArray:
-        # Calculate the arrow end point
-        x, y, end_x, end_y = self.calculate_arrow_end(map_array, odom)
-
-        # Draw the arrow on the map
-        arrow_image = np.zeros_like(map_array)
+    def _draw_arrow_onto(self, canvas: NDArray, odom: tuple[NDArray, NDArray], color: tuple) -> None:
+        """Draw arrow directly onto the provided canvas (no overlay)."""
+        x, y, end_x, end_y = self.calculate_arrow_end(canvas, odom)
+        # Pre-scale alpha into color to avoid post-hoc full-image alpha scaling
+        scaled_color = tuple(int(c * self.config.line_max_alpha) if i == 3 else c for i, c in enumerate(color))
         cv2.arrowedLine(
-            arrow_image,
+            canvas,
             (x, y),
             (end_x, end_y),
-            color,
+            scaled_color,
             int(self.config.local_arrow_thickness),
             line_type=self.config.line_type,
             shift=self.config.shift,
             tipLength=self.config.tip_length,
         )
-        arrow_image[..., 3] = self.config.line_max_alpha * arrow_image[..., 3]
-
-        # Overlay the arrow on the map
-        map_array = self.overlay_two_image(map_array, arrow_image)
-        return map_array
 
     def calculate_pixel_coords_from_human_traj(self, human_trajectory: np.ndarray, cur_x, cur_y):
         """

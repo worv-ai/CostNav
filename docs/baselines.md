@@ -43,7 +43,7 @@ graph LR
 
 #### CANVAS
 
-Three-node architecture with remote VLA inference:
+Three-node architecture with VLA inference (model worker runs on localhost by default):
 
 ```mermaid
 graph LR
@@ -57,17 +57,17 @@ graph LR
         NP -->|/vel_predict| CV
     end
 
-    subgraph GPU["GPU Server"]
-        MW["Model Worker\n(VLA inference)\nport 8200"]
+    subgraph MW["Model Worker Container"]
+        MWS["VLA Inference\nport 8200"]
     end
 
     SIM -->|"/camera, /odom"| NP
-    NP <-->|HTTP| MW
+    NP <-->|HTTP| MWS
     CV -->|/cmd_vel| SIM
 
     style Isaac fill:#76B900,color:#fff
     style Canvas fill:#1565c0,color:#fff
-    style GPU fill:#e65100,color:#fff
+    style MW fill:#e65100,color:#fff
 ```
 
 **Key ROS2 Topics:**
@@ -90,8 +90,25 @@ make run-vint
 make run-nomad
 make run-gnm
 make run-navdp
+
+# Canvas requires its own Docker image
+make build-canvas
 make run-canvas
 ```
+
+> **Tip:** For Canvas, the model worker launches on localhost by default.
+> To offload it to a separate GPU server for better performance, launch the worker on the remote machine
+> and override `MODEL_WORKER_URI`:
+> ```bash
+> # On the remote GPU server:
+> cd costnav_isaacsim/canvas/apps/model_workers
+> cp .env.pub .env  # Edit .env: set MODEL_PATH
+> docker compose --env-file .env up
+>
+> # On the local machine:
+> make run-canvas MODEL_WORKER_URI=http://<gpu-server>:<port>
+> ```
+> The local model worker is automatically skipped when the URI points to a remote host.
 
 **Navigation mode override** — switch between `image_goal` and `topomap`:
 

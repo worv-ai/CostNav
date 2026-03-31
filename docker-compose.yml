@@ -502,6 +502,33 @@ services:
     stdin_open: true
     tty: true
 
+  # Canvas model worker - serves the VLA model via HTTP API
+  # By default runs on localhost. To use a separate GPU server for better performance,
+  # set MODEL_WORKER_URI to point to the remote server and disable this service.
+  canvas-model-worker:
+    profiles: ["canvas"]
+    image: canvas:${CANVAS_VERSION:-latest}
+    container_name: costnav-canvas-model-worker
+    command: uvicorn main:app --host 0.0.0.0 --port ${MODEL_WORKER_PORT:-8200}
+    volumes:
+      - ${MODEL_PATH:-./checkpoints/canvas-costnav}:/app/model
+    environment:
+      - MODEL_PATH=/app/model
+      - LD_LIBRARY_PATH=
+      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
+    working_dir: /workspace/src/canvas/model_worker
+    ports:
+      - "${MODEL_WORKER_PORT:-8200}:${MODEL_WORKER_PORT:-8200}"
+    shm_size: '32gb'
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
   # Canvas neural planner - queries remote model worker, publishes velocity predictions
   canvas-neural-planner:
     profiles: ["canvas"]
