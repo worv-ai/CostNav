@@ -281,13 +281,18 @@ run-navdp:
 build-canvas:
 	cd costnav_isaacsim/canvas/docker && ./build.sh
 
-# Run Isaac Sim with Canvas agent (neural planner + cmd_vel publisher)
-# Requires a running model worker (launched separately on a GPU server)
-# Usage: make run-canvas MODEL_WORKER_URI=http://<gpu-server>:<MODEL_WORKER_PORT> NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True
+# Run Isaac Sim with Canvas agent (model worker + neural planner + cmd_vel publisher)
+# The model worker launches on localhost by default.
+# To use a separate GPU server, set MODEL_WORKER_URI to skip the local worker:
+#   make run-canvas MODEL_WORKER_URI=http://<gpu-server>:8200
+# Usage: make run-canvas MODEL_PATH=./checkpoints/canvas-costnav NUM_PEOPLE=20 SIM_ROBOT=segway_e1 FOOD=True
+run-canvas: MODEL_PATH ?= ./checkpoints/canvas-costnav
 run-canvas:
 	xhost +local:docker 2>/dev/null || true
 	$(DOCKER_COMPOSE) --profile canvas down
-	CANVAS=True MODEL_WORKER_URI=$(MODEL_WORKER_URI) NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) $(DOCKER_COMPOSE) --profile canvas up
+	$(eval _IS_REMOTE := $(if $(MODEL_WORKER_URI),$(if $(findstring localhost,$(MODEL_WORKER_URI)),,$(if $(findstring 127.0.0.1,$(MODEL_WORKER_URI)),,yes)),))
+	$(eval _SCALE := $(if $(_IS_REMOTE),--scale canvas-model-worker=0,))
+	CANVAS=True MODEL_PATH=$(MODEL_PATH) MODEL_WORKER_URI=$(MODEL_WORKER_URI) NUM_PEOPLE=$(NUM_PEOPLE) SIM_ROBOT=$(SIM_ROBOT) FOOD=$(FOOD) $(DOCKER_COMPOSE) --profile canvas up $(_SCALE)
 
 # =============================================================================
 # ROS Bag Recording Targets

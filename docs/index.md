@@ -81,24 +81,15 @@ make start-nucleus
     # 1. Build the Canvas Docker image
     make build-canvas
 
-    # 2. Launch the model worker on a GPU server
-    cd costnav_isaacsim/canvas/apps/model_workers
-    cp .env.pub .env
-    # Edit .env: set MODEL_PATH to your checkpoint directory
-    #   MODEL_PATH=/path/to/your/CostNav/checkpoints/canvas-costnav
-    docker compose --env-file .env up
-    # Listens on port 8200 by default
-    cd -
-
-    # 3. Start Isaac Sim + Canvas agent
+    # 2. Start Isaac Sim + Canvas agent (includes model worker)
     make run-canvas
-    # Default: MODEL_WORKER_URI=http://localhost:8200
+    # Defaults: MODEL_PATH=./checkpoints/canvas-costnav MODEL_WORKER_URI=http://localhost:8200
 
-    # 4. Run evaluation
+    # 3. Run evaluation
     make run-eval-canvas
     ```
 
-    See **[Baselines](baselines.md)** for detailed Canvas model worker setup.
+    > **Tip:** To offload the model worker to a separate GPU server, see **[Baselines](baselines.md)**.
 
 See **[Quick Reference](quick_reference.md)** for all commands.
 

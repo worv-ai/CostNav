@@ -97,22 +97,15 @@ make run-eval-vint
 # 1. Build the Canvas Docker image
 make build-canvas
 
-# 2. Launch the model worker on a GPU server
-cd costnav_isaacsim/canvas/apps/model_workers
-cp .env.pub .env
-# Edit .env: set MODEL_PATH to your checkpoint directory
-docker compose --env-file .env up
-cd -
-
-# 3. Start Isaac Sim + Canvas agent
+# 2. Start Isaac Sim + Canvas agent (includes model worker)
 make run-canvas
-# Default: MODEL_WORKER_URI=http://localhost:8200
+# Defaults: MODEL_PATH=./checkpoints/canvas-costnav MODEL_WORKER_URI=http://localhost:8200
 
-# 4. Run evaluation
+# 3. Run evaluation
 make run-eval-canvas
 ```
 
-See **[Baselines](baselines.md)** for detailed Canvas model worker setup.
+> **Tip:** To offload the model worker to a separate GPU server, see **[Baselines](baselines.md)**.
 
 ---
 
@@ -169,7 +162,7 @@ CostNav/
 | `ros2`      | ROS2 Nav2 only                     | `make run-ros2`      | Nav2 tuning (requires sim)     |
 | `teleop`    | Isaac Sim + Teleop                 | `make run-teleop`    | Manual driving (joystick)      |
 | `vint`      | Isaac Sim + ViNT Policy + Follower | `make run-vint`      | ViNT IL baseline evaluation    |
-| `canvas`    | Isaac Sim + RViz + Canvas Bridge   | `make run-canvas`    | Canvas VLA navigation          |
+| `canvas`    | Isaac Sim + RViz + Model Worker + Canvas Bridge | `make run-canvas` | Canvas VLA navigation     |
 
 ```bash
 # Direct docker compose usage

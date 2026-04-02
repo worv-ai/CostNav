@@ -218,8 +218,7 @@ Example usage from Isaac Sim container:
     print(f"Assets available at: {args.nucleus_url}")
     print("=" * 60)
 
-    # Always exit with success - partial uploads are acceptable
-    sys.exit(0)
+    sys.exit(0 if success else 1)
 
 
 if __name__ == "__main__":
