@@ -265,7 +265,7 @@ Each stack receives goals differently. The mission manager handles this automati
 
 === "NavDP"
 
-    Receives both a **goal pose** via `/goal_pose` (point goal) and a **goal image** via `/goal_image`, then fuses them using point+image blending (`point_image_blend_alpha`, default: 0.5). Also uses DepthAnything for depth estimation.
+    Receives both a **goal pose** via `/goal_pose` (point goal) and a **goal image** via `/goal_image`, then fuses them in a single diffusion pass using native transformer attention-based conditioning. Also uses DepthAnything for depth estimation.
 
 === "CANVAS"
 
