@@ -104,6 +104,25 @@ injury:
     mais_5: 0.0  # Delivery robot context: MAIS 4+ not modeled (report covers motor vehicles)
     fatality: 0.0  # Delivery robot context: MAIS 4+ not modeled (report covers motor vehicles)
 
+# Obstacle spawning settings
+obstacles:
+  # Seed for deterministic mission generation (null = disabled, int = generate at startup)
+  # When set, missions are generated from NavMesh paths with obstacle placement
+  # and saved to config/missions/{seed}.json for distribution.
+  seed: 42
+
+  # Path to pre-generated mission JSON (alternative to seed, mutually exclusive)
+  # When set, missions are loaded from this file instead of generating.
+  mission_file: null
+
+  # Output directory for generated mission JSON files
+  output_dir: "/workspace/config/missions"
+
+  # Number of missions per difficulty level (used with seed)
+  num_none: 50   # No obstacles — clean path
+  num_easy: 25   # Small obstacles near path but avoidable (common + minor types)
+  num_hard: 25   # Large obstacles blocking path, forces detour (common + minor + major types)
+
 # Goal image settings (for ViNT ImageGoal mode)
 goal_image:
   # Enable goal image publishing for ViNT ImageGoal mode

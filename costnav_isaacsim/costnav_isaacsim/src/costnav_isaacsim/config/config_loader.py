@@ -198,6 +198,18 @@ class CanvasInstructionConfig:
 
 
 @dataclass
+class ObstaclesConfig:
+    """Obstacle spawning configuration."""
+
+    seed: Optional[int] = None
+    mission_file: Optional[str] = None
+    output_dir: str = "/workspace/config/missions"
+    num_none: int = 50
+    num_easy: int = 25
+    num_hard: int = 25
+
+
+@dataclass
 class MissionManagerConfig:
     """Configuration for MissionManager runtime settings."""
 
@@ -242,6 +254,7 @@ class MissionConfig:
     goal_image: GoalImageConfig = field(default_factory=GoalImageConfig)
     topomap: TopoMapConfig = field(default_factory=TopoMapConfig)
     canvas: CanvasInstructionConfig = field(default_factory=CanvasInstructionConfig)
+    obstacles: ObstaclesConfig = field(default_factory=ObstaclesConfig)
     manager: MissionManagerConfig = field(default_factory=MissionManagerConfig)
 
     @classmethod
@@ -374,6 +387,17 @@ class MissionConfig:
             debug_map_image_path=canvas_data.get("debug_map_image_path", ""),
         )
 
+        # Parse obstacles config
+        obstacles_data = data.get("obstacles", {})
+        obstacles_config = ObstaclesConfig(
+            seed=obstacles_data.get("seed"),
+            mission_file=obstacles_data.get("mission_file"),
+            output_dir=obstacles_data.get("output_dir", "/workspace/config/missions"),
+            num_none=obstacles_data.get("num_none", 50),
+            num_easy=obstacles_data.get("num_easy", 25),
+            num_hard=obstacles_data.get("num_hard", 25),
+        )
+
         # Parse manager config (MissionManager runtime settings)
         manager_data = data.get("manager", {})
         manager_config = MissionManagerConfig(
@@ -404,6 +428,7 @@ class MissionConfig:
             goal_image=goal_image_config,
             topomap=topomap_config,
             canvas=canvas_config,
+            obstacles=obstacles_config,
             manager=manager_config,
         )
 

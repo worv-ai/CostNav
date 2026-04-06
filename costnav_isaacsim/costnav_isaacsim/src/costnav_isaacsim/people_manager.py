@@ -801,3 +801,39 @@ class PeopleManager:
         self.character_names = []
         self.initialized = False
         logger.info("PeopleManager shutdown complete")
+
+    def pause(self):
+        """Pause all people by disabling their rigid body physics.
+
+        Prevents characters from moving during mission reset (teleport, obstacle
+        spawn, NavMesh rebake).
+        """
+        if not self.initialized or not self.character_setup:
+            return
+        try:
+            from pxr import Sdf
+
+            with Sdf.ChangeBlock():
+                for name in self.character_names:
+                    prim = self.character_setup.stage.GetPrimAtPath(f"{self.character_root}/{name}")
+                    if prim.IsValid():
+                        self.character_setup._set_character_physics_enabled(prim, False)
+            logger.info("People paused (%d characters)", len(self.character_names))
+        except Exception as e:
+            logger.warning("Failed to pause people: %s", e)
+
+    def resume(self):
+        """Resume all people by re-enabling their rigid body physics."""
+        if not self.initialized or not self.character_setup:
+            return
+        try:
+            from pxr import Sdf
+
+            with Sdf.ChangeBlock():
+                for name in self.character_names:
+                    prim = self.character_setup.stage.GetPrimAtPath(f"{self.character_root}/{name}")
+                    if prim.IsValid():
+                        self.character_setup._set_character_physics_enabled(prim, True)
+            logger.info("People resumed (%d characters)", len(self.character_names))
+        except Exception as e:
+            logger.warning("Failed to resume people: %s", e)

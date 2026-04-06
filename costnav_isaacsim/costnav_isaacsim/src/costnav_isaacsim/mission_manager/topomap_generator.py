@@ -610,8 +610,6 @@ class TopomapGenerator:
         Returns:
             List of saved image file paths, or empty list on failure.
         """
-        from PIL import Image
-
         out_dir = output_dir or self._config.output_dir
 
         # Clean previous topomap images so stale files from earlier missions
@@ -645,17 +643,137 @@ class TopomapGenerator:
 
         logger.info(f"[TOPOMAP] Generating topomap: {len(waypoints)} waypoints → {out_dir}")
 
-        # Step 3: Setup camera
+        # Capture images at waypoints (skip the first waypoint so the
+        # topomap starts at a safe distance from the robot)
+        return self._capture_waypoints_to_images(waypoints[1:], out_dir)
+
+    def generate_topomap_from_waypoints(
+        self,
+        waypoints: list,
+        output_dir: Optional[str] = None,
+    ) -> List[str]:
+        """Generate a topological map from pre-computed waypoints.
+
+        Unlike :meth:`generate_topomap`, this method skips the NavMesh path
+        query and arc-length resampling steps.  It accepts waypoints directly
+        (e.g. from a cached mission JSON) and captures images using the same
+        camera logic.
+
+        This is useful when topomaps need to be generated from obstacle-free
+        cached paths after obstacles have been placed and the NavMesh has
+        been re-baked — making a live NavMesh query return a different (or
+        no) path.
+
+        Args:
+            waypoints: Pre-computed waypoint list.  Each element must be
+                either a ``SampledPosition`` or a ``[x, y]`` / ``[x, y, z]``
+                list/tuple.  When plain coordinates are given, headings are
+                computed automatically from consecutive waypoint directions.
+            output_dir: Directory to save images.  If *None*, uses the
+                config default.
+
+        Returns:
+            List of saved image file paths, or empty list on failure.
+        """
+        out_dir = output_dir or self._config.output_dir
+
+        # Clean previous topomap images
+        if os.path.isdir(out_dir):
+            for old_img in glob.glob(os.path.join(out_dir, "*.png")):
+                os.remove(old_img)
+            logger.info(f"[TOPOMAP] Cleaned previous images from {out_dir}")
+
+        os.makedirs(out_dir, exist_ok=True)
+
+        # Convert plain coordinate lists to SampledPosition with headings
+        positions = self._ensure_sampled_positions(waypoints)
+        if len(positions) < 2:
+            logger.error("[TOPOMAP] Need at least 2 waypoints. Aborting topomap generation.")
+            return []
+
+        logger.info(f"[TOPOMAP] Generating topomap from {len(positions)} pre-computed waypoints → {out_dir}")
+
+        # Skip the first waypoint (same as generate_topomap) so the robot
+        # does not appear in the first captured image.
+        return self._capture_waypoints_to_images(positions[1:], out_dir)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _ensure_sampled_positions(waypoints: list) -> List[SampledPosition]:
+        """Convert a mixed list of waypoints to ``SampledPosition`` objects.
+
+        Accepts ``SampledPosition`` instances (passed through) or plain
+        ``[x, y]`` / ``[x, y, z]`` sequences.  Headings are computed from
+        the direction to the next waypoint; the last waypoint inherits the
+        heading of the previous one.
+
+        Args:
+            waypoints: List of ``SampledPosition`` or coordinate sequences.
+
+        Returns:
+            List of ``SampledPosition`` with headings set.
+        """
+        if not waypoints:
+            return []
+
+        # If already all SampledPosition, return as-is
+        if all(isinstance(wp, SampledPosition) for wp in waypoints):
+            return list(waypoints)
+
+        # Build coordinate tuples first
+        coords: List[tuple] = []
+        for wp in waypoints:
+            if isinstance(wp, SampledPosition):
+                coords.append((wp.x, wp.y, wp.z))
+            elif hasattr(wp, "__len__"):
+                x, y = float(wp[0]), float(wp[1])
+                z = float(wp[2]) if len(wp) > 2 else 0.0
+                coords.append((x, y, z))
+            else:
+                raise TypeError(f"Unsupported waypoint type: {type(wp)}")
+
+        # Compute headings from consecutive directions
+        positions: List[SampledPosition] = []
+        for i, (x, y, z) in enumerate(coords):
+            if i < len(coords) - 1:
+                nx, ny, _ = coords[i + 1]
+                heading = math.atan2(ny - y, nx - x)
+            else:
+                # Last point: reuse previous heading
+                heading = positions[-1].heading if positions else 0.0
+            positions.append(SampledPosition(x=x, y=y, z=z, heading=heading))
+
+        return positions
+
+    def _capture_waypoints_to_images(
+        self,
+        waypoints: List[SampledPosition],
+        out_dir: str,
+    ) -> List[str]:
+        """Setup camera, capture an image at each waypoint, and save to disk.
+
+        This is the shared capture-and-save loop used by both
+        :meth:`generate_topomap` and :meth:`generate_topomap_from_waypoints`.
+
+        Args:
+            waypoints: Waypoints to capture (already trimmed — the caller
+                is responsible for skipping the first waypoint if desired).
+            out_dir: Directory where images are saved as ``0.png``,
+                ``1.png``, etc.
+
+        Returns:
+            List of saved image file paths.
+        """
+        from PIL import Image
+
         self.setup_camera()
 
-        # Step 4 & 5: Capture and save images
-        # Skip the first waypoint (index 0) so the topomap starts at a safe
-        # distance from the robot, preventing the robot from appearing in the
-        # first captured image.  Saved images are still numbered from 0.png.
-        waypoints_to_capture = waypoints[1:]
         saved_paths: List[str] = []
         try:
-            for i, waypoint in enumerate(waypoints_to_capture):
+            for i, waypoint in enumerate(waypoints):
                 extra = self._config.first_image_extra_settle_steps if i == 0 else 0
                 rgb_data = self.capture_image_at_position(waypoint, extra_settle_steps=extra)
                 if rgb_data is None:
@@ -667,10 +785,9 @@ class TopomapGenerator:
                 img.save(img_path)
                 saved_paths.append(img_path)
 
-                if (i + 1) % 50 == 0 or i == len(waypoints_to_capture) - 1:
-                    logger.info(f"[TOPOMAP] Progress: {i + 1}/{len(waypoints_to_capture)} images saved")
+                if (i + 1) % 50 == 0 or i == len(waypoints) - 1:
+                    logger.info(f"[TOPOMAP] Progress: {i + 1}/{len(waypoints)} images saved")
         finally:
-            # Step 6: Cleanup
             self.cleanup_camera()
 
         logger.info(f"[TOPOMAP] Topomap generation complete: {len(saved_paths)} images saved to {out_dir}")

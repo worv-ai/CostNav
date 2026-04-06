@@ -63,6 +63,17 @@ def main():
     else:
         logger.info("People spawning disabled")
 
+    # Log obstacle config
+    if mission_config.obstacles.seed is not None:
+        logger.info(
+            f"Obstacle spawning: seed={mission_config.obstacles.seed}, "
+            f"none={mission_config.obstacles.num_none}, "
+            f"easy={mission_config.obstacles.num_easy}, "
+            f"hard={mission_config.obstacles.num_hard}"
+        )
+    elif mission_config.obstacles.mission_file:
+        logger.info(f"Obstacle spawning: loading from {mission_config.obstacles.mission_file}")
+
     launcher = CostNavSimLauncher(
         usd_path=usd_path,
         robot_name=robot_name,

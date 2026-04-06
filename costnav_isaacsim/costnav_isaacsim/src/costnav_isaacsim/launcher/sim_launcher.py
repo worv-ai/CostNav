@@ -17,6 +17,7 @@ from costnav_isaacsim.utils import (
     resolve_people_robot_prim,
     resolve_robot_prim_path,
 )
+
 from .extensions import enable_isaac_sim_extensions
 
 if TYPE_CHECKING:
@@ -55,7 +56,7 @@ class CostNavSimLauncher:
 
         # Configure app and extensions
         self._config_app()
-        if not enable_isaac_sim_extensions(self.simulation_app, self.num_people):
+        if not enable_isaac_sim_extensions(self.simulation_app, self.num_people, enable_obstacles=True):
             self.num_people = 0
         self._setup_carb_settings()
 
@@ -291,6 +292,28 @@ class CostNavSimLauncher:
             self.people_manager.initialize(self.simulation_app, self.simulation_context)
             self._people_initialized = True
 
+        # Initialize obstacle setup (always enabled)
+        self.obstacle_setup = None
+        try:
+            from omni.isaac.obstacle.obstacle_setup import ObstacleSetup
+
+            self.obstacle_setup = ObstacleSetup()
+            logger.info("ObstacleSetup initialized")
+        except Exception as e:
+            logger.warning("Failed to initialize ObstacleSetup: %s", e)
+
+        # Load pre-generated mission configs if specified in obstacle config
+        self.mission_configs = None
+        obs_config = self.mission_config.obstacles if self.mission_config else None
+        if obs_config and obs_config.mission_file:
+            from costnav_isaacsim.mission_manager.mission_generator import load_missions
+
+            self.mission_configs = load_missions(obs_config.mission_file)
+            logger.info("Loaded %d missions from %s", len(self.mission_configs), obs_config.mission_file)
+        elif obs_config and obs_config.seed is not None:
+            # Mission generation deferred to MissionManager (needs NavMeshSampler created there)
+            logger.info("Mission generation deferred (seed=%d)", obs_config.seed)
+
         self._check_healthy()
         logger.info("Simulation started")
 
@@ -315,12 +338,22 @@ class CostNavSimLauncher:
         mission_manager = MissionManager(
             mission_config=self.mission_config,
             simulation_context=self.simulation_context,
+            obstacle_setup=self.obstacle_setup,
+            people_manager=self.people_manager,
+            mission_configs=self.mission_configs,
         )
         logger.info("Mission manager initialized (will run in main simulation loop)")
         return mission_manager
 
     def close(self):
         """Cleanup and close simulation."""
+        if getattr(self, "obstacle_setup", None) is not None:
+            try:
+                self.obstacle_setup.cleanup()
+            except Exception as e:
+                logger.warning("Error cleaning up obstacle setup: %s", e)
+            self.obstacle_setup = None
+
         if self.people_manager is not None:
             try:
                 self.people_manager.shutdown()

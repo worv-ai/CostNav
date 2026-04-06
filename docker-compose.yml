@@ -63,6 +63,7 @@ services:
       - /tmp/isaac-sim/documents:/root/Documents:rw
       - ./third_party/PeopleAPI/exts:/isaac-sim/extsUser:rw
       - ./third_party/FoodAssets/exts/worvai.assets.food:/isaac-sim/extsUser/worvai.assets.food:rw
+      - ./third_party/ObstacleAssets/exts/omni.isaac.obstacle:/isaac-sim/extsUser/omni.isaac.obstacle:rw
     working_dir: /workspace
     command:
       - "-ic"

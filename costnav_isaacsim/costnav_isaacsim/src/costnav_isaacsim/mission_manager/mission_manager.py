@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import math
 from enum import Enum
+from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional
 
 from transforms3d.euler import euler2quat
@@ -93,23 +94,32 @@ class MissionManager:
         simulation_context,
         node_name: str = "mission_manager",
         teleport_callback: Optional[Callable[[object], bool]] = None,
+        obstacle_setup=None,
+        people_manager=None,
+        mission_configs=None,
     ):
         """Initialize mission manager.
 
         Args:
             mission_config: Mission configuration object (timeout, distances, etc.).
+                          Obstacle settings are read from mission_config.obstacles.
             simulation_context: Isaac Sim SimulationContext for stepping physics.
             node_name: Name of the ROS2 node.
             teleport_callback: Optional callback for robot teleportation.
-                             Signature: (position: SampledPosition) -> bool
-                             If not provided and config.manager.robot_prim_path is set,
-                             will attempt to auto-setup Isaac Sim teleportation.
+            obstacle_setup: ObstacleSetup instance for spawning/removing obstacles.
+            people_manager: PeopleManager instance for pause/resume control.
+            mission_configs: Pre-loaded list of MissionConfig from JSON.
         """
         self.config = mission_config
         self.simulation_context = simulation_context
         self.node_name = node_name
 
         self._teleport_callback = teleport_callback
+        self._obstacle_setup = obstacle_setup
+        self._people_manager = people_manager
+        self._mission_configs = mission_configs
+        self._current_mission_config = None
+        self._settle_retry_count = 0
 
         # ROS2 node and publishers (initialized later)
         self._node = None
@@ -303,6 +313,23 @@ class MissionManager:
                 validate_path=self.config.sampling.validate_path,
             )
 
+            # Generate missions if seed provided (needs sampler to be ready)
+            obs_config = self.config.obstacles
+            if self._mission_configs is None and obs_config.seed is not None:
+                from costnav_isaacsim.mission_manager.mission_generator import MissionGenerator, save_missions
+
+                generator = MissionGenerator(self._sampler, seed=obs_config.seed)
+                self._mission_configs = generator.generate(
+                    num_none=obs_config.num_none, num_easy=obs_config.num_easy, num_hard=obs_config.num_hard
+                )
+                # Save for distribution
+                save_path = Path(obs_config.output_dir) / f"{obs_config.seed}.json"
+                save_missions(self._mission_configs, save_path, seed=obs_config.seed)
+
+            # Override num_missions if mission configs are loaded/generated
+            if self._mission_configs is not None:
+                self.config.manager.num_missions = len(self._mission_configs)
+
             # Initialize marker publisher (as a separate node) with config values
             self._marker_publisher = MarkerPublisher(
                 node_name=f"{self.node_name}_markers",
@@ -427,6 +454,10 @@ class MissionManager:
         # Reset topomap reload tracking
         self._model_load_topomap_future = None
         self._model_load_topomap_start_time = None
+
+        # Reset mission config and settle retry tracking
+        self._current_mission_config = None
+        self._settle_retry_count = 0
 
     def _odom_callback(self, msg) -> None:
         """Handle odometry messages for robot position and orientation tracking."""
@@ -1392,15 +1423,40 @@ class MissionManager:
         logger.info(f"[{self._state.name}] Mission {self._current_mission}")
         logger.info(f"[{self._state.name}] {'=' * 50}")
 
-        # Step 1: Sample positions using sampler
-        start, goal = self._sampler.sample_start_goal_pair()
+        # Pause people during mission reset
+        if self._people_manager is not None:
+            self._people_manager.pause()
+
+        # Remove old obstacles
+        if self._obstacle_setup is not None:
+            old_names = list(self._obstacle_setup.obstacle_data_dict.keys())
+            if old_names:
+                self._obstacle_setup.remove_obstacles(old_names)
+
+        # Step 1: Sample positions (use pre-configured mission or random sampling)
+        mission_idx = self._current_mission - 1  # _current_mission was just incremented
+        if self._mission_configs and mission_idx < len(self._mission_configs):
+            mc = self._mission_configs[mission_idx]
+            from costnav_isaacsim.mission_manager.navmesh_sampler import SampledPosition
+
+            start = SampledPosition(x=mc.start["x"], y=mc.start["y"], z=mc.start.get("z", 0))
+            start.heading = mc.start.get("heading", 0)
+            goal = SampledPosition(x=mc.goal["x"], y=mc.goal["y"], z=mc.goal.get("z", 0))
+            # Store mission config for obstacle spawning later
+            self._current_mission_config = mc
+        else:
+            # Fall back to random sampling (existing behavior)
+            start, goal = self._sampler.sample_start_goal_pair()
+            self._current_mission_config = None
+
         if start is None or goal is None:
             logger.error(f"[{self._state.name}] Failed to sample valid start/goal positions")
             self._state = MissionState.READY  # Try again next step
             return
 
         # Optionally align the start heading to the first NavMesh path waypoint
-        if self.config.manager.align_initial_heading_to_path:
+        # Skip if heading is already set from mission config
+        if self._current_mission_config is None and self.config.manager.align_initial_heading_to_path:
             first_wp = self._sampler.get_path_first_waypoint(start, goal)
             if first_wp is not None:
                 start.heading = math.atan2(first_wp.y - start.y, first_wp.x - start.x)
@@ -1450,6 +1506,37 @@ class MissionManager:
             if self._settle_steps_remaining == 0:
                 logger.info(f"[{self._state.name}] Physics settled")
 
+                # Check if robot fell during settling
+                if self._is_robot_fallen():
+                    self._settle_retry_count = getattr(self, "_settle_retry_count", 0) + 1
+                    if self._settle_retry_count >= 3:
+                        logger.error("Robot fell %d times, skipping mission", self._settle_retry_count)
+                        self._settle_retry_count = 0
+                        if self._people_manager:
+                            self._people_manager.resume()
+                        self._state = MissionState.READY
+                        return
+                    logger.warning(
+                        "Robot fell during settling (attempt %d/3), retrying teleport",
+                        self._settle_retry_count,
+                    )
+                    self._state = MissionState.TELEPORTING
+                    return
+
+                self._settle_retry_count = 0
+
+                # Spawn obstacles from mission config
+                if self._obstacle_setup and self._current_mission_config and self._current_mission_config.obstacles:
+                    self._spawn_mission_obstacles(self._current_mission_config)
+
+                # Generate topomap from cached waypoints if available
+                if self._current_mission_config and self._current_mission_config.waypoints and self._topomap_generator:
+                    self._topomap_generator.generate_topomap_from_waypoints(self._current_mission_config.waypoints)
+
+                # Resume people after obstacles are placed
+                if self._people_manager is not None:
+                    self._people_manager.resume()
+
                 # Spawn food at robot's actual position after robot has settled
                 if self.config.food.enabled:
                     if not self._evaluation.reset_food_for_teleport():
@@ -1457,6 +1544,27 @@ class MissionManager:
 
                 logger.info(f"[{self._state.name}] Publishing initial pose")
                 self._state = MissionState.PUBLISHING_INITIAL_POSE
+
+    def _spawn_mission_obstacles(self, mission_config):
+        """Spawn obstacles defined in the mission config."""
+        from omni.isaac.obstacle.impl.utils import get_server_path
+
+        server_path = get_server_path()
+        for idx, obs in enumerate(mission_config.obstacles):
+            usd_path = f"{server_path}/Users/worv/Object/{obs.usd_path}"
+            self._obstacle_setup.load_obstacle(
+                usd_path=usd_path,
+                name=f"mission_obs_{mission_config.id}_{idx}",
+                position=[obs.x, obs.y, obs.z],
+                rotation=obs.rotation,
+            )
+
+        logger.info(
+            "Spawned %d obstacles for mission %d (%s)",
+            len(mission_config.obstacles),
+            mission_config.id,
+            mission_config.difficulty,
+        )
 
     def _step_publishing_initial_pose(self):
         """Publish initial pose for AMCL."""

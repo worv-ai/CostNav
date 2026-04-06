@@ -87,6 +87,34 @@ mkdocs serve
 
 ---
 
+## :computer: Development Environment
+
+### Setup
+
+```bash
+make build-isaac-sim        # Build Isaac Sim Docker image
+make download-assets-hf     # Download simulation assets from Hugging Face
+make start-nucleus          # Start local Nucleus server + upload assets
+```
+
+### Running Isaac Sim
+
+```bash
+# Raw Isaac Sim GUI editor (for inspecting scenes, creating assets)
+make run-isaac-sim-raw
+
+# Full simulation with launch.py (includes RViz)
+make run-isaac-sim NUM_PEOPLE=5 SIM_ROBOT=nova_carter FOOD=True
+```
+
+| Parameter | Default | Options |
+|:----------|:--------|:--------|
+| `NUM_PEOPLE` | `20` | Number of pedestrians to spawn |
+| `SIM_ROBOT` | `segway_e1` | `segway_e1`, `nova_carter` |
+| `FOOD` | `True` | Enable food obstacles |
+
+---
+
 ## :dart: Roadmap
 
 ### Completed

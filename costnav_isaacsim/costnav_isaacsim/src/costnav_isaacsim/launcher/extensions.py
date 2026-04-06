@@ -12,12 +12,15 @@ from isaacsim import SimulationApp
 logger = logging.getLogger("costnav_launch")
 
 
-def enable_isaac_sim_extensions(simulation_app: SimulationApp, num_people: int = 0) -> bool:
+def enable_isaac_sim_extensions(
+    simulation_app: SimulationApp, num_people: int = 0, enable_obstacles: bool = True
+) -> bool:
     """Enable required Isaac Sim extensions.
 
     Args:
         simulation_app: The SimulationApp instance.
         num_people: Number of people to spawn (enables PeopleAPI if > 0).
+        enable_obstacles: Enable the obstacle spawning extension (default: True).
 
     Returns:
         True if all extensions enabled successfully, False if PeopleAPI failed.
@@ -42,6 +45,11 @@ def enable_isaac_sim_extensions(simulation_app: SimulationApp, num_people: int =
     if num_people > 0:
         if not _enable_people_api(simulation_app):
             return False
+
+    # Obstacle extension (PeopleAPI is optional — works without it)
+    if enable_obstacles:
+        enable_extension("omni.isaac.obstacle")
+        simulation_app.update()
 
     simulation_app.update()
     return True
