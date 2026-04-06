@@ -45,15 +45,12 @@ class NavDPPolicyNode(BasePolicyNode):
         if resolved_goal_type != "image_goal":
             raise ValueError(f"NavDP only supports goal_type='image_goal' in this wrapper, got '{resolved_goal_type}'.")
 
-        self.depth_anything_checkpoint = str(
-            model_cfg.get("depth_anything_checkpoint", "checkpoints/depth_anything_v2_metric_vkitti_vits.pth")
-        )
+        if "depth_anything_checkpoint" not in model_cfg:
+            raise ValueError("depth_anything_checkpoint must be set in the model config YAML")
+        self.depth_anything_checkpoint = str(model_cfg["depth_anything_checkpoint"])
         self.depth_anything_encoder = str(model_cfg.get("depth_anything_encoder", "vits"))
         self.depth_anything_input_size = int(model_cfg.get("depth_anything_input_size", 518))
         self.depth_anything_max_depth = float(model_cfg.get("depth_anything_max_depth", 20.0))
-
-        self.point_image_blend_alpha = float(model_cfg.get("point_image_blend_alpha", 0.5))
-        self.point_image_blend_alpha = max(0.0, min(1.0, self.point_image_blend_alpha))
 
         self._agent_kwargs = {
             "depth_anything_checkpoint": self.depth_anything_checkpoint,
@@ -92,10 +89,7 @@ class NavDPPolicyNode(BasePolicyNode):
             device=self.model_cfg.get("device", "cuda:0"),
         )
 
-        self.get_logger().info(
-            f"NavDP mode fixed to point_image + depth_anything "
-            f"(point_image_blend_alpha={self.point_image_blend_alpha:.2f})"
-        )
+        self.get_logger().info("NavDP mode: native point+image fusion (single diffusion pass) + depth_anything")
 
     def _create_agent(
         self,
@@ -167,11 +161,7 @@ class NavDPPolicyNode(BasePolicyNode):
             return True
 
         try:
-            queue_snapshot = [list(q) for q in self.agent.memory_queue]
-            point_traj, _ = self.agent.step_pointgoal(goal, self.current_image, depth)
-            self.agent.memory_queue = [list(q) for q in queue_snapshot]
-            image_traj, _ = self.agent.step_imagegoal(self.goal_image, self.current_image, depth)
-            best_traj = self.point_image_blend_alpha * point_traj + (1.0 - self.point_image_blend_alpha) * image_traj
+            best_traj, _ = self.agent.step_point_image_goal(goal, self.goal_image, self.current_image, depth)
         except Exception as exc:
             self.get_logger().error(f"NavDP inference failed: {exc}")
             return True

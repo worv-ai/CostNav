@@ -12,8 +12,7 @@ visualize_debug_images: true
 
 # NavDP eval is fixed to:
 # - depth: DepthAnything
-# - goal: point + image fusion
-point_image_blend_alpha: 0.5
+# - goal: native point + image fusion (single diffusion pass)
 
 # Goal topic (point goal for fusion mode)
 goal_pose_topic: "/goal_pose"

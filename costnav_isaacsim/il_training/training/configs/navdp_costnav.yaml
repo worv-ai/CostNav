@@ -20,7 +20,7 @@ il:
 
   # Common training knobs (defaults match InternNav)
   ckpt_to_load: /mnt/harbor/users/minhyeok/navdp/navdp-cross-modal.ckpt
-  depth_anything_checkpoint: /mnt/harbor/users/minhyeok/depthAnything/depth_anything_v2_vits.pth
+  depth_anything_checkpoint: checkpoints/depth_anything_v2_metric_vkitti_vits.pth
   depth_anything_encoder: vits
   epochs: 1000
   batch_size: 32

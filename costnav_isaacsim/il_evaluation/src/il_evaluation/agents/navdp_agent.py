@@ -115,7 +115,30 @@ class NavDPAgent:
         # separate explicit "model backbone encoder" argument.
 
         config = NavDPModelConfig(model_cfg=model_cfg)
-        self.model = NavDPNet(config)
+        # TODO: Remove this monkey-patch after https://github.com/InternRobotics/InternNav/pull/330 is merged.
+        # NavDPNet -> RGBDBackbone hardcodes a relative checkpoint default
+        # ("checkpoints/depth_anything_v2_vits.pth") that breaks in Docker.
+        # Monkey-patch RGBDBackbone.__init__ to inject the correct path from
+        # our eval config without modifying third-party code.
+        from internnav.model.encoder.navdp_backbone import RGBDBackbone
+
+        _orig_init = RGBDBackbone.__init__
+        da_ckpt = depth_anything_checkpoint
+        repo_root = _find_repo_root()
+
+        def _patched_init(self_bb, *args, checkpoint="", **kwargs):
+            resolved = checkpoint
+            if da_ckpt:
+                resolved = str(da_ckpt)
+            if resolved and not Path(resolved).is_absolute():
+                resolved = str(repo_root / resolved)
+            _orig_init(self_bb, *args, checkpoint=resolved, **kwargs)
+
+        RGBDBackbone.__init__ = _patched_init
+        try:
+            self.model = NavDPNet(config)
+        finally:
+            RGBDBackbone.__init__ = _orig_init
         if checkpoint:
             state_dict = torch.load(checkpoint, map_location=self.device, weights_only=False)
             if isinstance(state_dict, dict) and "state_dict" in state_dict:
@@ -246,6 +269,47 @@ class NavDPAgent:
         positive_traj = torch.cumsum(naction / 4.0, dim=1)[(-critic_values).argsort()[0:8]]
         return positive_traj
 
+    def _predict_noise_ip(
+        self,
+        last_actions: torch.Tensor,
+        timestep: torch.Tensor,
+        point_embed: torch.Tensor,
+        image_embed: torch.Tensor,
+        rgbd_embed: torch.Tensor,
+    ) -> torch.Tensor:
+        """Single-pass noise prediction with native point+image goal fusion.
+
+        Replicates the multi-goal training path using [point, image, point] for
+        the three goal-conditioning slots, matching the model's training distribution.
+        """
+        action_embeds = self.model.input_embed(last_actions)
+        time_embeds = self.model.time_emb(timestep.to(self.device)).unsqueeze(1)
+        cond_raw = torch.cat([time_embeds, point_embed, image_embed, point_embed, rgbd_embed], dim=1)
+        cond_embedding = cond_raw + self.model.cond_pos_embed(cond_raw)
+        cond_embedding = cond_embedding.repeat(action_embeds.shape[0], 1, 1)
+        input_embedding = action_embeds + self.model.out_pos_embed(action_embeds)
+        output = self.model.decoder(
+            tgt=input_embedding, memory=cond_embedding, tgt_mask=self.model.tgt_mask.to(self.device)
+        )
+        output = self.model.layernorm(output)
+        return self.model.action_head(output)
+
+    def _sample_with_ip_goals(
+        self, point_embed: torch.Tensor, image_embed: torch.Tensor, rgbd_embed: torch.Tensor
+    ) -> torch.Tensor:
+        """Run a single diffusion pass with native point+image goal fusion."""
+        noisy_action = torch.randn((self.sample_num * point_embed.shape[0], self.predict_size, 3), device=self.device)
+        naction = noisy_action
+        self.model.noise_scheduler.set_timesteps(self.model.noise_scheduler.config.num_train_timesteps)
+        for k in self.model.noise_scheduler.timesteps[:]:
+            noise_pred = self._predict_noise_ip(
+                naction, k.to(self.device).unsqueeze(0), point_embed, image_embed, rgbd_embed
+            )
+            naction = self.model.noise_scheduler.step(model_output=noise_pred, timestep=k, sample=naction).prev_sample
+        critic_values = self.model.predict_critic(naction, rgbd_embed)
+        positive_traj = torch.cumsum(naction / 4.0, dim=1)[(-critic_values).argsort()[0:8]]
+        return positive_traj
+
     @torch.no_grad()
     def step_pointgoal(
         self, goal_xyz: np.ndarray, image: np.ndarray, depth: np.ndarray
@@ -317,6 +381,46 @@ class NavDPAgent:
         pixel_embed = self.model.pixel_encoder(pixel_goal).unsqueeze(1)
 
         positive_traj = self._sample_with_goal_embed(pixel_embed, rgbd_embed)
+        best_traj = positive_traj[0].detach().cpu().numpy()
+        all_traj = positive_traj.detach().cpu().numpy()
+        return best_traj, all_traj
+
+    @torch.no_grad()
+    def step_point_image_goal(
+        self, goal_xyz: np.ndarray, goal_image: np.ndarray, image: np.ndarray, depth: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Predict trajectory with native point+image goal fusion in a single diffusion pass.
+
+        Unlike running separate point-goal and image-goal passes and alpha-blending the
+        results, this method feeds both embeddings into the transformer conditioning in a
+        single denoising pass, matching the multi-goal training distribution.
+
+        Args:
+            goal_xyz: Goal in robot frame [3] (x, y, theta).
+            goal_image: Goal RGB image (H, W, 3) uint8.
+            image: Current RGB image (H, W, 3) uint8.
+            depth: Depth image (H, W) or (H, W, 1).
+
+        Returns:
+            Tuple of (best_trajectory, all_trajectories)
+        """
+        proc_image = self._process_image(image)
+        proc_depth = self._process_depth(depth)
+        proc_goal = self._process_image(goal_image)
+
+        mem_image = self._update_memory(0, proc_image)
+        input_images = self._to_tensor(mem_image[None, ...])
+        input_depths = self._to_tensor(proc_depth[None, ...])
+
+        rgbd_embed = self.model.rgbd_encoder(input_images, input_depths)
+
+        tensor_point_goal = self._to_tensor(np.asarray(goal_xyz, dtype=np.float32)[None, ...])
+        point_embed = self.model.point_encoder(tensor_point_goal).unsqueeze(1)
+
+        image_goal = self._to_tensor(np.concatenate((proc_goal, proc_image), axis=-1)[None, ...])
+        image_embed = self.model.image_encoder(image_goal).unsqueeze(1)
+
+        positive_traj = self._sample_with_ip_goals(point_embed, image_embed, rgbd_embed)
         best_traj = positive_traj[0].detach().cpu().numpy()
         all_traj = positive_traj.detach().cpu().numpy()
         return best_traj, all_traj

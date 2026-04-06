@@ -55,21 +55,10 @@ def _repo_root_from_file() -> Path:
 
 
 def _find_depth_anything_checkpoint(explicit_path: Optional[str]) -> Optional[Path]:
-    if isinstance(explicit_path, str) and explicit_path.strip():
-        path = Path(explicit_path).expanduser()
-        return path if path.is_absolute() else _repo_root_from_file() / path
-
-    repo_root = _repo_root_from_file()
-    candidates = [
-        repo_root / "checkpoints" / "depth_anything_v2_metric_hypersim_vits.pth",
-        repo_root / "checkpoints" / "depth_anything_v2_vits.pth",
-        repo_root / "third_party" / "InternNav" / "checkpoints" / "depth_anything_v2_metric_hypersim_vits.pth",
-        repo_root / "third_party" / "InternNav" / "checkpoints" / "depth_anything_v2_vits.pth",
-    ]
-    for path in candidates:
-        if path.exists():
-            return path
-    return None
+    if not isinstance(explicit_path, str) or not explicit_path.strip():
+        return None
+    path = Path(explicit_path).expanduser()
+    return path if path.is_absolute() else _repo_root_from_file() / path
 
 
 class DepthAnythingEstimator:
