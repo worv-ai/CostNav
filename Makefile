@@ -607,13 +607,9 @@ start-nucleus:
 				--nucleus-url omniverse://localhost"; \
 	else \
 		echo ""; \
-		echo "WARNING: Isaac Sim image not found: $(ISAAC_SIM_IMAGE)"; \
-		echo "Run 'make build-isaac-sim' first to enable automatic asset upload."; \
-		echo ""; \
-		echo "For now, please upload assets manually:"; \
-		echo "  1. Open http://localhost:8080"; \
-		echo "  2. Login with: $(OMNI_USER) / $(OMNI_PASS)"; \
-		echo "  3. Navigate to / and upload files from assets/"; \
+		echo "ERROR: Isaac Sim image not found: $(ISAAC_SIM_IMAGE)"; \
+		echo "Run 'make build-isaac-sim' first."; \
+		exit 1; \
 	fi
 	@echo ""
 	@echo "============================================================"
