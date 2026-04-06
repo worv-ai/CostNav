@@ -160,8 +160,29 @@ def main() -> None:
     )
     assert exp_cfg.num_gpus > 0, "Number of GPUs must be greater than 0"
 
+    # TODO: Remove this monkey-patch after https://github.com/InternRobotics/InternNav/pull/330 is merged.
+    # NavDPNet -> RGBDBackbone hardcodes a relative checkpoint default
+    # ("checkpoints/depth_anything_v2_vits.pth") that ignores the config value.
+    # Monkey-patch RGBDBackbone.__init__ to inject depth_anything_checkpoint
+    # from our training config.
+    from internnav.model.encoder.navdp_backbone import RGBDBackbone
+
+    _orig_rgbd_init = RGBDBackbone.__init__
+    da_ckpt = cfg.get("il", {}).get("depth_anything_checkpoint")
+
+    def _patched_rgbd_init(self_bb, *args, checkpoint="", **kwargs):
+        resolved = checkpoint
+        if da_ckpt:
+            resolved = str(da_ckpt)
+        _orig_rgbd_init(self_bb, *args, checkpoint=resolved, **kwargs)
+
+    RGBDBackbone.__init__ = _patched_rgbd_init
+
     model_class, model_config_class = get_policy("NavDP_Policy"), get_config("NavDP_Policy")
-    train_module.main(exp_cfg, model_class, model_config_class)
+    try:
+        train_module.main(exp_cfg, model_class, model_config_class)
+    finally:
+        RGBDBackbone.__init__ = _orig_rgbd_init
 
 
 if __name__ == "__main__":

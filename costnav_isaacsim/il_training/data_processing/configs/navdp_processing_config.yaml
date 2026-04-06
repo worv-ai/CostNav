@@ -27,7 +27,7 @@ processing:
   depth_source: depth_anything
   # Optional: explicit checkpoint path for DepthAnything.
   # If empty, converter searches common defaults under checkpoints/.
-  depth_anything_checkpoint: /mnt/harbor/users/minhyeok/depthAnything/depth_anything_v2_vits.pth
+  depth_anything_checkpoint: checkpoints/depth_anything_v2_metric_vkitti_vits.pth
   depth_anything_encoder: vits
   depth_anything_input_size: 518
   depth_anything_max_depth: 20.0

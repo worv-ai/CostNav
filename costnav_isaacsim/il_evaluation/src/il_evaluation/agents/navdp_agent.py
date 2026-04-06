@@ -115,7 +115,30 @@ class NavDPAgent:
         # separate explicit "model backbone encoder" argument.
 
         config = NavDPModelConfig(model_cfg=model_cfg)
-        self.model = NavDPNet(config)
+        # TODO: Remove this monkey-patch after https://github.com/InternRobotics/InternNav/pull/330 is merged.
+        # NavDPNet -> RGBDBackbone hardcodes a relative checkpoint default
+        # ("checkpoints/depth_anything_v2_vits.pth") that breaks in Docker.
+        # Monkey-patch RGBDBackbone.__init__ to inject the correct path from
+        # our eval config without modifying third-party code.
+        from internnav.model.encoder.navdp_backbone import RGBDBackbone
+
+        _orig_init = RGBDBackbone.__init__
+        da_ckpt = depth_anything_checkpoint
+        repo_root = _find_repo_root()
+
+        def _patched_init(self_bb, *args, checkpoint="", **kwargs):
+            resolved = checkpoint
+            if da_ckpt:
+                resolved = str(da_ckpt)
+            if resolved and not Path(resolved).is_absolute():
+                resolved = str(repo_root / resolved)
+            _orig_init(self_bb, *args, checkpoint=resolved, **kwargs)
+
+        RGBDBackbone.__init__ = _patched_init
+        try:
+            self.model = NavDPNet(config)
+        finally:
+            RGBDBackbone.__init__ = _orig_init
         if checkpoint:
             state_dict = torch.load(checkpoint, map_location=self.device, weights_only=False)
             if isinstance(state_dict, dict) and "state_dict" in state_dict:
