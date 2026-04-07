@@ -202,6 +202,27 @@ Moves the virtual camera to the given position, steps the simulation to flush th
 
 Removes the camera prim and releases render resources. Automatically called by `generate_topomap()` in a `finally` block.
 
+## Obstacle Mission Integration
+
+When using [obstacle spawning](obstacle_spawning.md), topomaps are generated from **cached waypoints** stored in the mission JSON — not from live NavMesh queries. This ensures the topomap always reflects the obstacle-free path, even after obstacles are placed in the scene.
+
+```python
+# Generate topomap from pre-computed waypoints (no NavMesh query needed)
+waypoints = [[12.0, 5.3], [15.0, 4.0], [20.0, 2.5], [25.0, 1.0]]
+saved_paths = generator.generate_topomap_from_waypoints(waypoints)
+```
+
+### `generate_topomap_from_waypoints(waypoints, output_dir=None) -> List[str]`
+
+| Parameter    | Type                                 | Description                                      |
+| ------------ | ------------------------------------ | ------------------------------------------------ |
+| `waypoints`  | `list[list[float]] \| list[SampledPosition]` | Pre-computed waypoint positions `[[x, y], ...]` |
+| `output_dir` | `str \| None`                        | Override output directory                        |
+
+Accepts `[x, y]` or `[x, y, z]` lists. Headings are computed automatically from consecutive waypoint directions. Uses the same camera capture logic as `generate_topomap()`.
+
+---
+
 ## Advanced Usage
 
 ### Batch Generation for Multiple Routes

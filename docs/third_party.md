@@ -18,6 +18,7 @@ make fetch-third-party
 | `urban-sim/` | Metadriverse urban simulator — reference for robot configuration and related assets |
 | `PeopleAPI/` | Isaac Sim extension for spawning animated pedestrians with NavMesh-based walking |
 | `FoodAssets/` | Isaac Sim extension — curated asset library for food-related scenes (popcorn cargo) |
+| `ObstacleAssets/` | Isaac Sim extension for obstacle spawning with ground-snapping and dynamic avoidance |
 
 ### Navigation Baselines
 

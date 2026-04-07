@@ -87,7 +87,11 @@ graph TD
 
     subgraph Setup["2. Mission Setup"]
         direction LR
-        D[READY] --> E[TELEPORTING] --> F[SETTLING]
+        D["READY
+        (pause people,
+        remove obstacles)"] --> E[TELEPORTING] --> F["SETTLING
+        (fall check, spawn obstacles,
+        topomap, resume people)"]
     end
 
     subgraph Setup2["3. Pose & Costmap"]
@@ -131,9 +135,9 @@ graph TD
 | **Init** | `INIT` | Initialize ROS2 node, NavMesh sampler, evaluation manager, markers |
 | | `WAITING_FOR_NAV2` | Wait for Nav2 stack readiness |
 | | `WAITING_FOR_START` | Wait for `/start_mission` trigger |
-| **Setup** | `READY` | Sample start/goal positions from NavMesh; reset eval counters |
+| **Setup** | `READY` | Pause people, remove old obstacles, sample start/goal (from mission config or NavMesh); reset eval counters |
 | | `TELEPORTING` | Teleport robot to start position |
-| | `SETTLING` | Wait for physics to settle (30 steps); setup food tracking & contact reporting |
+| | `SETTLING` | Wait for physics to settle; check robot fall (retry up to 3x); spawn [obstacles](obstacle_spawning.md); generate topomap from cached waypoints; resume people; setup food tracking |
 | | `PUBLISHING_INITIAL_POSE` | Publish initial pose to `/initialpose` for AMCL |
 | | `CLEARING_COSTMAPS` | Clear Nav2 global/local costmaps (best-effort, 2s timeout) |
 | **Goal** | `PUBLISHING_GOAL` | Publish goal pose to `/goal_pose` for Nav2 |
