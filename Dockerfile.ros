@@ -23,8 +23,12 @@ RUN apt-get update && \
     ros-jazzy-joy \
     ros-jazzy-teleop-twist-joy \
     ros-jazzy-image-transport-plugins \
-    ros-jazzy-pcl-ros && \
+    ros-jazzy-pcl-ros \
+    python3-pip && \
     rm -rf /var/lib/apt/lists/*
+
+# Dashboard dependencies (FastAPI + uvicorn)
+RUN pip3 install --break-system-packages --no-cache-dir fastapi 'uvicorn[standard]' websockets
 
 # Set the default workspace directory
 WORKDIR /workspace

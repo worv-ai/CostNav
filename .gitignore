@@ -3,6 +3,12 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Node.js / Next.js
+node_modules/
+.next/
+package-lock.json
+next-env.d.ts
+
 # C extensions
 *.so
 

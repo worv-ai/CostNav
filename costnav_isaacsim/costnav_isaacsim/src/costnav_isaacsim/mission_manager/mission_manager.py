@@ -304,6 +304,13 @@ class MissionManager:
                 Float64, "/set_mission_timeout", self._handle_set_timeout, 10
             )
 
+            # Mission index subscriber (allows jumping to a specific mission)
+            from std_msgs.msg import Int32
+
+            self._mission_index_sub = self._node.create_subscription(
+                Int32, "/set_mission_index", self._handle_set_mission_index, 10
+            )
+
             # Initialize NavMesh sampler with config values
             self._sampler = NavMeshSampler(
                 min_distance=self.config.manager.min_distance,
@@ -902,6 +909,29 @@ class MissionManager:
         else:
             self.config.timeout = timeout_value
             logger.info(f"[CONFIG] Mission timeout set to {timeout_value}s")
+
+    def _handle_set_mission_index(self, msg):
+        """Handle mission index jump request.
+
+        Sets _current_mission so the next _step_ready() call uses the
+        requested mission. Value is 0-based mission index.
+        _step_ready() increments _current_mission before use, so we set
+        _current_mission to (requested_index) directly.
+
+        Args:
+            msg: Int32 message with 0-based mission index.
+        """
+        idx = msg.data
+        if self._mission_configs is None:
+            logger.warning("[CONFIG] No mission configs loaded, ignoring set_mission_index")
+            return
+        if idx < 0 or idx >= len(self._mission_configs):
+            logger.warning(f"[CONFIG] Mission index {idx} out of range [0, {len(self._mission_configs) - 1}], ignoring")
+            return
+        # _step_ready does: self._current_mission += 1, then uses (_current_mission - 1) as index
+        # So to run mission at index idx, set _current_mission = idx
+        self._current_mission = idx
+        logger.info(f"[CONFIG] Mission index set to {idx} (will run mission {idx + 1})")
 
     def _handle_skip_mission(self, _request, response):
         """Handle external mission skip trigger.
@@ -1552,10 +1582,12 @@ class MissionManager:
         server_path = get_server_path()
         for idx, obs in enumerate(mission_config.obstacles):
             usd_path = f"{server_path}/Users/worv/Object/{obs.usd_path}"
+            # Snap obstacle Z to actual terrain surface via PhysX raycast
+            position = self._obstacle_setup.ground_surface.snap_position([obs.x, obs.y, obs.z])
             self._obstacle_setup.load_obstacle(
                 usd_path=usd_path,
                 name=f"mission_obs_{mission_config.id}_{idx}",
-                position=[obs.x, obs.y, obs.z],
+                position=position,
                 rotation=obs.rotation,
             )
 

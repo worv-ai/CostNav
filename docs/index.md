@@ -159,7 +159,8 @@ See **[Baselines](baselines.md)** for reproduction instructions.
 - **[IL Baselines](baselines.md)**: ViNT, NoMaD, GNM, NavDP, and CANVAS
 - **[Teleoperation](teleop_guide.md)**: Joystick-based robot control for data collection
 - **[Topomap Pipeline](topomap_pipeline.md)**: Generate ViNT-compatible topological maps from NavMesh
-- **[Evaluation](evaluation.md)**: Unified eval script, metrics, and log output
+- **[Evaluation Dashboard](dashboard.md)**: Web UI for mission selection, batch evaluation, and live monitoring
+- **[Evaluation (CLI)](evaluation.md)**: Legacy CLI eval script, metrics, and log output
 
 ### :moneybag: Cost Model
 

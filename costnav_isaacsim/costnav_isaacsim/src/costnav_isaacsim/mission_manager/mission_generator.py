@@ -40,6 +40,9 @@ logger = logging.getLogger(__name__)
 _EASY_OBSTACLE_TYPES = ["common", "minor"]
 _HARD_OBSTACLE_TYPES = ["common", "minor", "major"]
 
+# Minimum distance (metres) between any two obstacle centres
+_MIN_OBSTACLE_SPACING = 2.0
+
 
 # ---------------------------------------------------------------------------
 # Data classes
@@ -215,31 +218,30 @@ class MissionGenerator:
     def _place_easy_obstacles(self, waypoints: list[list[float]]) -> list[ObstacleConfig]:
         """Place 2-3 obstacles near the path but not blocking it.
 
-        Obstacles are offset 1-2 m perpendicular to the path direction so the
-        robot can still pass without a detour.
+        Obstacles are spread evenly along the path by distance, then offset
+        perpendicular so the robot can still pass without a detour.
         """
         num_obstacles = self._rng.randint(2, 3)
         obstacles: list[ObstacleConfig] = []
 
-        # Pick random waypoint indices (skip start and goal)
-        if len(waypoints) <= 2:
+        chosen_indices = self._spread_indices_along_path(waypoints, num_obstacles)
+        if not chosen_indices:
             return obstacles
-        candidate_indices = list(range(1, len(waypoints) - 1))
-        chosen_indices = self._rng.sample(candidate_indices, min(num_obstacles, len(candidate_indices)))
 
         for idx in chosen_indices:
             wp = waypoints[idx]
-            # Compute perpendicular direction from path segment
             perp_x, perp_y = self._perpendicular_at(waypoints, idx)
 
-            # Offset 1-2 m to one side (randomly left or right)
-            offset_dist = self._rng.uniform(1.0, 2.0)
+            offset_dist = self._rng.uniform(2.0, 4.0)
             side = self._rng.choice([-1, 1])
 
             obs_x = wp[0] + perp_x * offset_dist * side
             obs_y = wp[1] + perp_y * offset_dist * side
-            rotation = self._rng.uniform(0.0, 360.0)
 
+            if self._too_close(obs_x, obs_y, obstacles):
+                continue
+
+            rotation = self._rng.uniform(0.0, 360.0)
             usd_path, obs_type = self._get_random_obstacle_usd(_EASY_OBSTACLE_TYPES)
             if usd_path is None:
                 continue
@@ -260,26 +262,30 @@ class MissionGenerator:
     def _place_hard_obstacles(self, waypoints: list[list[float]]) -> list[ObstacleConfig]:
         """Place obstacles directly on the path to force a detour.
 
-        1-2 obstacles are placed at or near the path midpoint (chokepoints),
-        and 1-2 additional obstacles may be placed nearby for increased
-        difficulty.
+        1-2 blocking obstacles are spread across the middle third of the path
+        (by distance, not index), and 1-2 extra obstacles are offset nearby.
         """
         obstacles: list[ObstacleConfig] = []
 
         if len(waypoints) <= 2:
             return obstacles
 
-        # Identify chokepoint indices around the path midpoint
-        mid_idx = len(waypoints) // 2
-        # Select 1-2 chokepoints near the midpoint
-        half_span = max(1, len(waypoints) // 6)
-        chokepoint_range = list(range(max(1, mid_idx - half_span), min(len(waypoints) - 1, mid_idx + half_span + 1)))
-        num_blocking = self._rng.randint(1, min(2, len(chokepoint_range)))
-        blocking_indices = self._rng.sample(chokepoint_range, num_blocking)
+        # Pick 1-2 blocking points spread across the middle third of the path
+        num_blocking = self._rng.randint(1, 2)
+        blocking_indices = self._spread_indices_along_path(
+            waypoints,
+            num_blocking,
+            start_frac=0.3,
+            end_frac=0.7,
+        )
 
         # Place obstacles directly on the path
         for idx in blocking_indices:
             wp = waypoints[idx]
+
+            if self._too_close(wp[0], wp[1], obstacles):
+                continue
+
             rotation = self._rng.uniform(0.0, 360.0)
             usd_path, obs_type = self._get_random_obstacle_usd(_HARD_OBSTACLE_TYPES)
             if usd_path is None:
@@ -295,19 +301,24 @@ class MissionGenerator:
                 )
             )
 
-        # Place 1-2 additional obstacles slightly offset nearby
+        # Place 1-2 additional obstacles offset from the blocking points
         num_extra = self._rng.randint(1, 2)
         for _ in range(num_extra):
+            if not blocking_indices:
+                break
             idx = self._rng.choice(blocking_indices)
             wp = waypoints[idx]
             perp_x, perp_y = self._perpendicular_at(waypoints, idx)
 
-            offset_dist = self._rng.uniform(0.5, 1.5)
+            offset_dist = self._rng.uniform(2.0, 3.5)
             side = self._rng.choice([-1, 1])
             obs_x = wp[0] + perp_x * offset_dist * side
             obs_y = wp[1] + perp_y * offset_dist * side
-            rotation = self._rng.uniform(0.0, 360.0)
 
+            if self._too_close(obs_x, obs_y, obstacles):
+                continue
+
+            rotation = self._rng.uniform(0.0, 360.0)
             usd_path, obs_type = self._get_random_obstacle_usd(_HARD_OBSTACLE_TYPES)
             if usd_path is None:
                 continue
@@ -323,6 +334,68 @@ class MissionGenerator:
             )
 
         return obstacles
+
+    def _spread_indices_along_path(
+        self,
+        waypoints: list[list[float]],
+        count: int,
+        start_frac: float = 0.1,
+        end_frac: float = 0.9,
+    ) -> list[int]:
+        """Select *count* waypoint indices evenly spread by cumulative path distance.
+
+        Only considers the portion of the path between *start_frac* and
+        *end_frac* (0-1) of the total length, skipping the very start and end.
+        A small random jitter is added so placements aren't perfectly uniform.
+        """
+        if len(waypoints) <= 2 or count <= 0:
+            return []
+
+        # Build cumulative distance along the path
+        cum_dist = [0.0]
+        for i in range(1, len(waypoints)):
+            dx = waypoints[i][0] - waypoints[i - 1][0]
+            dy = waypoints[i][1] - waypoints[i - 1][1]
+            cum_dist.append(cum_dist[-1] + math.hypot(dx, dy))
+
+        total_dist = cum_dist[-1]
+        if total_dist < 1e-3:
+            return []
+
+        lo = total_dist * start_frac
+        hi = total_dist * end_frac
+        span = hi - lo
+        if span < _MIN_OBSTACLE_SPACING * count:
+            return []
+
+        # Target distances evenly spaced within the range, with jitter
+        step = span / (count + 1)
+        targets = []
+        for k in range(1, count + 1):
+            jitter = self._rng.uniform(-step * 0.25, step * 0.25)
+            targets.append(lo + step * k + jitter)
+
+        # Map each target distance to the nearest waypoint index
+        indices = []
+        wi = 0
+        for target in sorted(targets):
+            while wi < len(cum_dist) - 1 and cum_dist[wi + 1] < target:
+                wi += 1
+            idx = max(1, min(wi, len(waypoints) - 2))
+            if idx not in indices:
+                indices.append(idx)
+
+        return indices
+
+    @staticmethod
+    def _too_close(
+        x: float, y: float, obstacles: list[ObstacleConfig], min_dist: float = _MIN_OBSTACLE_SPACING
+    ) -> bool:
+        """Return True if (x, y) is within *min_dist* of any existing obstacle."""
+        for obs in obstacles:
+            if math.hypot(x - obs.x, y - obs.y) < min_dist:
+                return True
+        return False
 
     @staticmethod
     def _perpendicular_at(waypoints: list[list[float]], idx: int) -> tuple[float, float]:

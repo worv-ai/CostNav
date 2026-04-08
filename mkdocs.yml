@@ -89,7 +89,8 @@ nav:
     - Teleop Dataset: teleop_dataset.md
     - Topomap Pipeline: topomap_pipeline.md
     - Obstacle Spawning: obstacle_spawning.md
-    - Evaluation: evaluation.md
+    - Evaluation Dashboard: dashboard.md
+    - Evaluation (CLI): evaluation.md
   - Cost Model: cost_model.md
   - Third-Party References: third_party.md
   - Contributing: contributing.md

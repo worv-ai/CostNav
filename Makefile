@@ -1,4 +1,4 @@
-.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-ros2-torch build-navdp run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint run-gnm run-nomad run-navdp run-canvas start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint run-eval-gnm run-eval-nomad run-eval-navdp run-eval-canvas download-assets-omniverse download-assets-hf upload-assets-hf upload-dataset-hf download-baseline-checkpoints-hf start-nucleus stop-nucleus
+.PHONY: build-isaac-sim build-isaac-lab build-dev build-all fetch-third-party build-ros2 build-ros2-torch build-navdp run-ros2 run-isaac-sim run-isaac-sim-raw run-nav2 run-teleop run-vint run-gnm run-nomad run-navdp run-canvas start-mission start-mission-record run-rosbag stop-rosbag run-eval-nav2 run-eval-teleop run-eval-vint run-eval-gnm run-eval-nomad run-eval-navdp run-eval-canvas download-assets-omniverse download-assets-hf upload-assets-hf upload-dataset-hf download-baseline-checkpoints-hf start-nucleus stop-nucleus run-dashboard stop-dashboard
 
 # Load environment variables from .env file if it exists
 # Variables can still be overridden from command line
@@ -458,6 +458,24 @@ run-eval-canvas:
 	@echo "  Number of missions:  $(NUM_MISSIONS)"
 	@echo ""
 	@bash scripts/eval.sh canvas $(TIMEOUT) $(NUM_MISSIONS)
+
+
+# =============================================================================
+# Dashboard (Web UI for mission selection and evaluation)
+# =============================================================================
+
+# Start the web dashboard (FastAPI backend + Next.js frontend)
+# Requires a running simulation (e.g., make run-nav2)
+# Dashboard: http://localhost:3000 | API docs: http://localhost:8100/docs
+run-dashboard:
+	@echo "Starting CostNav Dashboard..."
+	@$(DOCKER_COMPOSE) --profile dashboard up -d
+	@echo ""
+	@echo "Dashboard:  http://localhost:3000"
+	@echo "API docs:   http://localhost:8100/docs"
+
+stop-dashboard:
+	@$(DOCKER_COMPOSE) --profile dashboard down
 
 
 # =============================================================================

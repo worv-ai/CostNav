@@ -594,3 +594,36 @@ services:
     ipc: host
     stdin_open: true
     tty: true
+
+  # ── Dashboard ──────────────────────────────────────────────────────
+  # FastAPI backend bridging the web UI to ROS2 services
+  dashboard-backend:
+    profiles: ["dashboard"]
+    <<: *ros2-service
+    container_name: costnav-dashboard-backend
+    environment:
+      - ROS_DISTRO=jazzy
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/workspace/fastdds.xml
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+      - MISSION_FILE=/workspace/config/missions/42.json
+      - LOG_DIR=/workspace/logs
+    volumes:
+      - .:/workspace
+    command: >
+      bash -c "
+        uvicorn apps.dashboard.backend.main:app --host 0.0.0.0 --port 8100
+      "
+
+  # Next.js web dashboard for mission selection and evaluation
+  dashboard-frontend:
+    profiles: ["dashboard"]
+    image: node:20-alpine
+    container_name: costnav-dashboard-frontend
+    working_dir: /app
+    volumes:
+      - ./apps/dashboard/frontend:/app
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8100
+    command: sh -c "npm install && npm run dev"
+    network_mode: host
