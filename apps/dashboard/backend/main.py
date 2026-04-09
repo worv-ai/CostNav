@@ -22,6 +22,7 @@ logger = logging.getLogger("dashboard")
 
 MISSION_FILE = os.environ.get("MISSION_FILE", "config/missions/42.json")
 LOG_DIR = os.environ.get("LOG_DIR", "logs")
+MAP_YAML = os.environ.get("MAP_YAML", "costnav_isaacsim/nav2_params/maps/sidewalk.yaml")
 
 # --- Global eval state ---
 _eval_running = False
@@ -69,14 +70,67 @@ async def get_missions():
     return {"missions": missions, "file": MISSION_FILE}
 
 
+@app.get("/api/map/meta")
+async def get_map_meta():
+    """Return map metadata (resolution, origin, image dimensions)."""
+    import yaml
+    from PIL import Image
+
+    map_path = Path(MAP_YAML)
+    if not map_path.exists():
+        return {"error": "Map YAML not found"}
+    with open(map_path) as f:
+        meta = yaml.safe_load(f)
+    image_path = map_path.parent / meta["image"]
+    with Image.open(image_path) as img:
+        width, height = img.size
+    return {
+        "resolution": meta["resolution"],
+        "origin": meta["origin"],
+        "width": width,
+        "height": height,
+        "image_url": "/api/map/image",
+    }
+
+
+@app.get("/api/map/image")
+async def get_map_image():
+    """Serve the map PNG image."""
+    import yaml
+
+    map_path = Path(MAP_YAML)
+    if not map_path.exists():
+        return {"error": "Map YAML not found"}
+    with open(map_path) as f:
+        meta = yaml.safe_load(f)
+    image_path = map_path.parent / meta["image"]
+    return FileResponse(str(image_path), media_type="image/png")
+
+
 @app.post("/api/missions/{mission_id}/start")
 async def start_single_mission(mission_id: int, timeout: float = 241.0):
-    """Set mission index and start a single mission."""
+    """Set mission index, start a single mission, and track it in live status."""
+    global _eval_running, _eval_stop_requested, _eval_task
+    global _eval_completed, _eval_total, _eval_results, _eval_current_id
+
+    if _eval_running:
+        return {"error": "A mission or evaluation is already running"}
+
     bridge = ROS2Bridge.get()
     await bridge.set_mission_index(mission_id)
-    await asyncio.sleep(0.15)  # let the topic propagate
+    await asyncio.sleep(0.15)
     await bridge.set_timeout(timeout)
     result = await bridge.start_mission()
+
+    if result.get("success"):
+        _eval_running = True
+        _eval_stop_requested = False
+        _eval_completed = 0
+        _eval_total = 1
+        _eval_results = []
+        _eval_current_id = mission_id
+        _eval_task = asyncio.create_task(_run_single(mission_id, timeout))
+
     return result
 
 
@@ -169,6 +223,53 @@ async def ws_status(websocket: WebSocket):
 
 
 # --- Evaluation loop ---
+
+
+async def _run_single(mission_id: int, timeout: float):
+    """Poll a single mission until it completes and record the result."""
+    global _eval_running, _eval_completed, _eval_current_id
+    global _eval_results, _eval_current_status
+
+    bridge = ROS2Bridge.get()
+    missions, _ = _load_missions()
+    missions_by_id = {m["id"]: m for m in missions}
+    difficulty = missions_by_id.get(mission_id, {}).get("difficulty")
+
+    try:
+        safety_timeout = timeout + 30
+        elapsed = 0.0
+        while elapsed < safety_timeout:
+            if _eval_stop_requested:
+                await bridge.skip_mission()
+                break
+
+            await asyncio.sleep(1)
+            elapsed += 1
+
+            raw = await bridge.get_mission_result()
+            parsed = bridge.parse_result(raw, mission_id, difficulty)
+            _eval_current_status = parsed
+
+            if raw.get("result", "pending") != "pending":
+                break
+
+        final_raw = await bridge.get_mission_result()
+        final = bridge.parse_result(final_raw, mission_id, difficulty)
+        _eval_results.append(final)
+        _eval_completed = 1
+        logger.info(
+            "Mission %d: %s (%.1fs, %.1fm)",
+            mission_id + 1,
+            final["result"],
+            final["elapsed_time"],
+            final["traveled_distance"],
+        )
+    except Exception:
+        logger.exception("Single mission error")
+    finally:
+        _eval_running = False
+        _eval_current_id = None
+        _eval_current_status = None
 
 
 async def _run_eval(mission_ids: list[int], timeout: float):

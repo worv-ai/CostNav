@@ -20,6 +20,29 @@ logger = logging.getLogger("dashboard.ros2_bridge")
 
 ROLLING_RESISTANCE_FORCE = 18.179  # Newtons (for mech power calc)
 
+_cost_params: dict | None = None
+
+
+def _get_cost_params() -> dict:
+    """Load cost model params from mission_config.yaml cost_model section."""
+    global _cost_params
+    if _cost_params is not None:
+        return _cost_params
+
+    import os
+    from pathlib import Path
+
+    import yaml
+
+    config_path = os.environ.get(
+        "COST_CONFIG",
+        "costnav_isaacsim/costnav_isaacsim/config/mission_config.yaml",
+    )
+    with open(Path(config_path)) as f:
+        _cost_params = yaml.safe_load(f)["cost_model"]
+    logger.info("Loaded cost model from %s", config_path)
+    return _cost_params
+
 
 class ROS2Bridge:
     """Singleton ROS2 node that exposes async helpers for FastAPI."""
@@ -152,4 +175,51 @@ class ROS2Bridge:
                 "loss_fraction": float(raw.get("food_loss_fraction", -1) or -1),
                 "spoiled": raw.get("food_spoiled", False),
             },
+            "cost": ROS2Bridge._compute_cost(raw, elapsed, avg_mech),
+        }
+
+    @staticmethod
+    def _compute_cost(raw: dict, elapsed: float, avg_power_kw: float) -> dict:
+        """Compute real-time cost breakdown from mission metrics."""
+        p = _get_cost_params()
+        result = raw.get("result", "pending")
+        food_spoiled = raw.get("food_spoiled", False)
+        is_success = result == "success"
+        is_timeout = result == "failure_timeout"
+        is_phys = result == "failure_physicalassistance"
+
+        # Revenue: delivery fee only if SLA met
+        revenue = p["delivery_fee"] if is_success else 0.0
+
+        # Electricity
+        elapsed_hr = elapsed / 3600.0
+        electricity = p["electricity_rate"] * (avg_power_kw / p["electromech_efficiency"]) * elapsed_hr
+
+        # Pedestrian injury cost (already computed by sim)
+        injury_cost = float(raw.get("total_injury_cost", 0) or 0)
+
+        # Property damage
+        prop_damage = p["property_damage"]
+        prop_cost = 0.0
+        for prop_type, unit_cost in prop_damage.items():
+            count = int(raw.get(f"property_contact_{prop_type}", 0) or 0)
+            prop_cost += count * unit_cost
+
+        # Service compensation (refunds)
+        service_comp = 0.0
+        if food_spoiled:
+            service_comp += p["food_refund"]
+        if is_timeout or is_phys:
+            service_comp += p["delivery_fee"]
+
+        total_opex = electricity + injury_cost + prop_cost + service_comp
+
+        return {
+            "revenue": round(revenue, 4),
+            "electricity": round(electricity, 4),
+            "injury": round(injury_cost, 4),
+            "property_damage": round(prop_cost, 4),
+            "service_comp": round(service_comp, 4),
+            "total_opex": round(total_opex, 4),
+            "profit": round(revenue - total_opex, 4),
         }

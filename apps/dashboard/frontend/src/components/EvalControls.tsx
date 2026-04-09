@@ -1,5 +1,7 @@
 "use client";
+import { Play, Square, SkipForward, Clock, CheckCircle2 } from "lucide-react";
 import { startEval, stopEval, skipMission } from "@/lib/api";
+import Card from "@/components/Card";
 
 interface Props {
   running: boolean;
@@ -27,49 +29,53 @@ export default function EvalControls({
   };
 
   return (
-    <div className="flex items-center gap-3 flex-wrap">
-      <div className="flex items-center gap-1.5">
-        <label className="text-xs text-gray-400">Timeout</label>
+    <Card className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--surface-overlay)]">
+        <Clock size={14} className="text-[var(--text-muted)]" />
         <input
           type="number"
           value={timeout}
           onChange={(e) => onTimeoutChange(Number(e.target.value))}
-          className="w-20 px-2 py-1 text-sm bg-gray-800 border border-gray-700 rounded"
+          className="w-16 bg-transparent text-sm font-mono outline-none text-[var(--text-primary)]"
         />
-        <span className="text-xs text-gray-500">s</span>
+        <span className="text-xs text-[var(--text-muted)]">sec</span>
       </div>
 
       <button
         onClick={handleRunAll}
         disabled={running}
-        className="px-3 py-1.5 text-sm bg-green-700 hover:bg-green-600 rounded disabled:opacity-30"
+        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
+        <Play size={14} />
         Run All ({totalMissions})
       </button>
 
       <button
         onClick={handleRunSelected}
         disabled={running || selected.size === 0}
-        className="px-3 py-1.5 text-sm bg-blue-700 hover:bg-blue-600 rounded disabled:opacity-30"
+        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
+        <CheckCircle2 size={14} />
         Run Selected ({selected.size})
       </button>
 
       <button
         onClick={() => skipMission()}
         disabled={!running}
-        className="px-3 py-1.5 text-sm bg-orange-700 hover:bg-orange-600 rounded disabled:opacity-30"
+        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
+        <SkipForward size={14} />
         Skip
       </button>
 
       <button
         onClick={() => stopEval()}
         disabled={!running}
-        className="px-3 py-1.5 text-sm bg-red-700 hover:bg-red-600 rounded disabled:opacity-30"
+        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
+        <Square size={14} />
         Stop
       </button>
-    </div>
+    </Card>
   );
 }

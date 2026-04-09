@@ -108,8 +108,8 @@ class MissionGenerator:
 
         Args:
             num_none: Number of missions with no obstacles.
-            num_easy: Number of easy missions (obstacles near path, avoidable).
-            num_hard: Number of hard missions (obstacles on path, forces detour).
+            num_easy: Number of easy missions (small obstacles on path).
+            num_hard: Number of hard missions (large obstacles on path, forces detour).
 
         Returns:
             Ordered list of ``MissionConfig`` instances.
@@ -216,10 +216,10 @@ class MissionGenerator:
     # ------------------------------------------------------------------
 
     def _place_easy_obstacles(self, waypoints: list[list[float]]) -> list[ObstacleConfig]:
-        """Place 2-3 obstacles near the path but not blocking it.
+        """Place 2-3 obstacles directly on the path to block it.
 
-        Obstacles are spread evenly along the path by distance, then offset
-        perpendicular so the robot can still pass without a detour.
+        Uses common/minor obstacle types which are smaller and easier to
+        navigate around compared to hard obstacles.
         """
         num_obstacles = self._rng.randint(2, 3)
         obstacles: list[ObstacleConfig] = []
@@ -230,15 +230,8 @@ class MissionGenerator:
 
         for idx in chosen_indices:
             wp = waypoints[idx]
-            perp_x, perp_y = self._perpendicular_at(waypoints, idx)
 
-            offset_dist = self._rng.uniform(2.0, 4.0)
-            side = self._rng.choice([-1, 1])
-
-            obs_x = wp[0] + perp_x * offset_dist * side
-            obs_y = wp[1] + perp_y * offset_dist * side
-
-            if self._too_close(obs_x, obs_y, obstacles):
+            if self._too_close(wp[0], wp[1], obstacles):
                 continue
 
             rotation = self._rng.uniform(0.0, 360.0)
@@ -250,8 +243,8 @@ class MissionGenerator:
                 ObstacleConfig(
                     usd_path=usd_path,
                     type=obs_type,
-                    x=obs_x,
-                    y=obs_y,
+                    x=wp[0],
+                    y=wp[1],
                     z=0.0,
                     rotation=rotation,
                 )

@@ -34,6 +34,19 @@ class MissionResult(BaseModel):
     delta_v_avg_mph: float = 0.0
     injury_cost: float = 0.0
     food: dict = {}
+    cost: CostBreakdown | None = None
+
+
+class CostBreakdown(BaseModel):
+    """Real-time per-run cost breakdown based on the CostNav cost model."""
+
+    revenue: float = 0.0  # $3.49 if SLA met, else 0
+    electricity: float = 0.0
+    injury: float = 0.0
+    property_damage: float = 0.0
+    service_comp: float = 0.0  # refund costs
+    total_opex: float = 0.0
+    profit: float = 0.0  # revenue - total_opex
 
 
 class EvalRequest(BaseModel):

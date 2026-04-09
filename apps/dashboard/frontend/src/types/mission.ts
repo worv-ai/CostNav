@@ -1,9 +1,37 @@
+export interface Obstacle {
+  usd_path: string;
+  type: string;
+  x: number;
+  y: number;
+  z: number;
+  rotation: number;
+}
+
 export interface Mission {
   id: number;
   difficulty: string;
   start: { x: number; y: number; z?: number; heading?: number };
   goal: { x: number; y: number; z?: number };
   waypoints: number[][];
+  obstacles?: Obstacle[];
+}
+
+export interface MapMeta {
+  resolution: number;
+  origin: [number, number, number];
+  width: number;
+  height: number;
+  image_url: string;
+}
+
+export interface CostBreakdown {
+  revenue: number;
+  electricity: number;
+  injury: number;
+  property_damage: number;
+  service_comp: number;
+  total_opex: number;
+  profit: number;
 }
 
 export interface MissionResult {
@@ -31,6 +59,7 @@ export interface MissionResult {
     loss_fraction: number;
     spoiled: boolean;
   };
+  cost?: CostBreakdown;
 }
 
 export interface EvalStatus {

@@ -104,6 +104,29 @@ injury:
     mais_5: 0.0  # Delivery robot context: MAIS 4+ not modeled (report covers motor vehicles)
     fatality: 0.0  # Delivery robot context: MAIS 4+ not modeled (report covers motor vehicles)
 
+# Cost model parameters (from CostNav paper Section 3.1)
+# Used by the dashboard backend for real-time cost computation.
+cost_model:
+  # Revenue
+  delivery_fee: 3.49          # $/run — market robot delivery price
+  food_refund: 31.93          # $/run — avg food refund (order value - delivery fee)
+
+  # Electricity
+  electricity_rate: 0.2704    # $/kWh — U.S. average retail electricity price
+  electromech_efficiency: 0.7266  # grid-to-wheel efficiency
+
+  # Property damage costs ($/event)
+  property_damage:
+    bollard: 65
+    mail_box: 50
+    trash_bin: 50
+    building: 300
+    fire_hydrant: 12500
+    traffic_light: 5423
+    street_lamp: 4000
+    bus_stop: 300
+    newspaper_box: 50
+
 # Obstacle spawning settings
 obstacles:
   # Seed for deterministic mission generation (null = disabled, int = generate at startup)
@@ -120,7 +143,7 @@ obstacles:
 
   # Number of missions per difficulty level (used with seed)
   num_none: 50   # No obstacles — clean path
-  num_easy: 25   # Small obstacles near path but avoidable (common + minor types)
+  num_easy: 25   # Small obstacles blocking path (common + minor types)
   num_hard: 25   # Large obstacles blocking path, forces detour (common + minor + major types)
 
 # Goal image settings (for ViNT ImageGoal mode)

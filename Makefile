@@ -54,8 +54,8 @@ endif
 endif
 endif
 
-# Joystick settings for teleop (always reads from .env)
-XBOX_ID := $(shell grep '^XBOX_ID=' .env 2>/dev/null | cut -d= -f2)
+# Auto-detect Xbox controller from /dev/input/by-id/
+XBOX_ID := $(shell ls /dev/input/by-id/ 2>/dev/null | grep 'usb-Microsoft_Controller_.*-event-joystick' | sed 's/usb-Microsoft_Controller_\(.*\)-event-joystick/\1/' | head -1)
 
 ISAAC_SIM_IMAGE ?= costnav-isaacsim-$(ISAAC_SIM_VERSION):$(COSTNAV_VERSION)
 ISAAC_LAB_IMAGE ?= costnav-isaaclab-$(ISAAC_SIM_VERSION)-$(ISAAC_LAB_VERSION):$(COSTNAV_VERSION)
@@ -169,6 +169,13 @@ run-teleop:
 		echo "Unsupported robot: $(SIM_ROBOT). Use nova_carter or segway_e1."; \
 		exit 1; \
 	fi
+	@if [ -z "$(XBOX_ID)" ]; then \
+		echo "ERROR: No Xbox controller detected. Connect a controller and try again."; \
+		echo "  Looking for: /dev/input/by-id/usb-Microsoft_Controller_*-event-joystick"; \
+		ls /dev/input/by-id/ 2>/dev/null | grep -i joystick || echo "  (no joystick devices found)"; \
+		exit 1; \
+	fi
+	@echo "Detected Xbox controller: $(XBOX_ID)"
 	xhost +local:docker 2>/dev/null || true
 	@# Bring down any previous teleop session
 	SIM_ROBOT=$(SIM_ROBOT) $(DOCKER_COMPOSE) --profile teleop down

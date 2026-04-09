@@ -608,6 +608,8 @@ services:
       - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
       - MISSION_FILE=/workspace/config/missions/42.json
       - LOG_DIR=/workspace/logs
+      - MAP_YAML=/workspace/costnav_isaacsim/nav2_params/maps/sidewalk.yaml
+      - COST_CONFIG=/workspace/costnav_isaacsim/costnav_isaacsim/config/mission_config.yaml
     volumes:
       - .:/workspace
     command: >
