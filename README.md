@@ -12,8 +12,10 @@
   <img alt="Isaac Lab" src="https://img.shields.io/badge/Isaac%20Lab-2.3.0-4CAF50?style=flat&logo=nvidia">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white">
   <a href="https://worv-ai.github.io/costnav/"><img alt="Project Page" src="https://img.shields.io/badge/Project%20Page-CostNav-blue?style=flat&logo=materialformkdocs&logoColor=white"></a>
+  <img alt="CoRL 2026" src="https://img.shields.io/badge/CoRL%202026-Accepted-2ea44f?style=flat">
 
   <h3>CostNav: A Navigation Benchmark for Real-World Economic-Cost Evaluation of Physical AI Agents</h3>
+  <p><strong>Accepted at the Conference on Robot Learning (CoRL) 2026</strong></p>
 </div>
 
 ---

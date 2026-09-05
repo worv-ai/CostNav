@@ -7,11 +7,14 @@
 [![Sim Assets](https://img.shields.io/badge/Sim%20Assets-HuggingFace-FFD21E?style=flat&logo=huggingface)](https://huggingface.co/datasets/maum-ai/CostNav)
 [![Dataset](https://img.shields.io/badge/Dataset-HuggingFace-FFD21E?style=flat&logo=huggingface)](https://huggingface.co/datasets/maum-ai/CostNav-Teleop-Dataset)
 [![Models](https://img.shields.io/badge/Models-HuggingFace-FFD21E?style=flat&logo=huggingface)](https://huggingface.co/maum-ai/CostNav_baseline)
+![CoRL 2026](https://img.shields.io/badge/CoRL%202026-Accepted-2ea44f?style=flat)
 ![Isaac Sim](https://img.shields.io/badge/Isaac%20Sim-5.1.0-76B900?style=flat&logo=nvidia)
 ![Isaac Lab](https://img.shields.io/badge/Isaac%20Lab-2.3.0-4CAF50?style=flat&logo=nvidia)
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)
 
 **A cost-driven navigation benchmark for sidewalk robots, built on Isaac Sim.**
+
+**Accepted at the Conference on Robot Learning (CoRL) 2026.**
 
 </div>
 
